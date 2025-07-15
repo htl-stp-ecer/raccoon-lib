@@ -1,0 +1,1 @@
+register_libstp_module(datatype "FALSE" "foundation;motion")

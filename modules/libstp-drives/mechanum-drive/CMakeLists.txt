@@ -1,0 +1,1 @@
+register_libstp_module(mechanum_drive "FALSE" "foundation;drive_base")

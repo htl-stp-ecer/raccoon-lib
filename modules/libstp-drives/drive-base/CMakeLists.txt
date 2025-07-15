@@ -1,0 +1,1 @@
+register_libstp_module(drive_base "TRUE" "")

@@ -1,0 +1,1 @@
+register_libstp_module(motion "FALSE" "foundation;datatype;ahrs;device")

@@ -1,0 +1,36 @@
+function(register_driver DRIVER_NAME)
+    set(DRIVER_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}/src")
+    file(GLOB DRIVER_SRCS "${DRIVER_SRC_DIR}/*.cpp")
+    if(NOT DRIVER_SRCS)
+        message(FATAL_ERROR "No .cpp files found in ${DRIVER_SRC_DIR}")
+    endif()
+    set(DRIVER_TARGET ${DRIVER_NAME})
+    add_library(${DRIVER_TARGET} ${DRIVER_SRCS})
+    target_include_directories(${DRIVER_TARGET} PUBLIC "${CMAKE_CURRENT_LIST_DIR}/include")
+    target_link_libraries(${DRIVER_TARGET} PUBLIC hal platform_core)
+
+    get_property(_drivers GLOBAL PROPERTY PLATFORM_DRIVERS)
+    if(NOT _drivers)
+        set(_drivers "")
+    endif()
+    list(APPEND _drivers ${DRIVER_TARGET})
+    set_property(GLOBAL PROPERTY PLATFORM_DRIVERS "${_drivers}")
+    
+    message(STATUS "Registered driver: ${DRIVER_TARGET}")
+endfunction()
+
+function(register_platform PLATFORM_NAME)
+    get_property(_drivers GLOBAL PROPERTY PLATFORM_DRIVERS)
+    add_library(platform_${PLATFORM_NAME} INTERFACE)
+    if(_drivers)
+        target_link_libraries(platform_${PLATFORM_NAME} INTERFACE ${_drivers})
+    endif()
+    add_library(platform ALIAS platform_${PLATFORM_NAME})
+    message(STATUS "Linking platform_${PLATFORM_NAME} with drivers: ${_drivers}")
+endfunction()
+
+set(DRIVER_BUNDLE "wombat" CACHE STRING "Which driver bundle to use (e.g. wombat, esp32)")
+set_property(CACHE DRIVER_BUNDLE PROPERTY STRINGS wombat esp32)
+
+add_subdirectory(${DRIVER_BUNDLE})
+

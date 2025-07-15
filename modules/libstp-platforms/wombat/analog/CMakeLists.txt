@@ -1,0 +1,1 @@
+register_driver(analog_driver)

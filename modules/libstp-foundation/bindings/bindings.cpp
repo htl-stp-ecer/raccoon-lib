@@ -1,0 +1,22 @@
+//
+// Created by tobias on 12/29/24.
+//
+
+#include <pybind11/pybind11.h>
+#include <pybind11/chrono.h>
+
+#include "foundation/config.hpp"
+#include "foundation/pid.hpp"
+
+namespace py = pybind11;
+
+void init_pid(const py::module& m);
+void init_logger(py::module_& m);
+
+PYBIND11_MODULE(hal, m)
+{
+    m.doc() = "Python bindings for libstp-foundation";
+
+    init_pid(m);
+    init_logger(m);
+}
