@@ -71,6 +71,25 @@ class SetMotorVelocity(Step):
             await asyncio.sleep(self.duration)
             motor_obj.set_velocity(0)
 
+class StopMotor(Step):
+
+    def __init__(self, motor: Union[str, Motor]) -> None:
+        """
+        Step to stop a motor.
+
+        Args:
+            motor: name of the motor attribute in definitions (str), or a direct reference to the motor (class attribute).
+        """
+        super().__init__()
+        self.motor: Union[str, Motor] = motor
+
+    async def run_step(self, device: NativeDevice, definitions: Any) -> None:
+        await super().run_step(device, definitions)
+
+        motor_obj = self.get_property_from_definitions(self.motor, definitions, Motor)
+        motor_obj.stop()
+
+
 
 def motor(motor: Union[str, Motor], pct: float, duration: Optional[float] = None) -> SetMotorVelocity:
     """
@@ -82,3 +101,12 @@ def motor(motor: Union[str, Motor], pct: float, duration: Optional[float] = None
         duration: optional seconds to run at that speed.
     """
     return SetMotorVelocity(motor, velocity_pct=pct, duration=duration)
+
+def stop_motor(motor: Union[str, Motor]) -> StopMotor:
+    """
+    Helper to create a StopMotor step.
+
+    Args:
+        motor: name of the motor in definitions (str), or a direct reference to the motor (class attribute).
+    """
+    return StopMotor(motor)

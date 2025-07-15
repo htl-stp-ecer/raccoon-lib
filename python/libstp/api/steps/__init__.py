@@ -10,8 +10,6 @@ from libstp_helpers.api import ClassNameLogger
 class StepProtocol(Protocol):
     async def run_step(self, device: NativeDevice, definitions: Any) -> None: ...
 
-    def has_run(self) -> bool: ...
-
     def call_on_exit(self, next_step: Optional['StepProtocol'] = None) -> None: ...
 
     def should_continue_moving(self) -> bool: ...
@@ -21,16 +19,7 @@ T = TypeVar('T')
 
 class Step(ClassNameLogger):
     def __init__(self) -> None:
-        self._has_run = False
-
-    def has_run(self) -> bool:
-        """
-        Check if this step has already been executed.
-        
-        Returns:
-            bool: True if the step has already been run, False otherwise.
-        """
-        return self._has_run
+        pass
 
     def call_on_exit(self, next_step: Optional[StepProtocol] = None) -> None:
         """
@@ -50,7 +39,7 @@ class Step(ClassNameLogger):
         """
         return False  # Default behavior is to stop
 
-    def get_property_from_definitions(self, prop: Union[str, T], definitions: Any, prop_type_name: str) -> T:
+    def get_property_from_definitions(self, prop: Union[str, T], definitions: Any, prop_type: T) -> T:
         """
         Extract a property from definitions when given either a string attribute name
         or a direct object reference.
@@ -58,24 +47,24 @@ class Step(ClassNameLogger):
         Args:
             prop: Either a string attribute name in the definitions object or a direct object reference
             definitions: The definitions object containing attributes
-            prop_type_name: Name of the property type for error messages (e.g., 'Servo', 'Motor')
+            prop_type: The expected type of the property
 
         Returns:
             The resolved object
 
         Raises:
-            RuntimeError: If the attribute does not exist or is None
+            RuntimeError: If the attribute does not exist, is None, or is of the wrong type
         """
         if isinstance(prop, str):
             if not hasattr(definitions, prop):
-                raise RuntimeError(f"{prop_type_name} attribute '{prop}' does not exist in definitions")
+                raise RuntimeError(f"{prop_type.__name__} attribute '{prop}' does not exist in definitions")
             obj = getattr(definitions, prop)
         else:
             obj = prop
 
         if obj is None:
-            prop_name = prop if isinstance(prop, str) else prop_type_name
-            raise RuntimeError(f"{prop_type_name} reference '{prop_name}' is None")
+            prop_name = prop if isinstance(prop, str) else prop_type.__name__
+            raise RuntimeError(f"{prop_type.__name__} reference '{prop_name}' is None")
 
         return cast(T, obj)
 
@@ -91,9 +80,6 @@ class Step(ClassNameLogger):
         Raises:
             RuntimeError: If attempting to run a step that has already been executed
         """
-        if self._has_run:
-            raise RuntimeError(f"Step {self.__class__.__name__} has already been executed")
-        self._has_run = True
         self.debug(f"Executing {self.__class__.__name__} step")
 
 

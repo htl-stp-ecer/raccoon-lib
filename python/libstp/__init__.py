@@ -2,7 +2,7 @@ import sys
 from abc import abstractmethod
 from enum import Enum
 
-# from libstp.logging import info, debug
+from libstp.logging import info, debug
 
 
 class TableSide(Enum):
@@ -22,19 +22,45 @@ def index_args():
         if args.startswith("--"):
             values = args.split("=")
             local_args[values[0][2:]] = values[1] if len(values) > 1 else True
+            debug(f"Found argument: {values[0][2:]} with value: {local_args[values[0][2:]]}")
 
     debug(f"Detected {len(local_args.keys())} / {len(sys.argv[1:])} arguments passed to script")
     return local_args
 
 
-#arguments = index_args()
+arguments = index_args()
 
 
 def get_table() -> TableSide:
     return TableSide(arguments.get("table", "DEFAULT"))
 
-def get_bool_argument(name: str) -> bool:
-    return arguments.get(name) is not None
+
+def get_bool_argument(name: str, default: bool = False) -> bool:
+    debug(f"Checking boolean argument '{name}' with default value {default}")
+    arg = arguments.get(name)
+    negative_arg = arguments.get(f"no-{name}")
+    if arg is not None and negative_arg is not None:
+        raise ValueError(
+            f"Cannot use both '{name}' and 'no-{name}' arguments at the same time. "
+            "Please choose one of them."
+        )
+
+    if arg == "true" or arg == "True":
+        return True
+    if arg == "false" or arg == "False":
+        return False
+
+    if negative_arg == "true" or negative_arg == "True":
+        return False
+    if negative_arg == "false" or negative_arg == "False":
+        return True
+
+    if negative_arg is not None:
+        return False
+
+    if arg is not None:
+        return True
+    return default
 
 
 def run_as_module(name: str, callback, *args, **kwargs):

@@ -13,6 +13,15 @@ from libstp_helpers import get_bool_argument
 
 properties_dir = f"{os.path.dirname(__file__)}/properties"
 
+calibrated_velocity = 14.3 # cm/s, used for the robot's calibrated velocity
+
+def seconds(cm: float):
+    """
+    Convert centimeters to seconds based on the calibrated velocity.
+    :param cm: Distance in centimeters.
+    :return: Time in seconds.
+    """
+    return cm / calibrated_velocity
 
 def run_command(command):
     try:

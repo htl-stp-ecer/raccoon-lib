@@ -8,7 +8,7 @@ from libstp.servo import Servo
 from libstp_helpers.api.steps import Step
 from libstp_helpers.utility import to_task
 
-from libstp_helpers.utility.math import ease_in_ease_out
+from libstp_helpers.utility.math import ease_in_ease_out, exponential
 
 # Servo angle and speed constants
 SERVO_MIN_ANGLE = 0.0
@@ -114,7 +114,7 @@ class SetServoPosition(Step):
                 servo_obj.slowly_set_position(
                     self.target_position,
                     timedelta(seconds=self.time),
-                    ease_in_ease_out
+                    exponential
                 )
             )
             return
@@ -159,81 +159,3 @@ def slow_servo(servo: Union[str, Servo], angle: float, time: float) -> SetServoP
         SetServoPosition step
     """
     return SetServoPosition(servo=servo, target_angle=angle, time=time)
-
-
-class ShakeServo(Step):
-    def __init__(self, servo: Union[str, Servo], duration: float, angle_a: float, angle_b: float) -> None:
-        """
-        Initialize the ShakeServo step.
-
-        Args:
-            servo: The attribute name of the servo in the definitions object (str), or a direct reference to the servo (class attribute).
-            duration: The duration (in seconds) to shake the servo.
-            angle_a: The first angle for shaking (0-180 degrees).
-            angle_b: The second angle for shaking (0-180 degrees).
-        
-        Raises:
-            ValueError: If duration is negative or angles are out of range.
-        """
-        super().__init__()
-
-        if duration < 0:
-            raise ValueError(f"Duration cannot be negative, got {duration}")
-        if not (SERVO_MIN_ANGLE <= angle_a <= SERVO_MAX_ANGLE):
-            raise ValueError(
-                f"Angle A must be between {SERVO_MIN_ANGLE} and {SERVO_MAX_ANGLE} degrees, got {angle_a}")
-        if not (SERVO_MIN_ANGLE <= angle_b <= SERVO_MAX_ANGLE):
-            raise ValueError(
-                f"Angle B must be between {SERVO_MIN_ANGLE} and {SERVO_MAX_ANGLE} degrees, got {angle_b}")
-
-        self.servo = servo
-        self.duration = float(duration)
-        self.angle_a = float(angle_a)
-        self.angle_b = float(angle_b)
-
-    async def run_step(self, device: NativeDevice, definitions: Any) -> None:
-        """
-        Shake the servo for a given duration.
-
-        Args:
-            device: The device to run on (not used in this step).
-            definitions: The definitions object containing the servo attribute.
-        
-        Raises:
-            RuntimeError: If the servo attribute does not exist or is invalid.
-        """
-        await super().run_step(device, definitions)
-
-        servo_obj = self.get_property_from_definitions(self.servo, definitions, Servo)
-        servo_obj.enable()
-
-        end_time = asyncio.get_event_loop().time() + self.duration
-        
-        pos_a = angle_to_position(self.angle_a)
-        pos_b = angle_to_position(self.angle_b)
-        
-        move_time = estimate_servo_move_time(self.angle_a, self.angle_b)
-
-        while asyncio.get_event_loop().time() < end_time:
-            servo_obj.set_position(pos_a)
-            await asyncio.sleep(move_time)
-            if asyncio.get_event_loop().time() >= end_time:
-                break
-            servo_obj.set_position(pos_b)
-            await asyncio.sleep(move_time)
-
-
-def shake_servo(servo: Union[str, Servo], duration: float, angle_a: float, angle_b: float) -> ShakeServo:
-    """
-    Create a step to shake a servo for a specific duration between two angles.
-    
-    Args:
-        servo: The attribute name of the servo in the definitions object (str), or a direct reference to the servo (class attribute).
-        duration: Duration in seconds for the servo to shake.
-        angle_a: The first angle for shaking in degrees (0-180).
-        angle_b: The second angle for shaking in degrees (0-180).
-
-    Returns:
-        ShakeServo step
-    """
-    return ShakeServo(servo=servo, duration=duration, angle_a=angle_a, angle_b=angle_b)

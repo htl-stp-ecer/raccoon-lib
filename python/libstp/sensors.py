@@ -10,7 +10,7 @@ def delete_calibrate_light_sensors_properties():
 
 
 def lazy_calibrate_light_sensors(sensors: List[Sensor]):
-    if not get_bool_argument("no-calibrate"):
+    if get_bool_argument("calibrate", True):
         debug("Forcing calibration because no-calibrate argument was not passed.")
         delete_calibrate_light_sensors_properties()
 

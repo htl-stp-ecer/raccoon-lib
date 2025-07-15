@@ -33,9 +33,6 @@ class Timeout(Step):
         if timeout_seconds <= 0:
             raise ValueError(f"Timeout duration must be positive: {timeout_seconds}")
 
-        if step.has_run():
-            raise ValueError("Step has already been executed")
-
         self.step = step
         self.timeout_seconds = float(timeout_seconds)
         self.result = None

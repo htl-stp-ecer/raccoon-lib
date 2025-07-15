@@ -14,6 +14,7 @@ class DriveUntil(Drive):
             self,
             sensor_name: str,
             forward_speed: float,
+            angular_speed: float,
             black_or_white: str,
             do_correction: bool = True,
     ):
@@ -29,10 +30,13 @@ class DriveUntil(Drive):
             raise TypeError(f"sensor_name must be a string, got {type(sensor_name)}")
         if not isinstance(forward_speed, (int, float)):
             raise TypeError(f"forward_speed must be a number, got {type(forward_speed)}")
+        if not isinstance(angular_speed, (int, float)):
+            raise TypeError(f"angular_speed must be a number, got {type(angular_speed)}")
         if not isinstance(black_or_white, str) or black_or_white not in ["black", "white"]:
             raise TypeError(f"black_or_white must be a string that is black or white, got {type(black_or_white)}")
 
         self.sensor_name = sensor_name
+        self.angular_speed = angular_speed
         self.forward_speed = forward_speed
         self.black_or_white = black_or_white
 
@@ -57,12 +61,12 @@ class DriveUntil(Drive):
 
         def get_speed(_):
             if self._sensor is None:
-                return Speed(self.forward_speed, 0, 0)
+                return Speed(self.forward_speed, self.angular_speed)
             if is_black:
                 confidence = self._sensor.get_white_confidence()
             else:
                 confidence = self._sensor.get_black_confidence()
-            return Speed(self.forward_speed * confidence, 0, 0)
+            return Speed(self.forward_speed * confidence, self.angular_speed * confidence)
 
         super().__init__(while_false(check_condition), get_speed, do_correction)
 
@@ -101,11 +105,12 @@ def drive_until_white(
     return seq([
         drive_forward(ignorance_time, forward_speed),
         DriveUntil(
-        sensor_name,
-        forward_speed=forward_speed,
-        black_or_white="white",
-        do_correction=do_correction,
-    )
+            sensor_name,
+            forward_speed=forward_speed,
+            angular_speed=0,
+            black_or_white="white",
+            do_correction=do_correction,
+        )
     ])
 
 
@@ -129,9 +134,73 @@ def drive_until_black(
     return seq([
         drive_forward(ignorance_time, forward_speed),
         DriveUntil(
-        sensor_name,
-        forward_speed=forward_speed,
-        black_or_white="black",
-        do_correction=do_correction,
-    )
+            sensor_name,
+            forward_speed=forward_speed,
+            angular_speed=0,
+            black_or_white="black",
+            do_correction=do_correction,
+        )
     ])
+
+
+def turn_cw_until_black(sensor_name: str,
+                        angular_speed: float,
+                        ignorance_time: float = 0.1,
+                        do_correction: bool = True) -> Sequential:
+    return seq([
+        drive_forward(ignorance_time, angular_speed),
+        DriveUntil(
+            sensor_name,
+            forward_speed=0,
+            angular_speed=-angular_speed,
+            black_or_white="black",
+            do_correction=do_correction,
+        )
+    ])
+
+def turn_cw_until_white(sensor_name: str,
+                        angular_speed: float,
+                        ignorance_time: float = 0.1,
+                        do_correction: bool = True) -> Sequential:
+    return seq([
+        drive_forward(ignorance_time, angular_speed),
+        DriveUntil(
+            sensor_name,
+            forward_speed=0,
+            angular_speed=-angular_speed,
+            black_or_white="white",
+            do_correction=do_correction,
+        )
+    ])
+
+def turn_ccw_until_black(sensor_name: str,
+                         angular_speed: float,
+                         ignorance_time: float = 0.1,
+                         do_correction: bool = True) -> Sequential:
+    return seq([
+        drive_forward(ignorance_time, angular_speed),
+        DriveUntil(
+            sensor_name,
+            forward_speed=0,
+            angular_speed=angular_speed,
+            black_or_white="black",
+            do_correction=do_correction,
+        )
+    ])
+
+
+def turn_ccw_until_white(sensor_name: str,
+                         angular_speed: float,
+                         ignorance_time: float = 0.1,
+                         do_correction: bool = True) -> Sequential:
+    return seq([
+        drive_forward(ignorance_time, angular_speed),
+        DriveUntil(
+            sensor_name,
+            forward_speed=0,
+            angular_speed=angular_speed,
+            black_or_white="white",
+            do_correction=do_correction,
+        )
+    ])
+

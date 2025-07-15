@@ -1,3 +1,4 @@
+import time
 from typing import Any
 
 from libstp import PIDController
@@ -15,6 +16,14 @@ class LineUp(Drive):
     Drives forward (or backward) until both sensors exceed a confidence threshold,
     and *scales* its speed down as you approach the line for precision.
     """
+
+    # ─────────────────────────────────────────────────────────────
+    #  CONFIGURE THESE FOUR NUMBERS TO MATCH YOUR ROBOT
+    BOOST_DUTY      = 0.85      # % of full power to break static friction
+    NO_PROGRESS_EPS = 0.004     # confidence delta that still counts as “nothing moved”
+    STALL_DELAY_S   = 0.35      # how long we allow no progress before we “kick”
+    BOOST_TIME_S    = 0.18      # duration of the kick
+    # ─────────────────────────────────────────────────────────────
 
     def __init__(
             self,
@@ -58,26 +67,54 @@ class LineUp(Drive):
                 lb, rb = 1 - lb, 1 - rb
             return lb >= self.thresh and rb >= self.thresh
 
+        super().__init__(while_false(done), self._make_speed_fn(), do_correction=False)
+
+    def _make_speed_fn(self):
+        last_lb = last_rb = None
+        stalled_since: float | None = None
+
         def speed_fn(_: ConditionalResult) -> Speed:
+            nonlocal last_lb, last_rb, stalled_since
+
             lb = self.left_sensor.get_black_confidence()
             rb = self.right_sensor.get_black_confidence()
             if self.reverse:
                 lb, rb = 1 - lb, 1 - rb
 
+            # done
             if lb >= self.thresh and rb >= self.thresh:
+                self.left_pid.reset(); self.right_pid.reset()
+                stalled_since = None
                 return Speed(0, 0, 0)
 
-            # Use PID controllers to calculate wheel speeds
-            left_output = self.left_pid.calculate(0.5 - lb)
-            right_output = self.right_pid.calculate(0.5 - rb)
+            now = time.monotonic()
 
-            # Calculate final wheel speeds by applying PID output to base speed
-            left_speed = left_output * self.base_speed
-            right_speed = right_output * self.base_speed
+            # progress check
+            if last_lb is not None:
+                no_change = (abs(lb - last_lb) < self.NO_PROGRESS_EPS and
+                             abs(rb - last_rb) < self.NO_PROGRESS_EPS)
+                if no_change:
+                    stalled_since = stalled_since or now
+                else:
+                    stalled_since = None
+            last_lb, last_rb = lb, rb
 
+            # kick if stalled
+            if stalled_since is not None and now - stalled_since > self.STALL_DELAY_S:
+                if now - stalled_since < self.STALL_DELAY_S + self.BOOST_TIME_S:
+                    duty = self.BOOST_DUTY * (1 if self.base_speed >= 0 else -1)
+                    return Speed.wheels(duty, duty)  # straight power blast
+                else:
+                    stalled_since = None  # reset after kick
+
+            # normal PID
+            l_out = self.left_pid.calculate(0.5 - lb)
+            r_out = self.right_pid.calculate(0.5 - rb)
+            left_speed  = l_out * self.base_speed
+            right_speed = r_out * self.base_speed
             return Speed.wheels(left_speed, right_speed)
 
-        super().__init__(while_false(done), speed_fn, do_correction=False)
+        return speed_fn
 
     async def run_step(self, device: NativeDevice, definitions: Any) -> None:
         if not hasattr(definitions, self.left_name) or not hasattr(definitions, self.right_name):

@@ -33,8 +33,6 @@ class Parallel(Step):
         for i, step in enumerate(steps):
             if not isinstance(step, StepProtocol):
                 raise TypeError(f"Element at index {i} is not a Step instance: {type(step)}")
-            if step.has_run():
-                raise ValueError(f"Step at index {i} has already been executed")
 
         self.steps: List[Step] = steps
         self._last_completed_step: Optional[Step] = None
@@ -64,11 +62,6 @@ class Parallel(Step):
         # Call parent's run_step which will check if this step has already run
         # and set the _has_run flag to True
         await super().run_step(device, definitions)
-
-        # Verify no steps have been run yet
-        for i, step in enumerate(self.steps):
-            if step.has_run():
-                raise RuntimeError(f"Step at index {i} has already been executed")
 
         # If no steps, nothing to do
         if not self.steps:

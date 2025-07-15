@@ -5,6 +5,7 @@ from libstp.datatypes import for_seconds as for_seconds_condition
 from libstp.device import NativeDevice
 from libstp.sensor import LightSensor
 
+from libstp_helpers.api.hardware.single_line_follow_sensor import SingleLineFollowSensor
 from libstp_helpers.api.steps.drive import Drive
 
 
@@ -47,7 +48,7 @@ class SingleSensorLineFollow(Drive):
         self._sensor = None
 
         def get_speed(_: ConditionalResult) -> Speed:
-            conf = self._sensor.get_black_confidence()
+            conf = self._sensor.line_confidence()
             # positive diff = more black → steer one way; negative = more white → steer other
             diff = conf - self.threshold
             rotational = self.rotation_adjustment * diff
@@ -60,8 +61,8 @@ class SingleSensorLineFollow(Drive):
         if not hasattr(definitions, self.sensor_name):
             raise RuntimeError(f"Sensor '{self.sensor_name}' not found in definitions")
         self._sensor = getattr(definitions, self.sensor_name)
-        if not isinstance(self._sensor, LightSensor):
-            raise TypeError(f"Sensor must be LightSensor, got {type(self._sensor)}")
+        if not isinstance(self._sensor, SingleLineFollowSensor):
+            raise TypeError(f"Sensor must be SingleLineFollowSensor, got {type(self._sensor)}")
         await super().run_step(device, definitions)
 
 

@@ -34,15 +34,9 @@ class WaitForCheckpoint(Step):
         """
         await super().run_step(device, definitions)
 
-        if hasattr(definitions, "synchronizer"):
-            raise RuntimeError("Synchronizer variable does not exist in definitions")
+        synchronizer = self.get_property_from_definitions("synchronizer", definitions, Synchroniser)
 
-        if definitions.synchronizer is None:
-            raise RuntimeError("Synchronizer variable is None in definitions")
-        if type(definitions.synchronizer) is not Synchroniser:
-            raise RuntimeError(f"Synchronizer variable is not of type Synchronizer: {type(definitions.synchronizer)}")
-        
-        await definitions.synchronizer.wait_until_checkpoint(self.checkpoint_seconds)
+        await synchronizer.wait_until_checkpoint(self.checkpoint_seconds)
 
 @log
 def wait_for_checkpoint(checkpoint_seconds: float) -> WaitForCheckpoint:

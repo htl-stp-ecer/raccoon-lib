@@ -44,17 +44,20 @@ class Robot(ClassNameLogger):
 
         self._missions = []
         self._setup_mission = None
-        self._shutdown_hook = None
+        self._shutdown_mission = None
         self._auto_shutdown_time = None
         self._light_sensor = None
+        self._has_shutdown_missions_been_called = False
 
     def use_missions(self, *missions):
         self._missions.extend(missions)
         return self
 
-    def on_shutdown(self, func):
-        self._shutdown_hook = func
-        return func
+    def set_shutdown_mission(self, mission):
+        if not isinstance(mission, Mission):
+            raise TypeError("The provided mission must be an instance of Mission.")
+
+        self._shutdown_mission = mission
 
     def set_setup_mission(self, mission):
         if not isinstance(mission, Mission):
@@ -73,14 +76,18 @@ class Robot(ClassNameLogger):
         return self
 
     async def __call_on_shutdown__(self):
-        if self._shutdown_hook is None:
+        if self._shutdown_mission is None:
+            return
+        if self._has_shutdown_missions_been_called:
             return
 
+        self._has_shutdown_missions_been_called = True
         start_time = time.perf_counter()
-        await self._shutdown_hook(self.device, self.definitions)
+        mission_controller = MissionController(self.device, self.definitions)
+        await mission_controller.execute_missions([self._shutdown_mission])
         elapsed_time = (time.perf_counter() - start_time) * 1000  # Convert to milliseconds
         if elapsed_time > 20:
-            self.warn(f"Shutdown hook execution took {elapsed_time:.2f}ms, exceeding the 20ms limit.")
+            self.warn(f"Shutdown mission execution took {elapsed_time:.2f}ms, exceeding the 20ms limit.")
 
     async def __execute_missions__(self):
         mission_controller = MissionController(self.device, self.definitions)
@@ -97,7 +104,7 @@ class Robot(ClassNameLogger):
         await self.__call_on_shutdown__()
 
     def wait_for_button_click(self):
-        if not get_bool_argument("wait-for-button"):
+        if not get_bool_argument("wait-for-button", True):
             return
 
         self.info("Waiting for button click to continue...")
@@ -105,7 +112,7 @@ class Robot(ClassNameLogger):
         self.info("Button clicked!")
 
     def wait_for_light(self):
-        if not get_bool_argument("wait-for-light"):
+        if not get_bool_argument("wait-for-light", True):
             return
 
         if self._light_sensor is None:
@@ -145,6 +152,7 @@ class Robot(ClassNameLogger):
                 # This happens when timer cancels the main task
                 self.device.stop()
                 await self.__call_on_shutdown__()
+                self.device.stop()
 
         with self.device:
             asyncio.run(_run())

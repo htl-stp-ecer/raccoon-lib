@@ -149,10 +149,10 @@ def follow_line_until_both_black(
         left_sensor_name: str = "left_front_sensor",
         right_sensor_name: str = "right_front_sensor",
         strafe_adjustment: float = 0.05,
-        forward_reduction: float = 0.5,
-        pid_kp: float = 0.0,
+        forward_reduction: float = 0.0,
+        pid_kp: float = 0.75,
         pid_ki: float = 0.0,
-        pid_kd: float = 0.0,
+        pid_kd: float = 0.5,
 ) -> LineFollow:
     """
     Create a LineFollow step that follows a line until both sensors detect black.

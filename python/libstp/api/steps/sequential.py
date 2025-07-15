@@ -28,8 +28,6 @@ class Sequential(Step):
         for i, step in enumerate(steps):
             if not isinstance(step, StepProtocol):
                 raise TypeError(f"Element at index {i} is not a Step instance: {type(step)}")
-            if step.has_run():
-                raise ValueError(f"Step at index {i} has already been executed")
 
         self.steps: List[Step] = steps
         self._last_internal_step: Optional[Step] = steps[-1] if steps else None
@@ -64,10 +62,6 @@ class Sequential(Step):
         
         # Now execute all child steps
         for i, step in enumerate(self.steps):
-            if step.has_run():
-                raise RuntimeError(f"Step at index {i} has already been executed")
-
-            # Execute the step
             await step.run_step(device, definitions)
 
             # Call the on_exit callback with information about the next step

@@ -108,4 +108,3 @@ def turn_cw(degrees: float, speed: float, do_correction=True) -> Drive:
 def turn_ccw(degrees: float, speed: float, do_correction=True) -> Drive:
     """Turn counter-clockwise by specified degrees at a given speed"""
     return Drive(for_ccw_condition(degrees), Speed(0, 0, speed), do_correction)
-
