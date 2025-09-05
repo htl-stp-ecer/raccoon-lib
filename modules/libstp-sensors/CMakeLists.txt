@@ -1,1 +1,0 @@
-register_libstp_module(sensors "FALSE" "foundation;hal")

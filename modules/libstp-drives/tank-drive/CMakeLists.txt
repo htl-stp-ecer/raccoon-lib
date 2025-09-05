@@ -1,1 +1,0 @@
-register_libstp_module(tank_drive "FALSE" "foundation;drive_base")
