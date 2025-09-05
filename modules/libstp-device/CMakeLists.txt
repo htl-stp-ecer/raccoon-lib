@@ -1,1 +1,0 @@
-register_libstp_module(device "FALSE" "foundation;hal;datatype;async;ahrs;motion")
