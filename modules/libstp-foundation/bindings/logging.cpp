@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <optional>
 #include "foundation/config.hpp"
+#include <spdlog/pattern_formatter.h>
+#include <spdlog/details/fmt_helper.h>
 
 namespace py = pybind11;
 

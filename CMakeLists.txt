@@ -1,12 +1,12 @@
 option(ENABLE_SAFETY_CHECKS "Enable runtime safety checks across the whole project" ON)
 
-cmake_minimum_required(VERSION 3.15...3.27)
+cmake_minimum_required(VERSION 3.27)
 
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.cmake-cache" CACHE PATH "")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Set C++20 as the standard for coroutine support
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -42,25 +42,30 @@ FetchContent_Declare(
         GIT_TAG 3.4.0
 )
 
+set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
+set(EIGEN_BUILD_BENCHMARKS OFF CACHE BOOL "Disable Eigen benchmarks" FORCE)
+
 FetchContent_MakeAvailable(eigen)
 
-# Add include directory for Eigen
-include_directories(${eigen_SOURCE_DIR})
+FetchContent_Declare(
+        spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.14.1
+)
+FetchContent_MakeAvailable(spdlog)
 
 add_subdirectory(modules)
-# Add a library using FindPython's tooling (pybind11 also provides a helper like
-# this)
+
 python_add_library(_core MODULE main.cpp WITH_SOABI)
-target_link_libraries(_core PRIVATE pybind11::headers)
 
-# Add Eigen as a dependency to your library
+target_link_libraries(_core PRIVATE
+        pybind11::headers
+        spdlog::spdlog
+        Eigen3::Eigen
+)
+
+target_compile_features(_core PRIVATE cxx_std_23)
 target_include_directories(_core PRIVATE ${eigen_SOURCE_DIR})
-
-# Add coroutine support to the _core target
-target_compile_features(_core PRIVATE cxx_std_20)
-
-# This is passing in the version as a define just as an example
 target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
 
-# The install directory is the output (wheel) directory
 install(TARGETS _core DESTINATION libstp)
