@@ -1,0 +1,41 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/cpp
+{
+  "name": "C++ + Python",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // "forwardPorts": [],
+
+  // Auto-create a project-local .venv and upgrade basic tooling.
+  // (The Dockerfile's /etc/profile.d/auto-venv.sh will auto-activate it in interactive shells.)
+  "postCreateCommand": "bash -lc 'python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip wheel'",
+  // Ensure we run as the non-root dev user in base image.
+  "remoteUser": "vscode",
+  // Useful env defaults for predictable pip behavior.
+  "containerEnv": {
+    "PIP_DISABLE_PIP_VERSION_CHECK": "1",
+    "PIP_NO_CACHE_DIR": "1",
+    "VIRTUAL_ENV_DISABLE_PROMPT": "1"
+    // Set DISABLE_AUTO_VENV=1 to opt out of auto-activation logic from /etc/profile.d/auto-venv.sh
+    // "DISABLE_AUTO_VENV": "1"
+  },
+  // Tool-specific properties.
+  "customizations": {
+    "jetbrains": {
+      "backend": "CLion"
+    },
+    // Optional VS Code niceties if you ever open this in VS Code
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.terminal.activateEnvironment": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  }
+}
