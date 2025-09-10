@@ -1,0 +1,1 @@
+register_libstp_module(kinematics-mecanum "FALSE" "foundation;kinematics")
