@@ -1,0 +1,1 @@
+register_libstp_module(kinematics-differential "FALSE" "foundation;kinematics")

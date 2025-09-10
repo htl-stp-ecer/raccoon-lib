@@ -16,4 +16,13 @@ namespace libstp::foundation {
         Quaternionf orientation;
     };
 
+    struct ChassisCmd { double vx, vy, wz; };
+    struct ChassisState { double vx, vy, wz; };
+    struct ChassisVel {
+        double vx;
+        double vy;
+        double w;
+    };
+
+
 } // namespace foundation
