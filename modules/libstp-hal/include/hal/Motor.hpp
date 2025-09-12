@@ -12,7 +12,7 @@ namespace libstp::hal::motor
     class Motor
     {
 #ifdef SAFETY_CHECKS_ENABLED
-        static std::set<int> used_motor_ports;
+        static inline std::set<int> used_motor_ports{};
 
         static void registerMotorPort(int port);
 
@@ -28,19 +28,10 @@ namespace libstp::hal::motor
         ~Motor();
 
         void setSpeed(int percent) const;
-        int getSpeed() const;
+        int getPosition() const;
 
         void brake() const;
 
         static void disableAll();
-    };
-
-    class EncoderMotor : public Motor
-    {
-        int getPosition() const;
-
-        void moveToPosition(int position);
-
-        void resetPosition();
     };
 }

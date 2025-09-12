@@ -16,7 +16,7 @@ namespace libstp::drive
         void setMaxRate(double r);
         [[nodiscard]] double maxRate() const;
 
-        [[nodiscard]] double step(double target, double current_prev, double dt) const;
+        [[nodiscard]] double step(double target, double current_prev, double dt, double& out_accel) const;
 
     private:
         double max_rate_{0.0};
