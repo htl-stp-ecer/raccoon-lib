@@ -29,8 +29,8 @@ function(register_platform PLATFORM_NAME)
     message(STATUS "Linking platform_${PLATFORM_NAME} with drivers: ${_drivers}")
 endfunction()
 
-set(DRIVER_BUNDLE "wombat" CACHE STRING "Which driver bundle to use (e.g. wombat, esp32)")
-set_property(CACHE DRIVER_BUNDLE PROPERTY STRINGS wombat esp32)
+set(DRIVER_BUNDLE "mock" CACHE STRING "Which driver bundle to use (e.g. wombat, esp32, mock)")
+set_property(CACHE DRIVER_BUNDLE PROPERTY STRINGS wombat esp32 mock)
 
 add_subdirectory(${DRIVER_BUNDLE})
 
