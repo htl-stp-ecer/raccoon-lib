@@ -8,7 +8,7 @@
 using namespace libstp::drive;
 
 Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
-             const std::vector<hal::motor::Motor>& motors,
+             const std::vector<hal::motor::Motor*>& motors,
              const std::vector<MotorCalibration>& calibrations)
     : kinematics_(std::move(kinematics))
 {
@@ -21,9 +21,9 @@ Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
     wheels_.reserve(motors.size());
     for (std::size_t i = 0; i < motors.size(); ++i)
     {
-        const auto& calibration = calibrations.empty() ? MotorCalibration{} : calibrations[i];
+        const auto calib = calibrations.empty() ? MotorCalibration{} : calibrations[i];
         Wheel w{
-            .adapter = MotorAdapter{motors[i], calibration},
+            .adapter = MotorAdapter{motors[i], calib},
         };
         wheels_.push_back(std::move(w));
     }
@@ -40,12 +40,32 @@ void Drive::setWheelLimits(const WheelLimits& lim)
     }
 }
 
-void Drive::setWheelControllerGains(const VelocityController::Gains& g)
+void Drive::setWheelControllerGains(const PidGains& g)
 {
     for (auto& w : wheels_)
     {
         auto calibration = w.adapter.getCalibration();
-        calibration.pid_gains = g;
+        calibration.pid = g;
+        w.adapter.setCalibration(calibration);
+    }
+}
+
+void Drive::setWheelFeedforward(const Feedforward& ff)
+{
+    for (auto& w : wheels_)
+    {
+        auto calibration = w.adapter.getCalibration();
+        calibration.ff = ff;
+        w.adapter.setCalibration(calibration);
+    }
+}
+
+void Drive::setWheelDeadzone(const Deadzone& dz)
+{
+    for (auto& w : wheels_)
+    {
+        auto calibration = w.adapter.getCalibration();
+        calibration.deadzone = dz;
         w.adapter.setCalibration(calibration);
     }
 }
@@ -80,20 +100,30 @@ Achieved Drive::update(const double dt)
 
     Achieved a{};
     a.saturated_any = false;
-    a.saturation_mask = 0;
+    a.kinematic_sat_mask = 0;
+    a.actuator_sat_mask = 0;
 
     for (std::size_t i = 0; i < wheels_.size(); ++i)
     {
-        const double target = std::clamp(wheel_targets[i], -wheel_lim_.max_w, wheel_lim_.max_w);
-        if (std::abs(wheel_targets[i]) > wheel_lim_.max_w)
+        const double unclamped_target = wheel_targets[i];
+        const double target = std::clamp(unclamped_target, -wheel_lim_.max_w, wheel_lim_.max_w);
+        if (std::abs(unclamped_target) > wheel_lim_.max_w)
         {
             a.saturated_any = true;
-            a.saturation_mask |= 1u << i;
+            a.kinematic_sat_mask |= 1u << i;
         }
 
-        const double limited = wheels_[i].limiter.step(target, wheels_[i].target_w, dt);
+        double a_ref = 0.0;
+        const double limited = wheels_[i].limiter.step(target, wheels_[i].target_w, dt, a_ref);
         wheels_[i].target_w = limited;
-        wheels_[i].adapter.setVelocity(limited, dt);
+
+        bool motor_sat = false;
+        wheels_[i].adapter.setVelocityWithAccel(limited, a_ref, dt, &motor_sat);
+        if (motor_sat)
+        {
+            a.saturated_any = true;
+            a.actuator_sat_mask |= 1u << i;
+        }
     }
 
     std::vector meas_w(wheels_.size(), 0.0);

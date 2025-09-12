@@ -39,7 +39,7 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
 #ifdef SAFETY_CHECKS_ENABLED
     if (percent < MIN_SPEED || percent > MAX_SPEED) throw std::out_of_range("speed -100 - 100");
 #endif
-    
+
     using namespace platform::wombat::core;
     const bool zero = percent == 0;
     auto dir = MotorDir::Off;
@@ -49,7 +49,7 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
     setMotor(port, dir, duty);
 }
 
-int libstp::hal::motor::Motor::getSpeed() const
+int libstp::hal::motor::Motor::getPosition() const
 {
     return static_cast<int>(platform::wombat::core::bemf(port));
 }

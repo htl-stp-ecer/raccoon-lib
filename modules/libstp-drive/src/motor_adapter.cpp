@@ -7,75 +7,105 @@
 
 using namespace libstp::drive;
 
-MotorAdapter::MotorAdapter(const hal::motor::Motor& motor, const MotorCalibration& calibration)
-    : motor_(motor), calibration_(calibration), controller_(calibration.pid_gains)
+MotorAdapter::MotorAdapter(hal::motor::Motor* motor, const MotorCalibration& calibration)
+    : motor_(motor), calibration_(calibration),
+      controller_(calibration.pid, calibration.ff, calibration.deadzone)
 {
-}
-
-void MotorAdapter::setVelocity(const double target_rad_per_s, const double dt)
-{
-    last_target_velocity_ = target_rad_per_s;
-    velocity_control_active_ = true;
-
-    const double current_velocity = getVelocity();
-
-    const double pid_output = controller_.compute(target_rad_per_s, current_velocity, dt);
-
-    double percent_output = pid_output * calibration_.velocity_to_percent_scale;
-    percent_output = std::clamp(percent_output, -calibration_.max_percent_output, calibration_.max_percent_output);
-
-    motor_.setSpeed(static_cast<int>(std::round(percent_output)));
-}
-
-double MotorAdapter::getVelocity() const
-{
-    const int raw_percent = motor_.getSpeed();
-    const double adjusted_percent = static_cast<double>(raw_percent) - calibration_.bemf_offset;
-    return adjusted_percent * calibration_.percent_to_velocity_scale;
-}
-
-void MotorAdapter::setPercent(const double percent)
-{
-    velocity_control_active_ = false;
-    const double clamped_percent = std::clamp(percent, -calibration_.max_percent_output,
-                                              calibration_.max_percent_output);
-    motor_.setSpeed(static_cast<int>(std::round(clamped_percent)));
-}
-
-int MotorAdapter::getRawPercent() const
-{
-    return motor_.getSpeed();
 }
 
 void MotorAdapter::setCalibration(const MotorCalibration& calibration)
 {
     calibration_ = calibration;
-    controller_.setGains(calibration.pid_gains);
+    controller_.setGains(calibration_.pid);
+    controller_.setFF(calibration_.ff);
+    controller_.setDeadzone(calibration_.deadzone);
 }
 
-const MotorCalibration& MotorAdapter::getCalibration() const
+const MotorCalibration& MotorAdapter::getCalibration() const { return calibration_; }
+
+void MotorAdapter::updateEncoderVelocity(double dt)
 {
-    return calibration_;
+    if (!motor_ || dt <= 0.0) return;
+
+    const long long pos = motor_->getPosition();
+    if (!pos_prev_init_)
+    {
+        pos_prev_ = pos;
+        pos_prev_init_ = true;
+        return;
+    }
+
+    const long long d_ticks = pos - pos_prev_;
+    pos_prev_ = pos;
+
+    double w = (static_cast<double>(d_ticks) * calibration_.ticks_to_rad) / dt; // rad/s
+    if (calibration_.invert_meas) w = -w;
+
+    const double a = std::clamp(calibration_.vel_lpf_alpha, 0.0, 1.0);
+    w_meas_filt_ = (1.0 - a) * w_meas_filt_ + a * w;
+}
+
+double MotorAdapter::getVelocity() const
+{
+    return w_meas_filt_;
+}
+
+int MotorAdapter::getRawPercent() const
+{
+    if (!motor_) return 0;
+    return motor_->getPosition();
+}
+
+void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, bool* out_saturated)
+{
+    if (!motor_) return;
+
+    updateEncoderVelocity(dt);
+    double w_meas = getVelocity();
+
+    const double u_max = std::abs(calibration_.max_percent_output);
+    bool saturated = false;
+    double u = controller_.compute(w_ref, a_ref, w_meas, dt, u_max, &saturated);
+
+    if (calibration_.invert_cmd) u = -u;
+
+    u = std::clamp(u, -u_max, u_max);
+
+    motor_->setSpeed(static_cast<int>(std::lround(u)));
+    last_u_cmd_ = u;
+    if (out_saturated) *out_saturated = saturated || (std::abs(u) >= u_max - 1e-6);
+}
+
+void MotorAdapter::setVelocity(double w_ref, double dt)
+{
+    bool dummy = false;
+    setVelocityWithAccel(w_ref, 0.0, dt, &dummy);
+}
+
+void MotorAdapter::setPercent(double percent)
+{
+    if (!motor_) return;
+
+    controller_.reset();
+    const double u_max = std::abs(calibration_.max_percent_output);
+    double u = std::clamp(percent, -u_max, u_max);
+    if (calibration_.invert_cmd) u = -u;
+    motor_->setSpeed(static_cast<int>(std::lround(u)));
+    last_u_cmd_ = u;
 }
 
 void MotorAdapter::resetController()
 {
     controller_.reset();
-    velocity_control_active_ = false;
 }
 
 void MotorAdapter::brake()
 {
-    motor_.brake();
+    if (!motor_) return;
+    motor_->brake();
     resetController();
 }
 
-libstp::hal::motor::Motor& MotorAdapter::getMotor()
-{
-    return motor_;
-}
 
-const libstp::hal::motor::Motor& MotorAdapter::getMotor() const
-{
-    return motor_;
-}
+libstp::hal::motor::Motor& MotorAdapter::motor() { return *motor_; }
+const libstp::hal::motor::Motor& MotorAdapter::motor() const { return *motor_; }
