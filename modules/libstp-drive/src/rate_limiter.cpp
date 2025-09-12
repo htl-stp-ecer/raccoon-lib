@@ -4,26 +4,29 @@
 
 #include "drive/rate_limiter.hpp"
 
-libstp::drive::RateLimiter::RateLimiter(const double max_rate) : max_rate_(max_rate)
+using namespace libstp::drive;
+
+RateLimiter::RateLimiter(const double max_rate) : max_rate_(max_rate)
 {
 }
 
-void libstp::drive::RateLimiter::setMaxRate(const double r)
-{
-    max_rate_ = std::max(0.0, r);
-}
+void RateLimiter::setMaxRate(const double r) { max_rate_ = std::max(0.0, r); }
 
-double libstp::drive::RateLimiter::maxRate() const
-{
-    return max_rate_;
-}
+double RateLimiter::maxRate() const { return max_rate_; }
 
-double libstp::drive::RateLimiter::step(const double target, const double current_prev, const double dt) const
+double RateLimiter::step(const double target, const double current_prev, const double dt, double& out_accel) const
 {
-    if (max_rate_ <= 0.0 || dt <= 0.0) return target;
+    if (max_rate_ <= 0.0 || dt <= 0.0)
+    {
+        out_accel = (target - current_prev) / (dt > 0.0 ? dt : 1.0);
+        return target;
+    }
     const double dv = target - current_prev;
     const double cap = max_rate_ * dt;
-    if (dv > cap) return current_prev + cap;
-    if (dv < -cap) return current_prev - cap;
-    return target;
+    double next = target;
+    if (dv > cap) next = current_prev + cap;
+    else if (dv < -cap) next = current_prev - cap;
+
+    out_accel = (next - current_prev) / (dt > 0.0 ? dt : 1.0);
+    return next;
 }

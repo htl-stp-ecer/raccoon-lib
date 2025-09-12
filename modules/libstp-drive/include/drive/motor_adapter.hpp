@@ -10,25 +10,33 @@ namespace libstp::drive
 {
     struct MotorCalibration
     {
-        double velocity_to_percent_scale{10.0};
-        double percent_to_velocity_scale{0.1};
+        Feedforward ff{};
+        PidGains pid{1.0, 0.0, 0.0};
 
-        VelocityController::Gains pid_gains{1.0, 0.0, 0.0, 1.0};
 
-        double bemf_offset{0.0};
+        Deadzone deadzone{true, 10.0, 40.0, 15.0};
+
         double max_percent_output{100.0};
+        double ticks_to_rad{1.0};
+        double vel_lpf_alpha{0.2};
+
+        bool invert_meas{false};
+        bool invert_cmd{false};
     };
+
 
     class MotorAdapter
     {
     public:
-        explicit MotorAdapter(const hal::motor::Motor& motor, const MotorCalibration& calibration = {});
+        explicit MotorAdapter(hal::motor::Motor* motor, const MotorCalibration& calibration = {});
 
-        void setVelocity(double target_rad_per_s, double dt);
+        void setVelocityWithAccel(double w_ref, double a_ref, double dt, bool* out_saturated);
 
-        [[nodiscard]] double getVelocity() const;
+        void setVelocity(double w_ref, double dt);
 
         void setPercent(double percent);
+
+        [[nodiscard]] double getVelocity() const;
 
         [[nodiscard]] int getRawPercent() const;
 
@@ -38,15 +46,20 @@ namespace libstp::drive
         void resetController();
         void brake();
 
-        hal::motor::Motor& getMotor();
-        [[nodiscard]] const hal::motor::Motor& getMotor() const;
+        hal::motor::Motor& motor();
+        [[nodiscard]] const hal::motor::Motor& motor() const;
+
+        void updateEncoderVelocity(double dt);
 
     private:
-        hal::motor::Motor motor_;
+        hal::motor::Motor* motor_{nullptr};
         MotorCalibration calibration_;
         VelocityController controller_;
 
-        double last_target_velocity_{0.0};
-        bool velocity_control_active_{false};
+        mutable double w_meas_filt_{0.0};
+        long long pos_prev_{0};
+        bool pos_prev_init_{false};
+
+        double last_u_cmd_{0.0};
     };
 }

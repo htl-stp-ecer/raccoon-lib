@@ -15,7 +15,7 @@ namespace libstp::hal::servo
         int storedPosition = 0;
 
 #ifdef SAFETY_CHECKS_ENABLED
-        static std::set<int> used_servo_ports;
+        static inline std::set<int> used_servo_ports{};
 
         static void registerServoPort(int port);
 

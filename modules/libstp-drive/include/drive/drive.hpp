@@ -11,7 +11,6 @@
 #include "motor_adapter.hpp"
 #include "kinematics/kinematics.hpp"
 #include "foundation/types.hpp"
-
 #include "drive/limits.hpp"
 
 namespace libstp::drive
@@ -20,30 +19,31 @@ namespace libstp::drive
     {
         foundation::ChassisVel body{};
         bool saturated_any{false};
-        std::uint32_t saturation_mask{0};
+        std::uint32_t kinematic_sat_mask{0};
+        std::uint32_t actuator_sat_mask{0};
     };
 
     class Drive final
     {
     public:
         Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
-              const std::vector<hal::motor::Motor>& motors,
+              const std::vector<hal::motor::Motor*>& motors,
               const std::vector<MotorCalibration>& calibrations = {});
 
         void setChassisLimits(const MotionLimits& lim);
         void setWheelLimits(const WheelLimits& lim);
 
-        void setWheelControllerGains(const VelocityController::Gains& g);
-        
+        void setWheelControllerGains(const PidGains& g);
+        void setWheelFeedforward(const Feedforward& ff);
+        void setWheelDeadzone(const Deadzone& dz);
+
         void setWheelCalibration(std::size_t wheel_index, const MotorCalibration& calibration);
         void setAllWheelCalibrations(const std::vector<MotorCalibration>& calibrations);
 
         void setVelocity(const foundation::ChassisVel& v_body);
-
         Achieved update(double dt);
 
         [[nodiscard]] foundation::ChassisState estimateState() const;
-
         [[nodiscard]] std::size_t wheelCount() const;
 
         void stop(bool hard = false);
