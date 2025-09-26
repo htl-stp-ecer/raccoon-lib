@@ -6,6 +6,7 @@
 #ifdef SAFETY_CHECKS_ENABLED
 #include <set>
 #endif
+#include "foundation/motor.hpp"
 
 namespace libstp::hal::motor
 {
@@ -23,7 +24,7 @@ namespace libstp::hal::motor
         int port;
         bool inverted;
 
-        explicit Motor(int port, bool inverted);
+        explicit Motor(int port, bool inverted, const foundation::MotorCalibration& calibration = {});
 
         ~Motor();
 
@@ -32,6 +33,11 @@ namespace libstp::hal::motor
 
         void brake() const;
 
+        [[nodiscard]] const foundation::MotorCalibration& getCalibration() const;
+
         static void disableAll();
+
+    private:
+        foundation::MotorCalibration calibration_;
     };
 }

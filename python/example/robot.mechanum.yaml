@@ -1,0 +1,87 @@
+robot:
+  type: mecanum
+  kinematics:
+    wheel_diameter: 0.1016
+    wheelbase_width: 0.3048
+    wheelbase_length: 0.3048
+    front_left_wheel: fl_motor
+    front_right_wheel: fr_motor
+    back_left_wheel: bl_motor
+    back_right_wheel: br_motor
+  limits:
+    chassis:
+      max_velocity: 2.0
+      max_angular_velocity: 8.0
+    wheels:
+      max_angular_velocity: 100.0
+      max_angular_acceleration: 1000.0
+
+definitions:
+  fl_motor:
+    port: 0
+    ticks_per_revolution: 1440
+    gear_ratio: 1.0
+    pid:
+      kp: 1.2
+      ki: 0.0
+      kd: 0.05
+    feedforward:
+      ks: 0.2
+      kv: 0.01
+      ka: 0.0
+    deadzone:
+      enable: true
+      zero_window_percent: 10.0
+      start_percent: 40.0
+      release_percent: 15.0
+  fr_motor:
+    port: 1
+    ticks_per_revolution: 1440
+    pid:
+      kp: 1.2
+      ki: 0.0
+      kd: 0.05
+    feedforward:
+      ks: 0.2
+      kv: 0.01
+      ka: 0.0
+    deadzone:
+      enable: true
+      zero_window_percent: 10.0
+      start_percent: 40.0
+      release_percent: 15.0
+    gear_ratio: 1.0
+  bl_motor:
+    port: 0
+    ticks_per_revolution: 1440
+    gear_ratio: 1.0
+    pid:
+      kp: 1.2
+      ki: 0.0
+      kd: 0.05
+    feedforward:
+      ks: 0.2
+      kv: 0.01
+      ka: 0.0
+    deadzone:
+      enable: true
+      zero_window_percent: 10.0
+      start_percent: 40.0
+      release_percent: 15.0
+  br_motor:
+    port: 1
+    ticks_per_revolution: 1440
+    pid:
+      kp: 1.2
+      ki: 0.0
+      kd: 0.05
+    feedforward:
+      ks: 0.2
+      kv: 0.01
+      ka: 0.0
+    deadzone:
+      enable: true
+      zero_window_percent: 10.0
+      start_percent: 40.0
+      release_percent: 15.0
+    gear_ratio: 1.0

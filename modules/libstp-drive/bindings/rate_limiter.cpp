@@ -1,5 +1,4 @@
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 #include "drive/rate_limiter.hpp"
 
 namespace py = pybind11;

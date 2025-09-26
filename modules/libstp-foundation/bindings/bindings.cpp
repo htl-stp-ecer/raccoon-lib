@@ -12,11 +12,13 @@ namespace py = pybind11;
 
 void init_pid(const py::module& m);
 void init_logger(py::module_& m);
+void init_motor(const py::module& m);
 
-PYBIND11_MODULE(hal, m)
+PYBIND11_MODULE(foundation, m)
 {
     m.doc() = "Python bindings for libstp-foundation";
 
     init_pid(m);
     init_logger(m);
+    init_motor(m);
 }
