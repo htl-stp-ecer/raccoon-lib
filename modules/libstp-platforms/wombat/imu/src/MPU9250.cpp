@@ -6,6 +6,10 @@
 #include "core/Spi.hpp"
 #include "hal/IMU.hpp"
 
+#ifdef SAFETY_CHECKS_ENABLED
+bool libstp::hal::imu::IMU::imuInstanceCreated = false;
+#endif
+
 libstp::hal::imu::IMU::IMU()
 {
 #ifdef SAFETY_CHECKS_ENABLED

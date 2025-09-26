@@ -1,0 +1,37 @@
+robot:
+  type: differential
+  kinematics:
+    wheel_diameter: 0.1016
+    wheelbase_width: 0.3048
+    left_wheel: left_motor
+    right_wheel: right_motor
+  limits:
+    chassis:
+      max_velocity: 2.0
+      max_angular_velocity: 8.0
+    wheels:
+      max_angular_velocity: 100.0
+      max_angular_acceleration: 1000.0
+
+definitions:
+  left_motor:
+    port: 0
+    ticks_per_revolution: 1440
+    gear_ratio: 1.0
+    pid:
+      kp: 1.2
+      ki: 0.0
+      kd: 0.05
+    feedforward:
+      ks: 0.2
+      kv: 0.01
+      ka: 0.0
+    deadzone:
+      enable: true
+      zero_window_percent: 10.0
+      start_percent: 40.0
+      release_percent: 15.0
+  right_motor:
+    port: 1
+    ticks_per_revolution: 1440
+    gear_ratio: 1.0
