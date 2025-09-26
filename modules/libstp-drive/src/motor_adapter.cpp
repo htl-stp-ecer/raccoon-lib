@@ -7,21 +7,11 @@
 
 using namespace libstp::drive;
 
-MotorAdapter::MotorAdapter(hal::motor::Motor* motor, const MotorCalibration& calibration)
-    : motor_(motor), calibration_(calibration),
-      controller_(calibration.pid, calibration.ff, calibration.deadzone)
+MotorAdapter::MotorAdapter(hal::motor::Motor* motor)
+    : motor_(motor),
+      controller_(motor->getCalibration().pid, motor->getCalibration().ff, motor->getCalibration().deadzone)
 {
 }
-
-void MotorAdapter::setCalibration(const MotorCalibration& calibration)
-{
-    calibration_ = calibration;
-    controller_.setGains(calibration_.pid);
-    controller_.setFF(calibration_.ff);
-    controller_.setDeadzone(calibration_.deadzone);
-}
-
-const MotorCalibration& MotorAdapter::getCalibration() const { return calibration_; }
 
 void MotorAdapter::updateEncoderVelocity(double dt)
 {
@@ -38,10 +28,10 @@ void MotorAdapter::updateEncoderVelocity(double dt)
     const long long d_ticks = pos - pos_prev_;
     pos_prev_ = pos;
 
-    double w = (static_cast<double>(d_ticks) * calibration_.ticks_to_rad) / dt; // rad/s
-    if (calibration_.invert_meas) w = -w;
+    double w = (static_cast<double>(d_ticks) * motor_->getCalibration().ticks_to_rad) / dt; // rad/s
+    //if (motor_->getCalibration().invert_meas) w = -w;
 
-    const double a = std::clamp(calibration_.vel_lpf_alpha, 0.0, 1.0);
+    const double a = std::clamp(motor_->getCalibration().vel_lpf_alpha, 0.0, 1.0);
     w_meas_filt_ = (1.0 - a) * w_meas_filt_ + a * w;
 }
 
@@ -63,11 +53,11 @@ void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, b
     updateEncoderVelocity(dt);
     double w_meas = getVelocity();
 
-    const double u_max = std::abs(calibration_.max_percent_output);
+    const double u_max = std::abs(motor_->getCalibration().max_percent_output);
     bool saturated = false;
     double u = controller_.compute(w_ref, a_ref, w_meas, dt, u_max, &saturated);
 
-    if (calibration_.invert_cmd) u = -u;
+    //if (motor_->getCalibration().invert_cmd) u = -u;
 
     u = std::clamp(u, -u_max, u_max);
 
@@ -87,9 +77,9 @@ void MotorAdapter::setPercent(double percent)
     if (!motor_) return;
 
     controller_.reset();
-    const double u_max = std::abs(calibration_.max_percent_output);
+    const double u_max = std::abs(motor_->getCalibration().max_percent_output);
     double u = std::clamp(percent, -u_max, u_max);
-    if (calibration_.invert_cmd) u = -u;
+    //if (motor_->getCalibration().invert_cmd) u = -u;
     motor_->setSpeed(static_cast<int>(std::lround(u)));
     last_u_cmd_ = u;
 }

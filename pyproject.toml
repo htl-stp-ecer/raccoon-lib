@@ -11,7 +11,10 @@ readme = "README.md"
 authors = [
   { name = "Tobias Madlberger", email = "tobias.madlberger@gmail.com" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml",
+]
 classifiers = [
   "Development Status :: 4 - Beta",
   "License :: OSI Approved :: MIT License",
@@ -33,6 +36,7 @@ test = ["pytest"]
 wheel.expand-macos-universal-tags = true
 minimum-version = "build-system.requires"
 build-dir = "build"
+wheel.packages = ["python/libstp", "python/libstp_api"]
 
 
 [tool.pytest.ini_options]

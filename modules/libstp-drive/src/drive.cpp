@@ -8,22 +8,18 @@
 using namespace libstp::drive;
 
 Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
-             const std::vector<hal::motor::Motor*>& motors,
-             const std::vector<MotorCalibration>& calibrations)
+             const std::vector<hal::motor::Motor*>& motors)
     : kinematics_(std::move(kinematics))
 {
     if (!kinematics_) throw std::invalid_argument("Kinematics pointer cannot be null");
     if (motors.size() != kinematics_->wheelCount())
         throw std::invalid_argument("Number of motors must match number of wheels in kinematics");
-    if (!calibrations.empty() && calibrations.size() != motors.size())
-        throw std::invalid_argument("Calibrations vector must be empty or match number of motors");
 
     wheels_.reserve(motors.size());
     for (std::size_t i = 0; i < motors.size(); ++i)
     {
-        const auto calib = calibrations.empty() ? MotorCalibration{} : calibrations[i];
         Wheel w{
-            .adapter = MotorAdapter{motors[i], calib},
+            .adapter = MotorAdapter{motors[i]},
         };
         wheels_.push_back(std::move(w));
     }
@@ -37,53 +33,6 @@ void Drive::setWheelLimits(const WheelLimits& lim)
     for (auto& w : wheels_)
     {
         w.limiter.setMaxRate(std::max(0.0, wheel_lim_.max_w_dot));
-    }
-}
-
-void Drive::setWheelControllerGains(const PidGains& g)
-{
-    for (auto& w : wheels_)
-    {
-        auto calibration = w.adapter.getCalibration();
-        calibration.pid = g;
-        w.adapter.setCalibration(calibration);
-    }
-}
-
-void Drive::setWheelFeedforward(const Feedforward& ff)
-{
-    for (auto& w : wheels_)
-    {
-        auto calibration = w.adapter.getCalibration();
-        calibration.ff = ff;
-        w.adapter.setCalibration(calibration);
-    }
-}
-
-void Drive::setWheelDeadzone(const Deadzone& dz)
-{
-    for (auto& w : wheels_)
-    {
-        auto calibration = w.adapter.getCalibration();
-        calibration.deadzone = dz;
-        w.adapter.setCalibration(calibration);
-    }
-}
-
-void Drive::setWheelCalibration(const std::size_t wheel_index, const MotorCalibration& calibration)
-{
-    if (wheel_index >= wheels_.size())
-        throw std::out_of_range("Wheel index out of range");
-    wheels_[wheel_index].adapter.setCalibration(calibration);
-}
-
-void Drive::setAllWheelCalibrations(const std::vector<MotorCalibration>& calibrations)
-{
-    if (calibrations.size() != wheels_.size())
-        throw std::invalid_argument("Calibrations vector size must match number of wheels");
-    for (std::size_t i = 0; i < wheels_.size(); ++i)
-    {
-        wheels_[i].adapter.setCalibration(calibrations[i]);
     }
 }
 

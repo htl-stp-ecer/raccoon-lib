@@ -7,7 +7,9 @@ constexpr int MAX_PORT = 4;
 constexpr int MIN_SPEED = -100;
 constexpr int MAX_SPEED = 100;
 
-libstp::hal::motor::Motor::Motor(const int port, const bool inverted): port(port), inverted(inverted)
+libstp::hal::motor::Motor::Motor(const int port, const bool inverted,
+                                 const foundation::MotorCalibration& calibration) : port(port), inverted(inverted),
+    calibration_(calibration)
 {
 #ifdef SAFETY_CHECKS_ENABLED
     if (port < MIN_PORT || port > MAX_PORT)
@@ -56,4 +58,9 @@ void libstp::hal::motor::Motor::disableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
         platform::mock::core::setMotor(p, platform::mock::core::MotorDir::Off, 0);
+}
+
+const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibration() const
+{
+    return calibration_;
 }

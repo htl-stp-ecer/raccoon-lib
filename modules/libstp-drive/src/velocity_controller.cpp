@@ -7,14 +7,14 @@
 
 using namespace libstp::drive;
 
-VelocityController::VelocityController(PidGains g, Feedforward ff, Deadzone dz)
+VelocityController::VelocityController(foundation::PidGains g, foundation::Feedforward ff, foundation::Deadzone dz)
     : g_(g), ff_(ff), dz_(dz)
 {
 }
 
-void VelocityController::setGains(const PidGains& g) { g_ = g; }
-void VelocityController::setFF(const Feedforward& ff) { ff_ = ff; }
-void VelocityController::setDeadzone(const Deadzone& dz) { dz_ = dz; }
+void VelocityController::setGains(const foundation::PidGains& g) { g_ = g; }
+void VelocityController::setFF(const foundation::Feedforward& ff) { ff_ = ff; }
+void VelocityController::setDeadzone(const foundation::Deadzone& dz) { dz_ = dz; }
 
 double VelocityController::mapDutyWithDeadzone(double u_raw, double u_max) const
 {
