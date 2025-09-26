@@ -13,6 +13,9 @@ void init_servo(const py::module& m);
 PYBIND11_MODULE(hal, m) {
     m.doc() = "Python bindings for libstp-hal";
 
+    // Import foundation module to ensure MotorCalibration type is available
+    py::module::import("libstp.foundation");
+
     init_imu(m);
     init_analog(m);
     init_digital(m);

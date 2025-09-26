@@ -4,6 +4,8 @@
 #include "hal/Motor.hpp"
 #include "foundation/config.hpp"
 
+using namespace libstp::hal::motor;
+
 #ifdef SAFETY_CHECKS_ENABLED
 void libstp::hal::motor::Motor::registerMotorPort(int port)
 {

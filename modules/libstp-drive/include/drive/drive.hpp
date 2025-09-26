@@ -27,18 +27,10 @@ namespace libstp::drive
     {
     public:
         Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
-              const std::vector<hal::motor::Motor*>& motors,
-              const std::vector<MotorCalibration>& calibrations = {});
+              const std::vector<hal::motor::Motor*>& motors);
 
         void setChassisLimits(const MotionLimits& lim);
         void setWheelLimits(const WheelLimits& lim);
-
-        void setWheelControllerGains(const PidGains& g);
-        void setWheelFeedforward(const Feedforward& ff);
-        void setWheelDeadzone(const Deadzone& dz);
-
-        void setWheelCalibration(std::size_t wheel_index, const MotorCalibration& calibration);
-        void setAllWheelCalibrations(const std::vector<MotorCalibration>& calibrations);
 
         void setVelocity(const foundation::ChassisVel& v_body);
         Achieved update(double dt);
