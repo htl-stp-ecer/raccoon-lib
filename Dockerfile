@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64/v8 python:3.12-slim-bookworm
+FROM --platform=linux/arm64/v8 python:3.12-trixie
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TZ=Europe/Vienna

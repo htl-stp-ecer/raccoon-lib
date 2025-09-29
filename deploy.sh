@@ -47,7 +47,7 @@ scp "${WHEEL_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 
 echo -e "${GREEN}Installing Python package on target...${NC}"
 WHEEL_BASENAME=$(basename "$WHEEL_FILE")
-ssh "${REMOTE_USER}@${REMOTE_HOST}" "${PYTHON_CMD} -m pip install --user --force-reinstall '${REMOTE_DIR}/${WHEEL_BASENAME}'"
+ssh "${REMOTE_USER}@${REMOTE_HOST}" "${PYTHON_CMD} -m pip install --user --force-reinstall '${REMOTE_DIR}/${WHEEL_BASENAME}' --break-system-packages"
 
 # Test the installation
 echo -e "${GREEN}Testing installation...${NC}"

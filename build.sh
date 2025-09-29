@@ -60,6 +60,9 @@ docker_exec() {
     -e CCACHE_COMPRESS=1 \
     -e PYTHONUNBUFFERED=1 \
     -e PYTHONDONTWRITEBYTECODE=1 \
+    -e CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS" \
+    -e MAKEFLAGS="-j$BUILD_JOBS" \
+    --cpus="$(nproc)" \
     -w /src \
     "$IMAGE_NAME" \
     bash -lc "$*"
@@ -75,8 +78,12 @@ if [[ "$FORCE_REBUILD" == "1" ]]; then
   docker_exec "rm -rf /src/$BUILD_DIR"
 fi
 
-echo "• Building Python wheel with scikit-build-core"
-docker_exec "python -m build --wheel --outdir /src/$BUILD_DIR"
+docker_exec g++ --version
+
+echo "• Installing build dependencies first..."
+docker_exec "pip install -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
+echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
+docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation"
 
 WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
 if [[ ! -f "$WHEEL_FILE" ]]; then
