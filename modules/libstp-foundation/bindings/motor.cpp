@@ -43,7 +43,6 @@ void init_motor(const py::module_& m)
                   .def_readwrite("ticks_to_rad", &libstp::foundation::MotorCalibration::ticks_to_rad)
                   .def_readwrite("vel_lpf_alpha", &libstp::foundation::MotorCalibration::vel_lpf_alpha);
 
-    // ---- Class-level attribute annotations (OK to set) ----
     mc_cls.attr("__annotations__") = py::dict(
         "ff"_a = ff_cls,
         "pid"_a = pid_cls,
@@ -53,8 +52,6 @@ void init_motor(const py::module_& m)
         "vel_lpf_alpha"_a = py::module_::import("builtins").attr("float")
     );
 
-    // ---- Synthetic __signature__ on the CLASS (not __init__) ----
-    // This controls inspect.signature(MotorCalibration) and can include annotations.
     py::module_ inspect = py::module_::import("inspect");
     py::object Parameter = inspect.attr("Parameter");
     py::object Signature = inspect.attr("Signature");
@@ -63,7 +60,7 @@ void init_motor(const py::module_& m)
 
     auto Param = [&](const char* name, py::object ann)
     {
-        return Parameter(name, POK, empty, ann);
+        return Parameter(name, POK, "default"_a = empty, "annotation"_a = ann);
     };
 
     py::list params;
@@ -74,7 +71,6 @@ void init_motor(const py::module_& m)
     params.append(Param("ticks_to_rad", py::module_::import("builtins").attr("float")));
     params.append(Param("vel_lpf_alpha", py::module_::import("builtins").attr("float")));
 
-    // Classes are callables; setting __signature__ on the class is allowed.
     mc_cls.attr("__signature__") = Signature("parameters"_a = params,
                                              "return_annotation"_a = mc_cls);
 }

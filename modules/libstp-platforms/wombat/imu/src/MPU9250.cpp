@@ -3,7 +3,7 @@
 //
 #include <spdlog/spdlog.h>
 
-#include "core/Spi.hpp"
+#include "core/LcmReader.hpp"
 #include "hal/IMU.hpp"
 
 #ifdef SAFETY_CHECKS_ENABLED
@@ -20,8 +20,6 @@ libstp::hal::imu::IMU::IMU()
     }
     imuInstanceCreated = true;
 #endif
-
-    platform::wombat::core::Spi::instance().init();
 }
 
 libstp::hal::imu::IMU::~IMU()
@@ -40,16 +38,20 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
     }
     // ToDo: Check if buffers are large enough
 #endif
-    
-    accel[0] = platform::wombat::core::accelX();
-    accel[1] = platform::wombat::core::accelY();
-    accel[2] = platform::wombat::core::accelZ();
-    gyro[0] = platform::wombat::core::gyroX();
-    gyro[1] = platform::wombat::core::gyroY();
-    gyro[2] = platform::wombat::core::gyroZ();
-    magneto[0] = platform::wombat::core::magX();
-    magneto[1] = platform::wombat::core::magY();
-    magneto[2] = platform::wombat::core::magZ();
+
+    const exlcm::vector3f_t accelValue = platform::wombat::core::LcmReader::instance().readAccel();
+    const exlcm::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
+    const exlcm::vector3f_t magValue = platform::wombat::core::LcmReader::instance().readMag();
+
+    accel[0] = accelValue.x;
+    accel[1] = accelValue.y;
+    accel[2] = accelValue.z;
+    gyro[0] = gyroValue.x;
+    gyro[1] = gyroValue.y;
+    gyro[2] = gyroValue.z;
+    magneto[0] = magValue.x;
+    magneto[1] = magValue.y;
+    magneto[2] = magValue.z;
 }
 
 void libstp::hal::imu::IMU::calibrate()

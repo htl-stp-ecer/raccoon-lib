@@ -1,29 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_NAME="${PROJECT_NAME:-libstp}"
+PROJECT_NAME="${PROJECT_NAME:-libary}"
 BUILD_DIR="${BUILD_DIR:-build}"
+BINARY_PATH="${BINARY_PATH:-${BUILD_DIR}/${PROJECT_NAME}}"
 
 REMOTE_USER="${RPI_USER:-pi}"
 REMOTE_HOST="${RPI_HOST:-10.101.156.14}"
-REMOTE_DIR="${RPI_DIR:-/home/pi/python-libs}"
-PYTHON_CMD="${PYTHON_CMD:-python3}"
+REMOTE_DIR="${RPI_DIR:-/home/pi/libary}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 
 echo -e "${GREEN}Deploying ${PROJECT_NAME} to Raspberry Pi...${NC}"
 echo -e "${BLUE}Target: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}${NC}"
 
-echo -e "${YELLOW}Building Python wheel (containerized ARM toolchain)...${NC}"
+echo -e "${YELLOW}Building binary (containerized ARM toolchain)...${NC}"
 bash ./build.sh
 
-WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
-if [[ ! -f "$WHEEL_FILE" ]]; then
-  echo -e "${RED}Error: Wheel file not found after build in ${BUILD_DIR}${NC}"
+if [[ ! -f "${BINARY_PATH}" ]]; then
+  echo -e "${RED}Error: Binary not found after build at ${BINARY_PATH}${NC}"
   exit 1
 fi
-
-echo -e "${BLUE}Found wheel: $(basename "$WHEEL_FILE")${NC}"
 
 echo -e "${GREEN}Testing SSH connection...${NC}"
 if ! ssh -o ConnectTimeout=5 "${REMOTE_USER}@${REMOTE_HOST}" "echo 'SSH OK'"; then
@@ -42,22 +39,21 @@ fi
 echo -e "${GREEN}Creating remote directory...${NC}"
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_DIR}'"
 
-echo -e "${GREEN}Copying wheel file...${NC}"
-scp "${WHEEL_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+echo -e "${GREEN}Copying binary...${NC}"
+scp "${BINARY_PATH}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 
-echo -e "${GREEN}Installing Python package on target...${NC}"
-WHEEL_BASENAME=$(basename "$WHEEL_FILE")
-ssh "${REMOTE_USER}@${REMOTE_HOST}" "${PYTHON_CMD} -m pip install --user --force-reinstall '${REMOTE_DIR}/${WHEEL_BASENAME}' --break-system-packages"
-
-# Test the installation
-echo -e "${GREEN}Testing installation...${NC}"
-if ssh "${REMOTE_USER}@${REMOTE_HOST}" "${PYTHON_CMD} -c 'import ${PROJECT_NAME}; print(f\"${PROJECT_NAME} successfully installed\")'"; then
-  echo -e "${GREEN}✓ Package installation verified!${NC}"
-else
-  echo -e "${YELLOW}⚠ Package installed but import test failed${NC}"
+if [[ -f "systemd/${PROJECT_NAME}.service" ]]; then
+  echo -e "${GREEN}Copying systemd service...${NC}"
+  scp "systemd/${PROJECT_NAME}.service" "${REMOTE_USER}@${REMOTE_HOST}:/tmp/"
+  ssh "${REMOTE_USER}@${REMOTE_HOST}" "sudo mv /tmp/${PROJECT_NAME}.service /etc/systemd/system/${PROJECT_NAME}.service && sudo systemctl daemon-reload"
 fi
 
+echo -e "${GREEN}Making binary executable...${NC}"
+ssh "${REMOTE_USER}@${REMOTE_HOST}" "chmod +x '${REMOTE_DIR}/${PROJECT_NAME}'"
+
 echo -e "${GREEN}Deployment complete!${NC}"
-echo -e "${BLUE}Python package deployed and installed on: ${REMOTE_USER}@${REMOTE_HOST}${NC}"
-echo -e "${YELLOW}To use: ssh ${REMOTE_USER}@${REMOTE_HOST} '${PYTHON_CMD} -c \"import ${PROJECT_NAME}\"'${NC}"
-echo -e "${YELLOW}Wheel location: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/${WHEEL_BASENAME}${NC}"
+echo -e "${BLUE}Binary deployed to: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/${PROJECT_NAME}${NC}"
+echo -e "${YELLOW}To run: ssh ${REMOTE_USER}@${REMOTE_HOST} '${REMOTE_DIR}/${PROJECT_NAME}'${NC}"
+if [[ -f "systemd/${PROJECT_NAME}.service" ]]; then
+  echo -e "${YELLOW}To start as service: ssh ${REMOTE_USER}@${REMOTE_HOST} 'sudo systemctl enable --now ${PROJECT_NAME}'${NC}"
+fi
