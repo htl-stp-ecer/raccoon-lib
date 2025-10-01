@@ -2,24 +2,24 @@
 set -euo pipefail
 
 # -------- Config (env overridable) --------
-PROJECT_NAME="${PROJECT_NAME:-libstp}"
+PROJECT_NAME="${PROJECT_NAME:-libary}"
 BUILD_DIR="${BUILD_DIR:-build}"
 PLATFORM="${PLATFORM:-linux/arm64/v8}"
-IMAGE_NAME="${IMAGE_NAME:-libstp-dev:arm64}"
-CCACHE_VOL="${CCACHE_VOL:-libstp-ccache}"
-BUILD_TYPE="${BUILD_TYPE:-Release}"
+IMAGE_NAME="${IMAGE_NAME:-libary-dev:arm64}"
+CCACHE_VOL="${CCACHE_VOL:-libary-ccache}"
+CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 # Portable CPU count default
 if command -v nproc >/dev/null 2>&1; then
   _cpu="$(nproc)"
 else
   _cpu="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
 fi
-BUILD_JOBS="${BUILD_JOBS:-${_cpu}}"
-FORCE_REBUILD="${FORCE_REBUILD:-0}"
+NINJA_JOBS="${NINJA_JOBS:-${_cpu}}"
+FORCE_RECONFIGURE="${FORCE_RECONFIGURE:-0}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
 CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
 
-echo "▶ Building Python library $PROJECT_NAME for $PLATFORM using $IMAGE_NAME"
+echo "▶ Building $PROJECT_NAME for $PLATFORM into ./$BUILD_DIR using $IMAGE_NAME"
 mkdir -p "$BUILD_DIR"
 
 need_builder() {
@@ -58,11 +58,6 @@ docker_exec() {
     -e CCACHE_DIR=/ccache \
     -e CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
     -e CCACHE_COMPRESS=1 \
-    -e PYTHONUNBUFFERED=1 \
-    -e PYTHONDONTWRITEBYTECODE=1 \
-    -e CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS" \
-    -e MAKEFLAGS="-j$BUILD_JOBS" \
-    --cpus="$(nproc)" \
     -w /src \
     "$IMAGE_NAME" \
     bash -lc "$*"
@@ -73,23 +68,25 @@ ensure_binfmt
 docker volume create "$CCACHE_VOL" >/dev/null
 ensure_image
 
-if [[ "$FORCE_REBUILD" == "1" ]]; then
-  echo "• Force rebuild requested, cleaning build directory"
-  docker_exec "rm -rf /src/$BUILD_DIR"
+if [[ "$FORCE_RECONFIGURE" == "1" || ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
+  echo "• Configuring with CMake ($CMAKE_BUILD_TYPE)"
+  docker_exec "cmake -S /src -B /src/$BUILD_DIR -G Ninja \
+    -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+else
+  echo "• Using existing configuration at $BUILD_DIR/"
 fi
 
-docker_exec g++ --version
+echo "• Building with Ninja (-j $NINJA_JOBS)"
+docker_exec "cmake --build /src/$BUILD_DIR -j$NINJA_JOBS"
 
-echo "• Installing build dependencies first..."
-docker_exec "pip install -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
-echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
-docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation"
-
-WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
-if [[ ! -f "$WHEEL_FILE" ]]; then
-  echo "✖ Build completed but wheel not found in $BUILD_DIR"
+BIN="${BUILD_DIR}/${PROJECT_NAME}"
+if [[ ! -f "$BIN" ]]; then
+  echo "✖ Build completed but binary not found: $BIN"
   exit 1
 fi
 
-echo "✓ Built Python wheel → $WHEEL_FILE"
-ls -la "$WHEEL_FILE"
+chmod +x "$BIN" || true
+echo "✓ Built $(basename "$BIN") → $BIN"
+file "$BIN" || true
