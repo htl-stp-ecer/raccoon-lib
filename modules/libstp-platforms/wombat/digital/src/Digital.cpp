@@ -6,7 +6,7 @@
 
 #include <stdexcept>
 
-#include "core/Spi.hpp"
+#include "core/LcmReader.hpp"
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 9;
@@ -21,8 +21,6 @@ libstp::hal::digital::DigitalSensor::DigitalSensor(const int port): port(port)
 
     registerDigitalPort(port);
 #endif
-
-    platform::wombat::core::Spi::instance().init();
 }
 
 libstp::hal::digital::DigitalSensor::~DigitalSensor()
@@ -34,5 +32,6 @@ libstp::hal::digital::DigitalSensor::~DigitalSensor()
 
 bool libstp::hal::digital::DigitalSensor::read() const
 {
-    return platform::wombat::core::digital(port);
+    const int digital = platform::wombat::core::LcmReader::instance().readDigital(port).value;
+    return (port < 16) && !(digital & (1u << port));
 }

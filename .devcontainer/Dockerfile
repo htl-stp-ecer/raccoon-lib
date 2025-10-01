@@ -20,6 +20,7 @@ RUN apt-get update && \
         python3-dev \
         build-essential \
         ca-certificates \
+        libglib2.0-dev \
         git && \
     update-alternatives --install /usr/bin/python python /usr/bin/python3 10 && \
     update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 10 && \
