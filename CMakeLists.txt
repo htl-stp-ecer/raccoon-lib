@@ -1,12 +1,14 @@
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 option(ENABLE_SAFETY_CHECKS "Enable runtime safety checks across the whole project" ON)
 
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.15...3.27)
 
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.cmake-cache" CACHE PATH "")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Set C++20 as the standard for coroutine support
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -36,16 +38,32 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(pybind11)
 
+set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         eigen
         GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
         GIT_TAG 3.4.0
 )
 
-set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests" FORCE)
-set(EIGEN_BUILD_BENCHMARKS OFF CACHE BOOL "Disable Eigen benchmarks" FORCE)
-
 FetchContent_MakeAvailable(eigen)
+
+# Add include directory for Eigen
+include_directories(${eigen_SOURCE_DIR})
+
+# Add LCM
+set(LCM_ENABLE_JAVA OFF CACHE BOOL "" FORCE)
+set(LCM_ENABLE_PYTHON OFF CACHE BOOL "" FORCE)
+set(LCM_ENABLE_DOCS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+        lcm
+        GIT_REPOSITORY https://github.com/lcm-proj/lcm.git
+        GIT_TAG v1.5.0
+)
+FetchContent_MakeAvailable(lcm)
+
+add_subdirectory(lcm-messages)
 
 FetchContent_Declare(
         spdlog
@@ -69,3 +87,4 @@ target_include_directories(_core PRIVATE ${eigen_SOURCE_DIR})
 target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
 
 install(TARGETS _core DESTINATION libstp)
+
