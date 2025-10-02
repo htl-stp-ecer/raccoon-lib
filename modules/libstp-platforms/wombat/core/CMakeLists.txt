@@ -1,4 +1,4 @@
-add_library(platform_core
+add_library(platform_core STATIC
         src/LcmReader.cpp
         src/LcmWriter.cpp
 )
