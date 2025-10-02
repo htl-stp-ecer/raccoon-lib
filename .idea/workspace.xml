@@ -4,14 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="BackendCodeEditorMiscSettings">
-    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="51" type="long" />
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="14" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
-    <option name="/Default/Housekeeping/GlobalSettingsUpgraded/IsUpgraded/@EntryValue" value="true" type="bool" />
-    <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
   </component>
-  <component name="CMakePresetLoader">{
-  &quot;useNewFormat&quot;: true
-}</component>
+  <component name="CMakePresetLoader"><![CDATA[{
+  "useNewFormat": true
+}]]></component>
   <component name="CMakeProjectFlavorService">
     <option name="flavorId" value="CMakePlainProjectFlavor" />
   </component>
@@ -22,55 +20,59 @@
     <generated>
       <config projectName="VERSION" targetName="test-c-memq_test" />
       <config projectName="VERSION" targetName="gtest_main" />
+      <config projectName="VERSION" targetName="doc-dotnet" />
       <config projectName="VERSION" targetName="eigen_lapack" />
       <config projectName="VERSION" targetName="lcm-tester" />
-      <config projectName="VERSION" targetName="lcm-source" />
       <config projectName="VERSION" targetName="kinematics-mecanum" />
+      <config projectName="VERSION" targetName="lcm-source" />
+      <config projectName="VERSION" targetName="doc-doxygen" />
       <config projectName="VERSION" targetName="hal" />
       <config projectName="VERSION" targetName="lcm-logfilter" />
       <config projectName="VERSION" targetName="libstp_foundation" />
+      <config projectName="VERSION" targetName="imu_driver" />
       <config projectName="VERSION" targetName="lcm-test-types-c.sources" />
       <config projectName="VERSION" targetName="libstp_async" />
+      <config projectName="VERSION" targetName="doc-clean" />
       <config projectName="VERSION" targetName="lcm-test-types-c" />
       <config projectName="VERSION" targetName="lcm-logger" />
       <config projectName="VERSION" targetName="eigen_blas" />
       <config projectName="VERSION" targetName="eigen_lapack_static" />
+      <config projectName="VERSION" targetName="servo_driver" />
+      <config projectName="VERSION" targetName="motor_driver" />
       <config projectName="VERSION" targetName="uninstall" />
       <config projectName="VERSION" targetName="async" />
       <config projectName="VERSION" targetName="lcm-example" />
       <config projectName="VERSION" targetName="test-c-eventlog_test" />
       <config projectName="VERSION" targetName="test-cpp-client" />
-      <config projectName="VERSION" targetName="digital" />
-      <config projectName="VERSION" targetName="analog" />
+      <config projectName="VERSION" targetName="doc-sphinx" />
       <config projectName="VERSION" targetName="test-c-udpm_test" />
       <config projectName="VERSION" targetName="lcm-buftest-sender" />
-      <config projectName="VERSION" targetName="motor" />
       <config projectName="VERSION" targetName="foundation" />
       <config projectName="VERSION" targetName="spsolver" />
-      <config projectName="VERSION" targetName="servo" />
       <config projectName="VERSION" targetName="lcm-test-types-cpp.sources" />
       <config projectName="VERSION" targetName="demos" />
       <config projectName="VERSION" targetName="lcm_use_file" />
       <config projectName="VERSION" targetName="blas" />
       <config projectName="VERSION" targetName="messages-c.sources" />
       <config projectName="VERSION" targetName="lcm" />
+      <config projectName="VERSION" targetName="digital_driver" />
       <config projectName="VERSION" targetName="lcm-logplayer" />
       <config projectName="VERSION" targetName="eigen_blas_static" />
-      <config projectName="VERSION" targetName="imu" />
       <config projectName="VERSION" targetName="messages-cpp.sources" />
       <config projectName="VERSION" targetName="doc" />
       <config projectName="VERSION" targetName="lcm-buftest-receiver" />
       <config projectName="VERSION" targetName="drive" />
       <config projectName="VERSION" targetName="lcm-gen" />
       <config projectName="VERSION" targetName="test-cpp-memq_test" />
+      <config projectName="VERSION" targetName="analog_driver" />
       <config projectName="VERSION" targetName="libstp_drive" />
       <config projectName="VERSION" targetName="lcm-static" />
-      <config projectName="VERSION" targetName="messages-c" />
       <config projectName="VERSION" targetName="libstp_kinematics" />
+      <config projectName="VERSION" targetName="messages-c" />
       <config projectName="VERSION" targetName="kinematics" />
       <config projectName="VERSION" targetName="test_sparseLU" />
-      <config projectName="VERSION" targetName="test-c-client" />
       <config projectName="VERSION" targetName="libstp_hal" />
+      <config projectName="VERSION" targetName="test-c-client" />
       <config projectName="VERSION" targetName="dist" />
       <config projectName="VERSION" targetName="platform_core" />
       <config projectName="VERSION" targetName="spdlog" />
@@ -78,6 +80,7 @@
       <config projectName="VERSION" targetName="spbenchsolver" />
       <config projectName="VERSION" targetName="test-c-server" />
       <config projectName="VERSION" targetName="gtest" />
+      <config projectName="VERSION" targetName="doc-setup" />
       <config projectName="VERSION" targetName="_core" />
       <config projectName="VERSION" targetName="lapack" />
       <config projectName="VERSION" targetName="lcm-sink" />
@@ -85,22 +88,19 @@
   </component>
   <component name="CMakeSettings">
     <configurations>
-      <configuration PROFILE_NAME="Debug" ENABLED="true" CONFIG_NAME="Debug" GENERATION_OPTIONS="-DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DDRIVER_BUNDLE=&quot;mock&quot;" />
+      <configuration PROFILE_NAME="Debug" ENABLED="true" CONFIG_NAME="Debug" GENERATION_OPTIONS="-G Ninja" />
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Added an Reader and writer for the lcm.">
-      <change afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitmodules" beforeDir="false" afterPath="$PROJECT_DIR$/.gitmodules" afterDir="false" />
+    <list default="true" id="fdd90537-b370-48b5-8014-248e301c6809" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/lcm-messages/types/dict_t.lcm" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lcm-messages/types/key_value_t.lcm" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/python/libstp_api/render_screen.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/lcmScreenRenderRequestTest.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/editor.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/library.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/library.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/mock/core/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/mock/core/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/python/libstp_api/gen_defs.py" beforeDir="false" afterPath="$PROJECT_DIR$/python/libstp_api/gen_defs.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/lcmReadTest.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/lcmReadTest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lcm-messages" beforeDir="false" afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -120,106 +120,45 @@
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
-    <option name="ROOT_SYNC" value="DONT_SYNC" />
   </component>
-  <component name="HighlightingSettingsPerFile">
-    <setting file="file://$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/core/include/core/MockPlatform.hpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-platforms/wombat/core/src/LcmWriter.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
-  </component>
-  <component name="ProjectApplicationVersion">
-    <option name="ide" value="CLion" />
-    <option name="majorVersion" value="2025" />
-    <option name="minorVersion" value="2.1" />
-    <option name="productBranch" value="Classic" />
-  </component>
-  <component name="ProjectColorInfo">{
-  &quot;customColor&quot;: &quot;&quot;,
-  &quot;associatedIndex&quot;: 5
-}</component>
-  <component name="ProjectId" id="32iynVjyCf0Whl8zfPvujRjk547" />
-  <component name="ProjectStatusUIService">{
-  &quot;uiKindId&quot;: &quot;Widget&quot;
-}</component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "customColor": "",
+  "associatedIndex": 5
+}]]></component>
+  <component name="ProjectId" id="33VrRrzaLCDRw3bLzEr5n9QapmK" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
-    "CMake Application.lcm-gen.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.defs.executor": "Run",
-    "Python.gen_defs.executor": "Run",
-    "Python.lcmReadTest.executor": "Run",
+    "Python.lcmScreenRenderRequestCaller.executor": "Debug",
+    "Python.lcmScreenRenderRequestTest.executor": "Run",
+    "Python.render_screen.executor": "Run",
     "RunOnceActivity.RadMigrateCodeStyle": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.readMode.enableVisualFormatting": "true",
     "RunOnceActivity.west.config.association.type.startup.service": "true",
-    "SHELLCHECK.PATH": "I do mind",
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "RACOO-38",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "settings.editor.selected.configurable": "CMakeSettings",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
-    <layout>
-      <window_info id="Bookmarks" side_tool="true" />
-      <window_info id="Merge Requests" />
-      <window_info id="Backup and Sync History" />
-      <window_info id="Commit_Guest" show_stripe_button="false" />
-      <window_info id="Pull Requests" />
-      <window_info id="Learn" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.35035715" />
-      <window_info id="Commit" order="1" weight="0.35035715" />
-      <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
-      <window_info anchor="bottom" id="Database Changes" />
-      <window_info anchor="bottom" id="TypeScript" />
-      <window_info anchor="bottom" id="Python Packages" />
-      <window_info anchor="bottom" id="TODO" />
-      <window_info anchor="bottom" id="File Transfer" />
-      <window_info anchor="bottom" id="Vcpkg" />
-      <window_info anchor="bottom" id="clangd" />
-      <window_info anchor="bottom" id="Version Control" order="0" />
-      <window_info anchor="bottom" id="Problems" order="1" />
-      <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="3" visible="true" weight="0.3565" />
-      <window_info anchor="bottom" id="Services" order="4" />
-      <window_info anchor="bottom" id="CMake" order="5" weight="0.3300926" />
-      <window_info anchor="bottom" id="Messages" order="6" weight="0.2837963" />
-      <window_info anchor="bottom" id="Run" order="7" weight="0.3300926" />
-      <window_info anchor="bottom" id="Find" order="8" weight="0.3300926" />
-      <window_info anchor="right" id="make" side_tool="true" />
-      <window_info anchor="right" id="Python Console" />
-      <window_info anchor="right" id="Coverage" side_tool="true" />
-      <window_info anchor="right" content_ui="combo" id="Notifications" order="0" weight="0.25" />
-      <window_info anchor="right" id="AIAssistant" order="1" weight="0.25" />
-      <window_info anchor="right" id="Database" order="2" weight="0.25" />
-      <window_info anchor="right" id="Gradle" order="3" weight="0.25" />
-      <window_info anchor="right" id="Maven" order="4" weight="0.25" />
-      <window_info anchor="right" id="Meson" order="5" />
-    </layout>
-  </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/python/libstp_api" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.lcmReadTest">
+  <component name="RunManager" selected="Python.lcmScreenRenderRequestTest">
     <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -266,7 +205,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="analog" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="analog" CONFIG_NAME="Debug">
+    <configuration name="analog_driver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="analog_driver" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -286,12 +225,37 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="digital" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="digital" CONFIG_NAME="Debug">
+    <configuration name="digital_driver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="digital_driver" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
     <configuration name="dist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="dist" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="doc-clean" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-clean" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="doc-dotnet" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-dotnet" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="doc-doxygen" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-doxygen" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="doc-setup" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-setup" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="doc-sphinx" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-sphinx" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -346,7 +310,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="imu" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="imu" CONFIG_NAME="Debug">
+    <configuration name="imu_driver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="imu_driver" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -491,7 +455,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="motor" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="motor" CONFIG_NAME="Debug">
+    <configuration name="motor_driver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="motor_driver" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -501,7 +465,7 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="servo" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="servo" CONFIG_NAME="Debug">
+    <configuration name="servo_driver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="servo_driver" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -536,96 +500,8 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/defs.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/defs.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="gen_defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/gen_defs.py" />
-      <option name="PARAMETERS" value="../resources/config.yml" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="gen_defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/gen_defs.py" />
-      <option name="PARAMETERS" value="../resources/config.yml" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="lcmReadTest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
+    <configuration name="lcmScreenRenderRequestCaller" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="VERSION" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -637,7 +513,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/lcmReadTest.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/lcmScreenRenderRequestCaller.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -646,149 +522,138 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration default="true" type="UvRunConfigurationType" factoryName="UvRunConfigurationType">
-      <option name="args">
-        <list />
-      </option>
-      <option name="checkSync" value="true" />
-      <option name="env">
-        <map />
-      </option>
-      <option name="runType" value="SCRIPT" />
-      <option name="scriptOrModule" value="" />
-      <option name="uvArgs">
-        <list />
-      </option>
-      <option name="uvSdkKey" value="Python 3.13 virtualenv at ~/CLionProjects/DA25/libary/.venv" />
+    <configuration name="lcmScreenRenderRequestTest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="VERSION" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/lcmScreenRenderRequestTest.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="render_screen" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="VERSION" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/render_screen.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
     <list>
       <item itemvalue="CMake Application._core" />
-      <item itemvalue="CMake Application.uninstall" />
-      <item itemvalue="CMake Application.spbenchsolver" />
-      <item itemvalue="CMake Application.spsolver" />
-      <item itemvalue="CMake Application.test_sparseLU" />
+      <item itemvalue="CMake Application.async" />
       <item itemvalue="CMake Application.blas" />
-      <item itemvalue="CMake Application.eigen_blas" />
-      <item itemvalue="CMake Application.eigen_blas_static" />
       <item itemvalue="CMake Application.demos" />
-      <item itemvalue="CMake Application.eigen_lapack" />
-      <item itemvalue="CMake Application.eigen_lapack_static" />
-      <item itemvalue="CMake Application.lapack" />
       <item itemvalue="CMake Application.dist" />
       <item itemvalue="CMake Application.doc" />
-      <item itemvalue="CMake Application.lcm_use_file" />
-      <item itemvalue="CMake Application.lcm-test-types-c" />
-      <item itemvalue="CMake Application.lcm-test-types-c.sources" />
-      <item itemvalue="CMake Application.lcm-test-types-cpp.sources" />
-      <item itemvalue="CMake Application.messages-c" />
-      <item itemvalue="CMake Application.messages-c.sources" />
-      <item itemvalue="CMake Application.messages-cpp.sources" />
-      <item itemvalue="CMake Application.lcm-logger" />
-      <item itemvalue="CMake Application.lcm-logplayer" />
-      <item itemvalue="CMake Application.lcm" />
-      <item itemvalue="CMake Application.lcm-static" />
-      <item itemvalue="CMake Application.lcm-gen" />
-      <item itemvalue="CMake Application.lcm-buftest-receiver" />
-      <item itemvalue="CMake Application.lcm-buftest-sender" />
-      <item itemvalue="CMake Application.lcm-example" />
-      <item itemvalue="CMake Application.lcm-logfilter" />
-      <item itemvalue="CMake Application.lcm-sink" />
-      <item itemvalue="CMake Application.lcm-source" />
-      <item itemvalue="CMake Application.lcm-tester" />
-      <item itemvalue="CMake Application.test-c-server" />
+      <item itemvalue="CMake Application.doc-clean" />
+      <item itemvalue="CMake Application.doc-dotnet" />
+      <item itemvalue="CMake Application.doc-doxygen" />
+      <item itemvalue="CMake Application.doc-setup" />
+      <item itemvalue="CMake Application.doc-sphinx" />
+      <item itemvalue="CMake Application.drive" />
+      <item itemvalue="CMake Application.eigen_blas" />
+      <item itemvalue="CMake Application.eigen_blas_static" />
+      <item itemvalue="CMake Application.eigen_lapack" />
+      <item itemvalue="CMake Application.eigen_lapack_static" />
+      <item itemvalue="CMake Application.foundation" />
       <item itemvalue="CMake Application.gtest" />
       <item itemvalue="CMake Application.gtest_main" />
-      <item itemvalue="CMake Application.spdlog" />
       <item itemvalue="CMake Application.hal" />
       <item itemvalue="CMake Application.kinematics" />
       <item itemvalue="CMake Application.kinematics-differential" />
       <item itemvalue="CMake Application.kinematics-mecanum" />
+      <item itemvalue="CMake Application.lapack" />
+      <item itemvalue="CMake Application.lcm" />
+      <item itemvalue="CMake Application.lcm-buftest-receiver" />
+      <item itemvalue="CMake Application.lcm-buftest-sender" />
+      <item itemvalue="CMake Application.lcm-example" />
+      <item itemvalue="CMake Application.lcm-gen" />
+      <item itemvalue="CMake Application.lcm-logfilter" />
+      <item itemvalue="CMake Application.lcm-logger" />
+      <item itemvalue="CMake Application.lcm-logplayer" />
+      <item itemvalue="CMake Application.lcm-sink" />
+      <item itemvalue="CMake Application.lcm-source" />
+      <item itemvalue="CMake Application.lcm-static" />
+      <item itemvalue="CMake Application.lcm-test-types-c" />
+      <item itemvalue="CMake Application.lcm-test-types-c.sources" />
+      <item itemvalue="CMake Application.lcm-test-types-cpp.sources" />
+      <item itemvalue="CMake Application.lcm-tester" />
+      <item itemvalue="CMake Application.lcm_use_file" />
+      <item itemvalue="CMake Application.libstp_async" />
+      <item itemvalue="CMake Application.libstp_drive" />
+      <item itemvalue="CMake Application.libstp_foundation" />
+      <item itemvalue="CMake Application.analog_driver" />
       <item itemvalue="CMake Application.libstp_hal" />
       <item itemvalue="CMake Application.libstp_kinematics" />
-      <item itemvalue="CMake Application.async" />
-      <item itemvalue="CMake Application.libstp_async" />
-      <item itemvalue="CMake Application.drive" />
-      <item itemvalue="CMake Application.libstp_drive" />
-      <item itemvalue="CMake Application.foundation" />
-      <item itemvalue="CMake Application.libstp_foundation" />
-      <item itemvalue="CMake Application.servo" />
-      <item itemvalue="CMake Application.analog" />
+      <item itemvalue="CMake Application.messages-c" />
+      <item itemvalue="CMake Application.messages-c.sources" />
+      <item itemvalue="CMake Application.messages-cpp.sources" />
       <item itemvalue="CMake Application.platform_core" />
-      <item itemvalue="CMake Application.digital" />
-      <item itemvalue="CMake Application.imu" />
-      <item itemvalue="CMake Application.motor" />
+      <item itemvalue="CMake Application.digital_driver" />
+      <item itemvalue="CMake Application.imu_driver" />
+      <item itemvalue="CMake Application.motor_driver" />
+      <item itemvalue="CMake Application.servo_driver" />
+      <item itemvalue="CMake Application.spbenchsolver" />
+      <item itemvalue="CMake Application.spdlog" />
+      <item itemvalue="CMake Application.spsolver" />
+      <item itemvalue="CMake Application.test-c-server" />
+      <item itemvalue="CMake Application.test_sparseLU" />
+      <item itemvalue="CMake Application.uninstall" />
       <item itemvalue="Google Test.test-c-client" />
       <item itemvalue="Google Test.test-c-eventlog_test" />
       <item itemvalue="Google Test.test-c-memq_test" />
       <item itemvalue="Google Test.test-c-udpm_test" />
       <item itemvalue="Google Test.test-cpp-client" />
       <item itemvalue="Google Test.test-cpp-memq_test" />
-      <item itemvalue="Python.lcmReadTest" />
-      <item itemvalue="Python.defs" />
-      <item itemvalue="Python.gen_defs" />
+      <item itemvalue="Python.lcmScreenRenderRequestCaller" />
+      <item itemvalue="Python.lcmScreenRenderRequestTest" />
+      <item itemvalue="Python.render_screen" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.lcmReadTest" />
-        <item itemvalue="Python.gen_defs" />
-        <item itemvalue="Python.defs" />
+        <item itemvalue="Python.lcmScreenRenderRequestTest" />
+        <item itemvalue="Python.lcmScreenRenderRequestCaller" />
+        <item itemvalue="Python.render_screen" />
       </list>
     </recent_temporary>
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="" />
-      <created>1757917855054</created>
+      <changelist id="fdd90537-b370-48b5-8014-248e301c6809" name="Changes" comment="" />
+      <created>1759413076672</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1757917855054</updated>
-      <workItem from="1757917857792" duration="4090000" />
-      <workItem from="1757921963862" duration="1385000" />
-      <workItem from="1757923358647" duration="1948000" />
-      <workItem from="1757925328208" duration="2360000" />
-      <workItem from="1757950348087" duration="682000" />
-      <workItem from="1758005260373" duration="434000" />
-      <workItem from="1758005725339" duration="396000" />
-      <workItem from="1758006245034" duration="674000" />
-      <workItem from="1758006928552" duration="5480000" />
-      <workItem from="1758013342359" duration="7599000" />
-      <workItem from="1758176087764" duration="159000" />
-      <workItem from="1758787124206" duration="6000" />
-      <workItem from="1759125213995" duration="1661000" />
-      <workItem from="1759128772978" duration="12000" />
-      <workItem from="1759137119422" duration="4329000" />
-      <workItem from="1759228394734" duration="2025000" />
-      <workItem from="1759301337631" duration="10000" />
-      <workItem from="1759301382582" duration="2183000" />
-      <workItem from="1759327402770" duration="222000" />
-      <workItem from="1759329301667" duration="2052000" />
+      <updated>1759413076672</updated>
+      <workItem from="1759413078212" duration="4386000" />
     </task>
-    <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
-      <option name="closed" value="true" />
-      <created>1758005340249</created>
-      <option name="number" value="00001" />
-      <option name="presentableId" value="LOCAL-00001" />
-      <option name="project" value="LOCAL" />
-      <updated>1758005340249</updated>
-    </task>
-    <task id="LOCAL-00002" summary="Add Docker support for building and deploying Python library">
-      <option name="closed" value="true" />
-      <created>1759126861696</created>
-      <option name="number" value="00002" />
-      <option name="presentableId" value="LOCAL-00002" />
-      <option name="project" value="LOCAL" />
-      <updated>1759126861696</updated>
-    </task>
-    <task id="LOCAL-00003" summary="Added an Reader and writer for the lcm.">
-      <option name="closed" value="true" />
-      <created>1759327584102</created>
-      <option name="number" value="00003" />
-      <option name="presentableId" value="LOCAL-00003" />
-      <option name="project" value="LOCAL" />
-      <updated>1759327584102</updated>
-    </task>
-    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -798,92 +663,5 @@
     <isAutomaticCheckingOnLaunch value="false" />
     <isAutomaticFoundErrors value="true" />
     <isAutomaticReloadCMake value="true" />
-  </component>
-  <component name="Vcs.Log.Tabs.Properties">
-    <option name="RECENT_FILTERS">
-      <map>
-        <entry key="Branch">
-          <value>
-            <list>
-              <RecentGroup>
-                <option name="FILTER_VALUES">
-                  <option value="origin/RALIB-15" />
-                </option>
-              </RecentGroup>
-              <RecentGroup>
-                <option name="FILTER_VALUES">
-                  <option value="origin/main" />
-                </option>
-              </RecentGroup>
-              <RecentGroup>
-                <option name="FILTER_VALUES">
-                  <option value="main" />
-                </option>
-              </RecentGroup>
-            </list>
-          </value>
-        </entry>
-        <entry key="User">
-          <value>
-            <list>
-              <RecentGroup>
-                <option name="FILTER_VALUES">
-                  <option value="*" />
-                </option>
-              </RecentGroup>
-            </list>
-          </value>
-        </entry>
-      </map>
-    </option>
-    <option name="TAB_STATES">
-      <map>
-        <entry key="MAIN">
-          <value>
-            <State>
-              <option name="FILTERS">
-                <map>
-                  <entry key="branch">
-                    <value>
-                      <list>
-                        <option value="origin/RALIB-15" />
-                      </list>
-                    </value>
-                  </entry>
-                  <entry key="user">
-                    <value>
-                      <list>
-                        <option value="*" />
-                      </list>
-                    </value>
-                  </entry>
-                </map>
-              </option>
-            </State>
-          </value>
-        </entry>
-      </map>
-    </option>
-  </component>
-  <component name="VcsManagerConfiguration">
-    <MESSAGE value="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods" />
-    <MESSAGE value="Add Docker support for building and deploying Python library" />
-    <MESSAGE value="Added an Reader and writer for the lcm." />
-    <option name="LAST_COMMIT_MESSAGE" value="Added an Reader and writer for the lcm." />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <default-breakpoints>
-        <breakpoint type="python-exception">
-          <properties notifyOnTerminate="true" exception="BaseException">
-            <option name="notifyOnTerminate" value="true" />
-          </properties>
-        </breakpoint>
-      </default-breakpoints>
-    </breakpoint-manager>
-  </component>
-  <component name="XSLT-Support.FileAssociations.UIState">
-    <expand />
-    <select />
   </component>
 </project>
