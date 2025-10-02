@@ -31,6 +31,7 @@ project(
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 
 # Use FetchContent to auto-download pybind11
+set(PYBIND11_DETAILED_ERROR_MESSAGES ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
         pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
@@ -65,14 +66,15 @@ FetchContent_MakeAvailable(lcm)
 
 add_subdirectory(lcm-messages)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         spdlog
         GIT_REPOSITORY https://github.com/gabime/spdlog.git
         GIT_TAG v1.14.1
 )
 FetchContent_MakeAvailable(spdlog)
-
-add_subdirectory(modules)
+set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 
 python_add_library(_core MODULE main.cpp WITH_SOABI)
 
@@ -81,6 +83,8 @@ target_link_libraries(_core PRIVATE
         spdlog::spdlog
         Eigen3::Eigen
 )
+
+add_subdirectory(modules)
 
 target_compile_features(_core PRIVATE cxx_std_23)
 target_include_directories(_core PRIVATE ${eigen_SOURCE_DIR})
