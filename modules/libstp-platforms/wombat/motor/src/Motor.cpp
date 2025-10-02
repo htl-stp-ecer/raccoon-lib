@@ -6,7 +6,8 @@
 
 #include <stdexcept>
 
-#include "core/Spi.hpp"
+#include "core/LcmReader.hpp"
+#include "core/LcmWriter.hpp"
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 4;
@@ -23,7 +24,6 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted, const foun
 
     registerMotorPort(port);
 #endif
-    platform::wombat::core::Spi::instance().init();
 }
 
 
@@ -46,23 +46,23 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
     if (!zero)
         dir = (inverted ? percent < 0 : percent > 0) ? MotorDir::CW : MotorDir::CCW;
     const uint32_t duty = static_cast<uint32_t>(percent * 4); // 0-400
-    setMotor(port, dir, duty);
+    LcmDataWriter::instance().setMotor(port, duty);
 }
 
 int libstp::hal::motor::Motor::getPosition() const
 {
-    return static_cast<int>(platform::wombat::core::bemf(port));
+    return platform::wombat::core::LcmReader::instance().readBemf(port).value;
 }
 
 void libstp::hal::motor::Motor::brake() const
 {
-    platform::wombat::core::setMotor(port, platform::wombat::core::MotorDir::Off, 0);
+    platform::wombat::core::LcmDataWriter::instance().setMotor(port, 0);
 }
 
 void libstp::hal::motor::Motor::disableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
-        platform::wombat::core::setMotor(p, platform::wombat::core::MotorDir::Off, 0);
+        platform::wombat::core::LcmDataWriter::instance().setMotor(p, 0);
 }
 
 const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibration() const
