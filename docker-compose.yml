@@ -1,0 +1,20 @@
+services:
+  build-libary:
+    build:
+      context: .
+      platforms:
+        - linux/arm64/v8
+    volumes:
+      - .:/src:rw
+      - libary-ccache:/ccache
+    environment:
+      - CCACHE_DIR=/ccache
+      - CCACHE_MAXSIZE=3G
+      - CCACHE_COMPRESS=1
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    working_dir: /src
+    command: python -m build --wheel --outdir build
+
+volumes:
+  libary-ccache:

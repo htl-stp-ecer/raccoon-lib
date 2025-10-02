@@ -6,7 +6,8 @@
 #include <format>
 #include <stdexcept>
 
-#include "core/Spi.hpp"
+#include "core/LcmReader.hpp"
+#include "core/LcmWriter.hpp"
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 4;
@@ -23,8 +24,6 @@ libstp::hal::servo::Servo::Servo(const int port): port(port)
 
     registerServoPort(port);
 #endif
-
-    platform::wombat::core::Spi::instance().init();
 }
 
 libstp::hal::servo::Servo::~Servo()
@@ -44,27 +43,26 @@ void libstp::hal::servo::Servo::setPosition(const int position)
 #endif
     
     storedPosition = position;
-    platform::wombat::core::setServo(port,
-                                     platform::wombat::core::ServoMode::Enabled,
-                                     static_cast<uint16_t>(position));
+    platform::wombat::core::LcmDataWriter::instance().setServo(port,
+                                     position);
 }
 
 int libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
 
 void libstp::hal::servo::Servo::enable() const
 {
-    platform::wombat::core::setServo(port, platform::wombat::core::ServoMode::Enabled, storedPosition);
+    platform::wombat::core::LcmDataWriter::instance().setServo(port, storedPosition);
 }
 
 void libstp::hal::servo::Servo::disable() const
 {
-    platform::wombat::core::setServo(port, platform::wombat::core::ServoMode::Disabled, storedPosition);
+    platform::wombat::core::LcmDataWriter::instance().setServo(port, storedPosition);
 }
 
 void libstp::hal::servo::Servo::fullyDisableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
-        platform::wombat::core::setServo(p, platform::wombat::core::ServoMode::FullyDisabled, 0);
+        platform::wombat::core::LcmDataWriter::instance().setServo(p, 0);
 }
 
 /*

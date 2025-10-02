@@ -1,0 +1,6 @@
+.claude
+.venv
+.cmake-cache
+build
+cmake-build-debug
+.idea

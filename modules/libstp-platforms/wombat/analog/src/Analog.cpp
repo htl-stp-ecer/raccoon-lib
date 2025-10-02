@@ -6,8 +6,7 @@
 
 #include <stdexcept>
 
-#include "core/Spi.hpp"
-
+#include "core/LcmReader.hpp"
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 5;
 
@@ -21,8 +20,6 @@ libstp::hal::analog::AnalogSensor::AnalogSensor(const int port): port(port)
 
     registerAnalogPort(port);
 #endif
-
-    platform::wombat::core::Spi::instance().init();
 }
 
 
@@ -35,5 +32,5 @@ libstp::hal::analog::AnalogSensor::~AnalogSensor()
 
 int libstp::hal::analog::AnalogSensor::read() const
 {
-    return platform::wombat::core::analog(port);
+    return platform::wombat::core::LcmReader::instance().readAnalog(port).value;
 }
