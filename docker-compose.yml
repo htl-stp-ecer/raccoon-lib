@@ -1,12 +1,12 @@
 services:
-  build-libary:
+  build-libstp:
     build:
       context: .
       platforms:
         - linux/arm64/v8
     volumes:
       - .:/src:rw
-      - libary-ccache:/ccache
+      - libstp-ccache:/ccache
     environment:
       - CCACHE_DIR=/ccache
       - CCACHE_MAXSIZE=3G
@@ -17,4 +17,4 @@ services:
     command: python -m build --wheel --outdir build
 
 volumes:
-  libary-ccache:
+  libstp-ccache:
