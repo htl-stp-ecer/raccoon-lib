@@ -8,18 +8,25 @@ void init_motor(const py::module_& m)
 {
     auto pid_cls = py::class_<libstp::foundation::PidGains>(m, "PidGains")
                    .def(py::init<>())
+                   .def(py::init<double, double, double>(),
+                        py::arg("kp"), py::arg("ki"), py::arg("kd"))
                    .def_readwrite("kp", &libstp::foundation::PidGains::kp)
                    .def_readwrite("ki", &libstp::foundation::PidGains::ki)
                    .def_readwrite("kd", &libstp::foundation::PidGains::kd);
 
     auto ff_cls = py::class_<libstp::foundation::Feedforward>(m, "Feedforward")
                   .def(py::init<>())
+                  .def(py::init<double, double, double>(),
+                       py::arg("kS"), py::arg("kV"), py::arg("kA"))
                   .def_readwrite("kS", &libstp::foundation::Feedforward::kS)
                   .def_readwrite("kV", &libstp::foundation::Feedforward::kV)
                   .def_readwrite("kA", &libstp::foundation::Feedforward::kA);
 
     auto dz_cls = py::class_<libstp::foundation::Deadzone>(m, "Deadzone")
                   .def(py::init<>())
+                  .def(py::init<bool, double, double, double>(),
+                       py::arg("enable"), py::arg("zero_window_percent"),
+                       py::arg("start_percent"), py::arg("release_percent"))
                   .def_readwrite("enable", &libstp::foundation::Deadzone::enable)
                   .def_readwrite("zero_window_percent", &libstp::foundation::Deadzone::zero_window_percent)
                   .def_readwrite("start_percent", &libstp::foundation::Deadzone::start_percent)

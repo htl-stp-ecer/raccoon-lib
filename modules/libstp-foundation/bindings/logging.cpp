@@ -37,9 +37,7 @@ public:
 };
 
 
-void init_logger(py::module_& m)
-{
-    // ToDo: Move entire logging functionality into own module, whatever, but this is the wrong place for it all.
+void initialize_logging() {
     // Ensure the logs directory exists.
     std::filesystem::path log_dir = "logs";
     if (!std::filesystem::exists(log_dir)) {
@@ -57,7 +55,7 @@ void init_logger(py::module_& m)
     // Create a pattern formatter and register the custom elapsed time flag using '%E'
     auto pattern_formatter = std::make_unique<spdlog::pattern_formatter>();
     pattern_formatter->add_flag<ElapsedTimeFormatter>('E');
-    pattern_formatter->set_pattern("[%H:%M:%S] [+%E] [t%t/%n] [%^%l%$]: %v");
+    pattern_formatter->set_pattern("[%Y-%m-%d %H:%M:%S] [+%E] [t%t/%n] [%^%l%$]: %v");
 
     // Apply the custom formatter to both sinks.
     console_sink->set_formatter(pattern_formatter->clone());
@@ -74,7 +72,14 @@ void init_logger(py::module_& m)
     spdlog::flush_every(std::chrono::seconds(3));
 
     logger->info("Logging to directory: {}", std::filesystem::absolute(log_dir).string());
+}
 
+void init_logger(py::module_& m)
+{
+    // Disable logging by default - it will only be enabled when initialize_logging() is called
+    spdlog::set_level(spdlog::level::off);
+
+    m.def("initialize_logging", &initialize_logging, "Initialize and enable the logging system");
     m.def("initialize_timer", &initialize_timer, "Initialize the timer for elapsed time logging");
     
     m.def("debug", [](const char* message) { spdlog::debug(message); }, R"pbdoc(

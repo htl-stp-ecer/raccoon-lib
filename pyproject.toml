@@ -11,7 +11,7 @@ readme = "README.md"
 authors = [
   { name = "Tobias Madlberger", email = "tobias.madlberger@gmail.com" },
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "pyyaml",
     "black"
