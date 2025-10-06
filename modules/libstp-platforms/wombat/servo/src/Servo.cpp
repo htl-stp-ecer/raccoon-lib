@@ -3,8 +3,8 @@
 //
 #include "hal/Servo.hpp"
 
-#include <format>
 #include <stdexcept>
+#include <spdlog/fmt/fmt.h>
 
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
@@ -38,7 +38,7 @@ void libstp::hal::servo::Servo::setPosition(const int position)
 #ifdef SAFETY_CHECKS_ENABLED
     if (position < MIN_POSITION || position > MAX_POSITION)
     {
-        throw std::out_of_range(std::format("Position must be between {} and {} degrees.", MIN_POSITION, MAX_POSITION));
+        throw std::out_of_range(fmt::format("Position must be between {} and {} degrees.", MIN_POSITION, MAX_POSITION));
     }
 #endif
     

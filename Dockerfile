@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64/v8 python:3.12-trixie
+FROM --platform=linux/arm64/v8 python:3.11-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TZ=Europe/Vienna
@@ -7,7 +7,6 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ >/etc/timezone
 # Install system dependencies for building Python extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential cmake ninja-build git pkg-config ccache \
-      python3-dev python3-pip python3-venv \
       libssl-dev libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -28,5 +27,4 @@ ENV CCACHE_DIR=/ccache \
     PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /src
-
 CMD ["/bin/bash"]

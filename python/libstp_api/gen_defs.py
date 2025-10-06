@@ -10,7 +10,7 @@ Generate defs.py (class Defs) from a YAML motor definitions file.
 - Fails fast with actionable errors.
 
 Usage:
-  python gen_defs.py config.yml -o defs.py --class-name Defs
+  python gen_defs.py raccoon.project.yml -o defs.py --class-name Defs
 """
 
 from __future__ import annotations
