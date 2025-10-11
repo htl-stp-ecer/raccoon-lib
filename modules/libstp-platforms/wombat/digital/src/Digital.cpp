@@ -9,7 +9,7 @@
 #include "core/LcmReader.hpp"
 
 constexpr int MIN_PORT = 0;
-constexpr int MAX_PORT = 9;
+constexpr int MAX_PORT = 10;
 
 libstp::hal::digital::DigitalSensor::DigitalSensor(const int port): port(port)
 {
@@ -32,6 +32,7 @@ libstp::hal::digital::DigitalSensor::~DigitalSensor()
 
 bool libstp::hal::digital::DigitalSensor::read() const
 {
+    // readDigital(port) returns 0 or 1 for the specific port, not a bitmask
     const int digital = platform::wombat::core::LcmReader::instance().readDigital(port).value;
-    return (port < 16) && !(digital & (1u << port));
+    return digital != 0;
 }

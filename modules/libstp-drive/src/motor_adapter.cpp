@@ -6,10 +6,11 @@
 #include <cmath>
 
 using namespace libstp::drive;
+constexpr double u_max = 100.0;
 
 MotorAdapter::MotorAdapter(hal::motor::Motor* motor)
     : motor_(motor),
-      controller_(motor->getCalibration().pid, motor->getCalibration().ff, motor->getCalibration().deadzone)
+      controller_(motor->getCalibration().pid, motor->getCalibration().ff)
 {
 }
 
@@ -53,7 +54,6 @@ void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, b
     updateEncoderVelocity(dt);
     double w_meas = getVelocity();
 
-    const double u_max = std::abs(motor_->getCalibration().max_percent_output);
     bool saturated = false;
     double u = controller_.compute(w_ref, a_ref, w_meas, dt, u_max, &saturated);
 
@@ -77,7 +77,6 @@ void MotorAdapter::setPercent(double percent)
     if (!motor_) return;
 
     controller_.reset();
-    const double u_max = std::abs(motor_->getCalibration().max_percent_output);
     double u = std::clamp(percent, -u_max, u_max);
     //if (motor_->getCalibration().invert_cmd) u = -u;
     motor_->setSpeed(static_cast<int>(std::lround(u)));

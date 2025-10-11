@@ -37,8 +37,6 @@ test = ["pytest"]
 wheel.expand-macos-universal-tags = true
 minimum-version = "build-system.requires"
 build-dir = "build"
-wheel.packages = ["python/libstp", "python/libstp_api"]
-
 
 [tool.pytest.ini_options]
 minversion = "8.0"

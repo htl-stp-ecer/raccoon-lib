@@ -92,3 +92,8 @@ target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
 
 install(TARGETS _core DESTINATION libstp)
 
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp/"
+        DESTINATION libstp
+        FILES_MATCHING PATTERN "*.py")
+
+

@@ -7,37 +7,13 @@
 
 using namespace libstp::drive;
 
-VelocityController::VelocityController(foundation::PidGains g, foundation::Feedforward ff, foundation::Deadzone dz)
-    : g_(g), ff_(ff), dz_(dz)
+VelocityController::VelocityController(foundation::PidGains g, foundation::Feedforward ff)
+    : g_(g), ff_(ff)
 {
 }
 
 void VelocityController::setGains(const foundation::PidGains& g) { g_ = g; }
 void VelocityController::setFF(const foundation::Feedforward& ff) { ff_ = ff; }
-void VelocityController::setDeadzone(const foundation::Deadzone& dz) { dz_ = dz; }
-
-double VelocityController::mapDutyWithDeadzone(double u_raw, double u_max) const
-{
-    if (!dz_.enable) return u_raw;
-
-    const double zw = std::clamp(dz_.zero_window_percent, 0.0, u_max);
-    const double sp = std::clamp(dz_.start_percent, 0.0, u_max);
-    const double rp = (dz_.release_percent > 0.0)
-                          ? std::clamp(dz_.release_percent, 0.0, sp)
-                          : zw;
-
-    const double sign = (u_raw >= 0.0) ? 1.0 : -1.0;
-    double mag = std::abs(u_raw);
-
-    if (mag <= rp) return 0.0;
-
-    if (mag <= zw) mag = zw;
-    const double denom = std::max(1e-6, u_max - zw);
-    const double alpha = (mag - zw) / denom; // 0..1
-    const double out_mag = sp + alpha * (u_max - sp);
-
-    return std::clamp(sign * out_mag, -u_max, u_max);
-}
 
 double VelocityController::compute(double w_ref, double a_ref, double w_meas, double dt,
                                    double u_max, bool* out_sat)
@@ -57,15 +33,13 @@ double VelocityController::compute(double w_ref, double a_ref, double w_meas, do
 
     double u_raw = u_ff + u_p + g_.ki * i_ + u_d;
 
-    double u_mapped = mapDutyWithDeadzone(u_raw, std::abs(u_max));
-
-    const double u_cmd = std::clamp(u_mapped, -std::abs(u_max), std::abs(u_max));
-    if (out_sat) *out_sat = (u_cmd != u_mapped);
+    const double u_cmd = std::clamp(u_raw, -std::abs(u_max), std::abs(u_max));
+    if (out_sat) *out_sat = (u_cmd != u_raw);
 
     if (g_.ki > 0.0 && dt > 0.0)
     {
-        const double unclamped_to_cmd_error = u_cmd - u_mapped;
-        if (u_cmd == u_mapped || (unclamped_to_cmd_error * err) > 0.0)
+        const double unclamped_to_cmd_error = u_cmd - u_raw;
+        if (u_cmd == u_raw || (unclamped_to_cmd_error * err) > 0.0)
         {
             i_ += (err + k_aw_ * unclamped_to_cmd_error) * dt;
         }
