@@ -26,27 +26,18 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted, const foun
 #endif
 }
 
-
-libstp::hal::motor::Motor::~Motor()
-{
-#ifdef SAFETY_CHECKS_ENABLED
-    unregisterMotorPort(port);
-#endif
-}
-
 void libstp::hal::motor::Motor::setSpeed(const int percent) const
 {
 #ifdef SAFETY_CHECKS_ENABLED
     if (percent < MIN_SPEED || percent > MAX_SPEED) throw std::out_of_range("speed -100 - 100");
 #endif
 
-    using namespace platform::wombat::core;
-    const bool zero = percent == 0;
-    auto dir = MotorDir::Off;
-    if (!zero)
-        dir = (inverted ? percent < 0 : percent > 0) ? MotorDir::CW : MotorDir::CCW;
-    const uint32_t duty = static_cast<uint32_t>(percent * 4); // 0-400
-    LcmDataWriter::instance().setMotor(port, duty);
+    int scaled = percent * 4; // -400 to 400
+    if (inverted)
+    {
+        scaled = -scaled;
+    }
+    platform::wombat::core::LcmDataWriter::instance().setMotor(port, scaled);
 }
 
 int libstp::hal::motor::Motor::getPosition() const

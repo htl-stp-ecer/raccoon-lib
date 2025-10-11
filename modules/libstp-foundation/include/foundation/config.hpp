@@ -5,7 +5,7 @@
 #ifndef LIBSTP__CONFIG_H
 #define LIBSTP__CONFIG_H
 
-// SPDLOG_LEVEL_DEBUG for running the robot
+// SPDLOG_LEVEL_DEBUG for running the mission
 // SPDLOG_LEVEL_TRACE for debugging issues within algorithms
 //
 // This only sets the macro level - the actual logging level is set in the bindings/main.cpp file

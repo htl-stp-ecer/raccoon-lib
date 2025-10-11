@@ -76,9 +76,6 @@ void initialize_logging() {
 
 void init_logger(py::module_& m)
 {
-    // Disable logging by default - it will only be enabled when initialize_logging() is called
-    spdlog::set_level(spdlog::level::off);
-
     m.def("initialize_logging", &initialize_logging, "Initialize and enable the logging system");
     m.def("initialize_timer", &initialize_timer, "Initialize the timer for elapsed time logging");
     

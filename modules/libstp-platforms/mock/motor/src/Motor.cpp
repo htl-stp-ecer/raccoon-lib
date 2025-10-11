@@ -22,13 +22,6 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted,
     platform::mock::core::MockPlatform::instance().init();
 }
 
-libstp::hal::motor::Motor::~Motor()
-{
-#ifdef SAFETY_CHECKS_ENABLED
-    unregisterMotorPort(port);
-#endif
-}
-
 void libstp::hal::motor::Motor::setSpeed(const int percent) const
 {
 #ifdef SAFETY_CHECKS_ENABLED

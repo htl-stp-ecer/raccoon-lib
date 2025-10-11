@@ -18,6 +18,12 @@ void LcmDataWriter::setServo(uint8_t port, int valueData) {
     lcm.publish("libstp/servo/" + std::to_string(port) + "/position_cmd", &publishedValue);
 }
 
+void LcmDataWriter::requestDataDump() {
+    exlcm::scalar_i32_t dumpRequest{};
+    dumpRequest.value = 1;
+    lcm.publish("libstp/system/dump_request", &dumpRequest);
+}
+
 LcmDataWriter::LcmDataWriter() {
     if (!lcm.good()) {
         throw std::runtime_error("[LCM-Writer] Failed to initialize LCM");

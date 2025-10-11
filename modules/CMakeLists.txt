@@ -66,6 +66,19 @@ function(register_libstp_module module_name is_interface additional_libraries)
         install(TARGETS ${PY_LIB_NAME} DESTINATION libstp)
     endif ()
 
+    set(_PY_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/python/libstp")
+    if(EXISTS "${_PY_PKG_DIR}")
+        message(STATUS "Installing Python package fragment from ${_PY_PKG_DIR}")
+        install(
+                DIRECTORY "${_PY_PKG_DIR}/"
+                DESTINATION libstp
+                FILES_MATCHING
+                PATTERN "*.py"
+                PATTERN "__pycache__" EXCLUDE
+        )
+    endif()
+
+
     message(STATUS "Registered STP module: ${module_name}")
 endfunction()
 
@@ -75,5 +88,5 @@ add_subdirectory(libstp-platforms)
 add_subdirectory(libstp-async)
 add_subdirectory(libstp-kinematics)
 add_subdirectory(libstp-drive)
-# add_subdirectory(libstp-robot)
+add_subdirectory(libstp-robot)
 # add_subdirectory(libstp-motion)
