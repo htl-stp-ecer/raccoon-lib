@@ -3,15 +3,38 @@
 //
 
 #include "kinematics/differential/differential.hpp"
-
 #include "foundation/types.hpp"
-
+#include <algorithm>
+#include <stdexcept>
+#include <cmath>
 
 namespace libstp::kinematics::differential
 {
-    DifferentialKinematics::DifferentialKinematics(double wheelbase, double wheelRadius)
-        : m_wheelbase(wheelbase), m_wheelRadius(wheelRadius)
+    DifferentialKinematics::DifferentialKinematics(hal::motor::Motor* left_motor,
+                                                   hal::motor::Motor* right_motor,
+                                                   double wheelbase,
+                                                   double wheelRadius,
+                                                   double max_velocity,
+                                                   double max_acceleration)
+        : m_wheelbase(wheelbase)
+          , m_wheelRadius(wheelRadius)
+          , left_motor_{.adapter = drive::MotorAdapter(left_motor)}
+          , right_motor_{.adapter = drive::MotorAdapter(right_motor)}
     {
+        if (!left_motor) throw std::invalid_argument("left_motor cannot be null");
+        if (!right_motor) throw std::invalid_argument("right_motor cannot be null");
+        if (wheelbase <= 0.0) throw std::invalid_argument("wheelbase must be positive");
+        if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
+        setWheelLimits(max_velocity, max_acceleration);
+    }
+
+    void DifferentialKinematics::setWheelLimits(const double max_velocity, const double max_acceleration)
+    {
+        max_wheel_velocity_ = std::max(0.0, max_velocity);
+        max_wheel_acceleration_ = std::max(0.0, max_acceleration);
+
+        left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
+        right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
     }
 
     std::size_t DifferentialKinematics::wheelCount() const
@@ -19,15 +42,46 @@ namespace libstp::kinematics::differential
         return 2;
     }
 
-    std::vector<double> DifferentialKinematics::inverse(const foundation::ChassisCmd& cmd) const
+    void DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
-        // Dummy implementation
-        return {0.0, 0.0};
+        const double v_left = (cmd.vx - cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
+        const double v_right = (cmd.vx + cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
+
+        const double left_clamped = std::clamp(v_left, -max_wheel_velocity_, max_wheel_velocity_);
+        const double right_clamped = std::clamp(v_right, -max_wheel_velocity_, max_wheel_velocity_);
+
+        double left_accel = 0.0;
+        double right_accel = 0.0;
+        const double left_limited = left_motor_.limiter.step(left_clamped, left_motor_.target_w, dt, left_accel);
+        const double right_limited = right_motor_.limiter.step(right_clamped, right_motor_.target_w, dt, right_accel);
+
+        left_motor_.target_w = left_limited;
+        right_motor_.target_w = right_limited;
+
+        bool left_saturated = false;
+        bool right_saturated = false;
+        left_motor_.adapter.setVelocityWithAccel(left_limited, left_accel, dt, &left_saturated);
+        right_motor_.adapter.setVelocityWithAccel(right_limited, right_accel, dt, &right_saturated);
     }
 
-    foundation::ChassisState DifferentialKinematics::forward(const std::vector<double>& w) const
+    foundation::ChassisState DifferentialKinematics::estimateState() const
     {
-        // Dummy implementation
-        return {};
+        const double w_left = left_motor_.adapter.getVelocity();
+        const double w_right = right_motor_.adapter.getVelocity();
+
+        const double vx = (w_left + w_right) * m_wheelRadius / 2.0;
+        const double w = (w_right - w_left) * m_wheelRadius / m_wheelbase;
+
+        return foundation::ChassisState{vx, 0.0, w};
+    }
+
+    void DifferentialKinematics::hardStop()
+    {
+        left_motor_.target_w = 0.0;
+        right_motor_.target_w = 0.0;
+        left_motor_.adapter.resetController();
+        right_motor_.adapter.resetController();
+        left_motor_.adapter.brake();
+        right_motor_.adapter.brake();
     }
 }

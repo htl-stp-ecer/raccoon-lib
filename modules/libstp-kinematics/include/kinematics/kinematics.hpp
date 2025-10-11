@@ -10,13 +10,22 @@
 
 namespace libstp::kinematics
 {
+    struct MotorCommands
+    {
+        std::vector<double> wheel_velocities{};
+        bool saturated_any{false};
+        std::uint32_t saturation_mask{0};
+    };
+
     struct IKinematics
     {
         virtual ~IKinematics() = default;
         [[nodiscard]] virtual std::size_t wheelCount() const = 0;
 
-        [[nodiscard]] virtual std::vector<double> inverse(const foundation::ChassisCmd& cmd) const = 0;
+        virtual void applyCommand(const foundation::ChassisCmd& cmd, double dt) = 0;
 
-        [[nodiscard]] virtual foundation::ChassisState forward(const std::vector<double>& w) const = 0;
+        [[nodiscard]] virtual foundation::ChassisState estimateState() const = 0;
+
+        virtual void hardStop() = 0;
     };
 }
