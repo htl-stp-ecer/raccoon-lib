@@ -13,6 +13,7 @@ namespace py = pybind11;
 void init_pid(const py::module& m);
 void init_logger(py::module_& m);
 void init_motor(const py::module& m);
+void init_types(const py::module& m);
 
 PYBIND11_MODULE(foundation, m)
 {

@@ -1,1 +1,1 @@
-register_libstp_module(robot "FALSE" "")
+register_libstp_module(robot "TRUE" "")

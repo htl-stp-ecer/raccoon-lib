@@ -1,1 +1,1 @@
-register_libstp_module(kinematics-mecanum "FALSE" "foundation;kinematics")
+register_libstp_module(kinematics_mecanum "FALSE" "foundation;kinematics;drive;hal")

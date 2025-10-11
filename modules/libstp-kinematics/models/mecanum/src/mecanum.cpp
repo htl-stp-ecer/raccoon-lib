@@ -3,14 +3,49 @@
 //
 
 #include "kinematics/mecanum/mecanum.hpp"
-
 #include "foundation/types.hpp"
+#include <algorithm>
+#include <stdexcept>
+#include <cmath>
 
 namespace libstp::kinematics::mecanum
 {
-    MecanumKinematics::MecanumKinematics(double wheelbase, double trackWidth, double wheelRadius)
-        : m_wheelbase(wheelbase), m_trackWidth(trackWidth), m_wheelRadius(wheelRadius)
+    MecanumKinematics::MecanumKinematics(hal::motor::Motor* front_left_motor,
+                                         hal::motor::Motor* front_right_motor,
+                                         hal::motor::Motor* back_left_motor,
+                                         hal::motor::Motor* back_right_motor,
+                                         const double wheelbase,
+                                         const double trackWidth,
+                                         const double wheelRadius,
+                                         double max_velocity,
+                                         double max_acceleration)
+        : m_wheelbase(wheelbase)
+          , m_trackWidth(trackWidth)
+          , m_wheelRadius(wheelRadius)
+          , front_left_motor_{.adapter = drive::MotorAdapter(front_left_motor)}
+          , front_right_motor_{.adapter = drive::MotorAdapter(front_right_motor)}
+          , back_left_motor_{.adapter = drive::MotorAdapter(back_left_motor)}
+          , back_right_motor_{.adapter = drive::MotorAdapter(back_right_motor)}
     {
+        if (!front_left_motor) throw std::invalid_argument("front_left_motor cannot be null");
+        if (!front_right_motor) throw std::invalid_argument("front_right_motor cannot be null");
+        if (!back_left_motor) throw std::invalid_argument("back_left_motor cannot be null");
+        if (!back_right_motor) throw std::invalid_argument("back_right_motor cannot be null");
+        if (wheelbase <= 0.0) throw std::invalid_argument("wheelbase must be positive");
+        if (trackWidth <= 0.0) throw std::invalid_argument("trackWidth must be positive");
+        if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
+        setWheelLimits(max_velocity, max_acceleration);
+    }
+
+    void MecanumKinematics::setWheelLimits(const double max_velocity, const double max_acceleration)
+    {
+        max_wheel_velocity_ = std::max(0.0, max_velocity);
+        max_wheel_acceleration_ = std::max(0.0, max_acceleration);
+
+        front_left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
+        front_right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
+        back_left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
+        back_right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
     }
 
     std::size_t MecanumKinematics::wheelCount() const
@@ -18,15 +53,70 @@ namespace libstp::kinematics::mecanum
         return 4;
     }
 
-    std::vector<double> MecanumKinematics::inverse(const foundation::ChassisCmd& cmd) const
+    void MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
-        // Dummy implementation
-        return {0.0, 0.0, 0.0, 0.0};
+        const double L = (m_wheelbase + m_trackWidth) / 2.0;
+
+        const double w_fl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
+        const double w_fr = (cmd.vx + cmd.vy + L * cmd.wz) / m_wheelRadius;
+        const double w_bl = (cmd.vx + cmd.vy - L * cmd.wz) / m_wheelRadius;
+        const double w_br = (cmd.vx - cmd.vy + L * cmd.wz) / m_wheelRadius;
+
+        const double fl_clamped = std::clamp(w_fl, -max_wheel_velocity_, max_wheel_velocity_);
+        const double fr_clamped = std::clamp(w_fr, -max_wheel_velocity_, max_wheel_velocity_);
+        const double bl_clamped = std::clamp(w_bl, -max_wheel_velocity_, max_wheel_velocity_);
+        const double br_clamped = std::clamp(w_br, -max_wheel_velocity_, max_wheel_velocity_);
+
+        double fl_accel = 0.0, fr_accel = 0.0, bl_accel = 0.0, br_accel = 0.0;
+        const double fl_limited = front_left_motor_.limiter.step(fl_clamped, front_left_motor_.target_w, dt, fl_accel);
+        const double fr_limited = front_right_motor_.limiter.
+                                                     step(fr_clamped, front_right_motor_.target_w, dt, fr_accel);
+        const double bl_limited = back_left_motor_.limiter.step(bl_clamped, back_left_motor_.target_w, dt, bl_accel);
+        const double br_limited = back_right_motor_.limiter.step(br_clamped, back_right_motor_.target_w, dt, br_accel);
+
+        front_left_motor_.target_w = fl_limited;
+        front_right_motor_.target_w = fr_limited;
+        back_left_motor_.target_w = bl_limited;
+        back_right_motor_.target_w = br_limited;
+
+        bool fl_sat = false, fr_sat = false, bl_sat = false, br_sat = false;
+        front_left_motor_.adapter.setVelocityWithAccel(fl_limited, fl_accel, dt, &fl_sat);
+        front_right_motor_.adapter.setVelocityWithAccel(fr_limited, fr_accel, dt, &fr_sat);
+        back_left_motor_.adapter.setVelocityWithAccel(bl_limited, bl_accel, dt, &bl_sat);
+        back_right_motor_.adapter.setVelocityWithAccel(br_limited, br_accel, dt, &br_sat);
     }
 
-    foundation::ChassisState MecanumKinematics::forward(const std::vector<double>& w) const
+    foundation::ChassisState MecanumKinematics::estimateState() const
     {
-        // Dummy implementation
-        return {};
+        const double w_fl = front_left_motor_.adapter.getVelocity();
+        const double w_fr = front_right_motor_.adapter.getVelocity();
+        const double w_bl = back_left_motor_.adapter.getVelocity();
+        const double w_br = back_right_motor_.adapter.getVelocity();
+
+        const double L = (m_wheelbase + m_trackWidth) / 2.0;
+
+        const double vx = (w_fl + w_fr + w_bl + w_br) * m_wheelRadius / 4.0;
+        const double vy = (-w_fl + w_fr + w_bl - w_br) * m_wheelRadius / 4.0;
+        const double w = (-w_fl + w_fr - w_bl + w_br) * m_wheelRadius / (4.0 * L);
+
+        return foundation::ChassisState{vx, vy, w};
+    }
+
+    void MecanumKinematics::hardStop()
+    {
+        front_left_motor_.target_w = 0.0;
+        front_right_motor_.target_w = 0.0;
+        back_left_motor_.target_w = 0.0;
+        back_right_motor_.target_w = 0.0;
+
+        front_left_motor_.adapter.resetController();
+        front_right_motor_.adapter.resetController();
+        back_left_motor_.adapter.resetController();
+        back_right_motor_.adapter.resetController();
+
+        front_left_motor_.adapter.brake();
+        front_right_motor_.adapter.brake();
+        back_left_motor_.adapter.brake();
+        back_right_motor_.adapter.brake();
     }
 }

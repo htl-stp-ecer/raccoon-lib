@@ -6,12 +6,17 @@
 #include <exlcm/scalar_i32_t.hpp>
 #include <exlcm/scalar_f_t.hpp>
 #include <string>
+#include <unordered_map>
+#include <mutex>
+#include <optional>
+#include <thread>
+#include <atomic>
 
 namespace platform::wombat::core {
     class LcmReader {
     public:
         explicit LcmReader();
-        ~LcmReader() = default;
+        ~LcmReader();
 
         static LcmReader& instance()
         {
@@ -38,8 +43,40 @@ namespace platform::wombat::core {
     private:
         lcm::LCM lcm_;
 
-        template <typename T>
-        T readOnce(const std::string& channel, int timeout_ms = 500);
+        // Background thread for listening
+        std::thread listener_thread_;
+        std::atomic<bool> running_{false};
+
+        // Caches for all sensor values
+        std::mutex cache_mutex_;
+        std::unordered_map<int, int32_t> motor_value_cache_;
+        std::unordered_map<int, int8_t> motor_dir_cache_;
+        std::unordered_map<int, int8_t> servo_mode_cache_;
+        std::unordered_map<int, int32_t> servo_value_cache_;
+        std::unordered_map<int, int32_t> bemf_cache_;
+        std::unordered_map<int, int32_t> analog_cache_;
+        std::unordered_map<int, int32_t> digital_cache_;
+
+        exlcm::vector3f_t gyro_cache_{};
+        exlcm::vector3f_t accel_cache_{};
+        exlcm::vector3f_t mag_cache_{};
+        exlcm::scalar_f_t temp_cache_{};
+
+        // Background listening function
+        void listenLoop();
+
+        // Message handlers
+        void handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleMotorDir(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg);
+        void handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg);
+        void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
+        void handleAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
+        void handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
+        void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleTemp(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_f_t* msg);
     };
 
     enum class MotorDir : uint8_t { Off = 0b00, CCW = 0b01, CW = 0b10, ServoLike = 0b11 };
