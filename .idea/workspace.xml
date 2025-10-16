@@ -91,42 +91,27 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Implement kinematics for differential and mecanum drive systems, including Python bindings and command application">
-      <change afterPath="$PROJECT_DIR$/modules/libstp-mission/CMakeLists.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-mission/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/mission/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/mission/api.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/python/libstp/class_name_logger.py" afterDir="false" />
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add mission module with logging and LCM integration; refactor motor and velocity controller classes">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy.sh" beforeDir="false" afterPath="$PROJECT_DIR$/deploy.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/bindings/velocity_controller.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/bindings/velocity_controller.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/velocity_controller.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/velocity_controller.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/velocity_controller.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/velocity_controller.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/bindings/logging.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/bindings/logging.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/include/foundation/config.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/include/foundation/config.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/include/foundation/motor.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/include/foundation/motor.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/bindings/motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/bindings/motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/src/Analog.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/src/Analog.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmReader.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmWriter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmWriter.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmWriter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmWriter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/digital/src/Digital.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/digital/src/Digital.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-robot/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-robot/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/python/libstp/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/python/libstp/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/python/libstp/__init__.pyi" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/__init__.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -147,7 +132,7 @@
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="main" />
+        <entry key="$PROJECT_DIR$" value="python-motion-system" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -177,31 +162,31 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.defs.executor": "Run",
-    "Python.gen_defs.executor": "Run",
-    "RunOnceActivity.RadMigrateCodeStyle": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "RunOnceActivity.west.config.association.type.startup.service": "true",
-    "SHELLCHECK.PATH": "/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "python-motion-system",
-    "last_opened_file_path": "/home/tobias/Documents/Botball/library/modules/libstp-mission",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.defs.executor&quot;: &quot;Run&quot;,
+    &quot;Python.gen_defs.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;drive&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/tobias/Documents/Botball/library/modules/libstp-mission&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/modules/libstp-mission" />
@@ -211,11 +196,6 @@
     </key>
   </component>
   <component name="RunManager" selected="Python.gen_defs">
-    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -681,7 +661,9 @@
       <workItem from="1759990948335" duration="9035000" />
       <workItem from="1760079200910" duration="6359000" />
       <workItem from="1760119881120" duration="30000" />
-      <workItem from="1760162026946" duration="19617000" />
+      <workItem from="1760162026946" duration="19633000" />
+      <workItem from="1760335839998" duration="6272000" />
+      <workItem from="1760593893863" duration="2019000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -715,7 +697,15 @@
       <option name="project" value="LOCAL" />
       <updated>1760086277319</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Add mission module with logging and LCM integration; refactor motor and velocity controller classes">
+      <option name="closed" value="true" />
+      <created>1760191403686</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1760191403686</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -742,6 +732,7 @@
     <MESSAGE value="Add Docker support for building and deploying Python library" />
     <MESSAGE value="Rename config file to raccoon.project.yml, update Python script usage, adjust Python version requirement, and enhance logging initialization" />
     <MESSAGE value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
-    <option name="LAST_COMMIT_MESSAGE" value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
+    <MESSAGE value="Add mission module with logging and LCM integration; refactor motor and velocity controller classes" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add mission module with logging and LCM integration; refactor motor and velocity controller classes" />
   </component>
 </project>

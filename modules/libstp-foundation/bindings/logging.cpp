@@ -46,11 +46,14 @@ void initialize_logging() {
 
     // Create the console and file sinks.
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    console_sink->set_level(spdlog::level::trace);
+
     auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         (log_dir / "libstp.log").string(),
         5 * 1024 * 1024,  // 5MB max file size
         3                // keep 3 rotated files
     );
+    file_sink->set_level(spdlog::level::trace);
 
     // Create a pattern formatter and register the custom elapsed time flag using '%E'
     auto pattern_formatter = std::make_unique<spdlog::pattern_formatter>();
@@ -67,7 +70,7 @@ void initialize_logging() {
 
     // Set the default logger and configure its behavior.
     spdlog::set_default_logger(logger);
-    logger->set_level(spdlog::level::debug);
+    logger->set_level(spdlog::level::trace);
     logger->flush_on(spdlog::level::warn);
     spdlog::flush_every(std::chrono::seconds(3));
 
