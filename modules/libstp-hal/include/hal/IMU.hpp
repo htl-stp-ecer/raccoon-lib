@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <Eigen/Geometry>
+
 namespace libstp::hal::imu
 {
     class IMU
@@ -18,5 +20,6 @@ namespace libstp::hal::imu
         
         void read(float* accel, float* gyro, float* magneto);
         void calibrate();
+        [[nodiscard]] Eigen::Quaternionf getOrientation();
     };
 }

@@ -52,3 +52,8 @@ void libstp::hal::imu::IMU::calibrate()
     // Mock calibration - in a real implementation this would collect samples
     SPDLOG_INFO("[IMU Mock] Calibration complete (simulated).");
 }
+
+Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
+{
+    return Eigen::Quaternionf::Identity();
+}
