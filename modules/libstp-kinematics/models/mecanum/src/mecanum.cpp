@@ -4,6 +4,7 @@
 
 #include "kinematics/mecanum/mecanum.hpp"
 #include "foundation/types.hpp"
+#include "foundation/config.hpp"
 #include <algorithm>
 #include <stdexcept>
 #include <cmath>
@@ -35,6 +36,13 @@ namespace libstp::kinematics::mecanum
         if (trackWidth <= 0.0) throw std::invalid_argument("trackWidth must be positive");
         if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
         setWheelLimits(max_velocity, max_acceleration);
+        SPDLOG_INFO(
+            "MecanumKinematics::ctor wheelbase={} trackWidth={} wheelRadius={} max_vel={} max_accel={}",
+            wheelbase,
+            trackWidth,
+            wheelRadius,
+            max_velocity,
+            max_acceleration);
     }
 
     void MecanumKinematics::setWheelLimits(const double max_velocity, const double max_acceleration)
@@ -46,6 +54,11 @@ namespace libstp::kinematics::mecanum
         front_right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         back_left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         back_right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
+
+        SPDLOG_INFO(
+            "MecanumKinematics::setWheelLimits max_velocity={} max_acceleration={}",
+            max_wheel_velocity_,
+            max_wheel_acceleration_);
     }
 
     std::size_t MecanumKinematics::wheelCount() const
@@ -55,6 +68,13 @@ namespace libstp::kinematics::mecanum
 
     void MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
+        SPDLOG_INFO(
+            "MecanumKinematics::applyCommand dt={} cmd vx={} vy={} wz={}",
+            dt,
+            cmd.vx,
+            cmd.vy,
+            cmd.wz);
+
         const double L = (m_wheelbase + m_trackWidth) / 2.0;
 
         const double w_fl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
@@ -62,10 +82,25 @@ namespace libstp::kinematics::mecanum
         const double w_bl = (cmd.vx + cmd.vy - L * cmd.wz) / m_wheelRadius;
         const double w_br = (cmd.vx - cmd.vy + L * cmd.wz) / m_wheelRadius;
 
+        SPDLOG_TRACE(
+            "MecanumKinematics wheel speeds raw fl={} fr={} bl={} br={}",
+            w_fl,
+            w_fr,
+            w_bl,
+            w_br);
+
         const double fl_clamped = std::clamp(w_fl, -max_wheel_velocity_, max_wheel_velocity_);
         const double fr_clamped = std::clamp(w_fr, -max_wheel_velocity_, max_wheel_velocity_);
         const double bl_clamped = std::clamp(w_bl, -max_wheel_velocity_, max_wheel_velocity_);
         const double br_clamped = std::clamp(w_br, -max_wheel_velocity_, max_wheel_velocity_);
+
+        SPDLOG_TRACE(
+            "MecanumKinematics wheel speeds clamped fl={} fr={} bl={} br={} (max={})",
+            fl_clamped,
+            fr_clamped,
+            bl_clamped,
+            br_clamped,
+            max_wheel_velocity_);
 
         double fl_accel = 0.0, fr_accel = 0.0, bl_accel = 0.0, br_accel = 0.0;
         const double fl_limited = front_left_motor_.limiter.step(fl_clamped, front_left_motor_.target_w, dt, fl_accel);
@@ -73,6 +108,17 @@ namespace libstp::kinematics::mecanum
                                                      step(fr_clamped, front_right_motor_.target_w, dt, fr_accel);
         const double bl_limited = back_left_motor_.limiter.step(bl_clamped, back_left_motor_.target_w, dt, bl_accel);
         const double br_limited = back_right_motor_.limiter.step(br_clamped, back_right_motor_.target_w, dt, br_accel);
+
+        SPDLOG_TRACE(
+            "MecanumKinematics wheel speeds limited fl={} fr={} bl={} br={} accel_fl={} accel_fr={} accel_bl={} accel_br={}",
+            fl_limited,
+            fr_limited,
+            bl_limited,
+            br_limited,
+            fl_accel,
+            fr_accel,
+            bl_accel,
+            br_accel);
 
         front_left_motor_.target_w = fl_limited;
         front_right_motor_.target_w = fr_limited;
@@ -84,6 +130,18 @@ namespace libstp::kinematics::mecanum
         front_right_motor_.adapter.setVelocityWithAccel(fr_limited, fr_accel, dt, &fr_sat);
         back_left_motor_.adapter.setVelocityWithAccel(bl_limited, bl_accel, dt, &bl_sat);
         back_right_motor_.adapter.setVelocityWithAccel(br_limited, br_accel, dt, &br_sat);
+
+        SPDLOG_INFO(
+            "MecanumKinematics command applied fl={} fr={} bl={} br={} sat_fl={} sat_fr={} sat_bl={} sat_br={} dt={}",
+            fl_limited,
+            fr_limited,
+            bl_limited,
+            br_limited,
+            fl_sat,
+            fr_sat,
+            bl_sat,
+            br_sat,
+            dt);
     }
 
     foundation::ChassisState MecanumKinematics::estimateState() const
@@ -99,11 +157,22 @@ namespace libstp::kinematics::mecanum
         const double vy = (-w_fl + w_fr + w_bl - w_br) * m_wheelRadius / 4.0;
         const double w = (-w_fl + w_fr - w_bl + w_br) * m_wheelRadius / (4.0 * L);
 
+        SPDLOG_TRACE(
+            "MecanumKinematics::estimateState wheels fl={} fr={} bl={} br={} -> vx={} vy={} w={}",
+            w_fl,
+            w_fr,
+            w_bl,
+            w_br,
+            vx,
+            vy,
+            w);
+
         return foundation::ChassisState{vx, vy, w};
     }
 
     void MecanumKinematics::hardStop()
     {
+        SPDLOG_INFO("MecanumKinematics::hardStop invoked");
         front_left_motor_.target_w = 0.0;
         front_right_motor_.target_w = 0.0;
         back_left_motor_.target_w = 0.0;

@@ -1,8 +1,6 @@
 from libstp.class_name_logger import ClassNameLogger
-from libstp.foundation import initialize_logging
 class GenericRobot(ClassNameLogger):
     def __init__(self):
-        initialize_logging()
         self._check_required_variables()
 
     def _check_required_variables(self):

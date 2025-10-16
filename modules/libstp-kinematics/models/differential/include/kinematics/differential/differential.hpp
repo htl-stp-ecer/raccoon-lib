@@ -6,6 +6,7 @@
 #include "kinematics/kinematics.hpp"
 #include "drive/motor_adapter.hpp"
 #include "drive/rate_limiter.hpp"
+#include "foundation/config.hpp"
 #include "hal/Motor.hpp"
 
 namespace libstp::kinematics::differential
