@@ -2,6 +2,8 @@
 // Created by tobias on 4/21/25.
 //
 #include <spdlog/spdlog.h>
+#include <cmath>
+#include <limits>
 
 #include "core/LcmReader.hpp"
 #include "hal/IMU.hpp"
@@ -52,6 +54,21 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
     magneto[0] = magValue.x;
     magneto[1] = magValue.y;
     magneto[2] = magValue.z;
+}
+
+Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
+{
+    const auto orientationMsg = platform::wombat::core::LcmReader::instance().readOrientation();
+    Eigen::Quaternionf orientation(orientationMsg.w, orientationMsg.x, orientationMsg.y, orientationMsg.z);
+
+    const float norm = orientation.norm();
+    if (!std::isfinite(norm) || norm <= std::numeric_limits<float>::epsilon())
+    {
+        return Eigen::Quaternionf::Identity();
+    }
+
+    orientation.normalize();
+    return orientation;
 }
 
 void libstp::hal::imu::IMU::calibrate()
