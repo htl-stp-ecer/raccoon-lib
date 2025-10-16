@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="BackendCodeEditorMiscSettings">
-    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="14" type="long" />
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="40" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
     <option name="/Default/Housekeeping/GlobalSettingsUpgraded/IsUpgraded/@EntryValue" value="true" type="bool" />
     <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
@@ -22,18 +22,15 @@
     <generated>
       <config projectName="VERSION" targetName="test-c-memq_test" />
       <config projectName="VERSION" targetName="gtest_main" />
-      <config projectName="VERSION" targetName="doc-dotnet" />
       <config projectName="VERSION" targetName="eigen_lapack" />
       <config projectName="VERSION" targetName="libstp_kinematics_mecanum" />
       <config projectName="VERSION" targetName="lcm-tester" />
       <config projectName="VERSION" targetName="lcm-source" />
-      <config projectName="VERSION" targetName="doc-doxygen" />
       <config projectName="VERSION" targetName="hal" />
       <config projectName="VERSION" targetName="lcm-logfilter" />
       <config projectName="VERSION" targetName="libstp_foundation" />
       <config projectName="VERSION" targetName="lcm-test-types-c.sources" />
       <config projectName="VERSION" targetName="libstp_async" />
-      <config projectName="VERSION" targetName="doc-clean" />
       <config projectName="VERSION" targetName="lcm-test-types-c" />
       <config projectName="VERSION" targetName="lcm-logger" />
       <config projectName="VERSION" targetName="eigen_blas" />
@@ -46,7 +43,6 @@
       <config projectName="VERSION" targetName="test-cpp-client" />
       <config projectName="VERSION" targetName="digital" />
       <config projectName="VERSION" targetName="analog" />
-      <config projectName="VERSION" targetName="doc-sphinx" />
       <config projectName="VERSION" targetName="test-c-udpm_test" />
       <config projectName="VERSION" targetName="lcm-buftest-sender" />
       <config projectName="VERSION" targetName="motor" />
@@ -72,19 +68,18 @@
       <config projectName="VERSION" targetName="test-cpp-memq_test" />
       <config projectName="VERSION" targetName="libstp_drive" />
       <config projectName="VERSION" targetName="lcm-static" />
-      <config projectName="VERSION" targetName="libstp_kinematics" />
       <config projectName="VERSION" targetName="messages-c" />
+      <config projectName="VERSION" targetName="libstp_kinematics" />
       <config projectName="VERSION" targetName="kinematics" />
       <config projectName="VERSION" targetName="test_sparseLU" />
-      <config projectName="VERSION" targetName="libstp_hal" />
       <config projectName="VERSION" targetName="test-c-client" />
+      <config projectName="VERSION" targetName="libstp_hal" />
       <config projectName="VERSION" targetName="dist" />
       <config projectName="VERSION" targetName="platform_core" />
       <config projectName="VERSION" targetName="spdlog" />
       <config projectName="VERSION" targetName="spbenchsolver" />
       <config projectName="VERSION" targetName="test-c-server" />
       <config projectName="VERSION" targetName="gtest" />
-      <config projectName="VERSION" targetName="doc-setup" />
       <config projectName="VERSION" targetName="_core" />
       <config projectName="VERSION" targetName="lapack" />
       <config projectName="VERSION" targetName="lcm-sink" />
@@ -96,11 +91,27 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="rewriting api">
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add mission module with logging and LCM integration; refactor motor and velocity controller classes">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy.sh" beforeDir="false" afterPath="$PROJECT_DIR$/deploy.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lcm-messages" beforeDir="false" afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/velocity_controller.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/velocity_controller.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/bindings/logging.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/bindings/logging.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/include/foundation/config.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/include/foundation/config.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/src/Analog.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/src/Analog.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/python/libstp/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/python/libstp/__init__.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -111,66 +122,80 @@
     <option name="formatViaClangd" value="false" />
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="main" />
+        <entry key="$PROJECT_DIR$" value="python-motion-system" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="ROOT_SYNC" value="DONT_SYNC" />
   </component>
   <component name="HighlightingSettingsPerFile">
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-drive/bindings/drive.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-drive/src/drive.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/core/src/MockPlatform.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
+  </component>
+  <component name="ProjectApplicationVersion">
+    <option name="ide" value="CLion" />
+    <option name="majorVersion" value="2025" />
+    <option name="minorVersion" value="2.1" />
+    <option name="productBranch" value="Classic" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
   &quot;associatedIndex&quot;: 5
 }</component>
-  <component name="ProjectId" id="349iycPwHi9EmMkurnnmwepaj5N" />
+  <component name="ProjectId" id="32iynVjyCf0Whl8zfPvujRjk547" />
+  <component name="ProjectStatusUIService">{
+  &quot;uiKindId&quot;: &quot;Widget&quot;
+}</component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.defs.executor": "Run",
-    "Python.gen_defs.executor": "Run",
-    "RunOnceActivity.RadMigrateCodeStyle": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "RunOnceActivity.west.config.association.type.startup.service": "true",
-    "SHELLCHECK.PATH": "/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck",
-    "Shell Script.deploy.sh.executor": "Run",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "RACOO-37",
-    "last_opened_file_path": "/home/eternalRose/CLionProjects/DA25/libary/modules/libstp-screen/python/libstp/screen/exlcm",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.defs.executor&quot;: &quot;Run&quot;,
+    &quot;Python.gen_defs.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;drive&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/tobias/Documents/Botball/library/modules/libstp-mission&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/exlcm" />
-      <recent name="$PROJECT_DIR$/lcm-messages/types" />
+      <recent name="$PROJECT_DIR$/modules/libstp-mission" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/exlcm" />
+      <recent name="$PROJECT_DIR$/python/libstp_api" />
     </key>
   </component>
-  <component name="RunManager" selected="CMake Application._core">
+  <component name="RunManager" selected="Python.gen_defs">
     <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -212,11 +237,6 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="analog" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="analog" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -243,31 +263,6 @@
       </method>
     </configuration>
     <configuration name="dist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="dist" CONFIG_NAME="Debug">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="doc-clean" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-clean" CONFIG_NAME="Debug">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="doc-dotnet" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-dotnet" CONFIG_NAME="Debug">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="doc-doxygen" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-doxygen" CONFIG_NAME="Debug">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="doc-setup" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-setup" CONFIG_NAME="Debug">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
-    <configuration name="doc-sphinx" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc-sphinx" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -522,19 +517,48 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="deploy.sh" type="ShConfigurationType" temporary="true">
-      <option name="SCRIPT_TEXT" value="" />
-      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
-      <option name="SCRIPT_PATH" value="$PROJECT_DIR$/deploy.sh" />
-      <option name="SCRIPT_OPTIONS" value="" />
-      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
-      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
-      <option name="INTERPRETER_PATH" value="/usr/bin/env" />
-      <option name="INTERPRETER_OPTIONS" value="bash" />
-      <option name="EXECUTE_IN_TERMINAL" value="true" />
-      <option name="EXECUTE_SCRIPT_FILE" value="true" />
-      <envs />
+    <configuration name="defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="library" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/defs.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="gen_defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="library" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/gen_defs.py" />
+      <option name="PARAMETERS" value="../resources/config.yml" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
     <list>
@@ -545,11 +569,6 @@
       <item itemvalue="CMake Application.demos" />
       <item itemvalue="CMake Application.digital" />
       <item itemvalue="CMake Application.dist" />
-      <item itemvalue="CMake Application.doc-clean" />
-      <item itemvalue="CMake Application.doc-dotnet" />
-      <item itemvalue="CMake Application.doc-doxygen" />
-      <item itemvalue="CMake Application.doc-setup" />
-      <item itemvalue="CMake Application.doc-sphinx" />
       <item itemvalue="CMake Application.doc" />
       <item itemvalue="CMake Application.drive" />
       <item itemvalue="CMake Application.eigen_blas" />
@@ -606,11 +625,13 @@
       <item itemvalue="Google Test.test-c-udpm_test" />
       <item itemvalue="Google Test.test-cpp-client" />
       <item itemvalue="Google Test.test-cpp-memq_test" />
-      <item itemvalue="Shell Script.deploy.sh" />
+      <item itemvalue="Python.defs" />
+      <item itemvalue="Python.gen_defs" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Shell Script.deploy.sh" />
+        <item itemvalue="Python.gen_defs" />
+        <item itemvalue="Python.defs" />
       </list>
     </recent_temporary>
   </component>
@@ -640,13 +661,9 @@
       <workItem from="1759990948335" duration="9035000" />
       <workItem from="1760079200910" duration="6359000" />
       <workItem from="1760119881120" duration="30000" />
-      <workItem from="1760162026946" duration="19617000" />
-      <workItem from="1760337914824" duration="161000" />
-      <workItem from="1760594275354" duration="8161000" />
-      <workItem from="1760632447925" duration="8416000" />
-      <workItem from="1760939463312" duration="3009000" />
-      <workItem from="1761199816349" duration="7588000" />
-      <workItem from="1761313727245" duration="1292000" />
+      <workItem from="1760162026946" duration="19633000" />
+      <workItem from="1760335839998" duration="6272000" />
+      <workItem from="1760593893863" duration="2019000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -680,13 +697,13 @@
       <option name="project" value="LOCAL" />
       <updated>1760086277319</updated>
     </task>
-    <task id="LOCAL-00005" summary="rewriting api">
+    <task id="LOCAL-00005" summary="Add mission module with logging and LCM integration; refactor motor and velocity controller classes">
       <option name="closed" value="true" />
-      <created>1760602094152</created>
+      <created>1760191403686</created>
       <option name="number" value="00005" />
       <option name="presentableId" value="LOCAL-00005" />
       <option name="project" value="LOCAL" />
-      <updated>1760602094152</updated>
+      <updated>1760191403686</updated>
     </task>
     <option name="localTasksCounter" value="6" />
     <servers />
@@ -715,7 +732,7 @@
     <MESSAGE value="Add Docker support for building and deploying Python library" />
     <MESSAGE value="Rename config file to raccoon.project.yml, update Python script usage, adjust Python version requirement, and enhance logging initialization" />
     <MESSAGE value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
-    <MESSAGE value="rewriting api" />
-    <option name="LAST_COMMIT_MESSAGE" value="rewriting api" />
+    <MESSAGE value="Add mission module with logging and LCM integration; refactor motor and velocity controller classes" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add mission module with logging and LCM integration; refactor motor and velocity controller classes" />
   </component>
 </project>
