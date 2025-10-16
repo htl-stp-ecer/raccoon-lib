@@ -31,6 +31,7 @@ LcmReader::LcmReader() {
     lcm_.subscribe("libstp/gyro/value", &LcmReader::handleGyro, this);
     lcm_.subscribe("libstp/accel/value", &LcmReader::handleAccel, this);
     lcm_.subscribe("libstp/mag/value", &LcmReader::handleMag, this);
+    lcm_.subscribe("libstp/imu/orientation", &LcmReader::handleOrientation, this);
 
     // Subscribe to BEMF topics (assuming indices 0-3)
     for (int idx = 0; idx < 4; ++idx) {
@@ -67,6 +68,10 @@ LcmReader::LcmReader() {
     mag_cache_.z = 0.0f;
 
     temp_cache_.value = 0.0f;
+    orientation_cache_.w = 1.0f;
+    orientation_cache_.x = 0.0f;
+    orientation_cache_.y = 0.0f;
+    orientation_cache_.z = 0.0f;
 
     // Initialize BEMF cache with zeros (hardware default)
     for (int idx = 0; idx < 4; ++idx) {
@@ -163,6 +168,10 @@ void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string&, const e
     mag_cache_ = *msg;
 }
 
+void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string&, const exlcm::quaternionf_t* msg) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    orientation_cache_ = *msg;
+}
 void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
     std::regex idx_regex("libstp/bemf/(\\d+)/value");
     std::smatch match;
@@ -248,6 +257,10 @@ exlcm::vector3f_t LcmReader::readMag() {
     return mag_cache_;
 }
 
+exlcm::quaternionf_t LcmReader::readOrientation() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    return orientation_cache_;
+}
 exlcm::scalar_i32_t LcmReader::readBemf(const int idx) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     exlcm::scalar_i32_t result;
