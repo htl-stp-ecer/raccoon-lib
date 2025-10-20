@@ -31,7 +31,7 @@ LcmReader::LcmReader() {
     lcm_.subscribe("libstp/gyro/value", &LcmReader::handleGyro, this);
     lcm_.subscribe("libstp/accel/value", &LcmReader::handleAccel, this);
     lcm_.subscribe("libstp/mag/value", &LcmReader::handleMag, this);
-    lcm_.subscribe("libstp/imu/orientation", &LcmReader::handleOrientation, this);
+    lcm_.subscribe("libstp/imu/quaternion", &LcmReader::handleOrientation, this);
 
     // Subscribe to BEMF topics (assuming indices 0-3)
     for (int idx = 0; idx < 4; ++idx) {
