@@ -5,23 +5,11 @@
 #include "foundation/types.hpp"
 #include "kinematics/kinematics.hpp"
 
+#include <sstream>
 namespace py = pybind11;
 
 void init_drive(const py::module& m)
 {
-    // Foundation types
-    py::class_<libstp::foundation::ChassisVel>(m, "ChassisVel")
-        .def(py::init<>())
-        .def_readwrite("vx", &libstp::foundation::ChassisVel::vx)
-        .def_readwrite("vy", &libstp::foundation::ChassisVel::vy)
-        .def_readwrite("w", &libstp::foundation::ChassisVel::w);
-
-    py::class_<libstp::foundation::ChassisState>(m, "ChassisState")
-        .def(py::init<>())
-        .def_readwrite("vx", &libstp::foundation::ChassisState::vx)
-        .def_readwrite("vy", &libstp::foundation::ChassisState::vy)
-        .def_readwrite("wz", &libstp::foundation::ChassisState::wz);
-
     py::class_<libstp::drive::Drive>(m, "Drive")
         .def(py::init([](libstp::kinematics::IKinematics* kinematics, const libstp::drive::MotionLimits& chassis_lim)
         {

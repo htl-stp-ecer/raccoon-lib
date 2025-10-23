@@ -7,6 +7,7 @@ BUILD_DIR="${BUILD_DIR:-build}"
 PLATFORM="${PLATFORM:-linux/arm64/v8}"
 IMAGE_NAME="${IMAGE_NAME:-libstp-dev:arm64}"
 CCACHE_VOL="${CCACHE_VOL:-libstp-ccache}"
+PIP_CACHE_VOL="${PIP_CACHE_VOL:-libstp-pip-cache}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 # Portable CPU count default
 if command -v nproc >/dev/null 2>&1; then
@@ -55,9 +56,11 @@ docker_exec() {
   docker run --rm --platform="$PLATFORM" \
     -v "$PWD":/src \
     -v "$CCACHE_VOL":/ccache \
+    -v "$PIP_CACHE_VOL":/root/.cache/pip \
     -e CCACHE_DIR=/ccache \
     -e CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
     -e CCACHE_COMPRESS=1 \
+    -e PIP_CACHE_DIR=/root/.cache/pip \
     -e PYTHONUNBUFFERED=1 \
     -e PYTHONDONTWRITEBYTECODE=1 \
     -e CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS" \
@@ -71,6 +74,7 @@ docker_exec() {
 need_builder
 ensure_binfmt
 docker volume create "$CCACHE_VOL" >/dev/null
+docker volume create "$PIP_CACHE_VOL" >/dev/null
 ensure_image
 
 if [[ "$FORCE_REBUILD" == "1" ]]; then
@@ -81,7 +85,7 @@ fi
 docker_exec g++ --version
 
 echo "• Installing build dependencies first..."
-docker_exec "pip install -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
+docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
 docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation"
 
