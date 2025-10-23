@@ -20,28 +20,28 @@ void init_drive_straight(py::module_& m)
 
     py::class_<DriveStraightMotion, Motion, std::shared_ptr<DriveStraightMotion>>(m, "DriveStraightMotion")
         .def(py::init([](libstp::drive::Drive& drive,
-                         libstp::hal::imu::IMU& imu,
+                         libstp::odometry::IOdometry& odometry,
                          double distance_cm,
                          double max_speed_mps)
         {
-            MotionContext ctx{drive, imu};
+            MotionContext ctx{drive, odometry};
             return std::make_shared<DriveStraightMotion>(ctx, distance_cm, max_speed_mps);
         }),
             py::arg("drive"),
-            py::arg("imu"),
+            py::arg("odometry"),
             py::arg("distance_cm"),
             py::arg("max_speed_mps"),
             py::keep_alive<1, 2>(),
             py::keep_alive<1, 3>())
         .def(py::init([](libstp::drive::Drive& drive,
-                         libstp::hal::imu::IMU& imu,
+                         libstp::odometry::IOdometry& odometry,
                          const DriveStraightConfig& config)
         {
-            MotionContext ctx{drive, imu};
+            MotionContext ctx{drive, odometry};
             return std::make_shared<DriveStraightMotion>(ctx, config);
         }),
             py::arg("drive"),
-            py::arg("imu"),
+            py::arg("odometry"),
             py::arg("config"),
             py::keep_alive<1, 2>(),
             py::keep_alive<1, 3>())

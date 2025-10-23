@@ -1,14 +1,14 @@
 #pragma once
 
 #include "drive/drive.hpp"
-#include "hal/IMU.hpp"
+#include "odometry/odometry.hpp"
 
 namespace libstp::motion
 {
     struct MotionContext
     {
         drive::Drive& drive;
-        hal::imu::IMU& imu;
+        odometry::IOdometry& odometry;
     };
 
     class Motion
@@ -24,8 +24,8 @@ namespace libstp::motion
     protected:
         [[nodiscard]] drive::Drive& drive() { return ctx_.drive; }
         [[nodiscard]] const drive::Drive& drive() const { return ctx_.drive; }
-        [[nodiscard]] hal::imu::IMU& imu() { return ctx_.imu; }
-        [[nodiscard]] const hal::imu::IMU& imu() const { return ctx_.imu; }
+        [[nodiscard]] odometry::IOdometry& odometry() { return ctx_.odometry; }
+        [[nodiscard]] const odometry::IOdometry& odometry() const { return ctx_.odometry; }
 
         MotionContext ctx_;
         bool started_{false};
