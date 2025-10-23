@@ -91,17 +91,18 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Enhance logging and configuration for drive system; refactor motor and velocity controller classes to improve clarity and functionality">
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lcm-messages" beforeDir="false" afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/build.sh" beforeDir="false" afterPath="$PROJECT_DIR$/build.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/bindings/imu.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/bindings/imu.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/include/hal/IMU.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/include/hal/IMU.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/bindings/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/bindings/drive.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/bindings/bindings.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/bindings/types.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/bindings/types.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/mock/imu/src/MPU9250.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/mock/imu/src/MPU9250.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmReader.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/imu/src/MPU9250.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/imu/src/MPU9250.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -129,10 +130,9 @@
     <option name="ROOT_SYNC" value="DONT_SYNC" />
   </component>
   <component name="HighlightingSettingsPerFile">
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-drive/bindings/drive.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-drive/src/drive.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="mock://diff.h" root0="SKIP_HIGHLIGHTING" />
   </component>
   <component name="ProjectApplicationVersion">
     <option name="ide" value="CLion" />
@@ -658,7 +658,12 @@
       <workItem from="1760119881120" duration="30000" />
       <workItem from="1760162026946" duration="19633000" />
       <workItem from="1760335839998" duration="6272000" />
-      <workItem from="1760593893863" duration="8906000" />
+      <workItem from="1760593893863" duration="9171000" />
+      <workItem from="1760715797696" duration="571000" />
+      <workItem from="1760939047965" duration="123000" />
+      <workItem from="1760939410122" duration="8000" />
+      <workItem from="1760943108267" duration="4168000" />
+      <workItem from="1761199293539" duration="3613000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -708,7 +713,23 @@
       <option name="project" value="LOCAL" />
       <updated>1760596020726</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Add motion module with drive straight functionality and IMU integration; enhance bindings for Python">
+      <option name="closed" value="true" />
+      <created>1760603348470</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1760603348470</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader">
+      <option name="closed" value="true" />
+      <created>1760947524662</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1760947524662</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -737,6 +758,8 @@
     <MESSAGE value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
     <MESSAGE value="Add mission module with logging and LCM integration; refactor motor and velocity controller classes" />
     <MESSAGE value="Enhance logging and configuration for drive system; refactor motor and velocity controller classes to improve clarity and functionality" />
-    <option name="LAST_COMMIT_MESSAGE" value="Enhance logging and configuration for drive system; refactor motor and velocity controller classes to improve clarity and functionality" />
+    <MESSAGE value="Add motion module with drive straight functionality and IMU integration; enhance bindings for Python" />
+    <MESSAGE value="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader" />
+    <option name="LAST_COMMIT_MESSAGE" value="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader" />
   </component>
 </project>

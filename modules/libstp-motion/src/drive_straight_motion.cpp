@@ -39,8 +39,8 @@ namespace libstp::motion
         finished_ = false;
         distance_travelled_m_ = 0.0;
 
-        const auto orientation = imu().getOrientation();
-        reference_yaw_ = computeYaw(orientation);
+        const auto pose = odometry().getPose();
+        reference_yaw_ = computeYaw(pose.orientation);
     }
 
     void DriveStraightMotion::update(double dt)
@@ -59,12 +59,15 @@ namespace libstp::motion
             return;
         }
 
-        const auto orientation = imu().getOrientation();
-        const double current_yaw = computeYaw(orientation);
+        // Update odometry first
+        odometry().update(dt);
+
+        const auto pose = odometry().getPose();
+        const double current_yaw = computeYaw(pose.orientation);
         const foundation::ChassisState state = drive().estimateState();
 
         const Eigen::Vector3f v_body(static_cast<float>(state.vx), static_cast<float>(state.vy), 0.0f);
-        const Eigen::Vector3f v_world = orientation * v_body;
+        const Eigen::Vector3f v_world = pose.orientation * v_body;
         const Eigen::Vector2d v_world_xy(static_cast<double>(v_world.x()), static_cast<double>(v_world.y()));
         const Eigen::Vector2d ref_forward(std::cos(reference_yaw_), std::sin(reference_yaw_));
         const double progress_speed = v_world_xy.dot(ref_forward);
