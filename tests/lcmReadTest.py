@@ -1,7 +1,7 @@
 from libstp.hal import AnalogSensor, Motor, Servo
 
 i = 0
-sensor = AnalogSensor(0)
+sensor = Motor(0)
 while True:
     print(sensor.read())
     # i+=1

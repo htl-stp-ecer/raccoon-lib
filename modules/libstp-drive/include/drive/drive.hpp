@@ -8,6 +8,7 @@
 #include "kinematics/kinematics.hpp"
 #include "foundation/types.hpp"
 #include "drive/limits.hpp"
+#include "foundation/config.hpp"
 
 namespace libstp::drive
 {

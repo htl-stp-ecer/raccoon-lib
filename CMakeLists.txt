@@ -1,6 +1,7 @@
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 option(ENABLE_SAFETY_CHECKS "Enable runtime safety checks across the whole project" ON)
+option(LIBSTP_TRACE_LOGGING "Compile SPDLOG trace statements into all targets" ON)
 
 cmake_minimum_required(VERSION 3.15...3.27)
 
@@ -17,6 +18,14 @@ include(FetchContent)
 
 if(ENABLE_SAFETY_CHECKS)
     add_compile_definitions(SAFETY_CHECKS_ENABLED)
+endif()
+
+if(LIBSTP_TRACE_LOGGING)
+    message(STATUS "Enabling trace logging in all targets")
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+else()
+    message(STATUS "Disabling trace logging in all targets")
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
 endif()
 
 # Scikit-build-core sets these values for you, or you can just hard-code the
@@ -95,5 +104,4 @@ install(TARGETS _core DESTINATION libstp)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp/"
         DESTINATION libstp
         FILES_MATCHING PATTERN "*.py")
-
 

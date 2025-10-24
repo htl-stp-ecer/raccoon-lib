@@ -3,7 +3,6 @@
 //
 #include "hal/Analog.hpp"
 #include "foundation/config.hpp"
-#include <spdlog/spdlog.h>
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 5;
