@@ -5,6 +5,7 @@
 #pragma once
 #include "hal/Motor.hpp"
 #include "velocity_controller.hpp"
+#include "foundation/config.hpp"
 
 namespace libstp::drive
 {

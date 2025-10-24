@@ -2,6 +2,7 @@
 // Created by tobias on 9/5/25.
 //
 #include "drive/drive.hpp"
+#include "foundation/config.hpp"
 #include <stdexcept>
 #include <algorithm>
 
@@ -18,20 +19,40 @@ Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
 
 void Drive::setVelocity(const foundation::ChassisVel& v_body)
 {
-    desired_.vx = std::clamp(v_body.vx, -chassis_lim_.max_v, chassis_lim_.max_v);
-    desired_.vy = std::clamp(v_body.vy, -chassis_lim_.max_v, chassis_lim_.max_v);
-    desired_.w = std::clamp(v_body.w, -chassis_lim_.max_omega, chassis_lim_.max_omega);
+    SPDLOG_INFO("Drive::setVelocity request vx={}, vy={}, w={}", v_body.vx, v_body.vy, v_body.w);
+
+    const double clamped_vx = std::clamp(v_body.vx, -chassis_lim_.max_v, chassis_lim_.max_v);
+    const double clamped_vy = std::clamp(v_body.vy, -chassis_lim_.max_v, chassis_lim_.max_v);
+    const double clamped_w = std::clamp(v_body.w, -chassis_lim_.max_omega, chassis_lim_.max_omega);
+
+    const bool limited = (clamped_vx != v_body.vx) || (clamped_vy != v_body.vy) || (clamped_w != v_body.w);
+
+    desired_.vx = clamped_vx;
+    desired_.vy = clamped_vy;
+    desired_.w = clamped_w;
+
+    SPDLOG_INFO(
+        "Drive::setVelocity stored vx={}, vy={}, w={} (limited={})",
+        desired_.vx,
+        desired_.vy,
+        desired_.w,
+        limited);
 }
 
 void Drive::update(const double dt) const
 {
-    // Apply the chassis velocity command through the kinematics
-    kinematics_->applyCommand(foundation::ChassisCmd{desired_.vx, desired_.vy, desired_.w}, dt);
+    const foundation::ChassisCmd cmd{desired_.vx, desired_.vy, desired_.w};
+    SPDLOG_INFO("Drive::update dt={} -> applying cmd vx={}, vy={}, wz={}", dt, cmd.vx, cmd.vy, cmd.wz);
+    SPDLOG_TRACE("Drive::update target wheel count={} (if available)", kinematics_->wheelCount());
+
+    kinematics_->applyCommand(cmd, dt);
 }
 
 libstp::foundation::ChassisState Drive::estimateState() const
 {
-    return kinematics_->estimateState();
+    const auto state = kinematics_->estimateState();
+    SPDLOG_TRACE("Drive::estimateState -> vx={}, vy={}, w={}", state.vx, state.vy, state.wz);
+    return state;
 }
 
 std::size_t Drive::wheelCount() const
@@ -41,6 +62,7 @@ std::size_t Drive::wheelCount() const
 
 void Drive::hardStop()
 {
+    SPDLOG_INFO("Drive::hardStop invoked; zeroing desired velocity");
     desired_ = foundation::ChassisVel{0, 0, 0};
     kinematics_->hardStop();
 }

@@ -4,6 +4,7 @@
 
 #include "kinematics/differential/differential.hpp"
 #include "foundation/types.hpp"
+#include "foundation/config.hpp"
 #include <algorithm>
 #include <stdexcept>
 #include <cmath>
@@ -26,6 +27,12 @@ namespace libstp::kinematics::differential
         if (wheelbase <= 0.0) throw std::invalid_argument("wheelbase must be positive");
         if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
         setWheelLimits(max_velocity, max_acceleration);
+        SPDLOG_INFO(
+            "DifferentialKinematics::ctor wheelbase={} wheelRadius={} max_vel={} max_accel={}",
+            wheelbase,
+            wheelRadius,
+            max_velocity,
+            max_acceleration);
     }
 
     void DifferentialKinematics::setWheelLimits(const double max_velocity, const double max_acceleration)
@@ -35,6 +42,11 @@ namespace libstp::kinematics::differential
 
         left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
+
+        SPDLOG_INFO(
+            "DifferentialKinematics::setWheelLimits max_velocity={} max_acceleration={}",
+            max_wheel_velocity_,
+            max_wheel_acceleration_);
     }
 
     std::size_t DifferentialKinematics::wheelCount() const
@@ -44,16 +56,40 @@ namespace libstp::kinematics::differential
 
     void DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
+        SPDLOG_INFO(
+            "DifferentialKinematics::applyCommand dt={} cmd vx={} wz={}",
+            dt,
+            cmd.vx,
+            cmd.wz);
+
         const double v_left = (cmd.vx - cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
         const double v_right = (cmd.vx + cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
 
+        SPDLOG_TRACE(
+            "DifferentialKinematics wheel speeds raw left={} right={}",
+            v_left,
+            v_right);
+
         const double left_clamped = std::clamp(v_left, -max_wheel_velocity_, max_wheel_velocity_);
         const double right_clamped = std::clamp(v_right, -max_wheel_velocity_, max_wheel_velocity_);
+
+        SPDLOG_TRACE(
+            "DifferentialKinematics wheel speeds clamped left={} right={} (max={})",
+            left_clamped,
+            right_clamped,
+            max_wheel_velocity_);
 
         double left_accel = 0.0;
         double right_accel = 0.0;
         const double left_limited = left_motor_.limiter.step(left_clamped, left_motor_.target_w, dt, left_accel);
         const double right_limited = right_motor_.limiter.step(right_clamped, right_motor_.target_w, dt, right_accel);
+
+        SPDLOG_TRACE(
+            "DifferentialKinematics wheel speeds limited left={} right={} accel_left={} accel_right={}",
+            left_limited,
+            right_limited,
+            left_accel,
+            right_accel);
 
         left_motor_.target_w = left_limited;
         right_motor_.target_w = right_limited;
@@ -62,6 +98,14 @@ namespace libstp::kinematics::differential
         bool right_saturated = false;
         left_motor_.adapter.setVelocityWithAccel(left_limited, left_accel, dt, &left_saturated);
         right_motor_.adapter.setVelocityWithAccel(right_limited, right_accel, dt, &right_saturated);
+
+        SPDLOG_INFO(
+            "DifferentialKinematics command applied left={} right={} sat_left={} sat_right={} dt={}",
+            left_limited,
+            right_limited,
+            left_saturated,
+            right_saturated,
+            dt);
     }
 
     foundation::ChassisState DifferentialKinematics::estimateState() const
@@ -72,11 +116,19 @@ namespace libstp::kinematics::differential
         const double vx = (w_left + w_right) * m_wheelRadius / 2.0;
         const double w = (w_right - w_left) * m_wheelRadius / m_wheelbase;
 
+        SPDLOG_TRACE(
+            "DifferentialKinematics::estimateState wheel_left={} wheel_right={} vx={} w={}",
+            w_left,
+            w_right,
+            vx,
+            w);
+
         return foundation::ChassisState{vx, 0.0, w};
     }
 
     void DifferentialKinematics::hardStop()
     {
+        SPDLOG_INFO("DifferentialKinematics::hardStop invoked");
         left_motor_.target_w = 0.0;
         right_motor_.target_w = 0.0;
         left_motor_.adapter.resetController();

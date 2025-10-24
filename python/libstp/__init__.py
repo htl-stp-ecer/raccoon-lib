@@ -7,7 +7,7 @@ from typing import Dict
 
 from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger
-from libstp.foundation import error, info, debug
+from libstp.foundation import error, info, debug, initialize_logging
 
 Motor = _hal.Motor
 
@@ -74,3 +74,4 @@ def _install_shutdown_hooks() -> None:
 
 
 _install_shutdown_hooks()
+initialize_logging()
