@@ -14,6 +14,7 @@ namespace libstp::motion
         double distance_kp{2.0};
         double heading_kp{4.0};
         double max_heading_rate{3.0};
+        double saturation_derating_factor{0.85};  // Scale back speed to this fraction when saturated
     };
 
     class DriveStraightMotion final : public Motion
@@ -31,8 +32,9 @@ namespace libstp::motion
         static double wrapAngle(double angle);
 
         DriveStraightConfig cfg_{};
-        double reference_yaw_{0.0};
+        Eigen::Quaternionf reference_orientation_{Eigen::Quaternionf::Identity()};
         double distance_travelled_m_{0.0};
         bool finished_{false};
+        double speed_scale_{1.0};  // Current speed scaling factor due to saturation
     };
 }
