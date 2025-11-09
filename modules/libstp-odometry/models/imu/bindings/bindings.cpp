@@ -18,10 +18,37 @@ PYBIND11_MODULE(odometry_imu, m)
     py::module_::import("libstp.odometry");
     py::module_::import("libstp.hal");
 
+    // Bind configuration struct
+    py::class_<libstp::odometry::imu::ImuOdometryConfig>(m, "ImuOdometryConfig")
+        .def(py::init<>())
+        .def_readwrite("invert_x", &libstp::odometry::imu::ImuOdometryConfig::invert_x,
+                       "Invert quaternion x component")
+        .def_readwrite("invert_y", &libstp::odometry::imu::ImuOdometryConfig::invert_y,
+                       "Invert quaternion y component")
+        .def_readwrite("invert_z", &libstp::odometry::imu::ImuOdometryConfig::invert_z,
+                       "Invert quaternion z component")
+        .def_readwrite("invert_w", &libstp::odometry::imu::ImuOdometryConfig::invert_w,
+                       "Invert quaternion w component (for 180° rotation)");
+
     py::class_<libstp::odometry::imu::ImuOdometry, libstp::odometry::IOdometry>(
             m, "ImuOdometry")
-        .def(py::init<libstp::hal::imu::IMU*>(),
+        .def(py::init([](libstp::hal::imu::IMU* imu,
+                         bool invert_x,
+                         bool invert_y,
+                         bool invert_z,
+                         bool invert_w) {
+                 libstp::odometry::imu::ImuOdometryConfig config{};
+                 config.invert_x = invert_x;
+                 config.invert_y = invert_y;
+                 config.invert_z = invert_z;
+                 config.invert_w = invert_w;
+                 return new libstp::odometry::imu::ImuOdometry(imu, config);
+             }),
              py::arg("imu"),
+             py::arg("invert_x") = false,
+             py::arg("invert_y") = false,
+             py::arg("invert_z") = false,
+             py::arg("invert_w") = false,
              py::keep_alive<1, 2>())
         .def("update", &libstp::odometry::imu::ImuOdometry::update,
              py::arg("dt"))

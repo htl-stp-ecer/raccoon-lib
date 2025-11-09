@@ -22,7 +22,7 @@ namespace libstp::kinematics
         virtual ~IKinematics() = default;
         [[nodiscard]] virtual std::size_t wheelCount() const = 0;
 
-        virtual void applyCommand(const foundation::ChassisCmd& cmd, double dt) = 0;
+        virtual MotorCommands applyCommand(const foundation::ChassisCmd& cmd, double dt) = 0;
 
         [[nodiscard]] virtual foundation::ChassisState estimateState() const = 0;
 

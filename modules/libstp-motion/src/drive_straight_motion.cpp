@@ -5,6 +5,7 @@
 #include <numbers>
 
 #include "foundation/types.hpp"
+#include "spdlog/spdlog.h"
 
 namespace
 {
@@ -38,9 +39,13 @@ namespace libstp::motion
         started_ = true;
         finished_ = false;
         distance_travelled_m_ = 0.0;
+        speed_scale_ = 1.0;
 
         const auto pose = odometry().getPose();
-        reference_yaw_ = computeYaw(pose.orientation);
+        reference_orientation_ = pose.orientation.normalized();
+        const double reference_yaw = computeYaw(reference_orientation_);
+        SPDLOG_INFO("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, reference_yaw = {:.3f} rad",
+                    cfg_.distance_m, cfg_.max_speed_mps, reference_yaw);
     }
 
     void DriveStraightMotion::update(double dt)
@@ -50,7 +55,10 @@ namespace libstp::motion
         if (finished_)
         {
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
-            if (dt > 0.0) drive().update(dt);
+            if (dt > 0.0)
+            {
+                [[maybe_unused]] const auto motor_cmd = drive().update(dt);
+            }
             return;
         }
 
@@ -63,41 +71,86 @@ namespace libstp::motion
         odometry().update(dt);
 
         const auto pose = odometry().getPose();
+        SPDLOG_INFO("DriveStraightMotion w = ({:.3f}, {:.3f}, {:.3f}, {:.3f})", pose.orientation.w(), pose.orientation.x(), pose.orientation.y(), pose.orientation.z());
         const double current_yaw = computeYaw(pose.orientation);
         const foundation::ChassisState state = drive().estimateState();
+        SPDLOG_INFO("DriveStraightMotion update: position = ({:.3f}, {:.3f}), yaw = {:.3f} rad, velocity = ({:.3f}, {:.3f}) m/s",
+                    pose.position.x(), pose.position.y(), current_yaw,
+                    state.vx, state.vy);
 
         const Eigen::Vector3f v_body(static_cast<float>(state.vx), static_cast<float>(state.vy), 0.0f);
         const Eigen::Vector3f v_world = pose.orientation * v_body;
         const Eigen::Vector2d v_world_xy(static_cast<double>(v_world.x()), static_cast<double>(v_world.y()));
-        const Eigen::Vector2d ref_forward(std::cos(reference_yaw_), std::sin(reference_yaw_));
-        const double progress_speed = v_world_xy.dot(ref_forward);
+        const Eigen::Vector3f ref_forward_3d = reference_orientation_ * Eigen::Vector3f::UnitX();
+        const Eigen::Vector2d ref_forward(ref_forward_3d.x(), ref_forward_3d.y());
+        const double ref_forward_norm = ref_forward.norm();
+        const Eigen::Vector2d ref_forward_unit = (ref_forward_norm > 1e-6)
+                                                     ? (ref_forward / ref_forward_norm)
+                                                     : Eigen::Vector2d(1.0, 0.0);
+        const double progress_speed = v_world_xy.dot(ref_forward_unit);
+        SPDLOG_INFO("DriveStraightMotion progress_speed = {:.3f} m/s", progress_speed);
         distance_travelled_m_ += progress_speed * dt;
+        SPDLOG_INFO("DriveStraightMotion distance_travelled = {:.3f} m", distance_travelled_m_);
 
         const double remaining = cfg_.distance_m - distance_travelled_m_;
         const double remaining_abs = std::abs(remaining);
+        SPDLOG_INFO("DriveStraightMotion remaining_distance = {:.3f} m", remaining);
 
         if (remaining_abs <= cfg_.distance_tolerance_m)
         {
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
-            drive().update(dt);
+            const auto motor_cmd = drive().update(dt);
             return;
         }
 
-        const double yaw_error = wrapAngle(reference_yaw_ - current_yaw);
+        Eigen::Quaternionf current_orientation = pose.orientation.normalized();
+
+        // Ensure quaternions are in the same hemisphere (q and -q represent the same rotation)
+        if (reference_orientation_.dot(current_orientation) < 0.0f)
+        {
+            current_orientation.coeffs() *= -1.0f;
+        }
+
+        // Compute error quaternion: rotation from reference to current
+        // This represents how much we've deviated from the reference orientation
+        const Eigen::Quaternionf q_error = (current_orientation * reference_orientation_.conjugate()).normalized();
+        const double yaw_error = wrapAngle(computeYaw(q_error));
         const double omega_cmd = std::clamp(cfg_.heading_kp * yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+        SPDLOG_INFO("DriveStraightMotion yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s", yaw_error, omega_cmd);
 
         double vx_cmd = std::clamp(cfg_.distance_kp * remaining, -cfg_.max_speed_mps, cfg_.max_speed_mps);
+        SPDLOG_INFO("DriveStraightMotion vx_cmd = {:.3f} m/s", vx_cmd);
 
         if (std::abs(vx_cmd) < 1e-4)
         {
             const double direction = (remaining >= 0.0) ? 1.0 : -1.0;
             vx_cmd = direction * std::min(cfg_.max_speed_mps, 0.05);
+            SPDLOG_INFO("DriveStraightMotion adjusted vx_cmd = {:.3f} m/s", vx_cmd);
         }
+
+        // Apply speed scaling from previous saturation feedback
+        vx_cmd *= speed_scale_;
+        SPDLOG_INFO("DriveStraightMotion vx_cmd after scaling = {:.3f} m/s (scale={:.3f})", vx_cmd, speed_scale_);
 
         foundation::ChassisVel cmd{vx_cmd, 0.0, omega_cmd};
         drive().setVelocity(cmd);
-        drive().update(dt);
+        const auto motor_cmd = drive().update(dt);
+
+        // Adjust speed scaling based on saturation feedback
+        // If motors are saturating AND we have a heading error, reduce speed to leave headroom for correction
+        if (motor_cmd.saturated_any && std::abs(yaw_error) > 0.01)
+        {
+            // Gradually reduce speed scale to leave headroom for heading correction
+            speed_scale_ = std::max(cfg_.saturation_derating_factor, speed_scale_ * 0.98);
+            SPDLOG_INFO("DriveStraightMotion: Saturation detected with heading error, reducing speed_scale to {:.3f}", speed_scale_);
+        }
+        else if (!motor_cmd.saturated_any && std::abs(yaw_error) < 0.005)
+        {
+            // Gradually restore speed when not saturating and heading is good
+            speed_scale_ = std::min(1.0, speed_scale_ * 1.02);
+            SPDLOG_INFO("DriveStraightMotion: No saturation, increasing speed_scale to {:.3f}", speed_scale_);
+        }
     }
 
     bool DriveStraightMotion::isFinished() const
