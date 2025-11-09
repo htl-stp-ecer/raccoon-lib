@@ -66,7 +66,7 @@ namespace libstp::kinematics::mecanum
         return 4;
     }
 
-    void MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
+    MotorCommands MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
         SPDLOG_INFO(
             "MecanumKinematics::applyCommand dt={} cmd vx={} vy={} wz={}",
@@ -142,6 +142,14 @@ namespace libstp::kinematics::mecanum
             bl_sat,
             br_sat,
             dt);
+
+        MotorCommands result;
+        result.wheel_velocities = {fl_limited, fr_limited, bl_limited, br_limited};
+        result.saturated_any = fl_sat || fr_sat || bl_sat || br_sat;
+        result.saturation_mask = (fl_sat ? 0x1 : 0x0) | (fr_sat ? 0x2 : 0x0) |
+                                (bl_sat ? 0x4 : 0x0) | (br_sat ? 0x8 : 0x0);
+
+        return result;
     }
 
     foundation::ChassisState MecanumKinematics::estimateState() const

@@ -11,9 +11,36 @@ namespace libstp::odometry::imu
         , current_pose_{}
         , initial_orientation_(Eigen::Quaternionf::Identity())
         , initialized_(false)
+        , config_{}
     {
         current_pose_.position = foundation::Vector3f::Zero();
         current_pose_.orientation = Eigen::Quaternionf::Identity();
+    }
+
+    ImuOdometry::ImuOdometry(hal::imu::IMU* imu, const ImuOdometryConfig& config)
+        : imu_(imu)
+        , current_pose_{}
+        , initial_orientation_(Eigen::Quaternionf::Identity())
+        , initialized_(false)
+        , config_(config)
+    {
+        current_pose_.position = foundation::Vector3f::Zero();
+        current_pose_.orientation = Eigen::Quaternionf::Identity();
+    }
+
+    Eigen::Quaternionf ImuOdometry::applyInversions(const Eigen::Quaternionf& q) const
+    {
+        Eigen::Quaternionf result = q;
+
+        // Apply component inversions based on config
+        if (config_.invert_w) result.w() = -result.w();
+        if (config_.invert_x) result.x() = -result.x();
+        if (config_.invert_y) result.y() = -result.y();
+        if (config_.invert_z) result.z() = -result.z();
+
+        // Normalize to maintain unit quaternion
+        result.normalize();
+        return result;
     }
 
     void ImuOdometry::update(double dt)
@@ -22,6 +49,9 @@ namespace libstp::odometry::imu
 
         // Get current orientation from IMU
         Eigen::Quaternionf raw_orientation = imu_->getOrientation();
+
+        // Apply axis inversions
+        raw_orientation = applyInversions(raw_orientation);
 
         // Initialize on first update
         if (!initialized_)
