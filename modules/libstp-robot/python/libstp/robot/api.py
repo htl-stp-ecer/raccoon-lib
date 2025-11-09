@@ -1,4 +1,6 @@
 from libstp.class_name_logger import ClassNameLogger
+import asyncio
+
 class GenericRobot(ClassNameLogger):
     def __init__(self):
         self._check_required_variables()
@@ -21,4 +23,12 @@ class GenericRobot(ClassNameLogger):
         if hasattr(self, "shutdown_mission"):
             self.info("Shutdown mission for mission found")
     def start(self):
-        pass
+        self.info("Starting robot")
+
+        async def main_loop():
+            for mission in self.missions:
+                self.info(f"Starting mission: {mission}")
+                await mission.run(self)
+                self.info(f"Finished mission: {mission}")
+
+        asyncio.run(main_loop())

@@ -60,8 +60,13 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
 int libstp::hal::motor::Motor::getPosition() const
 {
     const auto reading = platform::wombat::core::LcmReader::instance().readBemf(port).value;
-    SPDLOG_TRACE("Wombat Motor port={} getPosition -> {}", port, reading);
-    return reading;
+
+    // Apply inversion to position reading to match command convention
+    const int corrected = inverted ? reading : -reading;
+
+    SPDLOG_TRACE("Wombat Motor port={} getPosition raw={} corrected={} inverted={}",
+                 port, reading, corrected, inverted);
+    return corrected;
 }
 
 void libstp::hal::motor::Motor::brake() const

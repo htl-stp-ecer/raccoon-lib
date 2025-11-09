@@ -31,6 +31,14 @@ namespace libstp::motion
         if (cfg_.distance_kp <= 0.0) cfg_.distance_kp = 1.0;
         if (cfg_.heading_kp < 0.0) cfg_.heading_kp = 0.0;
         if (cfg_.max_heading_rate < 0.0) cfg_.max_heading_rate = 0.0;
+        cfg_.saturation_derating_factor = std::clamp(cfg_.saturation_derating_factor, 0.1, 0.99);
+        cfg_.saturation_min_speed_scale = std::clamp(cfg_.saturation_min_speed_scale, 0.01, 1.0);
+        cfg_.saturation_recovery_rate = std::clamp(cfg_.saturation_recovery_rate, 0.0, 0.5);
+        cfg_.saturation_heading_error_rad = std::clamp(cfg_.saturation_heading_error_rad, 0.0, 0.5);
+        cfg_.heading_saturation_derating_factor = std::clamp(cfg_.heading_saturation_derating_factor, 0.1, 0.99);
+        cfg_.heading_min_scale = std::clamp(cfg_.heading_min_scale, 0.05, 1.0);
+        cfg_.heading_recovery_rate = std::clamp(cfg_.heading_recovery_rate, 0.0, 0.5);
+        cfg_.heading_recovery_error_rad = std::clamp(cfg_.heading_recovery_error_rad, 0.0, 0.5);
     }
 
     void DriveStraightMotion::start()
@@ -40,6 +48,7 @@ namespace libstp::motion
         finished_ = false;
         distance_travelled_m_ = 0.0;
         speed_scale_ = 1.0;
+        heading_scale_ = 1.0;
         reorienting_ = false;
 
         const auto pose = odometry().getPose();
@@ -229,28 +238,69 @@ namespace libstp::motion
             SPDLOG_INFO("DriveStraightMotion [DIFFERENTIAL-REORIENT] Reducing vx_cmd to {:.3f} m/s", vx_cmd);
         }
 
-        // Apply speed scaling from previous saturation feedback
+        // Apply scaling from previous saturation feedback (reduce translation first, then heading if needed)
         vx_cmd *= speed_scale_;
-        SPDLOG_INFO("DriveStraightMotion vx_cmd = {:.3f} m/s (scale={:.3f})", vx_cmd, speed_scale_);
+        vy_cmd *= speed_scale_;
+        const double omega_cmd_scaled = omega_cmd * heading_scale_;
+        SPDLOG_INFO(
+            "DriveStraightMotion scaled cmd: vx = {:.3f} m/s, vy = {:.3f} m/s, omega = {:.3f} rad/s (speed_scale={:.3f}, heading_scale={:.3f})",
+            vx_cmd,
+            vy_cmd,
+            omega_cmd_scaled,
+            speed_scale_,
+            heading_scale_);
 
         // ===== SEND COMMANDS =====
-        foundation::ChassisVel cmd{vx_cmd, vy_cmd, omega_cmd};
+        foundation::ChassisVel cmd{vx_cmd, vy_cmd, omega_cmd_scaled};
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 
-        // Adjust speed scaling based on saturation feedback
-        // If motors are saturating AND we have a heading error, reduce speed to leave headroom for correction
-        if (motor_cmd.saturated_any && std::abs(yaw_error) > 0.01)
+        // Adjust scaling based on saturation feedback
+        const double yaw_error_abs = std::abs(yaw_error);
+        if (motor_cmd.saturated_any && yaw_error_abs > cfg_.saturation_heading_error_rad)
         {
-            // Gradually reduce speed scale to leave headroom for heading correction
-            speed_scale_ = std::max(cfg_.saturation_derating_factor, speed_scale_ * 0.98);
-            SPDLOG_INFO("DriveStraightMotion: Saturation detected with heading error, reducing speed_scale to {:.3f}", speed_scale_);
+            const double prev_speed_scale = speed_scale_;
+            const double prev_heading_scale = heading_scale_;
+
+            if (speed_scale_ > cfg_.saturation_min_speed_scale + 1e-6)
+            {
+                speed_scale_ = std::max(
+                    cfg_.saturation_min_speed_scale,
+                    speed_scale_ * cfg_.saturation_derating_factor);
+            }
+            else
+            {
+                heading_scale_ = std::max(
+                    cfg_.heading_min_scale,
+                    heading_scale_ * cfg_.heading_saturation_derating_factor);
+            }
+
+            SPDLOG_INFO(
+                "DriveStraightMotion: Saturation detected (mask=0x{:X}, yaw_error={:.3f}) -> speed_scale {:.3f}->{:.3f}, heading_scale {:.3f}->{:.3f}",
+                motor_cmd.saturation_mask,
+                yaw_error,
+                prev_speed_scale,
+                speed_scale_,
+                prev_heading_scale,
+                heading_scale_);
         }
-        else if (!motor_cmd.saturated_any && std::abs(yaw_error) < 0.005)
+        else if (!motor_cmd.saturated_any && yaw_error_abs < cfg_.heading_recovery_error_rad)
         {
-            // Gradually restore speed when not saturating and heading is good
-            speed_scale_ = std::min(1.0, speed_scale_ * 1.02);
-            SPDLOG_INFO("DriveStraightMotion: No saturation, increasing speed_scale to {:.3f}", speed_scale_);
+            const double prev_speed_scale = speed_scale_;
+            const double prev_heading_scale = heading_scale_;
+
+            speed_scale_ = std::min(1.0, speed_scale_ + cfg_.saturation_recovery_rate);
+            heading_scale_ = std::min(1.0, heading_scale_ + cfg_.heading_recovery_rate);
+
+            if (prev_speed_scale != speed_scale_ || prev_heading_scale != heading_scale_)
+            {
+                SPDLOG_INFO(
+                    "DriveStraightMotion: Recovery -> speed_scale {:.3f}->{:.3f}, heading_scale {:.3f}->{:.3f}",
+                    prev_speed_scale,
+                    speed_scale_,
+                    prev_heading_scale,
+                    heading_scale_);
+            }
         }
     }
 

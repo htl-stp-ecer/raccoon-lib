@@ -5,6 +5,7 @@ namespace py = pybind11;
 void init_motion_base(py::module_& m);
 void init_drive_straight(py::module_& m);
 void init_move_to_pose(py::module_& m);
+void init_turn_motion(py::module_& m);
 
 PYBIND11_MODULE(motion, m)
 {
@@ -13,4 +14,5 @@ PYBIND11_MODULE(motion, m)
     init_motion_base(m);
     init_drive_straight(m);
     init_move_to_pose(m);
+    init_turn_motion(m);
 }
