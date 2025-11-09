@@ -196,4 +196,9 @@ namespace libstp::kinematics::mecanum
         back_left_motor_.adapter.brake();
         back_right_motor_.adapter.brake();
     }
+
+    bool MecanumKinematics::supportsLateralMotion() const
+    {
+        return true; // Mecanum drive can strafe
+    }
 }

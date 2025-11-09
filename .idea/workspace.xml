@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="BackendCodeEditorMiscSettings">
-    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="40" type="long" />
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="8" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
     <option name="/Default/Housekeeping/GlobalSettingsUpgraded/IsUpgraded/@EntryValue" value="true" type="bool" />
     <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
@@ -91,23 +91,22 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add odometry module with IMU integration; enhance Python bindings and refactor drive motion classes">
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results">
+      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/motion/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/editor.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/bindings/bindings.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/include/odometry/imu/imu_odometry.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/include/odometry/imu/imu_odometry.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/src/imu_odometry.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/src/imu_odometry.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/CMakeLists.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -669,7 +668,7 @@
       <workItem from="1761675359362" duration="716000" />
       <workItem from="1762153601906" duration="9527000" />
       <workItem from="1762264610321" duration="3007000" />
-      <workItem from="1762678484716" duration="1632000" />
+      <workItem from="1762678484716" duration="6415000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -743,7 +742,15 @@
       <option name="project" value="LOCAL" />
       <updated>1761204427373</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results">
+      <option name="closed" value="true" />
+      <created>1762680127687</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1762680127687</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -775,6 +782,7 @@
     <MESSAGE value="Add motion module with drive straight functionality and IMU integration; enhance bindings for Python" />
     <MESSAGE value="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader" />
     <MESSAGE value="Add odometry module with IMU integration; enhance Python bindings and refactor drive motion classes" />
-    <option name="LAST_COMMIT_MESSAGE" value="Add odometry module with IMU integration; enhance Python bindings and refactor drive motion classes" />
+    <MESSAGE value="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results" />
   </component>
 </project>

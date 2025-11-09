@@ -51,5 +51,6 @@ namespace libstp::kinematics::mecanum
         MotorCommands applyCommand(const foundation::ChassisCmd& cmd, double dt) override;
         [[nodiscard]] foundation::ChassisState estimateState() const override;
         void hardStop() override;
+        [[nodiscard]] bool supportsLateralMotion() const override;
     };
 }
