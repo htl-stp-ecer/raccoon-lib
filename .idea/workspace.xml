@@ -92,21 +92,25 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results">
-      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/motion/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/editor.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/editor.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/CMakeLists.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/parallel.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/sequential.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/timeout.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/mission/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/mission/api.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/motion/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -135,8 +139,21 @@
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/include/kinematics/kinematics.hpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/src/differential.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/src/differential.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/bindings/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-platforms/wombat/motor/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock://diff.h" root0="SKIP_HIGHLIGHTING" />
   </component>
   <component name="ProjectApplicationVersion">
     <option name="ide" value="CLion" />
@@ -156,36 +173,42 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.defs.executor&quot;: &quot;Run&quot;,
-    &quot;Python.gen_defs.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
-    &quot;SHELLCHECK.PATH&quot;: &quot;/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck&quot;,
-    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
-    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;drive&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/tobias/Documents/Botball/library/modules/libstp-mission&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.defs.executor": "Run",
+    "Python.gen_defs.executor": "Run",
+    "RunOnceActivity.RadMigrateCodeStyle": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "RunOnceActivity.west.config.association.type.startup.service": "true",
+    "SHELLCHECK.PATH": "/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "git-widget-placeholder": "drive",
+    "last_opened_file_path": "/home/tobias/Documents/Botball/library/modules/libstp-motion/python/libstp/steps",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/steps" />
+      <recent name="$PROJECT_DIR$/modules/libstp-step" />
+      <recent name="$PROJECT_DIR$/modules/libstp-step/python/libstp/step" />
       <recent name="$PROJECT_DIR$/modules/libstp-mission" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step" />
+      <recent name="$PROJECT_DIR$/modules/libstp-step/python/libstp/step" />
+      <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/steps" />
       <recent name="$PROJECT_DIR$/python/libstp_api" />
     </key>
   </component>

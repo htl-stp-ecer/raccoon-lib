@@ -14,7 +14,15 @@ namespace libstp::motion
         double distance_kp{2.0};
         double heading_kp{4.0};
         double max_heading_rate{3.0};
-        double saturation_derating_factor{0.85};  // Scale back speed to this fraction when saturated
+        double saturation_derating_factor{0.85};  // Multiply translational speed by this on each saturation hit
+        double saturation_min_speed_scale{0.1};   // Never reduce translational scale below this
+        double saturation_recovery_rate{0.02};    // How quickly translational scale recovers per cycle
+        double saturation_heading_error_rad{0.01};  // Only derate when heading error exceeds this
+
+        double heading_saturation_derating_factor{0.85};  // Multiply heading scale when still saturated
+        double heading_min_scale{0.25};                   // Minimum heading scale
+        double heading_recovery_rate{0.05};               // Recovery rate for heading scale
+        double heading_recovery_error_rad{0.005};         // Allow recovery once heading error is below this
 
         // Lateral drift correction parameters
         double lateral_kp{2.0};  // Proportional gain for lateral correction (mecanum uses vy, differential uses heading bias)
@@ -41,7 +49,8 @@ namespace libstp::motion
         Eigen::Vector3f reference_position_{Eigen::Vector3f::Zero()};  // Starting position for lateral tracking
         double distance_travelled_m_{0.0};
         bool finished_{false};
-        double speed_scale_{1.0};  // Current speed scaling factor due to saturation
+        double speed_scale_{1.0};    // Current translational speed scaling factor due to saturation
+        double heading_scale_{1.0};  // Current heading command scaling factor
         bool reorienting_{false};  // For differential: currently in reorientation mode
     };
 }
