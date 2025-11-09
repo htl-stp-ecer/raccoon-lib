@@ -31,3 +31,4 @@ for (;;) {
 ### Integration notes
 
 - Start with `ff=1.0`, small `kp`, zero `ki/kd`. Add `ki` only if you see steady-state errors.
+- Motor speed ramps are disabled by default to simplify bring-up. Export `LIBSTP_ENABLE_SPEED_RAMPS=1` if you need the ω̇ limiter active.

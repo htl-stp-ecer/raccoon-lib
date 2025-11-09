@@ -19,7 +19,7 @@ namespace libstp::drive
               const MotionLimits& chassis_lim);
 
         void setVelocity(const foundation::ChassisVel& v_body);
-        void update(double dt) const;
+        [[nodiscard]] kinematics::MotorCommands update(double dt) const;
 
         [[nodiscard]] foundation::ChassisState estimateState() const;
         [[nodiscard]] std::size_t wheelCount() const;
