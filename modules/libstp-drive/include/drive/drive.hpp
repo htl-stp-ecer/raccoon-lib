@@ -26,6 +26,9 @@ namespace libstp::drive
 
         void hardStop();
 
+        [[nodiscard]] kinematics::IKinematics& getKinematics() { return *kinematics_; }
+        [[nodiscard]] const kinematics::IKinematics& getKinematics() const { return *kinematics_; }
+
     private:
         std::unique_ptr<kinematics::IKinematics> kinematics_;
 

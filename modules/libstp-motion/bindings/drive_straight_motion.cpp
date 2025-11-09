@@ -16,7 +16,11 @@ void init_drive_straight(py::module_& m)
         .def_readwrite("distance_tolerance_m", &DriveStraightConfig::distance_tolerance_m)
         .def_readwrite("distance_kp", &DriveStraightConfig::distance_kp)
         .def_readwrite("heading_kp", &DriveStraightConfig::heading_kp)
-        .def_readwrite("max_heading_rate", &DriveStraightConfig::max_heading_rate);
+        .def_readwrite("max_heading_rate", &DriveStraightConfig::max_heading_rate)
+        .def_readwrite("saturation_derating_factor", &DriveStraightConfig::saturation_derating_factor)
+        .def_readwrite("lateral_kp", &DriveStraightConfig::lateral_kp)
+        .def_readwrite("lateral_heading_bias_gain", &DriveStraightConfig::lateral_heading_bias_gain)
+        .def_readwrite("lateral_reorient_threshold_m", &DriveStraightConfig::lateral_reorient_threshold_m);
 
     py::class_<DriveStraightMotion, Motion, std::shared_ptr<DriveStraightMotion>>(m, "DriveStraightMotion")
         .def(py::init([](libstp::drive::Drive& drive,

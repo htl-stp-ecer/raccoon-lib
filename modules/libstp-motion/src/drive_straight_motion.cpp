@@ -40,12 +40,14 @@ namespace libstp::motion
         finished_ = false;
         distance_travelled_m_ = 0.0;
         speed_scale_ = 1.0;
+        reorienting_ = false;
 
         const auto pose = odometry().getPose();
         reference_orientation_ = pose.orientation.normalized();
+        reference_position_ = pose.position;  // Store starting position for lateral tracking
         const double reference_yaw = computeYaw(reference_orientation_);
-        SPDLOG_INFO("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, reference_yaw = {:.3f} rad",
-                    cfg_.distance_m, cfg_.max_speed_mps, reference_yaw);
+        SPDLOG_INFO("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, reference_yaw = {:.3f} rad, start_pos = ({:.3f}, {:.3f})",
+                    cfg_.distance_m, cfg_.max_speed_mps, reference_yaw, reference_position_.x(), reference_position_.y());
     }
 
     void DriveStraightMotion::update(double dt)
@@ -104,36 +106,135 @@ namespace libstp::motion
             return;
         }
 
-        Eigen::Quaternionf current_orientation = pose.orientation.normalized();
+        // ===== COMPUTE LATERAL DRIFT =====
+        // Calculate the desired path direction in world frame (reuse ref_forward_3d from above)
+        const Eigen::Vector2f ref_forward_2d(ref_forward_3d.x(), ref_forward_3d.y());
+        const Eigen::Vector2f ref_forward_unit_2f = ref_forward_2d.normalized();
 
+        // Position error from reference starting position
+        const Eigen::Vector3f position_error_world = pose.position - reference_position_;
+        const Eigen::Vector2f position_error_2d(position_error_world.x(), position_error_world.y());
+
+        // Project onto reference direction to get forward progress
+        const float forward_progress = position_error_2d.dot(ref_forward_unit_2f);
+
+        // Compute lateral error (perpendicular to path)
+        const Eigen::Vector2f lateral_direction(-ref_forward_unit_2f.y(), ref_forward_unit_2f.x());  // 90° rotation
+        const float lateral_error_world = position_error_2d.dot(lateral_direction);
+
+        // Transform lateral error to body frame
+        const Eigen::Quaternionf current_orientation = pose.orientation.normalized();
+        const Eigen::Vector3f lateral_error_world_3d(lateral_error_world * lateral_direction.x(),
+                                                      lateral_error_world * lateral_direction.y(),
+                                                      0.0f);
+        const Eigen::Vector3f lateral_error_body_3d = current_orientation.inverse() * lateral_error_world_3d;
+        const double lateral_error_body = static_cast<double>(lateral_error_body_3d.y());  // Body-frame y is lateral
+
+        SPDLOG_INFO("DriveStraightMotion lateral_error_world = {:.3f} m, lateral_error_body = {:.3f} m",
+                    lateral_error_world, lateral_error_body);
+
+        // ===== HEADING CONTROL =====
         // Ensure quaternions are in the same hemisphere (q and -q represent the same rotation)
-        if (reference_orientation_.dot(current_orientation) < 0.0f)
+        Eigen::Quaternionf current_orientation_corrected = current_orientation;
+        if (reference_orientation_.dot(current_orientation_corrected) < 0.0f)
         {
-            current_orientation.coeffs() *= -1.0f;
+            current_orientation_corrected.coeffs() *= -1.0f;
         }
 
         // Compute error quaternion: rotation from reference to current
-        // This represents how much we've deviated from the reference orientation
-        const Eigen::Quaternionf q_error = (current_orientation * reference_orientation_.conjugate()).normalized();
-        const double yaw_error = wrapAngle(computeYaw(q_error));
-        const double omega_cmd = std::clamp(cfg_.heading_kp * yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
-        SPDLOG_INFO("DriveStraightMotion yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s", yaw_error, omega_cmd);
+        const Eigen::Quaternionf q_error = (current_orientation_corrected * reference_orientation_.conjugate()).normalized();
+        double yaw_error = wrapAngle(computeYaw(q_error));
 
+        // Check if kinematics supports lateral motion
+        const bool supports_lateral = drive().getKinematics().supportsLateralMotion();
+
+        // ===== LATERAL CORRECTION STRATEGY =====
+        double vy_cmd = 0.0;
+        double omega_cmd = 0.0;
+
+        if (supports_lateral)
+        {
+            // MECANUM STRATEGY: Direct lateral correction using vy
+            vy_cmd = std::clamp(cfg_.lateral_kp * lateral_error_body, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
+            omega_cmd = std::clamp(cfg_.heading_kp * yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+            SPDLOG_INFO("DriveStraightMotion [MECANUM] vy_cmd = {:.3f} m/s, omega_cmd = {:.3f} rad/s", vy_cmd, omega_cmd);
+        }
+        else
+        {
+            // DIFFERENTIAL STRATEGY: Combined approach (bias + stop-and-reorient)
+            const double lateral_error_abs = std::abs(lateral_error_world);
+
+            if (lateral_error_abs > cfg_.lateral_reorient_threshold_m && !reorienting_)
+            {
+                // Large lateral error: enter reorientation mode
+                reorienting_ = true;
+                SPDLOG_INFO("DriveStraightMotion [DIFFERENTIAL] Large lateral error ({:.3f} m), entering reorientation mode", lateral_error_abs);
+            }
+
+            if (reorienting_)
+            {
+                // Stop and reorient: compute desired heading that points back to path
+                // Target position is on the reference line at current forward progress
+                const Eigen::Vector2f target_position_2d = ref_forward_unit_2f * forward_progress;
+                const Eigen::Vector2f to_target = target_position_2d - position_error_2d;
+
+                if (to_target.norm() > 0.01f)
+                {
+                    // Compute desired heading in world frame
+                    const float desired_yaw_world = std::atan2(to_target.y(), to_target.x());
+                    const double current_yaw_world = computeYaw(current_orientation);
+                    double yaw_to_target = wrapAngle(desired_yaw_world - current_yaw_world);
+
+                    omega_cmd = std::clamp(cfg_.heading_kp * yaw_to_target, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+                    SPDLOG_INFO("DriveStraightMotion [DIFFERENTIAL-REORIENT] yaw_to_target = {:.3f} rad, omega_cmd = {:.3f} rad/s",
+                                yaw_to_target, omega_cmd);
+
+                    // Exit reorientation when aligned and lateral error is small
+                    if (std::abs(yaw_to_target) < 0.1 && lateral_error_abs < cfg_.lateral_reorient_threshold_m * 0.7)
+                    {
+                        reorienting_ = false;
+                        SPDLOG_INFO("DriveStraightMotion [DIFFERENTIAL] Exiting reorientation mode");
+                    }
+                }
+                else
+                {
+                    // Already on target, exit reorientation
+                    reorienting_ = false;
+                }
+            }
+            else
+            {
+                // Normal mode: bias heading slightly to correct lateral drift
+                const double heading_bias = std::atan(cfg_.lateral_heading_bias_gain * lateral_error_world);
+                const double biased_yaw_error = yaw_error + heading_bias;
+                omega_cmd = std::clamp(cfg_.heading_kp * biased_yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+                SPDLOG_INFO("DriveStraightMotion [DIFFERENTIAL-BIAS] heading_bias = {:.3f} rad, biased_yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s",
+                            heading_bias, biased_yaw_error, omega_cmd);
+            }
+        }
+
+        // ===== FORWARD VELOCITY CONTROL =====
         double vx_cmd = std::clamp(cfg_.distance_kp * remaining, -cfg_.max_speed_mps, cfg_.max_speed_mps);
-        SPDLOG_INFO("DriveStraightMotion vx_cmd = {:.3f} m/s", vx_cmd);
 
         if (std::abs(vx_cmd) < 1e-4)
         {
             const double direction = (remaining >= 0.0) ? 1.0 : -1.0;
             vx_cmd = direction * std::min(cfg_.max_speed_mps, 0.05);
-            SPDLOG_INFO("DriveStraightMotion adjusted vx_cmd = {:.3f} m/s", vx_cmd);
+        }
+
+        // Reduce forward speed during reorientation (differential only)
+        if (reorienting_)
+        {
+            vx_cmd *= 0.3;  // Slow down to 30% during reorientation
+            SPDLOG_INFO("DriveStraightMotion [DIFFERENTIAL-REORIENT] Reducing vx_cmd to {:.3f} m/s", vx_cmd);
         }
 
         // Apply speed scaling from previous saturation feedback
         vx_cmd *= speed_scale_;
-        SPDLOG_INFO("DriveStraightMotion vx_cmd after scaling = {:.3f} m/s (scale={:.3f})", vx_cmd, speed_scale_);
+        SPDLOG_INFO("DriveStraightMotion vx_cmd = {:.3f} m/s (scale={:.3f})", vx_cmd, speed_scale_);
 
-        foundation::ChassisVel cmd{vx_cmd, 0.0, omega_cmd};
+        // ===== SEND COMMANDS =====
+        foundation::ChassisVel cmd{vx_cmd, vy_cmd, omega_cmd};
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 

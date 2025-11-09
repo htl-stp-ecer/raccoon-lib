@@ -27,5 +27,12 @@ namespace libstp::kinematics
         [[nodiscard]] virtual foundation::ChassisState estimateState() const = 0;
 
         virtual void hardStop() = 0;
+
+        /**
+         * @brief Query whether this kinematics model supports direct lateral (vy) motion
+         * @return true if the robot can strafe sideways (e.g., mecanum, omni wheels)
+         *         false if lateral motion requires rotation (e.g., differential drive)
+         */
+        [[nodiscard]] virtual bool supportsLateralMotion() const = 0;
     };
 }

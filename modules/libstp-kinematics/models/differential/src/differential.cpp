@@ -143,4 +143,9 @@ namespace libstp::kinematics::differential
         left_motor_.adapter.brake();
         right_motor_.adapter.brake();
     }
+
+    bool DifferentialKinematics::supportsLateralMotion() const
+    {
+        return false; // Differential drive cannot strafe
+    }
 }
