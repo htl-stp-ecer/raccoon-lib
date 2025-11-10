@@ -41,13 +41,9 @@ namespace libstp::motion
         [[nodiscard]] bool isFinished() const override;
     private:
         void complete();
-        double computeYaw(const Eigen::Quaternionf& orientation) const;
-        static double wrapAngle(double angle);
 
         DriveStraightConfig cfg_{};
-        Eigen::Quaternionf reference_orientation_{Eigen::Quaternionf::Identity()};
-        Eigen::Vector3f reference_position_{Eigen::Vector3f::Zero()};  // Starting position for lateral tracking
-        double distance_travelled_m_{0.0};
+        double initial_heading_rad_{0.0};  // Heading at start (target heading to maintain)
         bool finished_{false};
         double speed_scale_{1.0};    // Current translational speed scaling factor due to saturation
         double heading_scale_{1.0};  // Current heading command scaling factor

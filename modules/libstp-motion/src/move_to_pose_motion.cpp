@@ -1,4 +1,5 @@
 #include "motion/move_to_pose_motion.hpp"
+#include "odometry/angle_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -38,17 +39,16 @@ namespace libstp::motion
         speed_scale_ = 1.0;
         reorienting_ = false;
 
-        const auto pose = odometry().getPose();
-        reference_orientation_ = pose.orientation.normalized();
-        reference_position_ = pose.position;
+        // Reset odometry to establish new origin for this motion
+        odometry().reset();
 
-        const double reference_yaw = computeYaw(reference_orientation_);
-        const double target_yaw = computeYaw(cfg_.target_pose.orientation);
+        const double initial_heading = odometry().getHeading();
+        const double target_heading = odometry::extractYaw(cfg_.target_pose.orientation);
 
-        SPDLOG_INFO("MoveToPoseMotion started: target_pos = ({:.3f}, {:.3f}), target_yaw = {:.3f} rad, "
-                    "reference_yaw = {:.3f} rad, start_pos = ({:.3f}, {:.3f})",
-                    cfg_.target_pose.position.x(), cfg_.target_pose.position.y(), target_yaw,
-                    reference_yaw, reference_position_.x(), reference_position_.y());
+        SPDLOG_INFO("MoveToPoseMotion started: target_pos = ({:.3f}, {:.3f}), target_heading = {:.3f} rad, "
+                    "initial_heading = {:.3f} rad",
+                    cfg_.target_pose.position.x(), cfg_.target_pose.position.y(), target_heading,
+                    initial_heading);
     }
 
     void MoveToPoseMotion::update(double dt)
@@ -70,32 +70,21 @@ namespace libstp::motion
         // Update odometry first
         odometry().update(dt);
 
-        const auto pose = odometry().getPose();
-        const foundation::ChassisState state = drive().estimateState();
+        const auto current_pose = odometry().getPose();
 
         // ===== COMPUTE POSITION AND HEADING ERRORS =====
 
-        // Position error in world frame (relative to start)
-        const Eigen::Vector3f position_error_world = (reference_position_ + cfg_.target_pose.position) - pose.position;
+        // Position error: target - current (both in world frame from origin)
+        const Eigen::Vector3f position_error_world = cfg_.target_pose.position - current_pose.position;
         const Eigen::Vector2f position_error_2d(position_error_world.x(), position_error_world.y());
         const double position_error_magnitude = position_error_2d.norm();
 
-        // Transform position error to body frame
-        const Eigen::Quaternionf current_orientation = pose.orientation.normalized();
-        const Eigen::Vector3f position_error_body = current_orientation.inverse() * position_error_world;
+        // Transform position error to body frame using odometry
+        const Eigen::Vector3f position_error_body = odometry().transformToBodyFrame(position_error_world);
 
-        // Heading error
-        const Eigen::Quaternionf target_orientation_world = reference_orientation_ * cfg_.target_pose.orientation;
-        Eigen::Quaternionf target_orientation_world_corrected = target_orientation_world.normalized();
-
-        // Ensure quaternions in same hemisphere
-        if (current_orientation.dot(target_orientation_world_corrected) < 0.0f)
-        {
-            target_orientation_world_corrected.coeffs() *= -1.0f;
-        }
-
-        const Eigen::Quaternionf q_error = (target_orientation_world_corrected * current_orientation.conjugate()).normalized();
-        const double heading_error = wrapAngle(computeYaw(q_error));
+        // Heading error: compute using target orientation from target pose
+        const double target_heading = odometry::extractYaw(cfg_.target_pose.orientation);
+        const double heading_error = odometry().getHeadingError(target_heading);
 
         SPDLOG_INFO("MoveToPoseMotion position_error = ({:.3f}, {:.3f}) mag={:.3f} m, heading_error = {:.3f} rad",
                     position_error_2d.x(), position_error_2d.y(), position_error_magnitude, heading_error);
@@ -154,9 +143,9 @@ namespace libstp::motion
                 // Stop and reorient: point toward target position
                 if (position_error_magnitude > 0.01)
                 {
-                    const float desired_yaw_world = std::atan2(position_error_2d.y(), position_error_2d.x());
-                    const double current_yaw_world = computeYaw(current_orientation);
-                    double yaw_to_target = wrapAngle(desired_yaw_world - current_yaw_world);
+                    // Compute desired heading to face the target
+                    const double desired_heading = std::atan2(position_error_2d.y(), position_error_2d.x());
+                    const double yaw_to_target = odometry().getHeadingError(desired_heading);
 
                     omega_cmd = std::clamp(cfg_.heading_kp * yaw_to_target,
                                           -cfg_.max_angular_speed_rps, cfg_.max_angular_speed_rps);
@@ -239,21 +228,5 @@ namespace libstp::motion
     void MoveToPoseMotion::complete()
     {
         finished_ = true;
-    }
-
-    double MoveToPoseMotion::computeYaw(const Eigen::Quaternionf& orientation) const
-    {
-        const Eigen::Quaternionf q = orientation.normalized();
-        const double siny_cosp = 2.0 * (q.w() * q.z() + q.x() * q.y());
-        const double cosy_cosp = 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z());
-        return std::atan2(siny_cosp, cosy_cosp);
-    }
-
-    double MoveToPoseMotion::wrapAngle(double angle)
-    {
-        const double two_pi = 2.0 * std::numbers::pi;
-        double wrapped = std::fmod(angle + std::numbers::pi, two_pi);
-        if (wrapped < 0.0) wrapped += two_pi;
-        return wrapped - std::numbers::pi;
     }
 }

@@ -8,8 +8,7 @@ from . import Step, StepProtocol
 
 class Drive(Step):
     def __init__(self,
-                 distance_cm: float,
-                 speed: Optional[float],
+                 config: DriveStraightConfig,
                  ):
         """
         Initialize the Drive step.
@@ -19,11 +18,7 @@ class Drive(Step):
             speed: The speed at which to drive in percent (0 - 1).
         """
         super().__init__()
-        self.config = DriveStraightConfig()
-        self.config.distance_m = distance_cm / 100.0
-        self.config.distance_tolerance_m = 0.01
-        self.config.heading_kp = 50
-        self.config.max_speed_mps = speed
+        self.config = config
 
     async def run_step(self, robot: GenericRobot) -> None:
         """
@@ -46,12 +41,17 @@ class Drive(Step):
 
 def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     """Drive forward for a specified duration at a given speed"""
-    return Drive(cm, speed)
+    config = DriveStraightConfig()
+    config.distance_m = cm / 100.0
+    config.distance_tolerance_m = 0.01
+    config.heading_kp = 5
+    config.max_speed_mps = speed
+    return Drive(config)
 
 
 def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     """Drive backward for a specified duration at a given speed"""
-    return Drive(cm, speed)
+    return drive_forward(cm, -speed)
 
 #
 # def strafe_left(seconds: float, speed: float, do_correction=True) -> Drive:

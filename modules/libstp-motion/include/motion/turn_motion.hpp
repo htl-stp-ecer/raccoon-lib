@@ -28,15 +28,12 @@ namespace libstp::motion
         [[nodiscard]] bool isFinished() const override;
     private:
         void complete();
-        double computeYaw(const Eigen::Quaternionf& orientation) const;
-        static double wrapAngle(double angle);
 
         TurnMotionConfig cfg_{};
-        Eigen::Quaternionf reference_orientation_{Eigen::Quaternionf::Identity()};  // Starting orientation
-        double target_angle_rad_{0.0};  // Target angle to turn (not yaw position!)
+        double target_angle_rad_{0.0};  // Target angle to turn (not absolute heading!)
         bool finished_{false};
         double angular_scale_{1.0};  // Current angular speed scaling factor due to saturation
         double cumulative_angle_rad_{0.0};  // Cumulative rotation tracking (handles >180° turns)
-        double previous_angle_rad_{0.0};  // Previous angle for wrap detection
+        double previous_heading_rad_{0.0};  // Previous heading for wrap detection
     };
 }
