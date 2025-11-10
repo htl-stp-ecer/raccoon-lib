@@ -5,9 +5,37 @@
 #pragma once
 
 #include "foundation/types.hpp"
+#include <Eigen/Core>
 
 namespace libstp::odometry
 {
+    /**
+     * @brief Distance measurements from the origin (set by last reset)
+     *
+     * All distances are in meters, measured from the origin position
+     * set by the most recent reset() call.
+     */
+    struct DistanceFromOrigin
+    {
+        /**
+         * Distance traveled in the initial forward direction (at reset time).
+         * Positive = moved forward, negative = moved backward.
+         */
+        double forward;
+
+        /**
+         * Lateral drift perpendicular to initial forward direction.
+         * Positive = drifted right, negative = drifted left.
+         */
+        double lateral;
+
+        /**
+         * Straight-line Euclidean distance from origin to current position.
+         * Always positive (unsigned distance).
+         */
+        double straight_line;
+    };
+
     struct IOdometry
     {
         virtual ~IOdometry() = default;
@@ -23,6 +51,50 @@ namespace libstp::odometry
          * @return Current pose (position and orientation)
          */
         [[nodiscard]] virtual foundation::Pose getPose() const = 0;
+
+        /**
+         * Get distance measurements from the origin (set by last reset)
+         * @return Forward, lateral, and straight-line distances from origin
+         */
+        [[nodiscard]] virtual DistanceFromOrigin getDistanceFromOrigin() const = 0;
+
+        /**
+         * Get current heading (yaw angle) in radians relative to origin orientation
+         * @return Heading in radians, range [-π, π]
+         *         0 = facing initial forward direction
+         *         positive = rotated CCW from initial
+         *         negative = rotated CW from initial
+         */
+        [[nodiscard]] virtual double getHeading() const = 0;
+
+        /**
+         * Get heading error to reach a target heading
+         *
+         * Computes the shortest angular path from current heading to target.
+         * Properly handles angle wraparound (e.g., from 170° to -170°).
+         *
+         * @param target_heading_rad Target heading in radians
+         * @return Signed angular error in radians, range [-π, π]
+         *         - Positive: turn CCW to reach target
+         *         - Negative: turn CW to reach target
+         *
+         * Use this as input to heading PID controllers.
+         */
+        [[nodiscard]] virtual double getHeadingError(double target_heading_rad) const = 0;
+
+        /**
+         * Transform a vector from world frame to body frame
+         * @param world_vec Vector in world coordinates
+         * @return Vector in body coordinates (forward=x, left=y, up=z)
+         */
+        [[nodiscard]] virtual Eigen::Vector3f transformToBodyFrame(const Eigen::Vector3f& world_vec) const = 0;
+
+        /**
+         * Transform a vector from body frame to world frame
+         * @param body_vec Vector in body coordinates (forward=x, left=y, up=z)
+         * @return Vector in world coordinates
+         */
+        [[nodiscard]] virtual Eigen::Vector3f transformToWorldFrame(const Eigen::Vector3f& body_vec) const = 0;
 
         /**
          * Reset the odometry to a given pose

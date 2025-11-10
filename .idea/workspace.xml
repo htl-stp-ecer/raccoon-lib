@@ -91,26 +91,26 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results">
-      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-step/CMakeLists.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/parallel.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/sequential.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/timeout.py" afterDir="false" />
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add step execution framework with parallel and sequential execution; implement drive and turn motion classes">
+      <change afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/wait_for_seconds.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/mission/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-mission/python/libstp/mission/api.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/drive_straight_motion.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/motion/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/move_to_pose_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/move_to_pose_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-robot/python/libstp/robot/api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/move_to_pose_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/move_to_pose_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/include/odometry/odometry.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/include/odometry/odometry.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/bindings/bindings.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/include/odometry/fused/fused_odometry.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/include/odometry/fused/fused_odometry.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/CMakeLists.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/bindings/bindings.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/include/odometry/imu/imu_odometry.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/imu/src/imu_odometry.cpp" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -189,7 +189,7 @@
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
     "git-widget-placeholder": "drive",
-    "last_opened_file_path": "/home/tobias/Documents/Botball/library/modules/libstp-motion/python/libstp/steps",
+    "last_opened_file_path": "/home/tobias/Documents/Botball/library/modules/libstp-step/python/libstp/step",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -200,9 +200,9 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/modules/libstp-step/python/libstp/step" />
       <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/steps" />
       <recent name="$PROJECT_DIR$/modules/libstp-step" />
-      <recent name="$PROJECT_DIR$/modules/libstp-step/python/libstp/step" />
       <recent name="$PROJECT_DIR$/modules/libstp-mission" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
@@ -250,6 +250,11 @@
       </method>
     </configuration>
     <configuration name="_core" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="_core" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -692,6 +697,7 @@
       <workItem from="1762153601906" duration="9527000" />
       <workItem from="1762264610321" duration="3007000" />
       <workItem from="1762678484716" duration="6415000" />
+      <workItem from="1762758198808" duration="5443000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -773,7 +779,15 @@
       <option name="project" value="LOCAL" />
       <updated>1762680127687</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="Add step execution framework with parallel and sequential execution; implement drive and turn motion classes">
+      <option name="closed" value="true" />
+      <created>1762715433365</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1762715433365</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -806,6 +820,7 @@
     <MESSAGE value="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader" />
     <MESSAGE value="Add odometry module with IMU integration; enhance Python bindings and refactor drive motion classes" />
     <MESSAGE value="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results" />
-    <option name="LAST_COMMIT_MESSAGE" value="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results" />
+    <MESSAGE value="Add step execution framework with parallel and sequential execution; implement drive and turn motion classes" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add step execution framework with parallel and sequential execution; implement drive and turn motion classes" />
   </component>
 </project>

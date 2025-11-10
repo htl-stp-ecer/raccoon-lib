@@ -1,4 +1,5 @@
 #include "motion/turn_motion.hpp"
+#include "odometry/angle_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -42,18 +43,18 @@ namespace libstp::motion
         finished_ = false;
         angular_scale_ = 1.0;
         cumulative_angle_rad_ = 0.0;
+        previous_heading_rad_ = 0.0;
 
-        const auto pose = odometry().getPose();
-        reference_orientation_ = pose.orientation.normalized();
-        previous_angle_rad_ = 0.0;  // Start at 0 relative rotation
+        // Reset odometry to establish new origin for this motion
+        odometry().reset();
 
         // Store the target angle to turn
         target_angle_rad_ = cfg_.angle_deg * kDegToRad;
 
-        const double reference_yaw = computeYaw(reference_orientation_);
+        const double initial_heading = odometry().getHeading();
 
-        SPDLOG_INFO("TurnMotion started: target_angle = {:.3f} deg ({:.3f} rad), max_angular_speed = {:.3f} rad/s, reference_yaw = {:.3f} rad",
-                    cfg_.angle_deg, target_angle_rad_, cfg_.max_angular_speed_rps, reference_yaw);
+        SPDLOG_INFO("TurnMotion started: target_angle = {:.3f} deg ({:.3f} rad), max_angular_speed = {:.3f} rad/s, initial_heading = {:.3f} rad",
+                    cfg_.angle_deg, target_angle_rad_, cfg_.max_angular_speed_rps, initial_heading);
     }
 
     void TurnMotion::update(double dt)
@@ -78,51 +79,30 @@ namespace libstp::motion
         // Update odometry first
         odometry().update(dt);
 
-        const auto pose = odometry().getPose();
-        const double current_yaw = computeYaw(pose.orientation);
-
-        // Compute rotation from reference orientation to current orientation
-        Eigen::Quaternionf current_orientation = pose.orientation.normalized();
-
-        // Ensure quaternions are in the same hemisphere (q and -q represent the same rotation)
-        if (reference_orientation_.dot(current_orientation) < 0.0f)
-        {
-            current_orientation.coeffs() *= -1.0f;
-        }
-
-        // Compute the relative rotation: how much we've rotated from the start
-        Eigen::Quaternionf delta_q = current_orientation * reference_orientation_.conjugate();
-        delta_q.normalize();
-
-        // Extract the signed rotation angle around the Z-axis (yaw)
-        // For a quaternion q = [w, x, y, z], the rotation angle around Z is:
-        // angle = 2 * atan2(z, w)
-        // This gives us the signed angle in the range [-π, π]
-        double current_angle_rad = 2.0 * std::atan2(static_cast<double>(delta_q.z()),
-                                                     static_cast<double>(delta_q.w()));
+        // Get current heading from odometry (relative to origin)
+        const double current_heading_rad = odometry().getHeading();
 
         // Track cumulative rotation to handle angles beyond ±180°
-        // Detect wrapping by checking if the angle jumped by more than π
-        double delta_angle = current_angle_rad - previous_angle_rad_;
+        // Detect wrapping by checking if the heading jumped by more than π
+        double delta_heading = current_heading_rad - previous_heading_rad_;
         const double pi = std::numbers::pi;
 
-        if (delta_angle > pi)
+        if (delta_heading > pi)
         {
             // Wrapped from +π to -π (turned counter-clockwise past 180°)
-            delta_angle -= 2.0 * pi;
+            delta_heading -= 2.0 * pi;
         }
-        else if (delta_angle < -pi)
+        else if (delta_heading < -pi)
         {
             // Wrapped from -π to +π (turned clockwise past -180°)
-            delta_angle += 2.0 * pi;
+            delta_heading += 2.0 * pi;
         }
 
-        cumulative_angle_rad_ += delta_angle;
-        previous_angle_rad_ = current_angle_rad;
+        cumulative_angle_rad_ += delta_heading;
+        previous_heading_rad_ = current_heading_rad;
 
-        SPDLOG_INFO("TurnMotion update: current_yaw = {:.3f} rad ({:.3f} deg), cumulative_angle = {:.3f} rad ({:.3f} deg), delta_q = ({:.3f}, {:.3f}, {:.3f}, {:.3f})",
-                    current_yaw, current_yaw * kRadToDeg, cumulative_angle_rad_, cumulative_angle_rad_ * kRadToDeg,
-                    delta_q.w(), delta_q.x(), delta_q.y(), delta_q.z());
+        SPDLOG_INFO("TurnMotion update: current_heading = {:.3f} rad ({:.3f} deg), cumulative_angle = {:.3f} rad ({:.3f} deg)",
+                    current_heading_rad, current_heading_rad * kRadToDeg, cumulative_angle_rad_, cumulative_angle_rad_ * kRadToDeg);
 
         // Compute remaining angle to turn using cumulative tracking
         double remaining_angle_rad = target_angle_rad_ - cumulative_angle_rad_;
@@ -137,8 +117,8 @@ namespace libstp::motion
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
-            SPDLOG_INFO("TurnMotion completed: final_yaw = {:.3f} rad ({:.3f} deg), total_turned = {:.3f} deg",
-                        current_yaw, current_yaw * kRadToDeg, cumulative_angle_rad_ * kRadToDeg);
+            SPDLOG_INFO("TurnMotion completed: final_heading = {:.3f} rad ({:.3f} deg), total_turned = {:.3f} deg",
+                        current_heading_rad, current_heading_rad * kRadToDeg, cumulative_angle_rad_ * kRadToDeg);
             return;
         }
 
@@ -197,21 +177,5 @@ namespace libstp::motion
     void TurnMotion::complete()
     {
         finished_ = true;
-    }
-
-    double TurnMotion::computeYaw(const Eigen::Quaternionf& orientation) const
-    {
-        const Eigen::Quaternionf q = orientation.normalized();
-        const double siny_cosp = 2.0 * (q.w() * q.z() + q.x() * q.y());
-        const double cosy_cosp = 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z());
-        return std::atan2(siny_cosp, cosy_cosp);
-    }
-
-    double TurnMotion::wrapAngle(double angle)
-    {
-        const double two_pi = 2.0 * std::numbers::pi;
-        double wrapped = std::fmod(angle + std::numbers::pi, two_pi);
-        if (wrapped < 0.0) wrapped += two_pi;
-        return wrapped - std::numbers::pi;
     }
 }

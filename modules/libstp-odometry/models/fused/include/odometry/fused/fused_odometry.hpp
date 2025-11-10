@@ -4,22 +4,22 @@
 
 #pragma once
 
-#include "odometry/imu/imu_odometry.hpp"
+#include "odometry/odometry.hpp"
+#include "hal/IMU.hpp"
 #include "kinematics/kinematics.hpp"
 
 namespace libstp::odometry::fused
 {
-    // Reuse ImuOdometryConfig for IMU configuration
-    using ImuOdometryConfig = imu::ImuOdometryConfig;
-
     /**
      * Fused odometry implementation combining IMU orientation with kinematics velocity
      *
      * This odometry model:
-     * - Delegates orientation tracking to ImuOdometry (handles IMU inversions, initialization)
+     * - Integrates IMU orientation tracking directly (handles auto-calibration)
      * - Integrates body velocities from kinematics to estimate position
      * - Does NOT directly access wheel encoders - uses IKinematics abstraction
      * - Provides 2D position tracking by integrating velocities in the world frame
+     * - Tracks distances from origin in forward/lateral directions
+     * - Provides all coordinate frame transformations
      *
      * Position drift will accumulate over time without external corrections.
      * Use reset() with external position references (AprilTags, vision, etc.) to correct drift.
@@ -27,9 +27,24 @@ namespace libstp::odometry::fused
     class FusedOdometry : public IOdometry
     {
     private:
-        imu::ImuOdometry imu_odometry_;  // Handles all IMU orientation tracking
+        // Hardware interfaces
+        hal::imu::IMU* imu_;
         kinematics::IKinematics* kinematics_;
-        Eigen::Vector3f position_;  // Position estimate (orientation comes from imu_odometry_)
+
+        // Current state
+        Eigen::Vector3f position_;           // Current position in world frame
+        Eigen::Quaternionf orientation_;     // Current orientation in world frame
+
+        // Origin tracking (set by reset)
+        Eigen::Vector3f origin_position_;    // Position at last reset
+        Eigen::Quaternionf origin_orientation_; // Orientation at last reset
+
+        // IMU initialization
+        Eigen::Quaternionf initial_imu_orientation_; // Raw IMU orientation at first update
+        bool imu_initialized_;
+
+        // Helper methods
+        [[nodiscard]] Eigen::Quaternionf getRelativeOrientation() const;
 
     public:
         /**
@@ -39,18 +54,16 @@ namespace libstp::odometry::fused
          */
         FusedOdometry(hal::imu::IMU* imu, kinematics::IKinematics* kinematics);
 
-        /**
-         * Construct fused odometry with IMU, kinematics, and configuration
-         * @param imu Pointer to IMU instance
-         * @param kinematics Pointer to kinematics model (provides velocity estimates)
-         * @param config Configuration for IMU axis inversions
-         */
-        FusedOdometry(hal::imu::IMU* imu, kinematics::IKinematics* kinematics, const ImuOdometryConfig& config);
-
         ~FusedOdometry() override = default;
 
+        // IOdometry interface implementation
         void update(double dt) override;
         [[nodiscard]] foundation::Pose getPose() const override;
+        [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override;
+        [[nodiscard]] double getHeading() const override;
+        [[nodiscard]] double getHeadingError(double target_heading_rad) const override;
+        [[nodiscard]] Eigen::Vector3f transformToBodyFrame(const Eigen::Vector3f& world_vec) const override;
+        [[nodiscard]] Eigen::Vector3f transformToWorldFrame(const Eigen::Vector3f& body_vec) const override;
         void reset(const foundation::Pose& pose) override;
         void reset() override;
     };

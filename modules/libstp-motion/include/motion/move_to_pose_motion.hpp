@@ -48,12 +48,8 @@ namespace libstp::motion
 
     private:
         void complete();
-        double computeYaw(const Eigen::Quaternionf& orientation) const;
-        static double wrapAngle(double angle);
 
         MoveToPoseConfig cfg_{};
-        Eigen::Quaternionf reference_orientation_{Eigen::Quaternionf::Identity()};
-        Eigen::Vector3f reference_position_{Eigen::Vector3f::Zero()};
         bool finished_{false};
         double speed_scale_{1.0};
         bool reorienting_{false};  // For differential: currently in reorientation mode
