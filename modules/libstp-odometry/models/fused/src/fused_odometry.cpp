@@ -20,6 +20,12 @@ namespace libstp::odometry::fused
     {
         if (!imu) throw std::invalid_argument("imu cannot be null");
         if (!kinematics) throw std::invalid_argument("kinematics cannot be null");
+
+        // Wait for IMU to receive initial data from coprocessor
+        if (imu_ && !imu_->waitForReady(1000)) {
+            SPDLOG_WARN("FusedOdometry::ctor - IMU not ready after timeout, proceeding anyway");
+        }
+
         SPDLOG_INFO("FusedOdometry::ctor initialized with IMU and kinematics");
     }
 
@@ -105,8 +111,8 @@ namespace libstp::odometry::fused
         const Eigen::Vector3f forward_at_origin = origin_orientation_ * Eigen::Vector3f::UnitX();
 
         // Get the right direction at origin (origin orientation applied to body-frame right vector)
-        // Note: In body frame, right is negative Y (left is +Y)
-        const Eigen::Vector3f right_at_origin = origin_orientation_ * (-Eigen::Vector3f::UnitY());
+        // Note: In body frame, right is positive Y (mecanum positive vy moves right)
+        const Eigen::Vector3f right_at_origin = origin_orientation_ * Eigen::Vector3f::UnitY();
 
         // Project displacement onto forward and right directions
         const double forward = displacement_world.dot(forward_at_origin);
@@ -163,6 +169,11 @@ namespace libstp::odometry::fused
 
     void FusedOdometry::reset()
     {
+        // Wait for IMU to receive initial data from coprocessor
+        if (imu_ && !imu_->waitForReady(1000)) {
+            SPDLOG_WARN("FusedOdometry::reset - IMU not ready after timeout, proceeding anyway");
+        }
+
         // Reset to origin (identity pose)
         position_ = Eigen::Vector3f::Zero();
         orientation_ = Eigen::Quaternionf::Identity();

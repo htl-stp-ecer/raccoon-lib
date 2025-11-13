@@ -42,6 +42,10 @@ namespace platform::wombat::core {
 
         exlcm::scalar_f_t readTemp();
 
+        // Wait for IMU orientation data to be received from the coprocessor
+        // Returns true if data was received within timeout_ms, false otherwise
+        bool waitForImuReady(int timeout_ms = 1000);
+
     private:
         lcm::LCM lcm_;
 
@@ -64,6 +68,9 @@ namespace platform::wombat::core {
         exlcm::vector3f_t mag_cache_{};
         exlcm::quaternionf_t orientation_cache_{};
         exlcm::scalar_f_t temp_cache_{};
+
+        // Track whether real IMU orientation data has been received
+        std::atomic<bool> imu_orientation_received_{false};
 
         // Background listening function
         void listenLoop();

@@ -57,3 +57,9 @@ Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
 {
     return Eigen::Quaternionf::Identity();
 }
+
+bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)
+{
+    // Mock platform always returns true immediately - no async data needed
+    return true;
+}

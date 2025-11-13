@@ -71,6 +71,11 @@ Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
     return orientation;
 }
 
+bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)
+{
+    return platform::wombat::core::LcmReader::instance().waitForImuReady(timeout_ms);
+}
+
 void libstp::hal::imu::IMU::calibrate()
 {
     /*namespace libstp::sensor

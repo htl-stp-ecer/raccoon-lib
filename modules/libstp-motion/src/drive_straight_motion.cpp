@@ -119,8 +119,9 @@ namespace libstp::motion
         if (supports_lateral)
         {
             // MECANUM STRATEGY: Direct lateral correction using vy
-            // Note: lateral_error is already in the direction we want (positive = drifted right)
-            // For mecanum, positive vy moves left (correcting rightward drift), so negate
+            // Note: lateral_error is positive when drifted right (from odometry)
+            // For mecanum, positive vy moves right, so we want negative vy to correct rightward drift
+            // Therefore: vy_cmd = -lateral_kp * lateral_error (already has correct sign)
             vy_cmd = std::clamp(-cfg_.lateral_kp * lateral_error_world, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
             omega_cmd = std::clamp(cfg_.heading_kp * yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
             SPDLOG_INFO("DriveStraightMotion [MECANUM] vy_cmd = {:.3f} m/s, omega_cmd = {:.3f} rad/s", vy_cmd, omega_cmd);

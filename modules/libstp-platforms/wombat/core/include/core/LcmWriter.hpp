@@ -29,6 +29,7 @@ namespace platform::wombat::core
         void setMotor(uint8_t port, int valueData);
         void setServo(uint8_t port, int valueData);
         void requestDataDump();
+        void resetBemfCounters();
 
     private:
         explicit LcmDataWriter();
