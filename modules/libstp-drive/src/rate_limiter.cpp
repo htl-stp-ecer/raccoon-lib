@@ -5,15 +5,40 @@
 #include "drive/rate_limiter.hpp"
 #include "foundation/config.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <string>
+
+namespace
+{
+    [[nodiscard]] bool speedRampsEnabled()
+    {
+        static constexpr bool enabled = [] {
+            return true;
+        }();
+        return enabled;
+    }
+}
+
 using namespace libstp::drive;
 
-RateLimiter::RateLimiter(const double max_rate) : max_rate_(max_rate)
+RateLimiter::RateLimiter(const double max_rate)
 {
-    SPDLOG_INFO("RateLimiter::ctor max_rate={}", max_rate_);
+    setMaxRate(max_rate);
 }
 
 void RateLimiter::setMaxRate(const double r)
 {
+    if (!speedRampsEnabled())
+    {
+        max_rate_ = 0.0;
+        SPDLOG_INFO(
+            "RateLimiter::setMaxRate speed ramps disabled (requested max_rate={} ignored)",
+            r);
+        return;
+    }
+
     max_rate_ = std::max(0.0, r);
     SPDLOG_INFO("RateLimiter::setMaxRate max_rate={}", max_rate_);
 }

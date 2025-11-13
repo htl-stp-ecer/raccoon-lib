@@ -5,6 +5,7 @@
 #include <exlcm/scalar_i8_t.hpp>
 #include <exlcm/scalar_i32_t.hpp>
 #include <exlcm/scalar_f_t.hpp>
+#include <exlcm/quaternionf_t.hpp>
 #include <string>
 #include <unordered_map>
 #include <mutex>
@@ -33,12 +34,17 @@ namespace platform::wombat::core {
         exlcm::vector3f_t readGyro();
         exlcm::vector3f_t readAccel();
         exlcm::vector3f_t readMag();
+        exlcm::quaternionf_t readOrientation();
         exlcm::scalar_i32_t readBemf(int idx);
 
         exlcm::scalar_i32_t readAnalog(int port);
         exlcm::scalar_i32_t readDigital(int port);
 
         exlcm::scalar_f_t readTemp();
+
+        // Wait for IMU orientation data to be received from the coprocessor
+        // Returns true if data was received within timeout_ms, false otherwise
+        bool waitForImuReady(int timeout_ms = 1000);
 
     private:
         lcm::LCM lcm_;
@@ -60,7 +66,11 @@ namespace platform::wombat::core {
         exlcm::vector3f_t gyro_cache_{};
         exlcm::vector3f_t accel_cache_{};
         exlcm::vector3f_t mag_cache_{};
+        exlcm::quaternionf_t orientation_cache_{};
         exlcm::scalar_f_t temp_cache_{};
+
+        // Track whether real IMU orientation data has been received
+        std::atomic<bool> imu_orientation_received_{false};
 
         // Background listening function
         void listenLoop();
@@ -73,6 +83,7 @@ namespace platform::wombat::core {
         void handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
+        void handleOrientation(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::quaternionf_t* msg);
         void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
         void handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
         void handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);

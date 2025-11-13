@@ -19,12 +19,15 @@ namespace libstp::drive
               const MotionLimits& chassis_lim);
 
         void setVelocity(const foundation::ChassisVel& v_body);
-        void update(double dt) const;
+        [[nodiscard]] kinematics::MotorCommands update(double dt) const;
 
         [[nodiscard]] foundation::ChassisState estimateState() const;
         [[nodiscard]] std::size_t wheelCount() const;
 
         void hardStop();
+
+        [[nodiscard]] kinematics::IKinematics& getKinematics() { return *kinematics_; }
+        [[nodiscard]] const kinematics::IKinematics& getKinematics() const { return *kinematics_; }
 
     private:
         std::unique_ptr<kinematics::IKinematics> kinematics_;

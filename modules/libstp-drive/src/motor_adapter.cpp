@@ -5,6 +5,7 @@
 #include "foundation/config.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 using namespace libstp::drive;
 constexpr double u_max = 100.0;
@@ -62,6 +63,21 @@ void MotorAdapter::updateEncoderVelocity(double dt)
     }
 
     const long long d_ticks = pos - pos_prev_;
+
+    constexpr long long kMaxDeltaTicks = 10000;
+    if (std::abs(d_ticks) > kMaxDeltaTicks)
+    {
+        SPDLOG_WARN(
+            "MotorAdapter::updateEncoderVelocity port={} detected implausible delta {} ticks (prev={}, cur={}) – reinitializing baseline",
+            motor_->port,
+            d_ticks,
+            pos_prev_,
+            pos);
+        pos_prev_ = pos;
+        w_meas_filt_ = 0.0;
+        return;
+    }
+
     pos_prev_ = pos;
 
     double w = (static_cast<double>(d_ticks) * motor_->getCalibration().ticks_to_rad) / dt; // rad/s
