@@ -1,0 +1,1 @@
+- to build, run RPI_HOST=10.101.156.206 bash deploy.sh
