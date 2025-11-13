@@ -24,6 +24,16 @@ void LcmDataWriter::requestDataDump() {
     lcm.publish("libstp/system/dump_request", &dumpRequest);
 }
 
+void LcmDataWriter::resetBemfCounters() {
+    exlcm::scalar_i32_t resetCmd{};
+    resetCmd.value = 1;
+
+    // Reset BEMF counters for all 4 motor ports
+    for (int port = 0; port < 4; ++port) {
+        lcm.publish("libstp/bemf/" + std::to_string(port) + "/reset_cmd", &resetCmd);
+    }
+}
+
 LcmDataWriter::LcmDataWriter() {
     if (!lcm.good()) {
         throw std::runtime_error("[LCM-Writer] Failed to initialize LCM");
