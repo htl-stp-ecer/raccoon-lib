@@ -1,0 +1,1 @@
+register_libstp_module(button "FALSE" "hal")
