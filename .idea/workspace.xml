@@ -21,6 +21,7 @@
   <component name="CMakeRunConfigurationManager">
     <generated>
       <config projectName="VERSION" targetName="test-c-memq_test" />
+      <config projectName="VERSION" targetName="sensor-ir" />
       <config projectName="VERSION" targetName="gtest_main" />
       <config projectName="VERSION" targetName="doc-dotnet" />
       <config projectName="VERSION" targetName="eigen_lapack" />
@@ -31,8 +32,10 @@
       <config projectName="VERSION" targetName="hal" />
       <config projectName="VERSION" targetName="lcm-logfilter" />
       <config projectName="VERSION" targetName="libstp_foundation" />
+      <config projectName="VERSION" targetName="libstp_sensor-ir" />
       <config projectName="VERSION" targetName="lcm-test-types-c.sources" />
       <config projectName="VERSION" targetName="libstp_async" />
+      <config projectName="VERSION" targetName="libstp_button" />
       <config projectName="VERSION" targetName="doc-clean" />
       <config projectName="VERSION" targetName="lcm-test-types-c" />
       <config projectName="VERSION" targetName="lcm-logger" />
@@ -61,6 +64,7 @@
       <config projectName="VERSION" targetName="blas" />
       <config projectName="VERSION" targetName="messages-c.sources" />
       <config projectName="VERSION" targetName="lcm" />
+      <config projectName="VERSION" targetName="button" />
       <config projectName="VERSION" targetName="lcm-logplayer" />
       <config projectName="VERSION" targetName="eigen_blas_static" />
       <config projectName="VERSION" targetName="imu" />
@@ -97,10 +101,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="rewriting api">
+      <change afterPath="$PROJECT_DIR$/modules/libstp-button/CMakeLists.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-button/bindings/button.cpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-button/include/button.hpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-button/include/button_wraper.hpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-button/src/button.cpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-sensor-ir/CMakeLists.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-sensor-ir/bindings/IRSensor.cpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-sensor-ir/include/IRSensor.hpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-sensor-ir/src/IRSensor.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy.sh" beforeDir="false" afterPath="$PROJECT_DIR$/deploy.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lcm-messages" beforeDir="false" afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/include/hal/Analog.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/include/hal/Analog.hpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -122,8 +134,17 @@
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/core/src/MockPlatform.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="mock:///home/eternalRose/CLionProjects/DA25/libary/modules/libstp-hal/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/core/src/MockPlatform.cpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/modules/libstp-sensor-ir/src/IRSensor.cpp" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
@@ -139,6 +160,7 @@
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "Python.defs.executor": "Run",
     "Python.gen_defs.executor": "Run",
+    "Python.lcmReadTest.executor": "Run",
     "RunOnceActivity.RadMigrateCodeStyle": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
@@ -150,14 +172,14 @@
     "Shell Script.deploy.sh.executor": "Run",
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "RACOO-37",
+    "git-widget-placeholder": "RACOO-74",
     "last_opened_file_path": "/home/eternalRose/CLionProjects/DA25/libary/modules/libstp-screen/python/libstp/screen/exlcm",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "settings.editor.selected.configurable": "preferences.keymap",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -167,10 +189,16 @@
       <recent name="$PROJECT_DIR$/lcm-messages/types" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/modules/libstp-button/include" />
       <recent name="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/exlcm" />
     </key>
   </component>
   <component name="RunManager" selected="CMake Application._core">
+    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -212,11 +240,6 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration default="true" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="analog" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="analog" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -228,6 +251,11 @@
       </method>
     </configuration>
     <configuration name="blas" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="blas" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="button" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="button" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -432,6 +460,11 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="libstp_button" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_button" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="libstp_drive" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_drive" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -462,6 +495,11 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="libstp_sensor-ir" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_sensor-ir" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="messages-c" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="messages-c" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -483,6 +521,11 @@
       </method>
     </configuration>
     <configuration name="platform_core" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="platform_core" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="sensor-ir" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="sensor-ir" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -521,6 +564,28 @@
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
+    </configuration>
+    <configuration name="lcmReadTest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="VERSION" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/tests" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/tests/lcmReadTest.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
     </configuration>
     <configuration name="deploy.sh" type="ShConfigurationType" temporary="true">
       <option name="SCRIPT_TEXT" value="" />
@@ -564,6 +629,7 @@
       <item itemvalue="CMake Application.kinematics" />
       <item itemvalue="CMake Application.kinematics_differential" />
       <item itemvalue="CMake Application.kinematics_mecanum" />
+      <item itemvalue="CMake Application.libstp_button" />
       <item itemvalue="CMake Application.lapack" />
       <item itemvalue="CMake Application.lcm-buftest-receiver" />
       <item itemvalue="CMake Application.lcm-buftest-sender" />
@@ -588,6 +654,8 @@
       <item itemvalue="CMake Application.libstp_kinematics" />
       <item itemvalue="CMake Application.libstp_kinematics_differential" />
       <item itemvalue="CMake Application.libstp_kinematics_mecanum" />
+      <item itemvalue="CMake Application.libstp_sensor-ir" />
+      <item itemvalue="CMake Application.sensor-ir" />
       <item itemvalue="CMake Application.messages-c" />
       <item itemvalue="CMake Application.messages-c.sources" />
       <item itemvalue="CMake Application.messages-cpp.sources" />
@@ -596,6 +664,7 @@
       <item itemvalue="CMake Application.servo" />
       <item itemvalue="CMake Application.spbenchsolver" />
       <item itemvalue="CMake Application.spdlog" />
+      <item itemvalue="CMake Application.button" />
       <item itemvalue="CMake Application.spsolver" />
       <item itemvalue="CMake Application.test-c-server" />
       <item itemvalue="CMake Application.test_sparseLU" />
@@ -606,10 +675,13 @@
       <item itemvalue="Google Test.test-c-udpm_test" />
       <item itemvalue="Google Test.test-cpp-client" />
       <item itemvalue="Google Test.test-cpp-memq_test" />
+      <item itemvalue="Python.lcmReadTest" />
       <item itemvalue="Shell Script.deploy.sh" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Shell Script.deploy.sh" />
+        <item itemvalue="Python.lcmReadTest" />
         <item itemvalue="Shell Script.deploy.sh" />
       </list>
     </recent_temporary>
@@ -647,6 +719,8 @@
       <workItem from="1760939463312" duration="3009000" />
       <workItem from="1761199816349" duration="7588000" />
       <workItem from="1761313727245" duration="1292000" />
+      <workItem from="1763021713740" duration="4630000" />
+      <workItem from="1763362102755" duration="8346000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -717,5 +791,9 @@
     <MESSAGE value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
     <MESSAGE value="rewriting api" />
     <option name="LAST_COMMIT_MESSAGE" value="rewriting api" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
   </component>
 </project>
