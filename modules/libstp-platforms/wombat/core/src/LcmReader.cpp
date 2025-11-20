@@ -2,6 +2,8 @@
 #include "core/LcmWriter.hpp"
 #include <iostream>
 #include <regex>
+#include <chrono>
+#include <thread>
 
 using namespace platform::wombat::core;
 
@@ -31,6 +33,7 @@ LcmReader::LcmReader() {
     lcm_.subscribe("libstp/gyro/value", &LcmReader::handleGyro, this);
     lcm_.subscribe("libstp/accel/value", &LcmReader::handleAccel, this);
     lcm_.subscribe("libstp/mag/value", &LcmReader::handleMag, this);
+    lcm_.subscribe("libstp/imu/quaternion", &LcmReader::handleOrientation, this);
 
     // Subscribe to BEMF topics (assuming indices 0-3)
     for (int idx = 0; idx < 4; ++idx) {
@@ -67,6 +70,10 @@ LcmReader::LcmReader() {
     mag_cache_.z = 0.0f;
 
     temp_cache_.value = 0.0f;
+    orientation_cache_.w = 1.0f;
+    orientation_cache_.x = 0.0f;
+    orientation_cache_.y = 0.0f;
+    orientation_cache_.z = 0.0f;
 
     // Initialize BEMF cache with zeros (hardware default)
     for (int idx = 0; idx < 4; ++idx) {
@@ -86,6 +93,11 @@ LcmReader::LcmReader() {
     std::cout << "[LcmReader] Requesting initial data dump..." << std::endl;
     LcmDataWriter::instance().requestDataDump();
     std::cout << "[LcmReader] Data dump request sent" << std::endl;
+
+    // Reset BEMF counters to prevent stale values from previous runs
+    std::cout << "[LcmReader] Resetting BEMF counters..." << std::endl;
+    LcmDataWriter::instance().resetBemfCounters();
+    std::cout << "[LcmReader] BEMF counter reset sent" << std::endl;
 }
 
 LcmReader::~LcmReader() {
@@ -163,6 +175,11 @@ void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string&, const e
     mag_cache_ = *msg;
 }
 
+void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string&, const exlcm::quaternionf_t* msg) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    orientation_cache_ = *msg;
+    imu_orientation_received_ = true;
+}
 void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
     std::regex idx_regex("libstp/bemf/(\\d+)/value");
     std::smatch match;
@@ -248,6 +265,10 @@ exlcm::vector3f_t LcmReader::readMag() {
     return mag_cache_;
 }
 
+exlcm::quaternionf_t LcmReader::readOrientation() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    return orientation_cache_;
+}
 exlcm::scalar_i32_t LcmReader::readBemf(const int idx) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     exlcm::scalar_i32_t result;
@@ -275,4 +296,21 @@ exlcm::scalar_i32_t LcmReader::readDigital(const int port) {
 exlcm::scalar_f_t LcmReader::readTemp() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return temp_cache_;
+}
+
+bool LcmReader::waitForImuReady(int timeout_ms) {
+    const auto start = std::chrono::steady_clock::now();
+    const auto timeout = std::chrono::milliseconds(timeout_ms);
+
+    while (!imu_orientation_received_) {
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        if (elapsed >= timeout) {
+            std::cerr << "[LcmReader] Timeout waiting for IMU orientation data" << std::endl;
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    std::cout << "[LcmReader] IMU orientation data received" << std::endl;
+    return true;
 }

@@ -26,5 +26,10 @@ void init_imu(const py::module& m)
 
             return result;
         }, "Read acceleration, gyroscope, and magnetometer data")
-    .def("calibrate", &libstp::hal::imu::IMU::calibrate, "Calibrate the IMU sensor");
+    .def("calibrate", &libstp::hal::imu::IMU::calibrate, "Calibrate the IMU sensor")
+    .def("get_orientation", [](libstp::hal::imu::IMU& self)
+    {
+        const Eigen::Quaternionf orientation = self.getOrientation();
+        return py::make_tuple(orientation.w(), orientation.x(), orientation.y(), orientation.z());
+    }, "Get the current orientation as a quaternion (w, x, y, z)");
 }

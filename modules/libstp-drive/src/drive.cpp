@@ -39,13 +39,13 @@ void Drive::setVelocity(const foundation::ChassisVel& v_body)
         limited);
 }
 
-void Drive::update(const double dt) const
+libstp::kinematics::MotorCommands Drive::update(const double dt) const
 {
     const foundation::ChassisCmd cmd{desired_.vx, desired_.vy, desired_.w};
     SPDLOG_INFO("Drive::update dt={} -> applying cmd vx={}, vy={}, wz={}", dt, cmd.vx, cmd.vy, cmd.wz);
     SPDLOG_TRACE("Drive::update target wheel count={} (if available)", kinematics_->wheelCount());
 
-    kinematics_->applyCommand(cmd, dt);
+    return kinematics_->applyCommand(cmd, dt);
 }
 
 libstp::foundation::ChassisState Drive::estimateState() const

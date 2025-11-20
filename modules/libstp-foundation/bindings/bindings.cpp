@@ -22,4 +22,5 @@ PYBIND11_MODULE(foundation, m)
     init_pid(m);
     init_logger(m);
     init_motor(m);
+    init_types(m);
 }
