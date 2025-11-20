@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <Eigen/Geometry>
+
 namespace libstp::hal::imu
 {
     class IMU
@@ -18,5 +20,10 @@ namespace libstp::hal::imu
         
         void read(float* accel, float* gyro, float* magneto);
         void calibrate();
+        [[nodiscard]] Eigen::Quaternionf getOrientation();
+
+        // Wait for IMU to receive initial orientation data
+        // Returns true if data received within timeout_ms, false otherwise
+        bool waitForReady(int timeout_ms = 1000);
     };
 }

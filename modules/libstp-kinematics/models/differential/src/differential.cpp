@@ -54,7 +54,7 @@ namespace libstp::kinematics::differential
         return 2;
     }
 
-    void DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
+    MotorCommands DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
         SPDLOG_INFO(
             "DifferentialKinematics::applyCommand dt={} cmd vx={} wz={}",
@@ -106,6 +106,13 @@ namespace libstp::kinematics::differential
             left_saturated,
             right_saturated,
             dt);
+
+        MotorCommands result;
+        result.wheel_velocities = {left_limited, right_limited};
+        result.saturated_any = left_saturated || right_saturated;
+        result.saturation_mask = (left_saturated ? 0x1 : 0x0) | (right_saturated ? 0x2 : 0x0);
+
+        return result;
     }
 
     foundation::ChassisState DifferentialKinematics::estimateState() const
@@ -135,5 +142,10 @@ namespace libstp::kinematics::differential
         right_motor_.adapter.resetController();
         left_motor_.adapter.brake();
         right_motor_.adapter.brake();
+    }
+
+    bool DifferentialKinematics::supportsLateralMotion() const
+    {
+        return false; // Differential drive cannot strafe
     }
 }
