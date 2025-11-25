@@ -1,1 +1,1 @@
-register_libstp_module(sensor-ir "FALSE" "hal;button")
+register_libstp_module(sensorIR "FALSE" "hal;button")

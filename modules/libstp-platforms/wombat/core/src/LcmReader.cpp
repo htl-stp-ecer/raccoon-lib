@@ -176,7 +176,7 @@ void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string&, const e
     mag_cache_ = *msg;
 }
 
-void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string&, const exlcm::quaternionf_t* msg) {
+void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string&, const exlcm::quaternion_t* msg) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     orientation_cache_ = *msg;
     imu_orientation_received_ = true;
@@ -264,7 +264,7 @@ exlcm::vector3f_t LcmReader::readMag() {
     return mag_cache_;
 }
 
-exlcm::quaternionf_t LcmReader::readOrientation() {
+exlcm::quaternion_t LcmReader::readOrientation() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return orientation_cache_;
 }
