@@ -64,10 +64,9 @@ bool IRSensor::calibrate(const std::vector<int> &whiteValues, const std::vector<
     whiteThreshold = static_cast<int>(whiteMean + calibrationFactor * delta);
     blackThreshold = static_cast<int>(blackMean - calibrationFactor * delta);
 
-    SPDLOG_INFO("Calibration successful: white mean = {}, black mean = {}", whiteMean, blackMean);
-    SPDLOG_INFO("Thresholds set: white = {}, black = {}", whiteThreshold, blackThreshold);
-
-    return true;
+void IRSensor::setCalibration(const int newBlackThreshold, const int newWhiteThreshold) {
+    this->whiteThreshold=newWhiteThreshold;
+    this->blackThreshold=newBlackThreshold;
 }
 
 bool IRSensor::isOnWhite() const {
