@@ -31,14 +31,6 @@ namespace libstp::sensors::ir {
 
         float probabilityOfBlack();
         float probabilityOfWhite();
-
-        [[nodiscard]] float gaussianProbability(int value, float mean, float stdDev) const;
     };
-
-    void calibrateLightSensors(const std::vector<IRSensor*>& lightSensors);
-
-    bool areOnBlack(IRSensor* leftSensor, IRSensor* rightSensor);
-
-    bool areOnWhite(IRSensor* leftSensor, IRSensor* rightSensor);
 
 }
