@@ -1,5 +1,4 @@
 #include "motion/turn_motion.hpp"
-#include "odometry/angle_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -11,28 +10,28 @@
 namespace
 {
     constexpr double kDegToRad = std::numbers::pi / 180.0;
-    constexpr double kRadToDeg = 180.0 / std::numbers::pi;
 }
 
 namespace libstp::motion
 {
-    TurnMotion::TurnMotion(MotionContext ctx, double angle_deg, double max_angular_speed_rps)
-        : TurnMotion(ctx, TurnMotionConfig{
-            .angle_deg = angle_deg,
-            .max_angular_speed_rps = max_angular_speed_rps
+    TurnMotion::TurnMotion(MotionContext ctx, double angle_deg, double max_angular_rate_rad_per_sec)
+        : TurnMotion(ctx, TurnConfig{
+            .target_angle_rad = angle_deg * kDegToRad,
+            .max_angular_rate = max_angular_rate_rad_per_sec
         })
     {
     }
 
-    TurnMotion::TurnMotion(MotionContext ctx, TurnMotionConfig config)
+    TurnMotion::TurnMotion(MotionContext ctx, TurnConfig config)
         : Motion(ctx), cfg_(config)
     {
-        cfg_.max_angular_speed_rps = std::abs(cfg_.max_angular_speed_rps);
-        if (cfg_.max_angular_speed_rps <= 0.0) cfg_.max_angular_speed_rps = 0.5;
-        if (cfg_.angle_tolerance_deg <= 0.0) cfg_.angle_tolerance_deg = 1.0;
-        if (cfg_.angle_kp <= 0.0) cfg_.angle_kp = 1.0;
+        // Validate and clamp configuration parameters
+        if (cfg_.max_angular_rate <= 0.0) cfg_.max_angular_rate = 0.5;
+        if (cfg_.angle_tolerance_rad <= 0.0) cfg_.angle_tolerance_rad = 0.01;
+        if (cfg_.angle_kp <= 0.0) cfg_.angle_kp = 2.0;
+        if (cfg_.min_angular_rate < 0.0) cfg_.min_angular_rate = 0.0;
         cfg_.saturation_derating_factor = std::clamp(cfg_.saturation_derating_factor, 0.1, 0.99);
-        cfg_.saturation_min_speed_scale = std::clamp(cfg_.saturation_min_speed_scale, 0.01, 1.0);
+        cfg_.saturation_min_scale = std::clamp(cfg_.saturation_min_scale, 0.05, 1.0);
         cfg_.saturation_recovery_rate = std::clamp(cfg_.saturation_recovery_rate, 0.0, 0.5);
     }
 
@@ -42,19 +41,16 @@ namespace libstp::motion
         started_ = true;
         finished_ = false;
         angular_scale_ = 1.0;
-        cumulative_angle_rad_ = 0.0;
-        previous_heading_rad_ = 0.0;
 
         // Reset odometry to establish new origin for this motion
+        // This zeros the heading, so our initial heading is 0.0
         odometry().reset();
 
-        // Store the target angle to turn
-        target_angle_rad_ = cfg_.angle_deg * kDegToRad;
+        // Target heading is simply the desired turn angle (since we reset to 0)
+        target_heading_rad_ = cfg_.target_angle_rad;
 
-        const double initial_heading = odometry().getHeading();
-
-        SPDLOG_INFO("TurnMotion started: target_angle = {:.3f} deg ({:.3f} rad), max_angular_speed = {:.3f} rad/s, initial_heading = {:.3f} rad",
-                    cfg_.angle_deg, target_angle_rad_, cfg_.max_angular_speed_rps, initial_heading);
+        SPDLOG_INFO("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s",
+                    cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate);
     }
 
     void TurnMotion::update(double dt)
@@ -79,92 +75,75 @@ namespace libstp::motion
         // Update odometry first
         odometry().update(dt);
 
-        // Get current heading from odometry (relative to origin)
-        const double current_heading_rad = odometry().getHeading();
+        // Get current heading and compute error
+        // getHeadingError() automatically computes the shortest angular path and handles wraparound
+        const double current_heading = odometry().getHeading();
+        const double heading_error = odometry().getHeadingError(target_heading_rad_);
 
-        // Track cumulative rotation to handle angles beyond ±180°
-        // Detect wrapping by checking if the heading jumped by more than π
-        double delta_heading = current_heading_rad - previous_heading_rad_;
-        const double pi = std::numbers::pi;
+        SPDLOG_INFO("TurnMotion update: current_heading = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
+                    current_heading, current_heading / kDegToRad,
+                    target_heading_rad_, target_heading_rad_ / kDegToRad,
+                    heading_error, heading_error / kDegToRad);
 
-        if (delta_heading > pi)
-        {
-            // Wrapped from +π to -π (turned counter-clockwise past 180°)
-            delta_heading -= 2.0 * pi;
-        }
-        else if (delta_heading < -pi)
-        {
-            // Wrapped from -π to +π (turned clockwise past -180°)
-            delta_heading += 2.0 * pi;
-        }
-
-        cumulative_angle_rad_ += delta_heading;
-        previous_heading_rad_ = current_heading_rad;
-
-        SPDLOG_INFO("TurnMotion update: current_heading = {:.3f} rad ({:.3f} deg), cumulative_angle = {:.3f} rad ({:.3f} deg)",
-                    current_heading_rad, current_heading_rad * kRadToDeg, cumulative_angle_rad_, cumulative_angle_rad_ * kRadToDeg);
-
-        // Compute remaining angle to turn using cumulative tracking
-        double remaining_angle_rad = target_angle_rad_ - cumulative_angle_rad_;
-        const double remaining_angle_deg = remaining_angle_rad * kRadToDeg;
-
-        SPDLOG_INFO("TurnMotion remaining_angle = {:.3f} deg ({:.3f} rad)",
-                    remaining_angle_deg, remaining_angle_rad);
-
-        // Check if we've reached the target
-        if (std::abs(remaining_angle_deg) <= cfg_.angle_tolerance_deg)
+        // Check if we've reached the target angle
+        const double error_abs = std::abs(heading_error);
+        if (error_abs <= cfg_.angle_tolerance_rad)
         {
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
-            SPDLOG_INFO("TurnMotion completed: final_heading = {:.3f} rad ({:.3f} deg), total_turned = {:.3f} deg",
-                        current_heading_rad, current_heading_rad * kRadToDeg, cumulative_angle_rad_ * kRadToDeg);
+            SPDLOG_INFO("TurnMotion completed: final error = {:.3f} rad ({:.1f} deg)", heading_error, heading_error / kDegToRad);
             return;
         }
 
-        // Compute angular velocity command using proportional control
-        double omega_cmd = std::clamp(cfg_.angle_kp * remaining_angle_rad,
-                                      -cfg_.max_angular_speed_rps,
-                                      cfg_.max_angular_speed_rps);
+        // Compute angular velocity using proportional control
+        // Positive error -> need to turn CCW (positive omega)
+        // Negative error -> need to turn CW (negative omega)
+        double omega_cmd = cfg_.angle_kp * heading_error;
 
-        // Ensure minimum angular velocity to avoid getting stuck
-        if (std::abs(omega_cmd) < 1e-4)
+        // Clamp to maximum angular rate
+        omega_cmd = std::clamp(omega_cmd, -cfg_.max_angular_rate, cfg_.max_angular_rate);
+
+        // Apply minimum angular rate to prevent stalling
+        // Only apply minimum if error is still significant
+        if (error_abs > cfg_.angle_tolerance_rad && std::abs(omega_cmd) < cfg_.min_angular_rate)
         {
-            const double direction = (remaining_angle_rad >= 0.0) ? 1.0 : -1.0;
-            omega_cmd = direction * std::min(cfg_.max_angular_speed_rps, 0.1);
+            const double direction = (heading_error >= 0.0) ? 1.0 : -1.0;
+            omega_cmd = direction * cfg_.min_angular_rate;
+            SPDLOG_INFO("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
         }
 
         // Apply scaling from previous saturation feedback
-        omega_cmd *= angular_scale_;
+        const double omega_cmd_scaled = omega_cmd * angular_scale_;
+        SPDLOG_INFO("TurnMotion: omega_cmd = {:.3f} rad/s, scaled = {:.3f} rad/s (scale={:.3f})",
+                    omega_cmd, omega_cmd_scaled, angular_scale_);
 
-        SPDLOG_INFO("TurnMotion omega_cmd = {:.3f} rad/s (angular_scale={:.3f})",
-                    omega_cmd, angular_scale_);
-
-        // Send command (no translation, only rotation)
-        foundation::ChassisVel cmd{0.0, 0.0, omega_cmd};
+        // Send command: no translation, only rotation
+        foundation::ChassisVel cmd{0.0, 0.0, omega_cmd_scaled};
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 
         // Adjust scaling based on saturation feedback
         if (motor_cmd.saturated_any)
         {
-            const double prev_angular_scale = angular_scale_;
+            const double prev_scale = angular_scale_;
             angular_scale_ = std::max(
-                cfg_.saturation_min_speed_scale,
+                cfg_.saturation_min_scale,
                 angular_scale_ * cfg_.saturation_derating_factor);
 
             SPDLOG_INFO("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
-                        motor_cmd.saturation_mask, prev_angular_scale, angular_scale_);
+                        motor_cmd.saturation_mask, prev_scale, angular_scale_);
         }
         else
         {
-            const double prev_angular_scale = angular_scale_;
+            // Recover scaling when not saturated
+            const double prev_scale = angular_scale_;
             angular_scale_ = std::min(1.0, angular_scale_ + cfg_.saturation_recovery_rate);
 
-            if (prev_angular_scale != angular_scale_)
+            if (prev_scale != angular_scale_)
             {
                 SPDLOG_INFO("TurnMotion: Recovery -> angular_scale {:.3f}->{:.3f}",
-                            prev_angular_scale, angular_scale_);
+                            prev_scale, angular_scale_);
             }
         }
     }

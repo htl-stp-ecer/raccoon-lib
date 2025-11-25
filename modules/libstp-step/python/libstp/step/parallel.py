@@ -1,6 +1,7 @@
 import asyncio
-from typing import List, Any, Optional
+from typing import List, Optional
 
+from libstp.robot.api import GenericRobot
 
 from . import Step, StepProtocol
 from .sequential import seq, Sequential
@@ -35,55 +36,45 @@ class Parallel(Step):
         self.steps: List[Step] = steps
         self._last_completed_step: Optional[Step] = None
 
-    async def run_step(self, robot) -> None:
+    async def run_step(self, robot: GenericRobot) -> None:
         """
         Execute all steps in parallel, waiting for all to complete.
         Can only be run once.
 
         Args:
-            device: The device to run on
-            definitions: Additional definitions needed for execution
+            robot: The robot instance on which to run the steps.
 
         Raises:
             RuntimeError: If attempting to run this sequence more than once
         """
-        # Call parent's run_step which will check if this step has already run
-        # and set the _has_run flag to True
         await super().run_step(robot)
 
-        # If no steps, nothing to do
         if not self.steps:
             return
 
-        # Create a shared state to track completion
         completed_count = 0
         total_steps = len(self.steps)
         completed_steps = []
 
-        # Define a callback wrapper for each step
         async def step_callback(step):
             nonlocal completed_count
 
-            # Run the step
             await step.run_step(robot)
 
-            # Track completion atomically
             completed_steps.append(step)
             completed_count += 1
 
-            # If this is not the last step to complete, call on_exit with None
             if completed_count < total_steps:
                 step.call_on_exit(next_step=None)
 
-        # Create tasks with callbacks
         tasks = [asyncio.create_task(step_callback(step)) for step in self.steps]
 
-        # Wait for all tasks to complete
         await asyncio.gather(*tasks)
 
-        # Save the last completed step for later use in call_on_exit
         if completed_steps:
             self._last_completed_step = completed_steps[-1]
+
+
 def parallel(*args) -> Parallel:
     """
     Create a parallel sequence of steps.

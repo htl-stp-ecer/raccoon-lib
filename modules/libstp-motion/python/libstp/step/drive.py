@@ -23,11 +23,12 @@ class Drive(Step):
     async def run_step(self, robot: GenericRobot) -> None:
         """
         Run the Drive step.
-        
+
         :param robot: The robot instance to interact with hardware
         """
         await super().run_step(robot)
         motion = DriveStraightMotion(robot.drive, robot.odometry, self.config)
+        motion.start()  # Explicitly start the motion to reset odometry
 
         update_rate = 1 / 10
         last_time = asyncio.get_event_loop().time()
@@ -51,7 +52,12 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
 
 def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     """Drive backward for a specified duration at a given speed"""
-    return drive_forward(cm, -speed)
+    config = DriveStraightConfig()
+    config.distance_m = -cm / 100.0  # Negative distance for backwards
+    config.distance_tolerance_m = 0.01
+    config.heading_kp = 5
+    config.max_speed_mps = speed  # Speed should be positive (magnitude only)
+    return Drive(config)
 
 #
 # def strafe_left(seconds: float, speed: float, do_correction=True) -> Drive:

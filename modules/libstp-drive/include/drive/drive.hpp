@@ -24,6 +24,7 @@ namespace libstp::drive
         [[nodiscard]] foundation::ChassisState estimateState() const;
         [[nodiscard]] std::size_t wheelCount() const;
 
+        void softStop();
         void hardStop();
 
         [[nodiscard]] kinematics::IKinematics& getKinematics() { return *kinematics_; }

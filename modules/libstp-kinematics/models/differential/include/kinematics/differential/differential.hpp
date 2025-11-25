@@ -46,5 +46,6 @@ namespace libstp::kinematics::differential
         [[nodiscard]] foundation::ChassisState estimateState() const override;
         void hardStop() override;
         [[nodiscard]] bool supportsLateralMotion() const override;
+        void resetEncoders() override;
     };
 }
