@@ -27,11 +27,17 @@ class Strafe(Step):
         motion.start()  # Explicitly start the motion to reset odometry
 
         update_rate = 1 / 10  # 10 Hz
-        last_time = asyncio.get_event_loop().time()
+        last_time = asyncio.get_event_loop().time() - update_rate  # seed so first dt ~= update_rate
         while not motion.is_finished():
             current_time = asyncio.get_event_loop().time()
-            delta_time = current_time - last_time
+            delta_time = max(current_time - last_time, 0.0)
             last_time = current_time
+
+            # Avoid near-zero dt on the very first iteration (causes huge accel FF)
+            if delta_time < 1e-4:
+                await asyncio.sleep(update_rate)
+                continue
+
             motion.update(delta_time)
             await asyncio.sleep(update_rate)
 

@@ -49,7 +49,6 @@ class Sequential(Step):
         # Now execute all child steps
         for i, step in enumerate(self.steps):
             await step.run_step(robot)
-            robot.drive.hard_stop()
 
 def seq(steps: List[Step]) -> Sequential:
     """Create a sequential sequence of steps"""
