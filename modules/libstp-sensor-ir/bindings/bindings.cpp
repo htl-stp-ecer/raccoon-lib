@@ -7,7 +7,7 @@ namespace py = pybind11;
 
 void init_ir_sensor(py::module& m);
 
-PYBIND11_MODULE(IRSensor, m) {
+PYBIND11_MODULE(sensor_ir, m) {
     m.doc() = "Python bindings for libstp-sensors-ir";
 
     init_ir_sensor(m);
