@@ -6,7 +6,6 @@
 
 #include <numeric>
 
-#include "button_wraper.hpp"
 #include "spdlog/spdlog.h"
 using namespace libstp::sensors::ir;
 

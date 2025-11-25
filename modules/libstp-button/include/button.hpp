@@ -13,8 +13,10 @@
 namespace libstp::button {
 
     class Button {
-        static hal::digital::DigitalSensor digital_sensor_;
-        Button() = default;
+    private:
+        static hal::digital::DigitalSensor* digital_sensor_;
+
+        Button() = delete;
 
     public:
         Button(const Button&) = delete;
@@ -22,16 +24,11 @@ namespace libstp::button {
         Button(Button&&) = delete;
         Button& operator=(Button&&) = delete;
 
-        ~Button() = default;
+        static bool isPressed();
 
-        static Button& getInstance() {
-            static Button instance;
-            return instance;
-        }
+        static void setDigital(int port);
 
-        void setDigital(const hal::digital::DigitalSensor &sensor);
-        bool isPressed();
-        void waitForButtonPress();
+        static void waitForButtonPress();
     };
 
 }
