@@ -144,4 +144,4 @@ _skbuild/
 .pyodide-xbuildenv/
 cmake-build-debug
 .cmake-cache
-.idea
+.idea/
