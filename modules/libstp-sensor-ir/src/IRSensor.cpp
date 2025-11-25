@@ -2,7 +2,7 @@
 // Created by eternalRose on 11/13/25.
 //
 
-#include "../include/IRSensor.hpp"
+#include "IRSensor.hpp"
 
 using namespace libstp::sensors::ir;
 
@@ -11,8 +11,6 @@ IRSensor::IRSensor(const int &port, float calibrationFactor) : AnalogSensor(port
                                                                blackThreshold(0),
                                                                calibrationFactor(calibrationFactor * 0.5) {
 }
-
-
 
 void IRSensor::setCalibration(const int newBlackThreshold, const int newWhiteThreshold) {
     this->whiteThreshold=newWhiteThreshold;
@@ -27,10 +25,10 @@ bool IRSensor::isOnBlack() {
     return read() > blackThreshold;
 }
 
-bool libstp::sensors::ir::areOnBlack(IRSensor *leftSensor, IRSensor *rightSensor) {
-    return leftSensor->isOnBlack() || rightSensor->isOnBlack();
+float IRSensor::probabilityOfBlack() {
+    return 0; // Todo: implement proper probability calculation
 }
 
-bool libstp::sensors::ir::areOnWhite(IRSensor *leftSensor, IRSensor *rightSensor) {
-    return leftSensor->isOnWhite() || rightSensor->isOnWhite();
+float IRSensor::probabilityOfWhite() {
+    return 1.0f - probabilityOfBlack();
 }
