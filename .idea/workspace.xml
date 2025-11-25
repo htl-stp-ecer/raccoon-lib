@@ -96,37 +96,12 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Enhance IMU integration and odometry: implement wait functionality for IMU readiness, adjust lateral motion commands for mecanum drive, and add BEMF counter reset in LCM communication">
-      <change afterPath="$PROJECT_DIR$/modules/libstp-debug/python/libstp/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-debug/python/libstp/step/breakpoint.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Add motion classes for turning and strafing: implement TurnMotion and StrafeMotion with configuration options, odometry reset, and velocity control">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lcm-messages" beforeDir="false" afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/bindings/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/bindings/drive.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/move_to_pose_motion.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/turn_motion.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/move_to_pose_motion.hpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-debug/CMakeLists.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/move_to_pose_motion.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/parallel.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/parallel.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/strafe.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/strafe.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/turn.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/turn.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/sequential.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/sequential.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/wait_for_seconds.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/wait_for_seconds.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -997,7 +972,7 @@
       <workItem from="1763638194013" duration="69000" />
       <workItem from="1763656685987" duration="16000" />
       <workItem from="1763710672487" duration="10061000" />
-      <workItem from="1764069076086" duration="5642000" />
+      <workItem from="1764069076086" duration="7628000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -1039,7 +1014,15 @@
       <option name="project" value="LOCAL" />
       <updated>1760602094152</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Add motion classes for turning and strafing: implement TurnMotion and StrafeMotion with configuration options, odometry reset, and velocity control">
+      <option name="closed" value="true" />
+      <created>1764075749188</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1764075749188</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -1067,7 +1050,8 @@
     <MESSAGE value="Rename config file to raccoon.project.yml, update Python script usage, adjust Python version requirement, and enhance logging initialization" />
     <MESSAGE value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
     <MESSAGE value="rewriting api" />
-    <option name="LAST_COMMIT_MESSAGE" value="rewriting api" />
+    <MESSAGE value="Add motion classes for turning and strafing: implement TurnMotion and StrafeMotion with configuration options, odometry reset, and velocity control" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add motion classes for turning and strafing: implement TurnMotion and StrafeMotion with configuration options, odometry reset, and velocity control" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>
