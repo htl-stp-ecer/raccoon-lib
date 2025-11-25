@@ -52,5 +52,6 @@ namespace libstp::kinematics::mecanum
         [[nodiscard]] foundation::ChassisState estimateState() const override;
         void hardStop() override;
         [[nodiscard]] bool supportsLateralMotion() const override;
+        void resetEncoders() override;
     };
 }

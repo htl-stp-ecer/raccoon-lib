@@ -174,6 +174,11 @@ namespace libstp::odometry::fused
             SPDLOG_WARN("FusedOdometry::reset - IMU not ready after timeout, proceeding anyway");
         }
 
+        // Reset encoder tracking to prevent stale position deltas
+        if (kinematics_) {
+            kinematics_->resetEncoders();
+        }
+
         // Reset to origin (identity pose)
         position_ = Eigen::Vector3f::Zero();
         orientation_ = Eigen::Quaternionf::Identity();

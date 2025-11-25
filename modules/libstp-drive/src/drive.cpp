@@ -16,7 +16,6 @@ Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
     chassis_lim_ = chassis_lim;
 }
 
-
 void Drive::setVelocity(const foundation::ChassisVel& v_body)
 {
     SPDLOG_INFO("Drive::setVelocity request vx={}, vy={}, w={}", v_body.vx, v_body.vy, v_body.w);
@@ -59,6 +58,13 @@ std::size_t Drive::wheelCount() const
 {
     return kinematics_->wheelCount();
 }
+
+void Drive::softStop()
+{
+    SPDLOG_INFO("Drive::softStop invoked; zeroing desired velocity");
+    setVelocity(foundation::ChassisVel(0, 0, 0));
+}
+
 
 void Drive::hardStop()
 {

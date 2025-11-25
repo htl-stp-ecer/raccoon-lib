@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="BackendCodeEditorMiscSettings">
-    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="8" type="long" />
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="14" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
     <option name="/Default/Housekeeping/GlobalSettingsUpgraded/IsUpgraded/@EntryValue" value="true" type="bool" />
     <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
@@ -22,15 +22,18 @@
     <generated>
       <config projectName="VERSION" targetName="test-c-memq_test" />
       <config projectName="VERSION" targetName="gtest_main" />
+      <config projectName="VERSION" targetName="doc-dotnet" />
       <config projectName="VERSION" targetName="eigen_lapack" />
       <config projectName="VERSION" targetName="libstp_kinematics_mecanum" />
       <config projectName="VERSION" targetName="lcm-tester" />
       <config projectName="VERSION" targetName="lcm-source" />
+      <config projectName="VERSION" targetName="doc-doxygen" />
       <config projectName="VERSION" targetName="hal" />
       <config projectName="VERSION" targetName="lcm-logfilter" />
       <config projectName="VERSION" targetName="libstp_foundation" />
       <config projectName="VERSION" targetName="lcm-test-types-c.sources" />
       <config projectName="VERSION" targetName="libstp_async" />
+      <config projectName="VERSION" targetName="doc-clean" />
       <config projectName="VERSION" targetName="lcm-test-types-c" />
       <config projectName="VERSION" targetName="lcm-logger" />
       <config projectName="VERSION" targetName="eigen_blas" />
@@ -43,6 +46,7 @@
       <config projectName="VERSION" targetName="test-cpp-client" />
       <config projectName="VERSION" targetName="digital" />
       <config projectName="VERSION" targetName="analog" />
+      <config projectName="VERSION" targetName="doc-sphinx" />
       <config projectName="VERSION" targetName="test-c-udpm_test" />
       <config projectName="VERSION" targetName="lcm-buftest-sender" />
       <config projectName="VERSION" targetName="motor" />
@@ -68,18 +72,19 @@
       <config projectName="VERSION" targetName="test-cpp-memq_test" />
       <config projectName="VERSION" targetName="libstp_drive" />
       <config projectName="VERSION" targetName="lcm-static" />
-      <config projectName="VERSION" targetName="messages-c" />
       <config projectName="VERSION" targetName="libstp_kinematics" />
+      <config projectName="VERSION" targetName="messages-c" />
       <config projectName="VERSION" targetName="kinematics" />
       <config projectName="VERSION" targetName="test_sparseLU" />
-      <config projectName="VERSION" targetName="test-c-client" />
       <config projectName="VERSION" targetName="libstp_hal" />
+      <config projectName="VERSION" targetName="test-c-client" />
       <config projectName="VERSION" targetName="dist" />
       <config projectName="VERSION" targetName="platform_core" />
       <config projectName="VERSION" targetName="spdlog" />
       <config projectName="VERSION" targetName="spbenchsolver" />
       <config projectName="VERSION" targetName="test-c-server" />
       <config projectName="VERSION" targetName="gtest" />
+      <config projectName="VERSION" targetName="doc-setup" />
       <config projectName="VERSION" targetName="_core" />
       <config projectName="VERSION" targetName="lapack" />
       <config projectName="VERSION" targetName="lcm-sink" />
@@ -91,17 +96,37 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Refactor motion classes and enhance odometry: remove unused yaw computations, add distance measurements from origin, and implement wait step for asynchronous execution">
+    <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Enhance IMU integration and odometry: implement wait functionality for IMU readiness, adjust lateral motion commands for mecanum drive, and add BEMF counter reset in LCM communication">
+      <change afterPath="$PROJECT_DIR$/modules/libstp-debug/python/libstp/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/libstp-debug/python/libstp/step/breakpoint.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/include/hal/IMU.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/include/hal/IMU.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lcm-messages" beforeDir="false" afterPath="$PROJECT_DIR$/lcm-messages" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/bindings/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/bindings/drive.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/drive.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/bindings/bindings.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/move_to_pose_motion.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/bindings/turn_motion.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/move_to_pose_motion.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-debug/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step/drive.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/move_to_pose_motion.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/mock/imu/src/MPU9250.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/mock/imu/src/MPU9250.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmReader.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmReader.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmWriter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/include/core/LcmWriter.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmReader.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmWriter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/core/src/LcmWriter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/imu/src/MPU9250.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/imu/src/MPU9250.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/parallel.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/parallel.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/sequential.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/sequential.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/wait_for_seconds.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-step/python/libstp/step/wait_for_seconds.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -116,13 +141,14 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Python Script" />
+        <option value="CMakeLists.txt" />
       </list>
     </option>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="python-motion-system" />
+        <entry key="$PROJECT_DIR$" value="main" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -130,36 +156,15 @@
   </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/modules/libstp-foundation/bindings/motor.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/include/kinematics/kinematics.hpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/src/differential.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/differential/src/differential.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/bindings/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-motion/src/drive_straight_motion.cpp" root0="SKIP_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/core/src/MockPlatform.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="mock:///home/tobias/Documents/Botball/library/modules/libstp-platforms/wombat/motor/src/Motor.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="mock://diff.h" root0="SKIP_HIGHLIGHTING" />
-  </component>
-  <component name="ProjectApplicationVersion">
-    <option name="ide" value="CLion" />
-    <option name="majorVersion" value="2025" />
-    <option name="minorVersion" value="2.1" />
-    <option name="productBranch" value="Classic" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
   &quot;associatedIndex&quot;: 5
 }</component>
-  <component name="ProjectId" id="32iynVjyCf0Whl8zfPvujRjk547" />
-  <component name="ProjectStatusUIService">{
-  &quot;uiKindId&quot;: &quot;Widget&quot;
-}</component>
+  <component name="ProjectId" id="349iycPwHi9EmMkurnnmwepaj5N" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -177,34 +182,43 @@
     &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
     &quot;SHELLCHECK.PATH&quot;: &quot;/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck&quot;,
+    &quot;Shell Script.deploy.sh.executor&quot;: &quot;Run&quot;,
     &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
     &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;drive&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/tobias/Documents/Botball/library/modules/libstp-step/python/libstp/step&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/tobias/Documents/Botball/library&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/modules/libstp-step/python/libstp/step" />
-      <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/steps" />
-      <recent name="$PROJECT_DIR$/modules/libstp-step" />
-      <recent name="$PROJECT_DIR$/modules/libstp-mission" />
+      <recent name="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/exlcm" />
+      <recent name="$PROJECT_DIR$/lcm-messages/types" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
-      <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/step" />
-      <recent name="$PROJECT_DIR$/modules/libstp-step/python/libstp/step" />
-      <recent name="$PROJECT_DIR$/modules/libstp-motion/python/libstp/steps" />
-      <recent name="$PROJECT_DIR$/python/libstp_api" />
+      <recent name="$PROJECT_DIR$/modules/libstp-screen/python/libstp/screen/exlcm" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.gen_defs">
+  <component name="RunManager" selected="Shell Script.deploy.sh">
     <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="test-c-eventlog_test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-eventlog_test" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-eventlog_test" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
         <option name="BeforeTestRunTask" enabled="true" />
@@ -222,7 +236,25 @@
         <option name="BeforeTestRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="test-c-memq_test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-memq_test" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-memq_test" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="test-c-udpm_test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-udpm_test" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-udpm_test" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="test-c-udpm_test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-udpm_test" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-udpm_test" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="test-cpp-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-cpp-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-cpp-client" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
         <option name="BeforeTestRunTask" enabled="true" />
@@ -240,7 +272,23 @@
         <option name="BeforeTestRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="test-cpp-memq_test" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-cpp-memq_test" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-cpp-memq_test" TEST_MODE="SUITE_TEST">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+        <option name="BeforeTestRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="_core" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="_core" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="_core" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="_core" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="analog" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="analog" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -255,7 +303,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="async" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="async" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="blas" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="blas" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="blas" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="blas" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="demos" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="demos" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -270,7 +333,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="digital" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="digital" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="dist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="dist" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="dist" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="dist" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="doc" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="doc" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -285,7 +363,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="drive" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="drive" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="eigen_blas" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="eigen_blas" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="eigen_blas" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="eigen_blas" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="eigen_blas_static" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="eigen_blas_static" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -300,7 +393,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="eigen_lapack" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="eigen_lapack" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="eigen_lapack_static" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="eigen_lapack_static" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="eigen_lapack_static" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="eigen_lapack_static" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="foundation" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="foundation" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -315,7 +423,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="gtest" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="gtest" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="gtest_main" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="gtest_main" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="gtest_main" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="gtest_main" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="hal" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="hal" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -330,7 +453,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="imu" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="imu" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="kinematics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="kinematics" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="kinematics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="kinematics" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="kinematics_differential" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="kinematics_differential" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -345,7 +483,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="kinematics_mecanum" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="kinematics_mecanum" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="lapack" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lapack" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lapack" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lapack" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-buftest-receiver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-buftest-receiver" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-buftest-receiver">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -360,7 +513,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="lcm-buftest-sender" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-buftest-sender" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-buftest-sender">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="lcm-example" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-example" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-example">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-example" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-example" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-example">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-gen" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-gen" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-gen">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -375,7 +543,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="lcm-logfilter" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-logfilter" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-logfilter">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="lcm-logger" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-logger" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-logger">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-logger" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-logger" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-logger">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-logplayer" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-logplayer" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-logplayer">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -390,7 +573,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="lcm-sink" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-sink" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-sink">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="lcm-source" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-source" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-source">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-source" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-source" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-source">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-static" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-static" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -405,7 +603,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="lcm-test-types-c" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-test-types-c" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="lcm-test-types-c.sources" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-test-types-c.sources" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-test-types-c.sources" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-test-types-c.sources" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm-test-types-cpp.sources" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-test-types-cpp.sources" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -420,7 +633,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="lcm-tester" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm-tester" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="lcm-tester">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="lcm" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="lcm_use_file" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="lcm_use_file" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -435,7 +663,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="libstp_async" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_async" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="libstp_drive" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_drive" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="libstp_drive" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_drive" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="libstp_foundation" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_foundation" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -450,7 +693,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="libstp_hal" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_hal" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="libstp_kinematics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_kinematics" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="libstp_kinematics" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_kinematics" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="libstp_kinematics_differential" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_kinematics_differential" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -465,7 +723,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="libstp_kinematics_mecanum" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="libstp_kinematics_mecanum" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="messages-c" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="messages-c" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="messages-c" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="messages-c" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="messages-c.sources" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="messages-c.sources" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -480,7 +753,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="messages-cpp.sources" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="messages-cpp.sources" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="motor" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="motor" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="motor" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="motor" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="platform_core" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="platform_core" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -495,7 +783,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="servo" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="servo" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="spbenchsolver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="spbenchsolver" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="spbenchsolver">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="spbenchsolver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="spbenchsolver" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="spbenchsolver">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="spdlog" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="spdlog" CONFIG_NAME="Debug">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -510,7 +813,22 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
+    <configuration name="spsolver" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="spsolver" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="spsolver">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="test-c-server" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-server" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-server">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="test-c-server" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-server" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-server">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="test_sparseLU" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test_sparseLU" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test_sparseLU">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -525,48 +843,39 @@
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
     </configuration>
-    <configuration name="defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/defs.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
+    <configuration name="uninstall" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="uninstall" CONFIG_NAME="Debug">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="deploy.sh" type="ShConfigurationType" temporary="true">
+      <option name="SCRIPT_TEXT" value="" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="$PROJECT_DIR$/deploy.sh" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="/usr/bin/env" />
+      <option name="INTERPRETER_OPTIONS" value="bash" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="true" />
+      <envs />
       <method v="2" />
     </configuration>
-    <configuration name="gen_defs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="library" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/python/libstp_api" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/python/libstp_api/gen_defs.py" />
-      <option name="PARAMETERS" value="../resources/config.yml" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
+    <configuration name="deploy.sh" type="ShConfigurationType" temporary="true">
+      <option name="SCRIPT_TEXT" value="" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="$PROJECT_DIR$/deploy.sh" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="/usr/bin/env" />
+      <option name="INTERPRETER_OPTIONS" value="bash" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="true" />
+      <envs />
       <method v="2" />
     </configuration>
     <list>
@@ -592,6 +901,7 @@
       <item itemvalue="CMake Application.kinematics_differential" />
       <item itemvalue="CMake Application.kinematics_mecanum" />
       <item itemvalue="CMake Application.lapack" />
+      <item itemvalue="CMake Application.lcm" />
       <item itemvalue="CMake Application.lcm-buftest-receiver" />
       <item itemvalue="CMake Application.lcm-buftest-sender" />
       <item itemvalue="CMake Application.lcm-example" />
@@ -606,7 +916,6 @@
       <item itemvalue="CMake Application.lcm-test-types-c.sources" />
       <item itemvalue="CMake Application.lcm-test-types-cpp.sources" />
       <item itemvalue="CMake Application.lcm-tester" />
-      <item itemvalue="CMake Application.lcm" />
       <item itemvalue="CMake Application.lcm_use_file" />
       <item itemvalue="CMake Application.libstp_async" />
       <item itemvalue="CMake Application.libstp_drive" />
@@ -633,15 +942,21 @@
       <item itemvalue="Google Test.test-c-udpm_test" />
       <item itemvalue="Google Test.test-cpp-client" />
       <item itemvalue="Google Test.test-cpp-memq_test" />
-      <item itemvalue="Python.defs" />
-      <item itemvalue="Python.gen_defs" />
+      <item itemvalue="Shell Script.deploy.sh" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.gen_defs" />
-        <item itemvalue="Python.defs" />
+        <item itemvalue="Shell Script.deploy.sh" />
       </list>
     </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-3aa1da707db6-JavaScript-PY-252.27397.106" />
+        <option value="bundled-python-sdk-4e2b1448bda8-9a97661f3031-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.27397.106" />
+      </set>
+    </attachedChunks>
   </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
@@ -669,22 +984,20 @@
       <workItem from="1759990948335" duration="9035000" />
       <workItem from="1760079200910" duration="6359000" />
       <workItem from="1760119881120" duration="30000" />
-      <workItem from="1760162026946" duration="19633000" />
-      <workItem from="1760335839998" duration="6272000" />
-      <workItem from="1760593893863" duration="9171000" />
-      <workItem from="1760715797696" duration="571000" />
-      <workItem from="1760939047965" duration="123000" />
-      <workItem from="1760939410122" duration="8000" />
-      <workItem from="1760943108267" duration="4168000" />
-      <workItem from="1761199293539" duration="9008000" />
-      <workItem from="1761215015758" duration="1246000" />
-      <workItem from="1761310538104" duration="2429000" />
-      <workItem from="1761675359362" duration="716000" />
-      <workItem from="1762153601906" duration="9527000" />
-      <workItem from="1762264610321" duration="3007000" />
-      <workItem from="1762678484716" duration="6415000" />
-      <workItem from="1762758198808" duration="5482000" />
-      <workItem from="1763018415113" duration="6754000" />
+      <workItem from="1760162026946" duration="19617000" />
+      <workItem from="1760337914824" duration="161000" />
+      <workItem from="1760594275354" duration="8161000" />
+      <workItem from="1760632447925" duration="8416000" />
+      <workItem from="1760939463312" duration="3009000" />
+      <workItem from="1761199816349" duration="7588000" />
+      <workItem from="1761313727245" duration="1292000" />
+      <workItem from="1763364102705" duration="2725000" />
+      <workItem from="1763473999089" duration="809000" />
+      <workItem from="1763621923589" duration="4960000" />
+      <workItem from="1763638194013" duration="69000" />
+      <workItem from="1763656685987" duration="16000" />
+      <workItem from="1763710672487" duration="10061000" />
+      <workItem from="1764069076086" duration="5642000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -718,71 +1031,15 @@
       <option name="project" value="LOCAL" />
       <updated>1760086277319</updated>
     </task>
-    <task id="LOCAL-00005" summary="Add mission module with logging and LCM integration; refactor motor and velocity controller classes">
+    <task id="LOCAL-00005" summary="rewriting api">
       <option name="closed" value="true" />
-      <created>1760191403686</created>
+      <created>1760602094152</created>
       <option name="number" value="00005" />
       <option name="presentableId" value="LOCAL-00005" />
       <option name="project" value="LOCAL" />
-      <updated>1760191403686</updated>
+      <updated>1760602094152</updated>
     </task>
-    <task id="LOCAL-00006" summary="Enhance logging and configuration for drive system; refactor motor and velocity controller classes to improve clarity and functionality">
-      <option name="closed" value="true" />
-      <created>1760596020726</created>
-      <option name="number" value="00006" />
-      <option name="presentableId" value="LOCAL-00006" />
-      <option name="project" value="LOCAL" />
-      <updated>1760596020726</updated>
-    </task>
-    <task id="LOCAL-00007" summary="Add motion module with drive straight functionality and IMU integration; enhance bindings for Python">
-      <option name="closed" value="true" />
-      <created>1760603348470</created>
-      <option name="number" value="00007" />
-      <option name="presentableId" value="LOCAL-00007" />
-      <option name="project" value="LOCAL" />
-      <updated>1760603348470</updated>
-    </task>
-    <task id="LOCAL-00008" summary="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader">
-      <option name="closed" value="true" />
-      <created>1760947524662</created>
-      <option name="number" value="00008" />
-      <option name="presentableId" value="LOCAL-00008" />
-      <option name="project" value="LOCAL" />
-      <updated>1760947524662</updated>
-    </task>
-    <task id="LOCAL-00009" summary="Add odometry module with IMU integration; enhance Python bindings and refactor drive motion classes">
-      <option name="closed" value="true" />
-      <created>1761204427373</created>
-      <option name="number" value="00009" />
-      <option name="presentableId" value="LOCAL-00009" />
-      <option name="project" value="LOCAL" />
-      <updated>1761204427373</updated>
-    </task>
-    <task id="LOCAL-00010" summary="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results">
-      <option name="closed" value="true" />
-      <created>1762680127687</created>
-      <option name="number" value="00010" />
-      <option name="presentableId" value="LOCAL-00010" />
-      <option name="project" value="LOCAL" />
-      <updated>1762680127687</updated>
-    </task>
-    <task id="LOCAL-00011" summary="Add step execution framework with parallel and sequential execution; implement drive and turn motion classes">
-      <option name="closed" value="true" />
-      <created>1762715433365</created>
-      <option name="number" value="00011" />
-      <option name="presentableId" value="LOCAL-00011" />
-      <option name="project" value="LOCAL" />
-      <updated>1762715433365</updated>
-    </task>
-    <task id="LOCAL-00012" summary="Refactor motion classes and enhance odometry: remove unused yaw computations, add distance measurements from origin, and implement wait step for asynchronous execution">
-      <option name="closed" value="true" />
-      <created>1762763720207</created>
-      <option name="number" value="00012" />
-      <option name="presentableId" value="LOCAL-00012" />
-      <option name="project" value="LOCAL" />
-      <updated>1762763720207</updated>
-    </task>
-    <option name="localTasksCounter" value="13" />
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -809,14 +1066,15 @@
     <MESSAGE value="Add Docker support for building and deploying Python library" />
     <MESSAGE value="Rename config file to raccoon.project.yml, update Python script usage, adjust Python version requirement, and enhance logging initialization" />
     <MESSAGE value="Implement kinematics for differential and mecanum drive systems, including command application and state estimation; enhance motor control with limits and hard stop functionality" />
-    <MESSAGE value="Add mission module with logging and LCM integration; refactor motor and velocity controller classes" />
-    <MESSAGE value="Enhance logging and configuration for drive system; refactor motor and velocity controller classes to improve clarity and functionality" />
-    <MESSAGE value="Add motion module with drive straight functionality and IMU integration; enhance bindings for Python" />
-    <MESSAGE value="Update IMU subscription topic from 'orientation' to 'quaternion' in LcmReader" />
-    <MESSAGE value="Add odometry module with IMU integration; enhance Python bindings and refactor drive motion classes" />
-    <MESSAGE value="Add IMU odometry configuration options; refactor drive and kinematics interfaces to return motor command results" />
-    <MESSAGE value="Add step execution framework with parallel and sequential execution; implement drive and turn motion classes" />
-    <MESSAGE value="Refactor motion classes and enhance odometry: remove unused yaw computations, add distance measurements from origin, and implement wait step for asynchronous execution" />
-    <option name="LAST_COMMIT_MESSAGE" value="Refactor motion classes and enhance odometry: remove unused yaw computations, add distance measurements from origin, and implement wait step for asynchronous execution" />
+    <MESSAGE value="rewriting api" />
+    <option name="LAST_COMMIT_MESSAGE" value="rewriting api" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
   </component>
 </project>

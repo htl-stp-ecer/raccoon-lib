@@ -20,5 +20,6 @@ void init_drive(const py::module& m)
         .def("update", &libstp::drive::Drive::update, py::arg("dt"))
         .def("estimate_state", &libstp::drive::Drive::estimateState)
         .def("wheel_count", &libstp::drive::Drive::wheelCount)
+        .def("soft_stop", &libstp::drive::Drive::softStop)
         .def("hard_stop", &libstp::drive::Drive::hardStop);
 }

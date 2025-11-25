@@ -27,6 +27,14 @@ namespace libstp::drive
         void resetController();
         void brake();
 
+        /**
+         * @brief Reset encoder position tracking to prevent stale deltas
+         *
+         * Call this when resetting odometry to invalidate the previous encoder position.
+         * This prevents incorrect velocity calculations on the next update.
+         */
+        void resetEncoderTracking();
+
         hal::motor::Motor& motor();
         [[nodiscard]] const hal::motor::Motor& motor() const;
 

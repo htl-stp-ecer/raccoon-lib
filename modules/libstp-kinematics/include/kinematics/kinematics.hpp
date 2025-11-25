@@ -34,5 +34,13 @@ namespace libstp::kinematics
          *         false if lateral motion requires rotation (e.g., differential drive)
          */
         [[nodiscard]] virtual bool supportsLateralMotion() const = 0;
+
+        /**
+         * @brief Reset encoder/BEMF counters to prepare for new odometry origin
+         *
+         * This should be called when odometry is reset to prevent stale counter values
+         * from causing incorrect velocity/position estimates in the next update cycle.
+         */
+        virtual void resetEncoders() = 0;
     };
 }

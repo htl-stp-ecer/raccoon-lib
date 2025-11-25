@@ -191,6 +191,13 @@ void MotorAdapter::brake()
     SPDLOG_INFO("MotorAdapter::brake port={} last_u_cmd={} reset controller", motor_->port, last_u_cmd_);
 }
 
+void MotorAdapter::resetEncoderTracking()
+{
+    pos_prev_init_ = false;
+    w_meas_filt_ = 0.0;
+    SPDLOG_INFO("MotorAdapter::resetEncoderTracking port={} - cleared position history", motor_ ? motor_->port : -1);
+}
+
 
 libstp::hal::motor::Motor& MotorAdapter::motor() { return *motor_; }
 const libstp::hal::motor::Motor& MotorAdapter::motor() const { return *motor_; }

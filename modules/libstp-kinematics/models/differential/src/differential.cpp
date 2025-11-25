@@ -148,4 +148,11 @@ namespace libstp::kinematics::differential
     {
         return false; // Differential drive cannot strafe
     }
+
+    void DifferentialKinematics::resetEncoders()
+    {
+        left_motor_.adapter.resetEncoderTracking();
+        right_motor_.adapter.resetEncoderTracking();
+        SPDLOG_INFO("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
+    }
 }

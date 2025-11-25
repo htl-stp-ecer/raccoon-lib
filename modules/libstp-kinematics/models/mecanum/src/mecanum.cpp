@@ -77,10 +77,11 @@ namespace libstp::kinematics::mecanum
 
         const double L = (m_wheelbase + m_trackWidth) / 2.0;
 
-        const double w_fl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
-        const double w_fr = (cmd.vx + cmd.vy + L * cmd.wz) / m_wheelRadius;
-        const double w_bl = (cmd.vx + cmd.vy - L * cmd.wz) / m_wheelRadius;
-        const double w_br = (cmd.vx - cmd.vy + L * cmd.wz) / m_wheelRadius;
+        // Body frame convention: +x forward, +y to the right (matches odometry/motion modules)
+        const double w_fl = (cmd.vx + cmd.vy - L * cmd.wz) / m_wheelRadius;
+        const double w_fr = (cmd.vx - cmd.vy + L * cmd.wz) / m_wheelRadius;
+        const double w_bl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
+        const double w_br = (cmd.vx + cmd.vy + L * cmd.wz) / m_wheelRadius;
 
         SPDLOG_TRACE(
             "MecanumKinematics wheel speeds raw fl={} fr={} bl={} br={}",
@@ -161,8 +162,9 @@ namespace libstp::kinematics::mecanum
 
         const double L = (m_wheelbase + m_trackWidth) / 2.0;
 
+        // Body frame convention: +x forward, +y to the right
         const double vx = (w_fl + w_fr + w_bl + w_br) * m_wheelRadius / 4.0;
-        const double vy = (-w_fl + w_fr + w_bl - w_br) * m_wheelRadius / 4.0;
+        const double vy = (w_fl - w_fr - w_bl + w_br) * m_wheelRadius / 4.0;
         const double w = (-w_fl + w_fr - w_bl + w_br) * m_wheelRadius / (4.0 * L);
 
         SPDLOG_TRACE(
@@ -200,5 +202,14 @@ namespace libstp::kinematics::mecanum
     bool MecanumKinematics::supportsLateralMotion() const
     {
         return true; // Mecanum drive can strafe
+    }
+
+    void MecanumKinematics::resetEncoders()
+    {
+        front_left_motor_.adapter.resetEncoderTracking();
+        front_right_motor_.adapter.resetEncoderTracking();
+        back_left_motor_.adapter.resetEncoderTracking();
+        back_right_motor_.adapter.resetEncoderTracking();
+        SPDLOG_INFO("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
     }
 }
