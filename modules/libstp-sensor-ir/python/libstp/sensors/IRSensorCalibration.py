@@ -1,8 +1,8 @@
 import math
 import time
 
-from libstp.sensorIR import IRSensor
-from lbistp.button import Button
+from libstp.sensor_ir import IRSensor
+from libstp.button import Button
 
 class IRSensorCalibration:
     def calibrateSensors(self, irsensors):

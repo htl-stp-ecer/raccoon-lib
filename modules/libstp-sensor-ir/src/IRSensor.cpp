@@ -4,6 +4,9 @@
 
 #include "IRSensor.hpp"
 
+#include <numeric>
+
+#include "spdlog/spdlog.h"
 using namespace libstp::sensors::ir;
 
 IRSensor::IRSensor(const int &port, float calibrationFactor) : AnalogSensor(port),

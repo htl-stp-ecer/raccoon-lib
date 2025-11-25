@@ -3,21 +3,29 @@
 //
 #include "../include/button.hpp"
 
-#include <bits/this_thread_sleep.h>
+#include <chrono>
+#include <thread>
 
 namespace libstp::button {
+    hal::digital::DigitalSensor* Button::digital_sensor_ = nullptr;
 
-    void Button::setDigital(const hal::digital::DigitalSensor &sensor) {
-        digital_sensor_ = sensor;
+    void Button::setDigital(int port) {
+        if (digital_sensor_ != nullptr) {
+            delete digital_sensor_;
+        }
+        digital_sensor_ = new hal::digital::DigitalSensor(port);
     }
 
     bool Button::isPressed() {
-        return digital_sensor_.read();
+        if (digital_sensor_ == nullptr) {
+            return false;
+        }
+        return digital_sensor_->read();
     }
 
     void Button::waitForButtonPress() {
         while (!isPressed()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<std::chrono::milliseconds::rep>(10)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 }
