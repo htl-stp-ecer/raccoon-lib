@@ -28,6 +28,9 @@ namespace libstp::sensors::ir {
         bool isOnWhite() const;
 
         virtual bool isOnBlack();
+
+        float probabilityOfBlack();
+        float probabilityOfWhite();
     };
 
     void calibrateLightSensors(const std::vector<IRSensor*>& lightSensors);
