@@ -2,8 +2,10 @@
 // Created by tobias on 10/9/25.
 //
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include "kinematics/differential/differential.hpp"
+#include "calibration/calibration.hpp"
 #include "hal/Motor.hpp"
 
 namespace py = pybind11;
@@ -15,6 +17,7 @@ PYBIND11_MODULE(kinematics_differential, m)
     // Ensure dependent base/types are registered before referencing them
     py::module_::import("libstp.kinematics");
     py::module_::import("libstp.hal");
+    py::module_::import("libstp.calibration");
 
     py::class_<libstp::kinematics::differential::DifferentialKinematics, libstp::kinematics::IKinematics>(
             m, "DifferentialKinematics")
@@ -30,5 +33,13 @@ PYBIND11_MODULE(kinematics_differential, m)
         .def("apply_command", &libstp::kinematics::differential::DifferentialKinematics::applyCommand,
              py::arg("cmd"), py::arg("dt"))
         .def("estimate_state", &libstp::kinematics::differential::DifferentialKinematics::estimateState)
-        .def("hard_stop", &libstp::kinematics::differential::DifferentialKinematics::hardStop);
+        .def("hard_stop", &libstp::kinematics::differential::DifferentialKinematics::hardStop)
+        .def("calibrate_motors",
+             py::overload_cast<>(&libstp::kinematics::differential::DifferentialKinematics::calibrateMotors),
+             "Calibrate both motors with default configuration")
+        .def("calibrate_motors",
+             py::overload_cast<const libstp::drive::CalibrationConfig&>(
+                 &libstp::kinematics::differential::DifferentialKinematics::calibrateMotors),
+             py::arg("config"),
+             "Calibrate both motors with custom configuration");
 }

@@ -48,7 +48,7 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
     {
         scaled = -scaled;
     }
-    SPDLOG_INFO(
+    SPDLOG_TRACE(
         "Wombat Motor port={} setSpeed percent={} scaled={} inverted={}",
         port,
         percent,

@@ -3,6 +3,7 @@
 //
 
 #include "kinematics/differential/differential.hpp"
+#include "calibration/calibration.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
@@ -154,5 +155,49 @@ namespace libstp::kinematics::differential
         left_motor_.adapter.resetEncoderTracking();
         right_motor_.adapter.resetEncoderTracking();
         SPDLOG_INFO("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
+    }
+
+    std::vector<drive::CalibrationResult> DifferentialKinematics::calibrateMotors()
+    {
+        return calibrateMotors(drive::CalibrationConfig{});
+    }
+
+    std::vector<drive::CalibrationResult> DifferentialKinematics::calibrateMotors(
+        const drive::CalibrationConfig& config)
+    {
+        SPDLOG_INFO("=== Starting DifferentialKinematics motor calibration ===");
+
+        std::vector<drive::CalibrationResult> results;
+
+        // Calibrate left motor
+        SPDLOG_INFO("Calibrating left motor...");
+        drive::CalibrationResult left_result = left_motor_.adapter.calibrate(config);
+        results.push_back(left_result);
+
+        if (left_result.success) {
+            SPDLOG_INFO("Left motor calibration successful");
+        } else {
+            SPDLOG_ERROR("Left motor calibration failed: {}", left_result.error_message);
+        }
+
+        // Wait a bit between calibrations
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // Calibrate right motor
+        SPDLOG_INFO("Calibrating right motor...");
+        drive::CalibrationResult right_result = right_motor_.adapter.calibrate(config);
+        results.push_back(right_result);
+
+        if (right_result.success) {
+            SPDLOG_INFO("Right motor calibration successful");
+        } else {
+            SPDLOG_ERROR("Right motor calibration failed: {}", right_result.error_message);
+        }
+
+        SPDLOG_INFO("=== DifferentialKinematics motor calibration completed ===");
+        SPDLOG_INFO("Success rate: {}/2 motors",
+                    (left_result.success ? 1 : 0) + (right_result.success ? 1 : 0));
+
+        return results;
     }
 }

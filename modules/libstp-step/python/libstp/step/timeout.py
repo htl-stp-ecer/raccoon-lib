@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Union
+from typing import Union
 
 from . import Step, StepProtocol
 
@@ -35,7 +35,13 @@ class Timeout(Step):
         self.timeout_seconds = float(timeout_seconds)
         self.result = None
 
-    async def run_step(self, robot) -> None:
+    def _generate_signature(self) -> str:
+        return (
+            f"Timeout(step={self.step.__class__.__name__}, "
+            f"seconds={self.timeout_seconds:.3f})"
+        )
+
+    async def _execute_step(self, robot) -> None:
         """
         Execute the wrapped step with a timeout.
         
@@ -46,8 +52,6 @@ class Timeout(Step):
         Returns:
             TimeoutResult: The result of the execution
         """
-        await super().run_step(robot)
-
         try:
             # Try to execute the step with a timeout
             await asyncio.wait_for(

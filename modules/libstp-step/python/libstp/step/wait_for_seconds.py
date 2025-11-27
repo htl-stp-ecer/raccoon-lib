@@ -1,5 +1,6 @@
 import asyncio
-from typing import Any, Union
+from typing import Union
+
 from . import Step
 
 class WaitForSeconds(Step):
@@ -24,7 +25,10 @@ class WaitForSeconds(Step):
 
         self.seconds = float(seconds)
 
-    async def run_step(self, robot) -> None:
+    def _generate_signature(self) -> str:
+        return f"Wait(seconds={self.seconds:.3f})"
+
+    async def _execute_step(self, robot) -> None:
         """
         Wait for the specified duration.
         
@@ -32,8 +36,6 @@ class WaitForSeconds(Step):
             device: The device to run on (not used in this step)
             definitions: Additional definitions needed for execution
         """
-        await super().run_step(robot)
-
         robot.drive.hard_stop()
 
         # Simply wait for the specified duration

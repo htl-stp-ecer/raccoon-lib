@@ -1,9 +1,8 @@
 import asyncio
 from libstp.motion import DriveStraightMotion, DriveStraightConfig
 from libstp.robot.api import GenericRobot
-from typing import Any, Callable, Union, Optional
 
-from . import Step, StepProtocol
+from . import Step
 
 
 class Drive(Step):
@@ -20,13 +19,18 @@ class Drive(Step):
         super().__init__()
         self.config = config
 
-    async def run_step(self, robot: GenericRobot) -> None:
+    def _generate_signature(self) -> str:
+        return (
+            f"Drive(distance_m={self.config.distance_m:.3f}, "
+            f"speed={self.config.max_speed_mps:.3f})"
+        )
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
         """
         Run the Drive step.
 
         :param robot: The robot instance to interact with hardware
         """
-        await super().run_step(robot)
         motion = DriveStraightMotion(robot.drive, robot.odometry, self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 

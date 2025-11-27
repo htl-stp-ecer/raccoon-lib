@@ -16,13 +16,18 @@ class Strafe(Step):
         super().__init__()
         self.config = config
 
-    async def run_step(self, robot: GenericRobot) -> None:
+    def _generate_signature(self) -> str:
+        return (
+            f"Strafe(distance_m={self.config.target_distance_m:.3f}, "
+            f"speed={self.config.max_speed_mps:.3f})"
+        )
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
         """
         Run the Strafe step.
 
         :param robot: The robot instance to interact with hardware
         """
-        await super().run_step(robot)
         motion = StrafeMotion(robot.drive, robot.odometry, self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 

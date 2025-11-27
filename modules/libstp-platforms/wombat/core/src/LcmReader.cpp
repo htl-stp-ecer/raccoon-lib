@@ -4,6 +4,7 @@
 #include <regex>
 #include <chrono>
 #include <thread>
+#include <spdlog/spdlog.h>
 
 using namespace platform::wombat::core;
 
@@ -90,14 +91,14 @@ LcmReader::LcmReader() {
     listener_thread_ = std::thread(&LcmReader::listenLoop, this);
 
     // Request initial data dump to populate caches quickly
-    std::cout << "[LcmReader] Requesting initial data dump..." << std::endl;
+    SPDLOG_DEBUG("[LcmReader] Requesting initial data dump...");
     LcmDataWriter::instance().requestDataDump();
-    std::cout << "[LcmReader] Data dump request sent" << std::endl;
+    SPDLOG_DEBUG("[LcmReader] Data dump request sent");
 
     // Reset BEMF counters to prevent stale values from previous runs
-    std::cout << "[LcmReader] Resetting BEMF counters..." << std::endl;
+    SPDLOG_DEBUG("[LcmReader] Resetting BEMF counters...");
     LcmDataWriter::instance().resetBemfCounters();
-    std::cout << "[LcmReader] BEMF counter reset sent" << std::endl;
+    SPDLOG_DEBUG("[LcmReader] BEMF counter reset sent");
 }
 
 LcmReader::~LcmReader() {
@@ -108,15 +109,15 @@ LcmReader::~LcmReader() {
 }
 
 void LcmReader::listenLoop() {
-    std::cout << "[LcmReader] Listen loop started" << std::endl;
+    SPDLOG_DEBUG("[LcmReader] Listen loop started");
     while (running_) {
         // Use handleTimeout with a short timeout to allow checking running_ flag
         int result = lcm_.handleTimeout(100);
         if (result < 0) {
-            std::cerr << "[LcmReader] Error in handleTimeout" << std::endl;
+            SPDLOG_ERROR("[LcmReader] Error in LCM handleTimeout");
         }
     }
-    std::cout << "[LcmReader] Listen loop stopped" << std::endl;
+    SPDLOG_DEBUG("[LcmReader] Listen loop exiting");
 }
 
 // Message handlers with channel parsing
@@ -187,7 +188,6 @@ void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel
         int idx = std::stoi(match[1].str());
         std::lock_guard<std::mutex> lock(cache_mutex_);
         bemf_cache_[idx] = msg->value;
-        std::cout << "[LcmReader] BEMF " << idx << " = " << msg->value << std::endl;
     }
 }
 
@@ -208,7 +208,6 @@ void LcmReader::handleDigital(const lcm::ReceiveBuffer*, const std::string& chan
         int port = std::stoi(match[1].str());
         std::lock_guard<std::mutex> lock(cache_mutex_);
         digital_cache_[port] = msg->value;
-        std::cout << "[LcmReader] Digital " << port << " = " << msg->value << std::endl;
     }
 }
 
@@ -311,6 +310,6 @@ bool LcmReader::waitForImuReady(int timeout_ms) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    std::cout << "[LcmReader] IMU orientation data received" << std::endl;
+    SPDLOG_TRACE("[LcmReader] IMU orientation data received");
     return true;
 }

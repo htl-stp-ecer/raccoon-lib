@@ -17,13 +17,18 @@ class Turn(Step):
         super().__init__()
         self.config = config
 
-    async def run_step(self, robot: GenericRobot) -> None:
+    def _generate_signature(self) -> str:
+        return (
+            f"Turn(angle_deg={math.degrees(self.config.target_angle_rad):.1f}, "
+            f"speed={self.config.max_angular_rate:.3f})"
+        )
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
         """
         Run the Turn step.
 
         :param robot: The robot instance to interact with hardware
         """
-        await super().run_step(robot)
         motion = TurnMotion(robot.drive, robot.odometry, self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 
