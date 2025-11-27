@@ -9,6 +9,10 @@
 
 namespace libstp::drive
 {
+    // Forward declaration
+    struct CalibrationConfig;
+    struct CalibrationResult;
+
     class MotorAdapter
     {
     public:
@@ -39,6 +43,15 @@ namespace libstp::drive
         [[nodiscard]] const hal::motor::Motor& motor() const;
 
         void updateEncoderVelocity(double dt);
+
+        // Calibration methods
+        CalibrationResult calibrate(const CalibrationConfig& config);
+        CalibrationResult calibrate(); // Overload with default config
+        void updateCalibration(const foundation::MotorCalibration& cal);
+
+        // Direct access to controller for calibration
+        VelocityController& getController() { return controller_; }
+        [[nodiscard]] const VelocityController& getController() const { return controller_; }
 
     private:
         hal::motor::Motor* motor_{nullptr};

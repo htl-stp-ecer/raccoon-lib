@@ -36,7 +36,10 @@ class Parallel(Step):
         self.steps: List[Step] = steps
         self._last_completed_step: Optional[Step] = None
 
-    async def run_step(self, robot: GenericRobot) -> None:
+    def _generate_signature(self) -> str:
+        return f"Parallel(groups={len(self.steps)})"
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
         """
         Execute all steps in parallel, waiting for all to complete.
         Can only be run once.
@@ -47,8 +50,6 @@ class Parallel(Step):
         Raises:
             RuntimeError: If attempting to run this sequence more than once
         """
-        await super().run_step(robot)
-
         if not self.steps:
             return
 

@@ -50,7 +50,7 @@ def _install_shutdown_hooks() -> None:
     _HOOKS_INSTALLED = True
 
     atexit.register(_disable_all_motors)
-    debug("Registered atexit shutdown hook to disable all motors")
+    print("Registered atexit shutdown hook to disable all motors")
 
     for sig_name in ("SIGINT", "SIGTERM"):
         sig = getattr(signal, sig_name, None)
@@ -70,7 +70,7 @@ def _install_shutdown_hooks() -> None:
             _forward_signal(signum, frame)
 
         signal.signal(sig, handler)
-        debug(f"Registered signal handler for {sig_name}")
+        print(f"Registered signal handler for {sig_name}")
 
 
 _install_shutdown_hooks()

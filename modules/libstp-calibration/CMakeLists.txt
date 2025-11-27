@@ -1,0 +1,1 @@
+register_libstp_module(calibration "FALSE" "foundation;drive;hal")

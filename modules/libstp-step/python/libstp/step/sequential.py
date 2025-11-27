@@ -1,4 +1,4 @@
-from typing import List, Any, Optional
+from typing import List, Optional
 
 from . import Step, StepProtocol
 
@@ -30,7 +30,12 @@ class Sequential(Step):
         self.steps: List[Step] = steps
         self._last_internal_step: Optional[Step] = steps[-1] if steps else None
 
-    async def run_step(self, robot) -> None:
+    def _generate_signature(self) -> str:
+        first = self.steps[0].__class__.__name__ if self.steps else "None"
+        last = self.steps[-1].__class__.__name__ if self.steps else "None"
+        return f"Sequential(count={len(self.steps)}, first={first}, last={last})"
+
+    async def _execute_step(self, robot) -> None:
         """
         Execute each step in sequence, passing device and definitions to each step.
         Can only be run once.
@@ -42,10 +47,6 @@ class Sequential(Step):
         Raises:
             RuntimeError: If attempting to run this sequence more than once
         """
-        # Call parent's run_step which will check if this step has already run
-        # and set the _has_run flag to True
-        await super().run_step(robot)
-        
         # Now execute all child steps
         for i, step in enumerate(self.steps):
             await step.run_step(robot)
@@ -53,4 +54,3 @@ class Sequential(Step):
 def seq(steps: List[Step]) -> Sequential:
     """Create a sequential sequence of steps"""
     return Sequential(steps)
-

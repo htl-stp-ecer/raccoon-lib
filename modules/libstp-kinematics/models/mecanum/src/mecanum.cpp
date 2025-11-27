@@ -3,6 +3,7 @@
 //
 
 #include "kinematics/mecanum/mecanum.hpp"
+#include "calibration/calibration.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
@@ -211,5 +212,75 @@ namespace libstp::kinematics::mecanum
         back_left_motor_.adapter.resetEncoderTracking();
         back_right_motor_.adapter.resetEncoderTracking();
         SPDLOG_INFO("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
+    }
+
+    std::vector<drive::CalibrationResult> MecanumKinematics::calibrateMotors()
+    {
+        return calibrateMotors(drive::CalibrationConfig{});
+    }
+
+    std::vector<drive::CalibrationResult> MecanumKinematics::calibrateMotors(
+        const drive::CalibrationConfig& config)
+    {
+        SPDLOG_INFO("=== Starting MecanumKinematics motor calibration ===");
+
+        std::vector<drive::CalibrationResult> results;
+
+        // Calibrate front left motor
+        SPDLOG_INFO("Calibrating front left motor...");
+        drive::CalibrationResult fl_result = front_left_motor_.adapter.calibrate(config);
+        results.push_back(fl_result);
+
+        if (fl_result.success) {
+            SPDLOG_INFO("Front left motor calibration successful");
+        } else {
+            SPDLOG_ERROR("Front left motor calibration failed: {}", fl_result.error_message);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // Calibrate front right motor
+        SPDLOG_INFO("Calibrating front right motor...");
+        drive::CalibrationResult fr_result = front_right_motor_.adapter.calibrate(config);
+        results.push_back(fr_result);
+
+        if (fr_result.success) {
+            SPDLOG_INFO("Front right motor calibration successful");
+        } else {
+            SPDLOG_ERROR("Front right motor calibration failed: {}", fr_result.error_message);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // Calibrate back left motor
+        SPDLOG_INFO("Calibrating back left motor...");
+        drive::CalibrationResult bl_result = back_left_motor_.adapter.calibrate(config);
+        results.push_back(bl_result);
+
+        if (bl_result.success) {
+            SPDLOG_INFO("Back left motor calibration successful");
+        } else {
+            SPDLOG_ERROR("Back left motor calibration failed: {}", bl_result.error_message);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+        // Calibrate back right motor
+        SPDLOG_INFO("Calibrating back right motor...");
+        drive::CalibrationResult br_result = back_right_motor_.adapter.calibrate(config);
+        results.push_back(br_result);
+
+        if (br_result.success) {
+            SPDLOG_INFO("Back right motor calibration successful");
+        } else {
+            SPDLOG_ERROR("Back right motor calibration failed: {}", br_result.error_message);
+        }
+
+        SPDLOG_INFO("=== MecanumKinematics motor calibration completed ===");
+        int success_count = (fl_result.success ? 1 : 0) + (fr_result.success ? 1 : 0) +
+                           (bl_result.success ? 1 : 0) + (br_result.success ? 1 : 0);
+        SPDLOG_INFO("Success rate: {}/4 motors", success_count);
+
+        return results;
     }
 }

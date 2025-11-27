@@ -2,6 +2,7 @@
 // Created by tobias on 9/8/25.
 //
 #include "drive/motor_adapter.hpp"
+#include "calibration/calibration.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
 #include <cmath>
@@ -201,3 +202,65 @@ void MotorAdapter::resetEncoderTracking()
 
 libstp::hal::motor::Motor& MotorAdapter::motor() { return *motor_; }
 const libstp::hal::motor::Motor& MotorAdapter::motor() const { return *motor_; }
+
+CalibrationResult MotorAdapter::calibrate()
+{
+    return calibrate(CalibrationConfig{});
+}
+
+CalibrationResult MotorAdapter::calibrate(const CalibrationConfig& config)
+{
+    if (!motor_)
+    {
+        CalibrationResult result;
+        result.success = false;
+        result.error_message = "Cannot calibrate: null motor pointer";
+        SPDLOG_ERROR("{}", result.error_message);
+        return result;
+    }
+
+    SPDLOG_INFO("Starting calibration for motor on port {}", motor_->port);
+
+    // Create calibrator and run calibration
+    MotorCalibrator calibrator(*motor_, config);
+    CalibrationResult result = calibrator.calibrate();
+
+    if (result.success)
+    {
+        // Apply the calibrated parameters
+        foundation::MotorCalibration new_cal;
+        new_cal.pid = result.pid;
+        new_cal.ff = result.ff;
+        // Preserve other calibration parameters
+        new_cal.ticks_to_rad = motor_->getCalibration().ticks_to_rad;
+        new_cal.vel_lpf_alpha = motor_->getCalibration().vel_lpf_alpha;
+
+        updateCalibration(new_cal);
+        SPDLOG_INFO("Calibration completed successfully for motor on port {}", motor_->port);
+    }
+    else
+    {
+        SPDLOG_ERROR("Calibration failed for motor on port {}: {}",
+                    motor_->port, result.error_message);
+    }
+
+    return result;
+}
+
+void MotorAdapter::updateCalibration(const foundation::MotorCalibration& cal)
+{
+    if (!motor_)
+    {
+        SPDLOG_WARN("Cannot update calibration: null motor pointer");
+        return;
+    }
+
+    // Update the controller gains
+    controller_.setGains(cal.pid);
+    controller_.setFF(cal.ff);
+
+    SPDLOG_INFO("Updated calibration for motor on port {}: kp={:.3f}, ki={:.3f}, kd={:.3f}, kS={:.3f}, kV={:.3f}, kA={:.3f}",
+                motor_->port,
+                cal.pid.kp, cal.pid.ki, cal.pid.kd,
+                cal.ff.kS, cal.ff.kV, cal.ff.kA);
+}
