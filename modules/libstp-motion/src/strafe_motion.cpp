@@ -5,7 +5,7 @@
 #include <numbers>
 
 #include "foundation/types.hpp"
-#include "spdlog/spdlog.h"
+#include "foundation/logging.hpp"
 
 namespace libstp::motion
 {
@@ -45,7 +45,7 @@ namespace libstp::motion
         initial_heading_rad_ = odometry().getHeading();
         target_distance_m_ = cfg_.target_distance_m;
 
-        SPDLOG_INFO("StrafeMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s",
+        LIBSTP_LOG_INFO("StrafeMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s",
                     cfg_.target_distance_m, cfg_.max_speed_mps);
     }
 
@@ -85,7 +85,7 @@ namespace libstp::motion
         // Compute heading error (maintain initial heading)
         const double heading_error = odometry().getHeadingError(initial_heading_rad_);
 
-        SPDLOG_INFO("StrafeMotion update: current_lateral = {:.3f} m, target = {:.3f} m, lateral_error = {:.3f} m, heading_error = {:.3f} rad",
+        LIBSTP_LOG_INFO("StrafeMotion update: current_lateral = {:.3f} m, target = {:.3f} m, lateral_error = {:.3f} m, heading_error = {:.3f} rad",
                     current_lateral_m, target_distance_m_, lateral_error, heading_error);
 
         // Check if we've reached the target distance
@@ -95,7 +95,7 @@ namespace libstp::motion
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
-            SPDLOG_INFO("StrafeMotion completed: final error = {:.3f} m", lateral_error);
+            LIBSTP_LOG_INFO("StrafeMotion completed: final error = {:.3f} m", lateral_error);
             return;
         }
 
@@ -110,7 +110,7 @@ namespace libstp::motion
         {
             const double direction = (lateral_error >= 0.0) ? 1.0 : -1.0;
             vy_cmd = direction * cfg_.min_speed_mps;
-            SPDLOG_INFO("StrafeMotion: Applying minimum speed: vy = {:.3f} m/s", vy_cmd);
+            LIBSTP_LOG_INFO("StrafeMotion: Applying minimum speed: vy = {:.3f} m/s", vy_cmd);
         }
 
         // Apply scaling from previous saturation feedback
@@ -119,7 +119,7 @@ namespace libstp::motion
         // Compute heading correction to maintain straight strafe
         const double omega_correction = cfg_.heading_kp * heading_error;
 
-        SPDLOG_INFO("StrafeMotion: vy_cmd = {:.3f} m/s, scaled = {:.3f} m/s (scale={:.3f}), omega_correction = {:.3f} rad/s",
+        LIBSTP_LOG_INFO("StrafeMotion: vy_cmd = {:.3f} m/s, scaled = {:.3f} m/s (scale={:.3f}), omega_correction = {:.3f} rad/s",
                     vy_cmd, vy_cmd_scaled, speed_scale_, omega_correction);
 
         // Send command: no forward motion, lateral strafe, with heading correction
@@ -135,7 +135,7 @@ namespace libstp::motion
                 cfg_.saturation_min_scale,
                 speed_scale_ * cfg_.saturation_derating_factor);
 
-            SPDLOG_INFO("StrafeMotion: Saturation detected (mask=0x{:X}) -> speed_scale {:.3f}->{:.3f}",
+            LIBSTP_LOG_INFO("StrafeMotion: Saturation detected (mask=0x{:X}) -> speed_scale {:.3f}->{:.3f}",
                         motor_cmd.saturation_mask, prev_scale, speed_scale_);
         }
         else
@@ -146,7 +146,7 @@ namespace libstp::motion
 
             if (prev_scale != speed_scale_)
             {
-                SPDLOG_INFO("StrafeMotion: Recovery -> speed_scale {:.3f}->{:.3f}",
+                LIBSTP_LOG_INFO("StrafeMotion: Recovery -> speed_scale {:.3f}->{:.3f}",
                             prev_scale, speed_scale_);
             }
         }

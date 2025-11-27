@@ -10,7 +10,7 @@ void libstp::hal::servo::Servo::registerServoPort(int port)
 {
     if (used_servo_ports.contains(port))
     {
-        SPDLOG_WARN("Servo port {} is already in use!", port);
+        LIBSTP_LOG_WARN("Servo port {} is already in use!", port);
         return;
     }
 

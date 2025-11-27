@@ -3,8 +3,8 @@
 //
 #include "hal/Servo.hpp"
 
+#include <spdlog/fmt/bundled/format.h>
 #include <stdexcept>
-#include <spdlog/fmt/fmt.h>
 
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
@@ -143,14 +143,14 @@ void libstp::servo::Servo::shake(const int centerPosition,
 
     if (amplitudeAdjusted)
     {
-        SPDLOG_WARN(
+        LIBSTP_LOG_WARN(
             "Requested amplitude of {} exceeds the maximum possible amplitude of {} for centerPosition {}. Amplitude has been adjusted accordingly.",
             amplitude, clampedAmplitude, clampedCenter);
     }
 
     if (clampedAmplitude == 0.0f || speedHz <= 0.0f)
     {
-        SPDLOG_WARN("Shake parameters are invalid. Servo will not be moved.");
+        LIBSTP_LOG_WARN("Shake parameters are invalid. Servo will not be moved.");
         setPosition(clampedCenter);
         return;
     }

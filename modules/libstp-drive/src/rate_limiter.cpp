@@ -33,19 +33,19 @@ void RateLimiter::setMaxRate(const double r)
     if (!speedRampsEnabled())
     {
         max_rate_ = 0.0;
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "RateLimiter::setMaxRate speed ramps disabled (requested max_rate={} ignored)",
             r);
         return;
     }
 
     max_rate_ = std::max(0.0, r);
-    SPDLOG_INFO("RateLimiter::setMaxRate max_rate={}", max_rate_);
+    LIBSTP_LOG_INFO("RateLimiter::setMaxRate max_rate={}", max_rate_);
 }
 
 double RateLimiter::maxRate() const
 {
-    SPDLOG_TRACE("RateLimiter::maxRate -> {}", max_rate_);
+    LIBSTP_LOG_TRACE("RateLimiter::maxRate -> {}", max_rate_);
     return max_rate_;
 }
 
@@ -54,7 +54,7 @@ double RateLimiter::step(const double target, const double current_prev, const d
     if (max_rate_ <= 0.0 || dt <= 0.0)
     {
         out_accel = (target - current_prev) / (dt > 0.0 ? dt : 1.0);
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "RateLimiter::step bypass max_rate={} dt={} target={} current_prev={} accel={}",
             max_rate_,
             dt,
@@ -70,7 +70,7 @@ double RateLimiter::step(const double target, const double current_prev, const d
     else if (dv < -cap) next = current_prev - cap;
 
     out_accel = (next - current_prev) / (dt > 0.0 ? dt : 1.0);
-    SPDLOG_TRACE(
+    LIBSTP_LOG_TRACE(
         "RateLimiter::step target={} current_prev={} dt={} max_rate={} cap={} next={} accel={}",
         target,
         current_prev,

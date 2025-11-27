@@ -10,6 +10,8 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/pattern_formatter.h>
 
+#include "foundation/logging.hpp"
+
 namespace logging {
 
     namespace {
@@ -20,7 +22,6 @@ namespace logging {
     /// Call this if you ever want to reset the relative timer at runtime.
     void initialize_timer() {
         start_time = std::chrono::steady_clock::now();
-        spdlog::info("Logging timer initialized");
     }
 
     class ElapsedTimeFormatter final : public spdlog::custom_flag_formatter {
@@ -46,7 +47,7 @@ namespace logging {
 
     void init() {
         if (logger_initialized) {
-            spdlog::warn("logging::init() called multiple times; ignoring subsequent calls");
+            // Logger already initialized, skip
             return;
         }
         logger_initialized = true;
@@ -62,14 +63,14 @@ namespace logging {
 
         // Create console + file sinks.
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        console_sink->set_level(spdlog::level::trace);
+        console_sink->set_level(spdlog::level::debug);
 
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
             (log_dir / "libstp.log").string(),
             5 * 1024 * 1024,  // 5MB max file size
             3                 // keep 3 rotated files
         );
-        file_sink->set_level(spdlog::level::trace);
+        file_sink->set_level(spdlog::level::debug);
 
         // Pattern formatter with custom elapsed-time flag '%E'.
         auto pattern_formatter = std::make_unique<spdlog::pattern_formatter>();
@@ -86,7 +87,7 @@ namespace logging {
             "core", spdlog::sinks_init_list{console_sink, file_sink}
         );
 
-        logger->set_level(spdlog::level::trace);
+        logger->set_level(spdlog::level::debug);
         logger->flush_on(spdlog::level::warn);
 
         spdlog::set_default_logger(logger); // SPDLOG_* macros use this
@@ -101,6 +102,45 @@ namespace logging {
             throw std::runtime_error("logging::init() must be called before using logging::core()");
         }
         return logger;
+    }
+
+    namespace {
+        spdlog::level::level_enum to_spdlog_level(Level level) {
+            switch (level) {
+                case Level::trace: return spdlog::level::trace;
+                case Level::debug: return spdlog::level::debug;
+                case Level::info: return spdlog::level::info;
+                case Level::warn: return spdlog::level::warn;
+                case Level::error: return spdlog::level::err;
+                case Level::critical: return spdlog::level::critical;
+                case Level::off: return spdlog::level::off;
+            }
+            return spdlog::level::info;
+        }
+    }
+
+    bool is_enabled(Level level) {
+        // Auto-initialize if not done yet
+        if (!logger_initialized) {
+            init();
+        }
+        auto logger = spdlog::default_logger_raw();
+        if (!logger) {
+            return false;
+        }
+        return logger->should_log(to_spdlog_level(level));
+    }
+
+    void log(Level level, std::string_view message) {
+        // Auto-initialize if not done yet
+        if (!logger_initialized) {
+            init();
+        }
+        auto logger = spdlog::default_logger_raw();
+        if (!logger) {
+            return;
+        }
+        logger->log(to_spdlog_level(level), message);
     }
 
 } // namespace logging

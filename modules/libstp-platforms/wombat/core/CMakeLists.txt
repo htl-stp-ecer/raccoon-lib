@@ -7,7 +7,7 @@ target_link_libraries(platform_core
         PUBLIC
         messages-cpp
         ${LCM_NAMESPACE}lcm
-        spdlog::spdlog_header_only
+        foundation
 )
 
 target_include_directories(platform_core PUBLIC include)

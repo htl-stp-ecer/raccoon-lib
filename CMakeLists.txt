@@ -21,11 +21,11 @@ if(ENABLE_SAFETY_CHECKS)
 endif()
 
 if(LIBSTP_TRACE_LOGGING)
-    message(STATUS "Enabling trace logging in all targets")
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+    message(STATUS "Enabling debug logging in foundation macros (level: DEBUG)")
+    add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=1)
 else()
-    message(STATUS "Disabling trace logging in all targets")
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
+    message(STATUS "Setting logging level to INFO")
+    add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=2)
 endif()
 
 # Scikit-build-core sets these values for you, or you can just hard-code the
@@ -104,4 +104,3 @@ install(TARGETS _core DESTINATION libstp)
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp/"
         DESTINATION libstp
         FILES_MATCHING PATTERN "*.py")
-
