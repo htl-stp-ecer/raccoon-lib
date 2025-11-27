@@ -1,7 +1,7 @@
 //
 // Created by tobias on 4/21/25.
 //
-#include <spdlog/spdlog.h>
+#include "foundation/logging.hpp"
 #include <cmath>
 #include <limits>
 
@@ -17,7 +17,7 @@ libstp::hal::imu::IMU::IMU()
 #ifdef SAFETY_CHECKS_ENABLED
     if (imuInstanceCreated)
     {
-        SPDLOG_WARN("IMU is already initialized!");
+        LIBSTP_LOG_WARN("IMU is already initialized!");
         return;
     }
     imuInstanceCreated = true;
@@ -168,7 +168,7 @@ void libstp::sensor::GyroSensor::calibrate(std::shared_ptr<MatrixX3d> calibratio
 
     variance = std::make_shared<Vector3d>(applied->array().square().colwise().mean());
 
-    SPDLOG_INFO("[IMU] Calibrated gyro sensor with bias: ({}, {}, {}), variance: ({}, {}, {})", 
+    LIBSTP_LOG_INFO("[IMU] Calibrated gyro sensor with bias: ({}, {}, {}), variance: ({}, {}, {})", 
                 (*offset)[0], (*offset)[1], (*offset)[2], 
                 (*variance)[0], (*variance)[1], (*variance)[2]);
 }
@@ -225,7 +225,7 @@ void libstp::sensor::AccelSensor::calibrate(std::shared_ptr<MatrixX3d> calibrati
     gravity = std::make_shared<Vector3d>(Vector3d::Zero());
     (*gravity)[gravity_axis] = 9.81 * gravity_sign;
 
-    SPDLOG_INFO("[IMU] Detected gravity axis: {} ({})", gravity_axis, gravity_sign > 0 ? "+" : "-");
+    LIBSTP_LOG_INFO("[IMU] Detected gravity axis: {} ({})", gravity_axis, gravity_sign > 0 ? "+" : "-");
 
     auto diffMatrix = std::make_shared<MatrixX3d>(rows, 3);
     for (int i = 0; i < rows; ++i) {
@@ -233,7 +233,7 @@ void libstp::sensor::AccelSensor::calibrate(std::shared_ptr<MatrixX3d> calibrati
     }
     variance = std::make_shared<Vector3d>(diffMatrix->array().square().colwise().mean());
     
-    SPDLOG_INFO("[IMU] Calibrated accel sensor with bias: ({}, {}, {}), variance: ({}, {}, {})", 
+    LIBSTP_LOG_INFO("[IMU] Calibrated accel sensor with bias: ({}, {}, {}), variance: ({}, {}, {})", 
                 (*offset)[0], (*offset)[1], (*offset)[2], 
                 (*variance)[0], (*variance)[1], (*variance)[2]);
 }
@@ -266,7 +266,7 @@ std::shared_ptr<Eigen::Vector3d> libstp::sensor::AccelSensor::applyCalibration(c
 void libstp::sensor::MagnetoSensor::calibrate(std::shared_ptr<MatrixX3d> calibrationMatrix)
 {
     variance = std::make_shared<Vector3d>(calibrationMatrix->colwise().squaredNorm());
-    SPDLOG_INFO("[IMU] Calibrated magneto sensor with variance: ({}, {}, {})", 
+    LIBSTP_LOG_INFO("[IMU] Calibrated magneto sensor with variance: ({}, {}, {})", 
                 (*variance)[0], (*variance)[1], (*variance)[2]);
 }
 
@@ -303,7 +303,7 @@ libstp::async::AsyncAlgorithm<int> libstp::sensor::IMU::calibrate(const int samp
     auto samples_accel = std::make_shared<MatrixX3d>(sampleCount, 3);
     auto samples_mag = std::make_shared<MatrixX3d>(sampleCount, 3);
 
-    SPDLOG_INFO("[IMU] Calibrating IMU... Please keep the device still.");
+    LIBSTP_LOG_INFO("[IMU] Calibrating IMU... Please keep the device still.");
     for (int i = 0; i < sampleCount; ++i)
     {
         samples_gyro->row(i) = *gyro.getValue();
@@ -316,7 +316,7 @@ libstp::async::AsyncAlgorithm<int> libstp::sensor::IMU::calibrate(const int samp
     accel.calibrate(samples_accel);
     magneto.calibrate(samples_mag);
 
-    SPDLOG_INFO("[IMU] Calibration complete.");
+    LIBSTP_LOG_INFO("[IMU] Calibration complete.");
 }
 
 std::tuple<std::shared_ptr<Eigen::Vector3d>, std::shared_ptr<Eigen::Vector3d>, std::shared_ptr<Eigen::Vector3d>> libstp::sensor::IMU::getReading() const

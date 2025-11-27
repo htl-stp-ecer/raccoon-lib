@@ -5,14 +5,14 @@
 #include "foundation/config.hpp"
 #include <cmath>
 #include <algorithm>
-#include <spdlog/spdlog.h>
+#include "foundation/logging.hpp"
 
 using namespace libstp::drive;
 
 VelocityController::VelocityController(foundation::PidGains g, foundation::Feedforward ff)
     : g_(g), ff_(ff)
 {
-    SPDLOG_INFO(
+    LIBSTP_LOG_INFO(
         "VelocityController::ctor gains(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
         g_.kp,
         g_.ki,
@@ -25,7 +25,7 @@ VelocityController::VelocityController(foundation::PidGains g, foundation::Feedf
 void VelocityController::setGains(const foundation::PidGains& g)
 {
     g_ = g;
-    SPDLOG_INFO(
+    LIBSTP_LOG_INFO(
         "VelocityController::setGains kp={} ki={} kd={}",
         g_.kp,
         g_.ki,
@@ -34,7 +34,7 @@ void VelocityController::setGains(const foundation::PidGains& g)
 void VelocityController::setFF(const foundation::Feedforward& ff)
 {
     ff_ = ff;
-    SPDLOG_INFO(
+    LIBSTP_LOG_INFO(
         "VelocityController::setFF kS={} kV={} kA={}",
         ff_.kS,
         ff_.kV,
@@ -44,7 +44,7 @@ void VelocityController::setFF(const foundation::Feedforward& ff)
 double VelocityController::compute(double w_ref, double a_ref, double w_meas, double dt,
                                    double u_max, bool* out_sat)
 {
-    SPDLOG_TRACE(
+    LIBSTP_LOG_TRACE(
         "VelocityController::compute w_ref={} a_ref={} w_meas={} dt={} u_max={}",
         w_ref,
         a_ref,
@@ -79,7 +79,7 @@ double VelocityController::compute(double w_ref, double a_ref, double w_meas, do
         }
     }
 
-    SPDLOG_TRACE(
+    LIBSTP_LOG_TRACE(
         "VelocityController::compute components err={} u_ff={} u_p={} u_d={} i_term={} u_raw={} u_cmd={} sat={}",
         err,
         u_ff,
@@ -90,7 +90,7 @@ double VelocityController::compute(double w_ref, double a_ref, double w_meas, do
         u_cmd,
         out_sat ? *out_sat : (u_cmd != u_raw));
 
-    SPDLOG_INFO(
+    LIBSTP_LOG_INFO(
         "VelocityController::compute result u_cmd={} (clamped from {}), out_sat={}",
         u_cmd,
         u_raw,
@@ -104,5 +104,5 @@ void VelocityController::reset()
     i_ = 0.0;
     w_meas_prev_ = 0.0;
     d_filt_ = 0.0;
-    SPDLOG_TRACE("VelocityController::reset state cleared");
+    LIBSTP_LOG_TRACE("VelocityController::reset state cleared");
 }

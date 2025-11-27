@@ -9,6 +9,7 @@
 #include <optional>
 #include "foundation/config.hpp"
 #include "foundation/logging.hpp"
+#include <spdlog/spdlog.h>
 #include <spdlog/pattern_formatter.h>
 
 namespace py = pybind11;

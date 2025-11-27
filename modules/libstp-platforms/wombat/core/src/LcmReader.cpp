@@ -4,7 +4,7 @@
 #include <regex>
 #include <chrono>
 #include <thread>
-#include <spdlog/spdlog.h>
+#include "foundation/logging.hpp"
 
 using namespace platform::wombat::core;
 
@@ -91,14 +91,14 @@ LcmReader::LcmReader() {
     listener_thread_ = std::thread(&LcmReader::listenLoop, this);
 
     // Request initial data dump to populate caches quickly
-    SPDLOG_DEBUG("[LcmReader] Requesting initial data dump...");
+    LIBSTP_LOG_DEBUG("[LcmReader] Requesting initial data dump...");
     LcmDataWriter::instance().requestDataDump();
-    SPDLOG_DEBUG("[LcmReader] Data dump request sent");
+    LIBSTP_LOG_DEBUG("[LcmReader] Data dump request sent");
 
     // Reset BEMF counters to prevent stale values from previous runs
-    SPDLOG_DEBUG("[LcmReader] Resetting BEMF counters...");
+    LIBSTP_LOG_DEBUG("[LcmReader] Resetting BEMF counters...");
     LcmDataWriter::instance().resetBemfCounters();
-    SPDLOG_DEBUG("[LcmReader] BEMF counter reset sent");
+    LIBSTP_LOG_DEBUG("[LcmReader] BEMF counter reset sent");
 }
 
 LcmReader::~LcmReader() {
@@ -109,15 +109,15 @@ LcmReader::~LcmReader() {
 }
 
 void LcmReader::listenLoop() {
-    SPDLOG_DEBUG("[LcmReader] Listen loop started");
+    LIBSTP_LOG_DEBUG("[LcmReader] Listen loop started");
     while (running_) {
         // Use handleTimeout with a short timeout to allow checking running_ flag
         int result = lcm_.handleTimeout(100);
         if (result < 0) {
-            SPDLOG_ERROR("[LcmReader] Error in LCM handleTimeout");
+            LIBSTP_LOG_ERROR("[LcmReader] Error in LCM handleTimeout");
         }
     }
-    SPDLOG_DEBUG("[LcmReader] Listen loop exiting");
+    LIBSTP_LOG_DEBUG("[LcmReader] Listen loop exiting");
 }
 
 // Message handlers with channel parsing
@@ -310,6 +310,6 @@ bool LcmReader::waitForImuReady(int timeout_ms) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    SPDLOG_TRACE("[LcmReader] IMU orientation data received");
+    LIBSTP_LOG_TRACE("[LcmReader] IMU orientation data received");
     return true;
 }

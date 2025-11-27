@@ -7,8 +7,10 @@
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <cmath>
+#include <thread>
 
 namespace libstp::kinematics::differential
 {
@@ -28,7 +30,7 @@ namespace libstp::kinematics::differential
         if (wheelbase <= 0.0) throw std::invalid_argument("wheelbase must be positive");
         if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
         setWheelLimits(max_velocity, max_acceleration);
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "DifferentialKinematics::ctor wheelbase={} wheelRadius={} max_vel={} max_accel={}",
             wheelbase,
             wheelRadius,
@@ -44,7 +46,7 @@ namespace libstp::kinematics::differential
         left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
 
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "DifferentialKinematics::setWheelLimits max_velocity={} max_acceleration={}",
             max_wheel_velocity_,
             max_wheel_acceleration_);
@@ -57,7 +59,7 @@ namespace libstp::kinematics::differential
 
     MotorCommands DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "DifferentialKinematics::applyCommand dt={} cmd vx={} wz={}",
             dt,
             cmd.vx,
@@ -66,7 +68,7 @@ namespace libstp::kinematics::differential
         const double v_left = (cmd.vx - cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
         const double v_right = (cmd.vx + cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics wheel speeds raw left={} right={}",
             v_left,
             v_right);
@@ -74,7 +76,7 @@ namespace libstp::kinematics::differential
         const double left_clamped = std::clamp(v_left, -max_wheel_velocity_, max_wheel_velocity_);
         const double right_clamped = std::clamp(v_right, -max_wheel_velocity_, max_wheel_velocity_);
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics wheel speeds clamped left={} right={} (max={})",
             left_clamped,
             right_clamped,
@@ -85,7 +87,7 @@ namespace libstp::kinematics::differential
         const double left_limited = left_motor_.limiter.step(left_clamped, left_motor_.target_w, dt, left_accel);
         const double right_limited = right_motor_.limiter.step(right_clamped, right_motor_.target_w, dt, right_accel);
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics wheel speeds limited left={} right={} accel_left={} accel_right={}",
             left_limited,
             right_limited,
@@ -100,7 +102,7 @@ namespace libstp::kinematics::differential
         left_motor_.adapter.setVelocityWithAccel(left_limited, left_accel, dt, &left_saturated);
         right_motor_.adapter.setVelocityWithAccel(right_limited, right_accel, dt, &right_saturated);
 
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "DifferentialKinematics command applied left={} right={} sat_left={} sat_right={} dt={}",
             left_limited,
             right_limited,
@@ -124,7 +126,7 @@ namespace libstp::kinematics::differential
         const double vx = (w_left + w_right) * m_wheelRadius / 2.0;
         const double w = (w_right - w_left) * m_wheelRadius / m_wheelbase;
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics::estimateState wheel_left={} wheel_right={} vx={} w={}",
             w_left,
             w_right,
@@ -136,7 +138,7 @@ namespace libstp::kinematics::differential
 
     void DifferentialKinematics::hardStop()
     {
-        SPDLOG_INFO("DifferentialKinematics::hardStop invoked");
+        LIBSTP_LOG_INFO("DifferentialKinematics::hardStop invoked");
         left_motor_.target_w = 0.0;
         right_motor_.target_w = 0.0;
         left_motor_.adapter.resetController();
@@ -154,7 +156,7 @@ namespace libstp::kinematics::differential
     {
         left_motor_.adapter.resetEncoderTracking();
         right_motor_.adapter.resetEncoderTracking();
-        SPDLOG_INFO("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
+        LIBSTP_LOG_INFO("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
     std::vector<drive::CalibrationResult> DifferentialKinematics::calibrateMotors()
@@ -165,37 +167,37 @@ namespace libstp::kinematics::differential
     std::vector<drive::CalibrationResult> DifferentialKinematics::calibrateMotors(
         const drive::CalibrationConfig& config)
     {
-        SPDLOG_INFO("=== Starting DifferentialKinematics motor calibration ===");
+        LIBSTP_LOG_INFO("=== Starting DifferentialKinematics motor calibration ===");
 
         std::vector<drive::CalibrationResult> results;
 
         // Calibrate left motor
-        SPDLOG_INFO("Calibrating left motor...");
+        LIBSTP_LOG_INFO("Calibrating left motor...");
         drive::CalibrationResult left_result = left_motor_.adapter.calibrate(config);
         results.push_back(left_result);
 
         if (left_result.success) {
-            SPDLOG_INFO("Left motor calibration successful");
+            LIBSTP_LOG_INFO("Left motor calibration successful");
         } else {
-            SPDLOG_ERROR("Left motor calibration failed: {}", left_result.error_message);
+            LIBSTP_LOG_ERROR("Left motor calibration failed: {}", left_result.error_message);
         }
 
         // Wait a bit between calibrations
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Calibrate right motor
-        SPDLOG_INFO("Calibrating right motor...");
+        LIBSTP_LOG_INFO("Calibrating right motor...");
         drive::CalibrationResult right_result = right_motor_.adapter.calibrate(config);
         results.push_back(right_result);
 
         if (right_result.success) {
-            SPDLOG_INFO("Right motor calibration successful");
+            LIBSTP_LOG_INFO("Right motor calibration successful");
         } else {
-            SPDLOG_ERROR("Right motor calibration failed: {}", right_result.error_message);
+            LIBSTP_LOG_ERROR("Right motor calibration failed: {}", right_result.error_message);
         }
 
-        SPDLOG_INFO("=== DifferentialKinematics motor calibration completed ===");
-        SPDLOG_INFO("Success rate: {}/2 motors",
+        LIBSTP_LOG_INFO("=== DifferentialKinematics motor calibration completed ===");
+        LIBSTP_LOG_INFO("Success rate: {}/2 motors",
                     (left_result.success ? 1 : 0) + (right_result.success ? 1 : 0));
 
         return results;

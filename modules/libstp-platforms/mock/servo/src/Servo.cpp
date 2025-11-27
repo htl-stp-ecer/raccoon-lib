@@ -1,5 +1,5 @@
 #include "hal/Servo.hpp"
-#include <format>
+#include <spdlog/fmt/bundled/format.h>
 #include <stdexcept>
 #include "core/MockPlatform.hpp"
 
@@ -34,7 +34,7 @@ void libstp::hal::servo::Servo::setPosition(const int position)
 #ifdef SAFETY_CHECKS_ENABLED
     if (position < MIN_POSITION || position > MAX_POSITION)
     {
-        throw std::out_of_range(std::format("Position must be between {} and {} degrees.", MIN_POSITION, MAX_POSITION));
+        throw std::out_of_range(fmt::format("Position must be between {} and {} degrees.", MIN_POSITION, MAX_POSITION));
     }
 #endif
     

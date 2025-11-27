@@ -1,4 +1,4 @@
-#include <spdlog/spdlog.h>
+#include "foundation/logging.hpp"
 #include "core/MockPlatform.hpp"
 #include "hal/IMU.hpp"
 
@@ -11,7 +11,7 @@ libstp::hal::imu::IMU::IMU()
 #ifdef SAFETY_CHECKS_ENABLED
     if (imuInstanceCreated)
     {
-        SPDLOG_WARN("IMU is already initialized!");
+        LIBSTP_LOG_WARN("IMU is already initialized!");
         return;
     }
     imuInstanceCreated = true;
@@ -50,7 +50,7 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
 void libstp::hal::imu::IMU::calibrate()
 {
     // Mock calibration - in a real implementation this would collect samples
-    SPDLOG_INFO("[IMU Mock] Calibration complete (simulated).");
+    LIBSTP_LOG_INFO("[IMU Mock] Calibration complete (simulated).");
 }
 
 Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()

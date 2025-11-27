@@ -9,7 +9,7 @@ void libstp::hal::digital::DigitalSensor::registerDigitalPort(int port)
 {
     if (used_digital_ports.contains(port))
     {
-        SPDLOG_WARN("Digital port {} is already in use!", port);
+        LIBSTP_LOG_WARN("Digital port {} is already in use!", port);
         return;
     }
 

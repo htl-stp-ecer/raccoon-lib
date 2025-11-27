@@ -1,10 +1,11 @@
 //
-// Created by Claude Code for automatic motor calibration
+// Created by tobias on 27/11/25.
 //
+
 
 #include "calibration/calibration.hpp"
 #include "drive/motor_adapter.hpp"
-#include <spdlog/spdlog.h>
+#include "foundation/logging.hpp"
 #include <cmath>
 #include <algorithm>
 #include <numeric>
@@ -39,7 +40,7 @@ namespace {
 MotorCalibrator::MotorCalibrator(hal::motor::Motor& motor, const CalibrationConfig& config)
     : motor_(motor), config_(config)
 {
-    SPDLOG_INFO("MotorCalibrator created for motor port {}", motor_.port);
+    LIBSTP_LOG_INFO("MotorCalibrator created for motor port {}", motor_.port);
 
     // Create a motor adapter for this motor
     adapter_ = std::make_unique<MotorAdapter>(&motor_);
@@ -47,7 +48,7 @@ MotorCalibrator::MotorCalibrator(hal::motor::Motor& motor, const CalibrationConf
 
 CalibrationResult MotorCalibrator::calibrate()
 {
-    SPDLOG_INFO("=== Starting motor calibration ===");
+    LIBSTP_LOG_INFO("=== Starting motor calibration ===");
     calibration_start_time_ = getCurrentTime();
     result_ = CalibrationResult{};
     result_.success = false;
@@ -56,53 +57,53 @@ CalibrationResult MotorCalibrator::calibrate()
 
     try {
         // Step 1: Calibrate feedforward
-        SPDLOG_INFO("Step 1/3: Calibrating feedforward parameters...");
+        LIBSTP_LOG_INFO("Step 1/3: Calibrating feedforward parameters...");
         result_.ff = calibrateFeedforward();
 
         if (checkTimeout(calibration_start_time_)) {
             result_.error_message = "Calibration timeout during feedforward calibration";
-            SPDLOG_ERROR("{}", result_.error_message);
+            LIBSTP_LOG_ERROR("{}", result_.error_message);
             return result_;
         }
 
         // Step 2: Calibrate PID using the measured feedforward
-        SPDLOG_INFO("Step 2/3: Calibrating PID parameters...");
+        LIBSTP_LOG_INFO("Step 2/3: Calibrating PID parameters...");
         result_.pid = calibratePID(result_.ff);
 
         if (checkTimeout(calibration_start_time_)) {
             result_.error_message = "Calibration timeout during PID calibration";
-            SPDLOG_ERROR("{}", result_.error_message);
+            LIBSTP_LOG_ERROR("{}", result_.error_message);
             return result_;
         }
 
         // Step 3: Validate the calibration
-        SPDLOG_INFO("Step 3/3: Validating calibration...");
+        LIBSTP_LOG_INFO("Step 3/3: Validating calibration...");
         if (!validateCalibration(result_.pid, result_.ff, result_.metrics)) {
             result_.error_message = "Calibration validation failed";
-            SPDLOG_WARN("{}", result_.error_message);
+            LIBSTP_LOG_WARN("{}", result_.error_message);
             // Don't return - validation failure isn't fatal
         }
 
         // Check parameter ranges
         if (!validateParameterRanges(result_.pid, result_.ff)) {
             result_.error_message = "Calibrated parameters out of acceptable range";
-            SPDLOG_ERROR("{}", result_.error_message);
+            LIBSTP_LOG_ERROR("{}", result_.error_message);
             return result_;
         }
 
         result_.duration_seconds = getCurrentTime() - calibration_start_time_;
         result_.success = true;
 
-        SPDLOG_INFO("=== Calibration completed successfully ===");
-        SPDLOG_INFO("PID gains: kp={:.3f}, ki={:.3f}, kd={:.3f}",
+        LIBSTP_LOG_INFO("=== Calibration completed successfully ===");
+        LIBSTP_LOG_INFO("PID gains: kp={:.3f}, ki={:.3f}, kd={:.3f}",
                     result_.pid.kp, result_.pid.ki, result_.pid.kd);
-        SPDLOG_INFO("Feedforward: kS={:.3f}, kV={:.3f}, kA={:.3f}",
+        LIBSTP_LOG_INFO("Feedforward: kS={:.3f}, kV={:.3f}, kA={:.3f}",
                     result_.ff.kS, result_.ff.kV, result_.ff.kA);
-        SPDLOG_INFO("Duration: {:.2f} seconds", result_.duration_seconds);
+        LIBSTP_LOG_INFO("Duration: {:.2f} seconds", result_.duration_seconds);
 
     } catch (const std::exception& e) {
         result_.error_message = std::string("Calibration exception: ") + e.what();
-        SPDLOG_ERROR("{}", result_.error_message);
+        LIBSTP_LOG_ERROR("{}", result_.error_message);
         stopMotor();
     }
 
@@ -114,23 +115,31 @@ foundation::Feedforward MotorCalibrator::calibrateFeedforward()
 {
     foundation::Feedforward ff;
 
-    // Find static friction (kS)
-    SPDLOG_INFO("Finding static friction...");
-    double kS = findStaticFriction();
-    ff.kS = kS;
-    SPDLOG_INFO("Static friction kS = {:.2f}", kS);
+    // Find static friction threshold (for reference/debugging only)
+    LIBSTP_LOG_INFO("Finding static friction threshold (for reference)...");
+    double kS_threshold = findStaticFriction();
+    LIBSTP_LOG_INFO("Static friction threshold = {:.2f}%", kS_threshold);
 
-    // Find velocity constant (kV)
-    SPDLOG_INFO("Finding velocity constant...");
-    double kV = findVelocityConstant();
-    ff.kV = kV;
-    SPDLOG_INFO("Velocity constant kV = {:.3f}", kV);
+    // Find velocity constant (kV) and kS from linear regression
+    // This will update result_.metrics with the regression-based kS
+    LIBSTP_LOG_INFO("Finding velocity constant via linear regression...");
+    double kV_percent = findVelocityConstant();
+    // Get kS from the regression (stored in metrics by findVelocityConstant)
+    double kS_percent = result_.metrics.static_friction_forward;
+    LIBSTP_LOG_INFO("Linear regression results: kS={:.2f}%, kV={:.3f}% per rad/s", kS_percent, kV_percent);
 
-    // Find acceleration constant (kA)
-    SPDLOG_INFO("Finding acceleration constant...");
-    double kA = findAccelerationConstant(kS, kV);
-    ff.kA = kA;
-    SPDLOG_INFO("Acceleration constant kA = {:.3f}", kA);
+    // Find acceleration constant (kA) - this returns percent per rad/s²
+    LIBSTP_LOG_INFO("Finding acceleration constant...");
+    double kA_percent = findAccelerationConstant(kS_percent, kV_percent);
+    LIBSTP_LOG_INFO("Acceleration constant kA = {:.3f}% per rad/s²", kA_percent);
+
+    // Convert from percent [0-100] to normalized [0-1] for VelocityController
+    // VelocityController expects normalized units where 1.0 = 100% motor command
+    ff.kS = kS_percent / 100.0;
+    ff.kV = kV_percent / 100.0;
+    ff.kA = kA_percent / 100.0;
+
+    LIBSTP_LOG_INFO("Converted to normalized units: kS={:.4f}, kV={:.4f}, kA={:.4f}", ff.kS, ff.kV, ff.kA);
 
     return ff;
 }
@@ -141,10 +150,10 @@ foundation::PidGains MotorCalibrator::calibratePID(const foundation::Feedforward
     adapter_->getController().setFF(ff);
 
     if (config_.use_relay_feedback) {
-        SPDLOG_INFO("Using relay feedback tuning (aggressive mode)");
+        LIBSTP_LOG_INFO("Using relay feedback tuning (aggressive mode)");
         return relayFeedbackTuning(ff);
     } else {
-        SPDLOG_INFO("Using step response tuning (conservative mode)");
+        LIBSTP_LOG_INFO("Using step response tuning (conservative mode)");
         return stepResponseTuning(ff);
     }
 }
@@ -154,20 +163,25 @@ double MotorCalibrator::findStaticFriction()
     const double start_time = getCurrentTime();
 
     // Test forward direction
-    SPDLOG_DEBUG("Testing forward static friction...");
+    LIBSTP_LOG_DEBUG("Testing forward static friction...");
     resetMotor();
 
     double forward_threshold = 0.0;
     for (double cmd = 0.0; cmd <= config_.static_friction_max; cmd += config_.static_friction_increment) {
         setMotorCommand(cmd);
 
-        // Wait briefly for motor to respond
+        // Wait for motor to respond and update velocity estimate
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        adapter_->updateEncoderVelocity(0.05);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        adapter_->updateEncoderVelocity(0.1);
 
         double velocity = std::abs(getMotorVelocity());
+        LIBSTP_LOG_DEBUG("Forward cmd={:.2f}%, velocity={:.3f} rad/s", cmd, velocity);
+
         if (velocity > config_.min_velocity_threshold) {
             forward_threshold = cmd;
-            SPDLOG_DEBUG("Forward threshold found at {:.2f}%", cmd);
+            LIBSTP_LOG_DEBUG("Forward threshold found at {:.2f}%", cmd);
             break;
         }
 
@@ -178,19 +192,25 @@ double MotorCalibrator::findStaticFriction()
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     // Test backward direction
-    SPDLOG_DEBUG("Testing backward static friction...");
+    LIBSTP_LOG_DEBUG("Testing backward static friction...");
     resetMotor();
 
     double backward_threshold = 0.0;
     for (double cmd = 0.0; cmd <= config_.static_friction_max; cmd += config_.static_friction_increment) {
         setMotorCommand(-cmd);
 
+        // Wait for motor to respond and update velocity estimate
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        adapter_->updateEncoderVelocity(0.05);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        adapter_->updateEncoderVelocity(0.1);
 
         double velocity = std::abs(getMotorVelocity());
+        LIBSTP_LOG_DEBUG("Backward cmd={:.2f}%, velocity={:.3f} rad/s", -cmd, velocity);
+
         if (velocity > config_.min_velocity_threshold) {
             backward_threshold = cmd;
-            SPDLOG_DEBUG("Backward threshold found at {:.2f}%", cmd);
+            LIBSTP_LOG_DEBUG("Backward threshold found at {:.2f}%", cmd);
             break;
         }
 
@@ -208,7 +228,7 @@ double MotorCalibrator::findStaticFriction()
 
     // Validate
     if (kS < config_.ranges.kS_min || kS > config_.ranges.kS_max) {
-        SPDLOG_WARN("Static friction {:.2f} outside expected range [{:.2f}, {:.2f}]",
+        LIBSTP_LOG_WARN("Static friction {:.2f} outside expected range [{:.2f}, {:.2f}]",
                     kS, config_.ranges.kS_min, config_.ranges.kS_max);
     }
 
@@ -225,39 +245,48 @@ double MotorCalibrator::findVelocityConstant()
     for (double cmd : config_.velocity_test_commands) {
         if (checkTimeout(start_time)) break;
 
-        SPDLOG_DEBUG("Testing velocity at {:.1f}% command...", cmd);
+        LIBSTP_LOG_DEBUG("Testing velocity at {:.1f}% command...", cmd);
 
         double velocity = measureSteadyStateVelocity(cmd, config_.velocity_test_duration);
 
         commands.push_back(cmd);
         velocities.push_back(velocity);
 
-        SPDLOG_DEBUG("Measured velocity: {:.3f} rad/s", velocity);
+        LIBSTP_LOG_DEBUG("Measured velocity: {:.3f} rad/s", velocity);
 
         stopMotor();
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 
     // Linear regression: command = kS + kV * velocity
-    // We need to solve for kV
+    // Fit y = slope * x + intercept where y=command, x=velocity
+    // So: command = kV * velocity + kS_regression
     LinearRegression fit = linearFit(velocities, commands);
 
     result_.metrics.velocity_constant_r_squared = fit.r_squared;
     result_.metrics.velocity_samples = commands.size();
 
     double kV = fit.slope;
+    double kS_regression = fit.intercept;
 
-    SPDLOG_INFO("Velocity constant linear fit: kV={:.3f}, R²={:.3f}", kV, fit.r_squared);
+    LIBSTP_LOG_INFO("Velocity constant linear fit: kV={:.3f}, kS_from_regression={:.2f}%, R²={:.3f}",
+                    kV, kS_regression, fit.r_squared);
 
     if (fit.r_squared < 0.8) {
-        SPDLOG_WARN("Poor linear fit (R²={:.3f}), velocity constant may be inaccurate", fit.r_squared);
+        LIBSTP_LOG_WARN("Poor linear fit (R²={:.3f}), velocity constant may be inaccurate", fit.r_squared);
     }
 
     // Validate
     if (kV < config_.ranges.kV_min || kV > config_.ranges.kV_max) {
-        SPDLOG_WARN("Velocity constant {:.3f} outside expected range [{:.3f}, {:.3f}]",
+        LIBSTP_LOG_WARN("Velocity constant {:.3f} outside expected range [{:.3f}, {:.3f}]",
                     kV, config_.ranges.kV_min, config_.ranges.kV_max);
     }
+
+    // Note: We're now using the regression intercept as kS instead of the threshold-based kS
+    // This ensures consistency between kS and kV in the feedforward model
+    // Update the stored static friction values to reflect the regression intercept
+    result_.metrics.static_friction_forward = kS_regression;
+    result_.metrics.static_friction_backward = kS_regression;
 
     return kV;
 }
@@ -270,7 +299,7 @@ double MotorCalibrator::findAccelerationConstant(double kS, double kV)
     for (int trial = 0; trial < config_.acceleration_test_count; ++trial) {
         if (checkTimeout(start_time)) break;
 
-        SPDLOG_DEBUG("Acceleration test trial {}/{}...", trial + 1, config_.acceleration_test_count);
+        LIBSTP_LOG_DEBUG("Acceleration test trial {}/{}...", trial + 1, config_.acceleration_test_count);
 
         resetMotor();
 
@@ -282,12 +311,13 @@ double MotorCalibrator::findAccelerationConstant(double kS, double kV)
 
         // Calculate acceleration from velocity change
         if (profile.data.size() < 10) {
-            SPDLOG_WARN("Insufficient data points in acceleration test");
+            LIBSTP_LOG_WARN("Insufficient data points in acceleration test");
             continue;
         }
 
-        // Use early portion of response (first 0.5 seconds) for acceleration
-        double max_time = profile.data.front().time + 0.5;
+        // Use early portion of response (first 0.3 seconds) for acceleration when v ≈ 0
+        // This is critical - we need early-time data where velocity is still small
+        double max_time = profile.data.front().time + 0.3;
         std::vector<double> times, velocities;
 
         for (const auto& point : profile.data) {
@@ -304,16 +334,13 @@ double MotorCalibrator::findAccelerationConstant(double kS, double kV)
         double acceleration = fit.slope;
 
         // Calculate kA from dynamics: command = kS + kV*v + kA*a
-        // During acceleration, assume v ≈ 0 initially, so: command ≈ kS + kA*a
+        // During early acceleration, v ≈ 0, so we ignore the kV term as stated in comments
         // Therefore: kA = (command - kS) / a
-        double avg_velocity = getMeanValue(velocities);
-        double expected_command = kS + kV * avg_velocity;
-        double residual = config_.acceleration_test_amplitude - expected_command;
-
+        // This implements exactly what the comment says without mixing in kV
         if (std::abs(acceleration) > 0.01) {
-            double kA = residual / acceleration;
+            double kA = (config_.acceleration_test_amplitude - kS) / acceleration;
             kA_measurements.push_back(kA);
-            SPDLOG_DEBUG("Trial {}: acceleration={:.3f} rad/s², kA={:.3f}",
+            LIBSTP_LOG_DEBUG("Trial {}: acceleration={:.3f} rad/s², kA={:.3f}",
                         trial + 1, acceleration, kA);
         }
 
@@ -322,7 +349,7 @@ double MotorCalibrator::findAccelerationConstant(double kS, double kV)
     }
 
     if (kA_measurements.empty()) {
-        SPDLOG_WARN("No valid acceleration measurements, using default kA=0.1");
+        LIBSTP_LOG_WARN("No valid acceleration measurements, using default kA=0.1");
         return 0.1;
     }
 
@@ -332,12 +359,15 @@ double MotorCalibrator::findAccelerationConstant(double kS, double kV)
     result_.metrics.acceleration_mean = kA;
     result_.metrics.acceleration_std_dev = kA_std;
 
-    SPDLOG_INFO("Acceleration constant: kA={:.3f} ± {:.3f}", kA, kA_std);
+    LIBSTP_LOG_INFO("Acceleration constant: kA={:.3f} ± {:.3f}", kA, kA_std);
+
+    // Clamp to valid range to prevent negative or extreme values
+    kA = clamp(kA, config_.ranges.kA_min, config_.ranges.kA_max);
 
     // Validate
-    if (kA < config_.ranges.kA_min || kA > config_.ranges.kA_max) {
-        SPDLOG_WARN("Acceleration constant {:.3f} outside expected range [{:.3f}, {:.3f}]",
-                    kA, config_.ranges.kA_min, config_.ranges.kA_max);
+    if (kA <= config_.ranges.kA_min || kA >= config_.ranges.kA_max) {
+        LIBSTP_LOG_WARN("Acceleration constant clamped to range [{:.3f}, {:.3f}]",
+                    config_.ranges.kA_min, config_.ranges.kA_max);
     }
 
     return kA;
@@ -345,7 +375,7 @@ double MotorCalibrator::findAccelerationConstant(double kS, double kV)
 
 foundation::PidGains MotorCalibrator::stepResponseTuning(const foundation::Feedforward& ff)
 {
-    SPDLOG_INFO("Performing step response test...");
+    LIBSTP_LOG_INFO("Performing step response test...");
 
     resetMotor();
 
@@ -358,7 +388,7 @@ foundation::PidGains MotorCalibrator::stepResponseTuning(const foundation::Feedf
     stopMotor();
 
     if (profile.data.size() < 20) {
-        SPDLOG_ERROR("Insufficient data for step response analysis");
+        LIBSTP_LOG_ERROR("Insufficient data for step response analysis");
         throw std::runtime_error("Step response test failed: insufficient data");
     }
 
@@ -370,7 +400,7 @@ foundation::PidGains MotorCalibrator::stepResponseTuning(const foundation::Feedf
     result_.metrics.steady_state_gain = params.K;
     result_.metrics.delay = params.delay;
 
-    SPDLOG_INFO("Step response parameters: tau={:.3f}s, K={:.3f}, delay={:.3f}s",
+    LIBSTP_LOG_INFO("Step response parameters: tau={:.3f}s, K={:.3f}, delay={:.3f}s",
                 params.tau, params.K, params.delay);
 
     // Calculate PID gains using FOPDT (First Order Plus Dead Time) model
@@ -383,7 +413,7 @@ foundation::PidGains MotorCalibrator::stepResponseTuning(const foundation::Feedf
         pid.kd = pid.kp * params.delay / 3.0;
     } else {
         // Fallback if parameters are invalid
-        SPDLOG_WARN("Invalid step response parameters, using fallback gains");
+        LIBSTP_LOG_WARN("Invalid step response parameters, using fallback gains");
         pid.kp = 2.0;
         pid.ki = 0.5;
         pid.kd = 0.1;
@@ -394,7 +424,7 @@ foundation::PidGains MotorCalibrator::stepResponseTuning(const foundation::Feedf
     pid.ki = clamp(pid.ki, config_.ranges.ki_min, config_.ranges.ki_max);
     pid.kd = clamp(pid.kd, config_.ranges.kd_min, config_.ranges.kd_max);
 
-    SPDLOG_INFO("Calculated PID gains: kp={:.3f}, ki={:.3f}, kd={:.3f}",
+    LIBSTP_LOG_INFO("Calculated PID gains: kp={:.3f}, ki={:.3f}, kd={:.3f}",
                 pid.kp, pid.ki, pid.kd);
 
     return pid;
@@ -402,7 +432,7 @@ foundation::PidGains MotorCalibrator::stepResponseTuning(const foundation::Feedf
 
 foundation::PidGains MotorCalibrator::relayFeedbackTuning(const foundation::Feedforward& ff)
 {
-    SPDLOG_INFO("Performing relay feedback test...");
+    LIBSTP_LOG_INFO("Performing relay feedback test...");
 
     resetMotor();
 
@@ -443,7 +473,7 @@ foundation::PidGains MotorCalibrator::relayFeedbackTuning(const foundation::Feed
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
         if (checkTimeout(start_time)) {
-            SPDLOG_ERROR("Relay feedback test timeout");
+            LIBSTP_LOG_ERROR("Relay feedback test timeout");
             break;
         }
     }
@@ -454,7 +484,7 @@ foundation::PidGains MotorCalibrator::relayFeedbackTuning(const foundation::Feed
     profile.data = data;
 
     if (zero_crossings < config_.min_oscillations * 2) {
-        SPDLOG_WARN("Insufficient oscillations ({}/{}), falling back to step response",
+        LIBSTP_LOG_WARN("Insufficient oscillations ({}/{}), falling back to step response",
                     zero_crossings / 2, config_.min_oscillations);
         return stepResponseTuning(ff);
     }
@@ -466,7 +496,7 @@ foundation::PidGains MotorCalibrator::relayFeedbackTuning(const foundation::Feed
     result_.metrics.ultimate_period_tu = relay_params.Tu;
     result_.metrics.oscillation_count = relay_params.cycles;
 
-    SPDLOG_INFO("Relay parameters: Ku={:.3f}, Tu={:.3f}s, cycles={}",
+    LIBSTP_LOG_INFO("Relay parameters: Ku={:.3f}, Tu={:.3f}s, cycles={}",
                 relay_params.Ku, relay_params.Tu, relay_params.cycles);
 
     // Calculate PID gains using Tyreus-Luyben rules (more conservative than Ziegler-Nichols)
@@ -477,7 +507,7 @@ foundation::PidGains MotorCalibrator::relayFeedbackTuning(const foundation::Feed
         pid.ki = pid.kp / (2.2 * relay_params.Tu);
         pid.kd = pid.kp * relay_params.Tu / 6.3;
     } else {
-        SPDLOG_WARN("Invalid relay parameters, falling back to step response");
+        LIBSTP_LOG_WARN("Invalid relay parameters, falling back to step response");
         return stepResponseTuning(ff);
     }
 
@@ -486,7 +516,7 @@ foundation::PidGains MotorCalibrator::relayFeedbackTuning(const foundation::Feed
     pid.ki = clamp(pid.ki, config_.ranges.ki_min, config_.ranges.ki_max);
     pid.kd = clamp(pid.kd, config_.ranges.kd_min, config_.ranges.kd_max);
 
-    SPDLOG_INFO("Calculated PID gains (Tyreus-Luyben): kp={:.3f}, ki={:.3f}, kd={:.3f}",
+    LIBSTP_LOG_INFO("Calculated PID gains (Tyreus-Luyben): kp={:.3f}, ki={:.3f}, kd={:.3f}",
                 pid.kp, pid.ki, pid.kd);
 
     return pid;
@@ -620,26 +650,32 @@ MotorCalibrator::StepResponseParams MotorCalibrator::fitStepResponse(
     double v_ss = getMeanValue(ss_velocities);
 
     // Steady-state gain K = Δvelocity / Δcommand
-    double v_change = v_ss - initial_velocity;
-    params.K = v_change / profile.data.front().command;
+    // Use absolute value of steady-state velocity (ignore initial velocity which may be noisy)
+    double v_change = v_ss;
+    double command = std::abs(profile.data.front().command);
+
+    if (command < 0.1) {
+        LIBSTP_LOG_WARN("Step response command too small: {}", command);
+        return params;
+    }
+
+    params.K = v_change / command;
 
     // Find time when velocity reaches 63.2% of final value (tau)
-    double target_velocity = initial_velocity + 0.632 * v_change;
+    double target_velocity = 0.632 * v_ss;
     double t0 = profile.data.front().time;
 
     for (const auto& point : profile.data) {
-        if ((v_change > 0 && point.velocity >= target_velocity) ||
-            (v_change < 0 && point.velocity <= target_velocity)) {
+        if (point.velocity >= target_velocity) {
             params.tau = point.time - t0;
             break;
         }
     }
 
-    // Estimate delay (when response starts to rise)
-    double threshold = initial_velocity + 0.1 * v_change;
+    // Estimate delay (when response starts to rise above 10% of final)
+    double threshold = 0.1 * v_ss;
     for (const auto& point : profile.data) {
-        if ((v_change > 0 && point.velocity >= threshold) ||
-            (v_change < 0 && point.velocity <= threshold)) {
+        if (point.velocity >= threshold) {
             params.delay = point.time - t0;
             break;
         }
@@ -707,26 +743,43 @@ bool MotorCalibrator::validateCalibration(
     const foundation::Feedforward& ff,
     CalibrationResult::Metrics& metrics)
 {
-    SPDLOG_INFO("Validating calibration...");
+    LIBSTP_LOG_INFO("Validating calibration...");
 
-    // Apply the calibrated parameters
-    adapter_->getController().setGains(pid);
-    adapter_->getController().setFF(ff);
+    // Don't apply PID/FF for validation - we're testing the feedforward model accuracy
+    // by measuring open-loop response and comparing to model prediction
 
     resetMotor();
 
-    // Test tracking at multiple velocities
-    std::vector<double> test_velocities = {0.5, 1.0, 1.5};
+    // Test feedforward model at multiple command levels (in %)
+    // Use lower test commands to stay in linear range
+    std::vector<double> test_commands = {10.0, 15.0, 20.0};
     std::vector<double> errors;
 
-    for (double target_v : test_velocities) {
-        VelocityProfile profile = recordVelocityProfile(target_v, config_.validation_duration);
+    for (double cmd_percent : test_commands) {
+        VelocityProfile profile = recordVelocityProfile(cmd_percent, config_.validation_duration);
 
-        // Calculate mean error in second half (after settling)
-        size_t start_idx = profile.data.size() / 2;
+        // Get steady-state velocity (last 30% of data)
+        size_t start_idx = profile.data.size() * 7 / 10;
+        std::vector<double> ss_velocities;
         for (size_t i = start_idx; i < profile.data.size(); ++i) {
-            double error = std::abs(profile.data[i].velocity - target_v) / target_v;
+            ss_velocities.push_back(profile.data[i].velocity);
+        }
+
+        if (ss_velocities.empty()) continue;
+
+        double measured_v = getMeanValue(ss_velocities);
+
+        // Predict velocity using feedforward model: cmd = kS + kV * v
+        // Rearranged: v = (cmd - kS) / kV
+        // Note: ff.kS and ff.kV are in normalized units [0-1], so we need to convert cmd_percent
+        double cmd_normalized = cmd_percent / 100.0;
+        double predicted_v = (cmd_normalized - ff.kS) / ff.kV;
+
+        if (predicted_v > 0.1 && measured_v > 0.1) {
+            double error = std::abs(measured_v - predicted_v) / measured_v;
             errors.push_back(error);
+            LIBSTP_LOG_DEBUG("Validation cmd={:.1f}%: measured={:.2f} rad/s, predicted={:.2f} rad/s, error={:.1f}%",
+                        cmd_percent, measured_v, predicted_v, error * 100.0);
         }
 
         stopMotor();
@@ -742,7 +795,7 @@ bool MotorCalibrator::validateCalibration(
     metrics.validation_max_error = *std::max_element(errors.begin(), errors.end());
     metrics.validation_passed = metrics.validation_max_error < config_.validation_max_error;
 
-    SPDLOG_INFO("Validation: mean_error={:.1f}%, max_error={:.1f}%, passed={}",
+    LIBSTP_LOG_INFO("Validation: mean_error={:.1f}%, max_error={:.1f}%, passed={}",
                 metrics.validation_mean_error * 100.0,
                 metrics.validation_max_error * 100.0,
                 metrics.validation_passed);
@@ -757,7 +810,7 @@ bool MotorCalibrator::validateCalibration(
 bool MotorCalibrator::checkSafetyLimits()
 {
     if (total_distance_moved_ > config_.max_test_distance_m) {
-        SPDLOG_ERROR("Safety limit exceeded: distance={:.3f}m > max={:.3f}m",
+        LIBSTP_LOG_ERROR("Safety limit exceeded: distance={:.3f}m > max={:.3f}m",
                     total_distance_moved_, config_.max_test_distance_m);
         emergency_stop_ = true;
         stopMotor();
@@ -771,14 +824,14 @@ bool MotorCalibrator::checkTimeout(double start_time)
     double elapsed = getCurrentTime() - start_time;
 
     if (elapsed > config_.max_single_test_duration) {
-        SPDLOG_ERROR("Individual test timeout: {:.2f}s > {:.2f}s",
+        LIBSTP_LOG_ERROR("Individual test timeout: {:.2f}s > {:.2f}s",
                     elapsed, config_.max_single_test_duration);
         return true;
     }
 
     double total_elapsed = getCurrentTime() - calibration_start_time_;
     if (total_elapsed > config_.max_calibration_duration) {
-        SPDLOG_ERROR("Total calibration timeout: {:.2f}s > {:.2f}s",
+        LIBSTP_LOG_ERROR("Total calibration timeout: {:.2f}s > {:.2f}s",
                     total_elapsed, config_.max_calibration_duration);
         return true;
     }
@@ -793,37 +846,37 @@ bool MotorCalibrator::validateParameterRanges(
     bool valid = true;
 
     if (ff.kS < config_.ranges.kS_min || ff.kS > config_.ranges.kS_max) {
-        SPDLOG_ERROR("kS={:.2f} out of range [{:.2f}, {:.2f}]",
+        LIBSTP_LOG_ERROR("kS={:.2f} out of range [{:.2f}, {:.2f}]",
                     ff.kS, config_.ranges.kS_min, config_.ranges.kS_max);
         valid = false;
     }
 
     if (ff.kV < config_.ranges.kV_min || ff.kV > config_.ranges.kV_max) {
-        SPDLOG_ERROR("kV={:.3f} out of range [{:.3f}, {:.3f}]",
+        LIBSTP_LOG_ERROR("kV={:.3f} out of range [{:.3f}, {:.3f}]",
                     ff.kV, config_.ranges.kV_min, config_.ranges.kV_max);
         valid = false;
     }
 
     if (ff.kA < config_.ranges.kA_min || ff.kA > config_.ranges.kA_max) {
-        SPDLOG_ERROR("kA={:.3f} out of range [{:.3f}, {:.3f}]",
+        LIBSTP_LOG_ERROR("kA={:.3f} out of range [{:.3f}, {:.3f}]",
                     ff.kA, config_.ranges.kA_min, config_.ranges.kA_max);
         valid = false;
     }
 
     if (pid.kp < config_.ranges.kp_min || pid.kp > config_.ranges.kp_max) {
-        SPDLOG_ERROR("kp={:.3f} out of range [{:.3f}, {:.3f}]",
+        LIBSTP_LOG_ERROR("kp={:.3f} out of range [{:.3f}, {:.3f}]",
                     pid.kp, config_.ranges.kp_min, config_.ranges.kp_max);
         valid = false;
     }
 
     if (pid.ki < config_.ranges.ki_min || pid.ki > config_.ranges.ki_max) {
-        SPDLOG_ERROR("ki={:.3f} out of range [{:.3f}, {:.3f}]",
+        LIBSTP_LOG_ERROR("ki={:.3f} out of range [{:.3f}, {:.3f}]",
                     pid.ki, config_.ranges.ki_min, config_.ranges.ki_max);
         valid = false;
     }
 
     if (pid.kd < config_.ranges.kd_min || pid.kd > config_.ranges.kd_max) {
-        SPDLOG_ERROR("kd={:.3f} out of range [{:.3f}, {:.3f}]",
+        LIBSTP_LOG_ERROR("kd={:.3f} out of range [{:.3f}, {:.3f}]",
                     pid.kd, config_.ranges.kd_min, config_.ranges.kd_max);
         valid = false;
     }
@@ -834,8 +887,20 @@ bool MotorCalibrator::validateParameterRanges(
 void MotorCalibrator::resetMotor()
 {
     stopMotor();
-    // Reset encoder position if applicable
-    // motor_.resetEncoder(); // If this method exists
+
+    // Wait for motor to fully stop - check velocity repeatedly
+    for (int i = 0; i < 10; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        adapter_->updateEncoderVelocity(0.05);
+
+        double velocity = std::abs(getMotorVelocity());
+        if (velocity < 0.1) {
+            break;  // Motor has stopped
+        }
+    }
+
+    // Additional settling time
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 void MotorCalibrator::stopMotor()

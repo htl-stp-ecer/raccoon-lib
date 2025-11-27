@@ -23,10 +23,10 @@ namespace libstp::odometry::fused
 
         // Wait for IMU to receive initial data from coprocessor
         if (imu_ && !imu_->waitForReady(1000)) {
-            SPDLOG_WARN("FusedOdometry::ctor - IMU not ready after timeout, proceeding anyway");
+            LIBSTP_LOG_WARN("FusedOdometry::ctor - IMU not ready after timeout, proceeding anyway");
         }
 
-        SPDLOG_INFO("FusedOdometry::ctor initialized with IMU and kinematics");
+        LIBSTP_LOG_INFO("FusedOdometry::ctor initialized with IMU and kinematics");
     }
 
     Eigen::Quaternionf FusedOdometry::getRelativeOrientation() const
@@ -54,7 +54,7 @@ namespace libstp::odometry::fused
         if (!imu_initialized_) {
             initial_imu_orientation_ = imu_->getOrientation();
             imu_initialized_ = true;
-            SPDLOG_INFO(
+            LIBSTP_LOG_INFO(
                 "FusedOdometry: IMU initialized with quat=({}, {}, {}, {})",
                 initial_imu_orientation_.w(),
                 initial_imu_orientation_.x(),
@@ -84,7 +84,7 @@ namespace libstp::odometry::fused
         // Integrate position in world frame
         position_ += v_world * static_cast<float>(dt);
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "FusedOdometry::update dt={} body_vel=({:.3f}, {:.3f}) world_vel=({:.3f}, {:.3f}) pos=({:.3f}, {:.3f}) heading={:.3f}",
             dt,
             body_velocity.vx, body_velocity.vy,
@@ -160,7 +160,7 @@ namespace libstp::odometry::fused
         // Re-initialize IMU to current reading
         imu_initialized_ = false;
 
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "FusedOdometry::reset to pose pos=({:.3f}, {:.3f}, {:.3f}) quat=({:.3f}, {:.3f}, {:.3f}, {:.3f})",
             pose.position.x(), pose.position.y(), pose.position.z(),
             pose.orientation.w(), pose.orientation.x(), pose.orientation.y(), pose.orientation.z()
@@ -171,7 +171,7 @@ namespace libstp::odometry::fused
     {
         // Wait for IMU to receive initial data from coprocessor
         if (imu_ && !imu_->waitForReady(1000)) {
-            SPDLOG_WARN("FusedOdometry::reset - IMU not ready after timeout, proceeding anyway");
+            LIBSTP_LOG_WARN("FusedOdometry::reset - IMU not ready after timeout, proceeding anyway");
         }
 
         // Reset encoder tracking to prevent stale position deltas
@@ -190,6 +190,6 @@ namespace libstp::odometry::fused
         // Re-initialize IMU to current reading
         imu_initialized_ = false;
 
-        SPDLOG_INFO("FusedOdometry::reset to origin");
+        LIBSTP_LOG_INFO("FusedOdometry::reset to origin");
     }
 }

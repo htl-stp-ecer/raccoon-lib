@@ -25,7 +25,7 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted, const foun
 
     registerMotorPort(port);
 #endif
-    SPDLOG_INFO(
+    LIBSTP_LOG_INFO(
         "Wombat Motor ctor port={} inverted={} pid(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
         this->port,
         this->inverted,
@@ -48,7 +48,7 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
     {
         scaled = -scaled;
     }
-    SPDLOG_TRACE(
+    LIBSTP_LOG_TRACE(
         "Wombat Motor port={} setSpeed percent={} scaled={} inverted={}",
         port,
         percent,
@@ -64,7 +64,7 @@ int libstp::hal::motor::Motor::getPosition() const
     // Apply inversion to position reading to match command convention
     const int corrected = inverted ? reading : -reading;
 
-    SPDLOG_TRACE("Wombat Motor port={} getPosition raw={} corrected={} inverted={}",
+    LIBSTP_LOG_TRACE("Wombat Motor port={} getPosition raw={} corrected={} inverted={}",
                  port, reading, corrected, inverted);
     return corrected;
 }
@@ -72,14 +72,14 @@ int libstp::hal::motor::Motor::getPosition() const
 void libstp::hal::motor::Motor::brake() const
 {
     platform::wombat::core::LcmDataWriter::instance().setMotor(port, 0);
-    SPDLOG_INFO("Wombat Motor port={} brake", port);
+    LIBSTP_LOG_INFO("Wombat Motor port={} brake", port);
 }
 
 void libstp::hal::motor::Motor::disableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
         platform::wombat::core::LcmDataWriter::instance().setMotor(p, 0);
-    SPDLOG_INFO("Wombat Motor disableAll executed");
+    LIBSTP_LOG_INFO("Wombat Motor disableAll executed");
 }
 
 const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibration() const

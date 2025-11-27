@@ -7,8 +7,10 @@
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 #include <cmath>
+#include <thread>
 
 namespace libstp::kinematics::mecanum
 {
@@ -37,7 +39,7 @@ namespace libstp::kinematics::mecanum
         if (trackWidth <= 0.0) throw std::invalid_argument("trackWidth must be positive");
         if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
         setWheelLimits(max_velocity, max_acceleration);
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "MecanumKinematics::ctor wheelbase={} trackWidth={} wheelRadius={} max_vel={} max_accel={}",
             wheelbase,
             trackWidth,
@@ -56,7 +58,7 @@ namespace libstp::kinematics::mecanum
         back_left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         back_right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
 
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "MecanumKinematics::setWheelLimits max_velocity={} max_acceleration={}",
             max_wheel_velocity_,
             max_wheel_acceleration_);
@@ -69,7 +71,7 @@ namespace libstp::kinematics::mecanum
 
     MotorCommands MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "MecanumKinematics::applyCommand dt={} cmd vx={} vy={} wz={}",
             dt,
             cmd.vx,
@@ -84,7 +86,7 @@ namespace libstp::kinematics::mecanum
         const double w_bl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
         const double w_br = (cmd.vx + cmd.vy + L * cmd.wz) / m_wheelRadius;
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics wheel speeds raw fl={} fr={} bl={} br={}",
             w_fl,
             w_fr,
@@ -96,7 +98,7 @@ namespace libstp::kinematics::mecanum
         const double bl_clamped = std::clamp(w_bl, -max_wheel_velocity_, max_wheel_velocity_);
         const double br_clamped = std::clamp(w_br, -max_wheel_velocity_, max_wheel_velocity_);
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics wheel speeds clamped fl={} fr={} bl={} br={} (max={})",
             fl_clamped,
             fr_clamped,
@@ -111,7 +113,7 @@ namespace libstp::kinematics::mecanum
         const double bl_limited = back_left_motor_.limiter.step(bl_clamped, back_left_motor_.target_w, dt, bl_accel);
         const double br_limited = back_right_motor_.limiter.step(br_clamped, back_right_motor_.target_w, dt, br_accel);
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics wheel speeds limited fl={} fr={} bl={} br={} accel_fl={} accel_fr={} accel_bl={} accel_br={}",
             fl_limited,
             fr_limited,
@@ -133,7 +135,7 @@ namespace libstp::kinematics::mecanum
         back_left_motor_.adapter.setVelocityWithAccel(bl_limited, bl_accel, dt, &bl_sat);
         back_right_motor_.adapter.setVelocityWithAccel(br_limited, br_accel, dt, &br_sat);
 
-        SPDLOG_INFO(
+        LIBSTP_LOG_INFO(
             "MecanumKinematics command applied fl={} fr={} bl={} br={} sat_fl={} sat_fr={} sat_bl={} sat_br={} dt={}",
             fl_limited,
             fr_limited,
@@ -168,7 +170,7 @@ namespace libstp::kinematics::mecanum
         const double vy = (w_fl - w_fr - w_bl + w_br) * m_wheelRadius / 4.0;
         const double w = (-w_fl + w_fr - w_bl + w_br) * m_wheelRadius / (4.0 * L);
 
-        SPDLOG_TRACE(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics::estimateState wheels fl={} fr={} bl={} br={} -> vx={} vy={} w={}",
             w_fl,
             w_fr,
@@ -183,7 +185,7 @@ namespace libstp::kinematics::mecanum
 
     void MecanumKinematics::hardStop()
     {
-        SPDLOG_INFO("MecanumKinematics::hardStop invoked");
+        LIBSTP_LOG_INFO("MecanumKinematics::hardStop invoked");
         front_left_motor_.target_w = 0.0;
         front_right_motor_.target_w = 0.0;
         back_left_motor_.target_w = 0.0;
@@ -211,7 +213,7 @@ namespace libstp::kinematics::mecanum
         front_right_motor_.adapter.resetEncoderTracking();
         back_left_motor_.adapter.resetEncoderTracking();
         back_right_motor_.adapter.resetEncoderTracking();
-        SPDLOG_INFO("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
+        LIBSTP_LOG_INFO("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
     std::vector<drive::CalibrationResult> MecanumKinematics::calibrateMotors()
@@ -222,64 +224,64 @@ namespace libstp::kinematics::mecanum
     std::vector<drive::CalibrationResult> MecanumKinematics::calibrateMotors(
         const drive::CalibrationConfig& config)
     {
-        SPDLOG_INFO("=== Starting MecanumKinematics motor calibration ===");
+        LIBSTP_LOG_INFO("=== Starting MecanumKinematics motor calibration ===");
 
         std::vector<drive::CalibrationResult> results;
 
         // Calibrate front left motor
-        SPDLOG_INFO("Calibrating front left motor...");
+        LIBSTP_LOG_INFO("Calibrating front left motor...");
         drive::CalibrationResult fl_result = front_left_motor_.adapter.calibrate(config);
         results.push_back(fl_result);
 
         if (fl_result.success) {
-            SPDLOG_INFO("Front left motor calibration successful");
+            LIBSTP_LOG_INFO("Front left motor calibration successful");
         } else {
-            SPDLOG_ERROR("Front left motor calibration failed: {}", fl_result.error_message);
+            LIBSTP_LOG_ERROR("Front left motor calibration failed: {}", fl_result.error_message);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Calibrate front right motor
-        SPDLOG_INFO("Calibrating front right motor...");
+        LIBSTP_LOG_INFO("Calibrating front right motor...");
         drive::CalibrationResult fr_result = front_right_motor_.adapter.calibrate(config);
         results.push_back(fr_result);
 
         if (fr_result.success) {
-            SPDLOG_INFO("Front right motor calibration successful");
+            LIBSTP_LOG_INFO("Front right motor calibration successful");
         } else {
-            SPDLOG_ERROR("Front right motor calibration failed: {}", fr_result.error_message);
+            LIBSTP_LOG_ERROR("Front right motor calibration failed: {}", fr_result.error_message);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Calibrate back left motor
-        SPDLOG_INFO("Calibrating back left motor...");
+        LIBSTP_LOG_INFO("Calibrating back left motor...");
         drive::CalibrationResult bl_result = back_left_motor_.adapter.calibrate(config);
         results.push_back(bl_result);
 
         if (bl_result.success) {
-            SPDLOG_INFO("Back left motor calibration successful");
+            LIBSTP_LOG_INFO("Back left motor calibration successful");
         } else {
-            SPDLOG_ERROR("Back left motor calibration failed: {}", bl_result.error_message);
+            LIBSTP_LOG_ERROR("Back left motor calibration failed: {}", bl_result.error_message);
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Calibrate back right motor
-        SPDLOG_INFO("Calibrating back right motor...");
+        LIBSTP_LOG_INFO("Calibrating back right motor...");
         drive::CalibrationResult br_result = back_right_motor_.adapter.calibrate(config);
         results.push_back(br_result);
 
         if (br_result.success) {
-            SPDLOG_INFO("Back right motor calibration successful");
+            LIBSTP_LOG_INFO("Back right motor calibration successful");
         } else {
-            SPDLOG_ERROR("Back right motor calibration failed: {}", br_result.error_message);
+            LIBSTP_LOG_ERROR("Back right motor calibration failed: {}", br_result.error_message);
         }
 
-        SPDLOG_INFO("=== MecanumKinematics motor calibration completed ===");
+        LIBSTP_LOG_INFO("=== MecanumKinematics motor calibration completed ===");
         int success_count = (fl_result.success ? 1 : 0) + (fr_result.success ? 1 : 0) +
                            (bl_result.success ? 1 : 0) + (br_result.success ? 1 : 0);
-        SPDLOG_INFO("Success rate: {}/4 motors", success_count);
+        LIBSTP_LOG_INFO("Success rate: {}/4 motors", success_count);
 
         return results;
     }

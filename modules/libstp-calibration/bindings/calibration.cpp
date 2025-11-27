@@ -1,6 +1,7 @@
 //
-// Created by Claude Code for calibration bindings
+// Created by tobias on 27/11/25.
 //
+
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 

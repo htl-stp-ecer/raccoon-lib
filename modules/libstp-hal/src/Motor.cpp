@@ -9,10 +9,10 @@ using namespace libstp::hal::motor;
 #ifdef SAFETY_CHECKS_ENABLED
 void Motor::registerMotorPort(int port)
 {
-    SPDLOG_INFO("Registering motor port {}", port);
+    LIBSTP_LOG_INFO("Registering motor port {}", port);
     if (used_motor_ports.contains(port))
     {
-        SPDLOG_WARN("Motor port {} is already in use!", port);
+        LIBSTP_LOG_WARN("Motor port {} is already in use!", port);
         return;
     }
 
@@ -21,7 +21,7 @@ void Motor::registerMotorPort(int port)
 
 void Motor::unregisterMotorPort(const int port)
 {
-    SPDLOG_INFO("Unregistering motor port {}", port);
+    LIBSTP_LOG_INFO("Unregistering motor port {}", port);
     used_motor_ports.erase(port);
 }
 #endif
@@ -29,7 +29,7 @@ void Motor::unregisterMotorPort(const int port)
 
 Motor::~Motor()
 {
-    SPDLOG_INFO("Destroying motor on port {}", port);
+    LIBSTP_LOG_INFO("Destroying motor on port {}", port);
     brake();
 #ifdef SAFETY_CHECKS_ENABLED
     unregisterMotorPort(port);
