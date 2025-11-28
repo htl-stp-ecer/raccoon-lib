@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include "motion/turn_motion.hpp"
+#include "motion/motion_pid.hpp"
 
 namespace py = pybind11;
 
@@ -15,6 +16,8 @@ void init_turn(py::module_& m)
         .def_readwrite("max_angular_rate", &TurnConfig::max_angular_rate)
         .def_readwrite("angle_tolerance_rad", &TurnConfig::angle_tolerance_rad)
         .def_readwrite("angle_kp", &TurnConfig::angle_kp)
+        .def_readwrite("angle_ki", &TurnConfig::angle_ki)
+        .def_readwrite("angle_kd", &TurnConfig::angle_kd)
         .def_readwrite("min_angular_rate", &TurnConfig::min_angular_rate)
         .def_readwrite("saturation_derating_factor", &TurnConfig::saturation_derating_factor)
         .def_readwrite("saturation_min_scale", &TurnConfig::saturation_min_scale)

@@ -1,4 +1,5 @@
 #include "motion/strafe_motion.hpp"
+#include "motion/motion_pid.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,27 @@ namespace libstp::motion
         cfg_.saturation_derating_factor = std::clamp(cfg_.saturation_derating_factor, 0.1, 0.99);
         cfg_.saturation_min_scale = std::clamp(cfg_.saturation_min_scale, 0.05, 1.0);
         cfg_.saturation_recovery_rate = std::clamp(cfg_.saturation_recovery_rate, 0.0, 0.5);
+
+        // Create PID controllers
+        MotionPidController::Config lateral_pid_cfg;
+        lateral_pid_cfg.kp = cfg_.distance_kp;
+        lateral_pid_cfg.ki = cfg_.distance_ki;
+        lateral_pid_cfg.kd = cfg_.distance_kd;
+        lateral_pid_cfg.output_min = -cfg_.max_speed_mps;
+        lateral_pid_cfg.output_max = cfg_.max_speed_mps;
+        lateral_pid_cfg.integral_max = (cfg_.distance_ki > 0.01) ? (cfg_.max_speed_mps / cfg_.distance_ki) : 10.0;
+        lateral_pid_cfg.integral_deadband = cfg_.distance_tolerance_m;
+        lateral_pid_ = std::make_unique<MotionPidController>(lateral_pid_cfg);
+
+        MotionPidController::Config heading_pid_cfg;
+        heading_pid_cfg.kp = cfg_.heading_kp;
+        heading_pid_cfg.ki = cfg_.heading_ki;
+        heading_pid_cfg.kd = cfg_.heading_kd;
+        heading_pid_cfg.output_min = -3.0;  // Max heading correction rate
+        heading_pid_cfg.output_max = 3.0;
+        heading_pid_cfg.integral_max = (cfg_.heading_ki > 0.01) ? (3.0 / cfg_.heading_ki) : 10.0;
+        heading_pid_cfg.integral_deadband = 0.01;  // ~0.5 degrees
+        heading_pid_ = std::make_unique<MotionPidController>(heading_pid_cfg);
     }
 
     void StrafeMotion::start()
@@ -40,6 +62,10 @@ namespace libstp::motion
 
         // Reset odometry to establish new origin for this motion
         odometry().reset();
+
+        // Reset PID controllers
+        lateral_pid_->reset();
+        heading_pid_->reset();
 
         // Store initial heading (should be ~0 after reset) and target distance
         initial_heading_rad_ = odometry().getHeading();
@@ -99,11 +125,8 @@ namespace libstp::motion
             return;
         }
 
-        // Compute lateral velocity using proportional control
-        double vy_cmd = cfg_.distance_kp * lateral_error;
-
-        // Clamp to maximum speed
-        vy_cmd = std::clamp(vy_cmd, -cfg_.max_speed_mps, cfg_.max_speed_mps);
+        // Compute lateral velocity using PID control
+        double vy_cmd = lateral_pid_->update(lateral_error, dt);
 
         // Apply minimum speed to prevent stalling
         if (error_abs > cfg_.distance_tolerance_m && std::abs(vy_cmd) < cfg_.min_speed_mps)
@@ -117,7 +140,7 @@ namespace libstp::motion
         const double vy_cmd_scaled = vy_cmd * speed_scale_;
 
         // Compute heading correction to maintain straight strafe
-        const double omega_correction = cfg_.heading_kp * heading_error;
+        const double omega_correction = heading_pid_->update(heading_error, dt);
 
         LIBSTP_LOG_INFO("StrafeMotion: vy_cmd = {:.3f} m/s, scaled = {:.3f} m/s (scale={:.3f}), omega_correction = {:.3f} rad/s",
                     vy_cmd, vy_cmd_scaled, speed_scale_, omega_correction);

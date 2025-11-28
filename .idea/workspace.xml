@@ -105,21 +105,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Refactor logging system: replace spdlog with foundation logging macros and update calibration file metadata">
-      <change afterPath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration_config.hpp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration_result.hpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/bindings/calibration.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/bindings/calibration.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/src/calibration.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/src/calibration.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/bindings/bindings.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/bindings/bindings.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-servo/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-servo/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/strafe_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/strafe_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/strafe_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/strafe_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -736,7 +729,7 @@
       <workItem from="1763710672487" duration="10061000" />
       <workItem from="1764069076086" duration="7628000" />
       <workItem from="1764255874700" duration="15764000" />
-      <workItem from="1764316380804" duration="5251000" />
+      <workItem from="1764316380804" duration="7601000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -802,7 +795,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764276185848</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Refactor logging system: replace spdlog with foundation logging macros and update calibration file metadata">
+      <option name="closed" value="true" />
+      <created>1764324117659</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1764324117659</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
