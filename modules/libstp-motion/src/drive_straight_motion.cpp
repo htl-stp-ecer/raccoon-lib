@@ -1,4 +1,5 @@
 #include "motion/drive_straight_motion.hpp"
+#include "motion/motion_pid.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -39,6 +40,37 @@ namespace libstp::motion
         cfg_.heading_min_scale = std::clamp(cfg_.heading_min_scale, 0.05, 1.0);
         cfg_.heading_recovery_rate = std::clamp(cfg_.heading_recovery_rate, 0.0, 0.5);
         cfg_.heading_recovery_error_rad = std::clamp(cfg_.heading_recovery_error_rad, 0.0, 0.5);
+
+        // Create PID controllers
+        MotionPidController::Config distance_pid_cfg;
+        distance_pid_cfg.kp = cfg_.distance_kp;
+        distance_pid_cfg.ki = cfg_.distance_ki;
+        distance_pid_cfg.kd = cfg_.distance_kd;
+        distance_pid_cfg.output_min = -cfg_.max_speed_mps;
+        distance_pid_cfg.output_max = cfg_.max_speed_mps;
+        distance_pid_cfg.integral_max = (cfg_.distance_ki > 0.01) ? (cfg_.max_speed_mps / cfg_.distance_ki) : 10.0;
+        distance_pid_cfg.integral_deadband = cfg_.distance_tolerance_m;
+        distance_pid_ = std::make_unique<MotionPidController>(distance_pid_cfg);
+
+        MotionPidController::Config heading_pid_cfg;
+        heading_pid_cfg.kp = cfg_.heading_kp;
+        heading_pid_cfg.ki = cfg_.heading_ki;
+        heading_pid_cfg.kd = cfg_.heading_kd;
+        heading_pid_cfg.output_min = -cfg_.max_heading_rate;
+        heading_pid_cfg.output_max = cfg_.max_heading_rate;
+        heading_pid_cfg.integral_max = (cfg_.heading_ki > 0.01) ? (cfg_.max_heading_rate / cfg_.heading_ki) : 10.0;
+        heading_pid_cfg.integral_deadband = 0.01;  // ~0.5 degrees
+        heading_pid_ = std::make_unique<MotionPidController>(heading_pid_cfg);
+
+        MotionPidController::Config lateral_pid_cfg;
+        lateral_pid_cfg.kp = cfg_.lateral_kp;
+        lateral_pid_cfg.ki = cfg_.lateral_ki;
+        lateral_pid_cfg.kd = cfg_.lateral_kd;
+        lateral_pid_cfg.output_min = -cfg_.max_speed_mps;
+        lateral_pid_cfg.output_max = cfg_.max_speed_mps;
+        lateral_pid_cfg.integral_max = (cfg_.lateral_ki > 0.01) ? (cfg_.max_speed_mps / cfg_.lateral_ki) : 10.0;
+        lateral_pid_cfg.integral_deadband = 0.005;  // 5mm
+        lateral_pid_ = std::make_unique<MotionPidController>(lateral_pid_cfg);
     }
 
     void DriveStraightMotion::start()
@@ -52,6 +84,11 @@ namespace libstp::motion
 
         // Reset odometry to establish new origin for this motion
         odometry().reset();
+
+        // Reset PID controllers
+        distance_pid_->reset();
+        heading_pid_->reset();
+        lateral_pid_->reset();
 
         const double initial_heading = odometry().getHeading();
         initial_heading_rad_ = initial_heading;
@@ -121,9 +158,9 @@ namespace libstp::motion
             // MECANUM STRATEGY: Direct lateral correction using vy
             // Note: lateral_error is positive when drifted right (from odometry)
             // For mecanum, positive vy moves right, so we want negative vy to correct rightward drift
-            // Therefore: vy_cmd = -lateral_kp * lateral_error (already has correct sign)
-            vy_cmd = std::clamp(-cfg_.lateral_kp * lateral_error_world, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
-            omega_cmd = std::clamp(cfg_.heading_kp * yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+            vy_cmd = -lateral_pid_->update(lateral_error_world, dt);
+            vy_cmd = std::clamp(vy_cmd, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
+            omega_cmd = heading_pid_->update(yaw_error, dt);
             LIBSTP_LOG_INFO("DriveStraightMotion [MECANUM] vy_cmd = {:.3f} m/s, omega_cmd = {:.3f} rad/s", vy_cmd, omega_cmd);
         }
         else
@@ -148,7 +185,7 @@ namespace libstp::motion
                 const double target_heading = initial_heading_rad_ + desired_heading_bias;
                 const double yaw_to_target = odometry().getHeadingError(target_heading);
 
-                omega_cmd = std::clamp(cfg_.heading_kp * yaw_to_target, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+                omega_cmd = heading_pid_->update(yaw_to_target, dt);
                 LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL-REORIENT] yaw_to_target = {:.3f} rad, omega_cmd = {:.3f} rad/s",
                             yaw_to_target, omega_cmd);
 
@@ -164,14 +201,14 @@ namespace libstp::motion
                 // Normal mode: bias heading slightly to correct lateral drift
                 const double heading_bias = std::atan(cfg_.lateral_heading_bias_gain * lateral_error_world);
                 const double biased_yaw_error = yaw_error + heading_bias;
-                omega_cmd = std::clamp(cfg_.heading_kp * biased_yaw_error, -cfg_.max_heading_rate, cfg_.max_heading_rate);
+                omega_cmd = heading_pid_->update(biased_yaw_error, dt);
                 LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL-BIAS] heading_bias = {:.3f} rad, biased_yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s",
                             heading_bias, biased_yaw_error, omega_cmd);
             }
         }
 
         // ===== FORWARD VELOCITY CONTROL =====
-        double vx_cmd = std::clamp(cfg_.distance_kp * remaining, -cfg_.max_speed_mps, cfg_.max_speed_mps);
+        double vx_cmd = distance_pid_->update(remaining, dt);
 
         if (std::abs(vx_cmd) < 1e-4)
         {

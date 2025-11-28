@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include "motion/drive_straight_motion.hpp"
+#include "motion/motion_pid.hpp"
 
 namespace py = pybind11;
 
@@ -15,7 +16,11 @@ void init_drive_straight(py::module_& m)
         .def_readwrite("max_speed_mps", &DriveStraightConfig::max_speed_mps)
         .def_readwrite("distance_tolerance_m", &DriveStraightConfig::distance_tolerance_m)
         .def_readwrite("distance_kp", &DriveStraightConfig::distance_kp)
+        .def_readwrite("distance_ki", &DriveStraightConfig::distance_ki)
+        .def_readwrite("distance_kd", &DriveStraightConfig::distance_kd)
         .def_readwrite("heading_kp", &DriveStraightConfig::heading_kp)
+        .def_readwrite("heading_ki", &DriveStraightConfig::heading_ki)
+        .def_readwrite("heading_kd", &DriveStraightConfig::heading_kd)
         .def_readwrite("max_heading_rate", &DriveStraightConfig::max_heading_rate)
         .def_readwrite("saturation_derating_factor", &DriveStraightConfig::saturation_derating_factor)
         .def_readwrite("saturation_min_speed_scale", &DriveStraightConfig::saturation_min_speed_scale)
@@ -26,6 +31,8 @@ void init_drive_straight(py::module_& m)
         .def_readwrite("heading_recovery_rate", &DriveStraightConfig::heading_recovery_rate)
         .def_readwrite("heading_recovery_error_rad", &DriveStraightConfig::heading_recovery_error_rad)
         .def_readwrite("lateral_kp", &DriveStraightConfig::lateral_kp)
+        .def_readwrite("lateral_ki", &DriveStraightConfig::lateral_ki)
+        .def_readwrite("lateral_kd", &DriveStraightConfig::lateral_kd)
         .def_readwrite("lateral_heading_bias_gain", &DriveStraightConfig::lateral_heading_bias_gain)
         .def_readwrite("lateral_reorient_threshold_m", &DriveStraightConfig::lateral_reorient_threshold_m);
 

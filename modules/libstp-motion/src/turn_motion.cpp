@@ -1,4 +1,5 @@
 #include "motion/turn_motion.hpp"
+#include "motion/motion_pid.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -33,6 +34,18 @@ namespace libstp::motion
         cfg_.saturation_derating_factor = std::clamp(cfg_.saturation_derating_factor, 0.1, 0.99);
         cfg_.saturation_min_scale = std::clamp(cfg_.saturation_min_scale, 0.05, 1.0);
         cfg_.saturation_recovery_rate = std::clamp(cfg_.saturation_recovery_rate, 0.0, 0.5);
+
+        // Create PID controller
+        MotionPidController::Config pid_cfg;
+        pid_cfg.kp = cfg_.angle_kp;
+        pid_cfg.ki = cfg_.angle_ki;
+        pid_cfg.kd = cfg_.angle_kd;
+        pid_cfg.output_min = -cfg_.max_angular_rate;
+        pid_cfg.output_max = cfg_.max_angular_rate;
+        pid_cfg.integral_max = (cfg_.angle_ki > 0.01) ? (cfg_.max_angular_rate / cfg_.angle_ki) : 10.0;
+        pid_cfg.integral_deadband = cfg_.angle_tolerance_rad;
+
+        angle_pid_ = std::make_unique<MotionPidController>(pid_cfg);
     }
 
     void TurnMotion::start()
@@ -45,6 +58,9 @@ namespace libstp::motion
         // Reset odometry to establish new origin for this motion
         // This zeros the heading, so our initial heading is 0.0
         odometry().reset();
+
+        // Reset PID controller state
+        angle_pid_->reset();
 
         // Target heading is simply the desired turn angle (since we reset to 0)
         target_heading_rad_ = cfg_.target_angle_rad;
@@ -96,13 +112,10 @@ namespace libstp::motion
             return;
         }
 
-        // Compute angular velocity using proportional control
+        // Compute angular velocity using PID control
         // Positive error -> need to turn CCW (positive omega)
         // Negative error -> need to turn CW (negative omega)
-        double omega_cmd = cfg_.angle_kp * heading_error;
-
-        // Clamp to maximum angular rate
-        omega_cmd = std::clamp(omega_cmd, -cfg_.max_angular_rate, cfg_.max_angular_rate);
+        double omega_cmd = angle_pid_->update(heading_error, dt);
 
         // Apply minimum angular rate to prevent stalling
         // Only apply minimum if error is still significant

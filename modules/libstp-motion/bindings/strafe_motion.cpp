@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include "motion/strafe_motion.hpp"
+#include "motion/motion_pid.hpp"
 
 namespace py = pybind11;
 
@@ -15,7 +16,11 @@ void init_strafe(py::module_& m)
         .def_readwrite("max_speed_mps", &StrafeConfig::max_speed_mps)
         .def_readwrite("distance_tolerance_m", &StrafeConfig::distance_tolerance_m)
         .def_readwrite("distance_kp", &StrafeConfig::distance_kp)
+        .def_readwrite("distance_ki", &StrafeConfig::distance_ki)
+        .def_readwrite("distance_kd", &StrafeConfig::distance_kd)
         .def_readwrite("heading_kp", &StrafeConfig::heading_kp)
+        .def_readwrite("heading_ki", &StrafeConfig::heading_ki)
+        .def_readwrite("heading_kd", &StrafeConfig::heading_kd)
         .def_readwrite("min_speed_mps", &StrafeConfig::min_speed_mps)
         .def_readwrite("saturation_derating_factor", &StrafeConfig::saturation_derating_factor)
         .def_readwrite("saturation_min_scale", &StrafeConfig::saturation_min_scale)
