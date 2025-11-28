@@ -11,8 +11,10 @@
 #include <numeric>
 #include <chrono>
 #include <thread>
+#include <utility>
 
-using namespace libstp::drive;
+using namespace libstp::calibration;
+using namespace  libstp::drive;
 using namespace libstp;
 
 namespace {
@@ -37,8 +39,8 @@ namespace {
     }
 }
 
-MotorCalibrator::MotorCalibrator(hal::motor::Motor& motor, const CalibrationConfig& config)
-    : motor_(motor), config_(config)
+MotorCalibrator::MotorCalibrator(hal::motor::Motor& motor, CalibrationConfig  config)
+    : motor_(motor), config_(std::move(config))
 {
     LIBSTP_LOG_INFO("MotorCalibrator created for motor port {}", motor_.port);
 
@@ -261,19 +263,19 @@ double MotorCalibrator::findVelocityConstant()
     // Linear regression: command = kS + kV * velocity
     // Fit y = slope * x + intercept where y=command, x=velocity
     // So: command = kV * velocity + kS_regression
-    LinearRegression fit = linearFit(velocities, commands);
+    auto [slope, intercept, r_squared] = linearFit(velocities, commands);
 
-    result_.metrics.velocity_constant_r_squared = fit.r_squared;
+    result_.metrics.velocity_constant_r_squared = r_squared;
     result_.metrics.velocity_samples = commands.size();
 
-    double kV = fit.slope;
-    double kS_regression = fit.intercept;
+    double kV = slope;
+    double kS_regression = intercept;
 
     LIBSTP_LOG_INFO("Velocity constant linear fit: kV={:.3f}, kS_from_regression={:.2f}%, R²={:.3f}",
-                    kV, kS_regression, fit.r_squared);
+                    kV, kS_regression, r_squared);
 
-    if (fit.r_squared < 0.8) {
-        LIBSTP_LOG_WARN("Poor linear fit (R²={:.3f}), velocity constant may be inaccurate", fit.r_squared);
+    if (r_squared < 0.8) {
+        LIBSTP_LOG_WARN("Poor linear fit (R²={:.3f}), velocity constant may be inaccurate", r_squared);
     }
 
     // Validate

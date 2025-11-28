@@ -6,11 +6,10 @@
 #include "kinematics/kinematics.hpp"
 #include "drive/motor_adapter.hpp"
 #include "drive/rate_limiter.hpp"
-#include "foundation/config.hpp"
 #include "hal/Motor.hpp"
 #include <vector>
 
-namespace libstp::drive {
+namespace libstp::calibration {
     struct CalibrationConfig;
     struct CalibrationResult;
 }
@@ -55,7 +54,7 @@ namespace libstp::kinematics::differential
         void resetEncoders() override;
 
         // Calibration methods
-        std::vector<drive::CalibrationResult> calibrateMotors();
-        std::vector<drive::CalibrationResult> calibrateMotors(const drive::CalibrationConfig& config);
+        std::vector<calibration::CalibrationResult> calibrateMotors();
+        std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config);
     };
 }

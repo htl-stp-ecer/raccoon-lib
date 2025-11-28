@@ -1,1 +1,1 @@
-register_libstp_module(servo "TRUE" "")
+register_libstp_module(actor_servo "TRUE" "")

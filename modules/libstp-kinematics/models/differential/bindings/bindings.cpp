@@ -38,7 +38,7 @@ PYBIND11_MODULE(kinematics_differential, m)
              py::overload_cast<>(&libstp::kinematics::differential::DifferentialKinematics::calibrateMotors),
              "Calibrate both motors with default configuration")
         .def("calibrate_motors",
-             py::overload_cast<const libstp::drive::CalibrationConfig&>(
+             py::overload_cast<const libstp::calibration::CalibrationConfig&>(
                  &libstp::kinematics::differential::DifferentialKinematics::calibrateMotors),
              py::arg("config"),
              "Calibrate both motors with custom configuration");

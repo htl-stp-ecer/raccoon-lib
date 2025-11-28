@@ -10,7 +10,7 @@
 #include "hal/Motor.hpp"
 #include <vector>
 
-namespace libstp::drive {
+namespace libstp::calibration {
     struct CalibrationConfig;
     struct CalibrationResult;
 }
@@ -61,7 +61,7 @@ namespace libstp::kinematics::mecanum
         void resetEncoders() override;
 
         // Calibration methods
-        std::vector<drive::CalibrationResult> calibrateMotors();
-        std::vector<drive::CalibrationResult> calibrateMotors(const drive::CalibrationConfig& config);
+        std::vector<calibration::CalibrationResult> calibrateMotors();
+        std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config);
     };
 }
