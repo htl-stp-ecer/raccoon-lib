@@ -203,16 +203,16 @@ void MotorAdapter::resetEncoderTracking()
 libstp::hal::motor::Motor& MotorAdapter::motor() { return *motor_; }
 const libstp::hal::motor::Motor& MotorAdapter::motor() const { return *motor_; }
 
-CalibrationResult MotorAdapter::calibrate()
+libstp::calibration::CalibrationResult MotorAdapter::calibrate()
 {
-    return calibrate(CalibrationConfig{});
+    return calibrate(calibration::CalibrationConfig{});
 }
 
-CalibrationResult MotorAdapter::calibrate(const CalibrationConfig& config)
+libstp::calibration::CalibrationResult MotorAdapter::calibrate(const calibration::CalibrationConfig& config)
 {
     if (!motor_)
     {
-        CalibrationResult result;
+        calibration::CalibrationResult result;
         result.success = false;
         result.error_message = "Cannot calibrate: null motor pointer";
         LIBSTP_LOG_ERROR("{}", result.error_message);
@@ -222,8 +222,8 @@ CalibrationResult MotorAdapter::calibrate(const CalibrationConfig& config)
     LIBSTP_LOG_INFO("Starting calibration for motor on port {}", motor_->port);
 
     // Create calibrator and run calibration
-    MotorCalibrator calibrator(*motor_, config);
-    CalibrationResult result = calibrator.calibrate();
+    calibration::MotorCalibrator calibrator(*motor_, config);
+    calibration::CalibrationResult result = calibrator.calibrate();
 
     if (result.success)
     {

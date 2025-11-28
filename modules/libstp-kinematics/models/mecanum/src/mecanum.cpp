@@ -216,21 +216,21 @@ namespace libstp::kinematics::mecanum
         LIBSTP_LOG_INFO("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
-    std::vector<drive::CalibrationResult> MecanumKinematics::calibrateMotors()
+    std::vector<calibration::CalibrationResult> MecanumKinematics::calibrateMotors()
     {
-        return calibrateMotors(drive::CalibrationConfig{});
+        return calibrateMotors(calibration::CalibrationConfig{});
     }
 
-    std::vector<drive::CalibrationResult> MecanumKinematics::calibrateMotors(
-        const drive::CalibrationConfig& config)
+    std::vector<calibration::CalibrationResult> MecanumKinematics::calibrateMotors(
+        const calibration::CalibrationConfig& config)
     {
         LIBSTP_LOG_INFO("=== Starting MecanumKinematics motor calibration ===");
 
-        std::vector<drive::CalibrationResult> results;
+        std::vector<calibration::CalibrationResult> results;
 
         // Calibrate front left motor
         LIBSTP_LOG_INFO("Calibrating front left motor...");
-        drive::CalibrationResult fl_result = front_left_motor_.adapter.calibrate(config);
+        calibration::CalibrationResult fl_result = front_left_motor_.adapter.calibrate(config);
         results.push_back(fl_result);
 
         if (fl_result.success) {
@@ -243,7 +243,7 @@ namespace libstp::kinematics::mecanum
 
         // Calibrate front right motor
         LIBSTP_LOG_INFO("Calibrating front right motor...");
-        drive::CalibrationResult fr_result = front_right_motor_.adapter.calibrate(config);
+        calibration::CalibrationResult fr_result = front_right_motor_.adapter.calibrate(config);
         results.push_back(fr_result);
 
         if (fr_result.success) {
@@ -256,7 +256,7 @@ namespace libstp::kinematics::mecanum
 
         // Calibrate back left motor
         LIBSTP_LOG_INFO("Calibrating back left motor...");
-        drive::CalibrationResult bl_result = back_left_motor_.adapter.calibrate(config);
+        calibration::CalibrationResult bl_result = back_left_motor_.adapter.calibrate(config);
         results.push_back(bl_result);
 
         if (bl_result.success) {
@@ -269,7 +269,7 @@ namespace libstp::kinematics::mecanum
 
         // Calibrate back right motor
         LIBSTP_LOG_INFO("Calibrating back right motor...");
-        drive::CalibrationResult br_result = back_right_motor_.adapter.calibrate(config);
+        calibration::CalibrationResult br_result = back_right_motor_.adapter.calibrate(config);
         results.push_back(br_result);
 
         if (br_result.success) {

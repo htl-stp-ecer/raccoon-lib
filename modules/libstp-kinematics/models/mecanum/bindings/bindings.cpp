@@ -44,7 +44,7 @@ PYBIND11_MODULE(kinematics_mecanum, m)
              py::overload_cast<>(&libstp::kinematics::mecanum::MecanumKinematics::calibrateMotors),
              "Calibrate all 4 motors with default configuration")
         .def("calibrate_motors",
-             py::overload_cast<const libstp::drive::CalibrationConfig&>(
+             py::overload_cast<const libstp::calibration::CalibrationConfig&>(
                  &libstp::kinematics::mecanum::MecanumKinematics::calibrateMotors),
              py::arg("config"),
              "Calibrate all 4 motors with custom configuration");

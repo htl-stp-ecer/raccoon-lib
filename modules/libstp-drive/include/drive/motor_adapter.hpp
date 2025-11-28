@@ -5,14 +5,15 @@
 #pragma once
 #include "hal/Motor.hpp"
 #include "velocity_controller.hpp"
-#include "foundation/config.hpp"
+#include "calibration/calibration_result.hpp"
+
+namespace libstp::calibration
+{
+    struct CalibrationConfig;
+}
 
 namespace libstp::drive
 {
-    // Forward declaration
-    struct CalibrationConfig;
-    struct CalibrationResult;
-
     class MotorAdapter
     {
     public:
@@ -45,8 +46,8 @@ namespace libstp::drive
         void updateEncoderVelocity(double dt);
 
         // Calibration methods
-        CalibrationResult calibrate(const CalibrationConfig& config);
-        CalibrationResult calibrate(); // Overload with default config
+        calibration::CalibrationResult calibrate(const calibration::CalibrationConfig& config);
+        calibration::CalibrationResult calibrate(); // Overload with default config
         void updateCalibration(const foundation::MotorCalibration& cal);
 
         // Direct access to controller for calibration

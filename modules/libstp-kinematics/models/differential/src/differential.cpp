@@ -159,21 +159,21 @@ namespace libstp::kinematics::differential
         LIBSTP_LOG_INFO("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
-    std::vector<drive::CalibrationResult> DifferentialKinematics::calibrateMotors()
+    std::vector<calibration::CalibrationResult> DifferentialKinematics::calibrateMotors()
     {
-        return calibrateMotors(drive::CalibrationConfig{});
+        return calibrateMotors(calibration::CalibrationConfig{});
     }
 
-    std::vector<drive::CalibrationResult> DifferentialKinematics::calibrateMotors(
-        const drive::CalibrationConfig& config)
+    std::vector<calibration::CalibrationResult> DifferentialKinematics::calibrateMotors(
+        const calibration::CalibrationConfig& config)
     {
         LIBSTP_LOG_INFO("=== Starting DifferentialKinematics motor calibration ===");
 
-        std::vector<drive::CalibrationResult> results;
+        std::vector<calibration::CalibrationResult> results;
 
         // Calibrate left motor
         LIBSTP_LOG_INFO("Calibrating left motor...");
-        drive::CalibrationResult left_result = left_motor_.adapter.calibrate(config);
+        calibration::CalibrationResult left_result = left_motor_.adapter.calibrate(config);
         results.push_back(left_result);
 
         if (left_result.success) {
@@ -187,7 +187,7 @@ namespace libstp::kinematics::differential
 
         // Calibrate right motor
         LIBSTP_LOG_INFO("Calibrating right motor...");
-        drive::CalibrationResult right_result = right_motor_.adapter.calibrate(config);
+        calibration::CalibrationResult right_result = right_motor_.adapter.calibrate(config);
         results.push_back(right_result);
 
         if (right_result.success) {
