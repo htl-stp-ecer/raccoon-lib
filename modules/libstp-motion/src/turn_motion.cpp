@@ -65,7 +65,7 @@ namespace libstp::motion
         // Target heading is simply the desired turn angle (since we reset to 0)
         target_heading_rad_ = cfg_.target_angle_rad;
 
-        LIBSTP_LOG_INFO("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s",
+        LIBSTP_LOG_TRACE("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s",
                     cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate);
     }
 
@@ -96,7 +96,7 @@ namespace libstp::motion
         const double current_heading = odometry().getHeading();
         const double heading_error = odometry().getHeadingError(target_heading_rad_);
 
-        LIBSTP_LOG_INFO("TurnMotion update: current_heading = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
+        LIBSTP_LOG_TRACE("TurnMotion update: current_heading = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
                     current_heading, current_heading / kDegToRad,
                     target_heading_rad_, target_heading_rad_ / kDegToRad,
                     heading_error, heading_error / kDegToRad);
@@ -108,7 +108,7 @@ namespace libstp::motion
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
-            LIBSTP_LOG_INFO("TurnMotion completed: final error = {:.3f} rad ({:.1f} deg)", heading_error, heading_error / kDegToRad);
+            LIBSTP_LOG_DEBUG("TurnMotion completed: final error = {:.3f} rad ({:.1f} deg)", heading_error, heading_error / kDegToRad);
             return;
         }
 
@@ -123,12 +123,12 @@ namespace libstp::motion
         {
             const double direction = (heading_error >= 0.0) ? 1.0 : -1.0;
             omega_cmd = direction * cfg_.min_angular_rate;
-            LIBSTP_LOG_INFO("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
+            LIBSTP_LOG_TRACE("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
         }
 
         // Apply scaling from previous saturation feedback
         const double omega_cmd_scaled = omega_cmd * angular_scale_;
-        LIBSTP_LOG_INFO("TurnMotion: omega_cmd = {:.3f} rad/s, scaled = {:.3f} rad/s (scale={:.3f})",
+        LIBSTP_LOG_TRACE("TurnMotion: omega_cmd = {:.3f} rad/s, scaled = {:.3f} rad/s (scale={:.3f})",
                     omega_cmd, omega_cmd_scaled, angular_scale_);
 
         // Send command: no translation, only rotation
@@ -144,7 +144,7 @@ namespace libstp::motion
                 cfg_.saturation_min_scale,
                 angular_scale_ * cfg_.saturation_derating_factor);
 
-            LIBSTP_LOG_INFO("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
+            LIBSTP_LOG_TRACE("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
                         motor_cmd.saturation_mask, prev_scale, angular_scale_);
         }
         else
@@ -155,7 +155,7 @@ namespace libstp::motion
 
             if (prev_scale != angular_scale_)
             {
-                LIBSTP_LOG_INFO("TurnMotion: Recovery -> angular_scale {:.3f}->{:.3f}",
+                LIBSTP_LOG_TRACE("TurnMotion: Recovery -> angular_scale {:.3f}->{:.3f}",
                             prev_scale, angular_scale_);
             }
         }

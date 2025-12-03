@@ -76,7 +76,7 @@ namespace logging {
         auto pattern_formatter = std::make_unique<spdlog::pattern_formatter>();
         pattern_formatter->add_flag<ElapsedTimeFormatter>('E');
         pattern_formatter->set_pattern(
-            "[%Y-%m-%d %H:%M:%S] [+%E] [t%t/%n] [%^%l%$]: %v"
+            "[%Y-%m-%d %H:%M:%S] [+%E] [t%t/%s:%#] [%^%l%$]: %v"
         );
 
         console_sink->set_formatter(pattern_formatter->clone());

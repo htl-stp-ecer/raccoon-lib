@@ -18,7 +18,7 @@ Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
 
 void Drive::setVelocity(const foundation::ChassisVel& v_body)
 {
-    LIBSTP_LOG_INFO("Drive::setVelocity request vx={}, vy={}, w={}", v_body.vx, v_body.vy, v_body.w);
+    LIBSTP_LOG_TRACE("Drive::setVelocity request vx={}, vy={}, w={}", v_body.vx, v_body.vy, v_body.w);
 
     const double clamped_vx = std::clamp(v_body.vx, -chassis_lim_.max_v, chassis_lim_.max_v);
     const double clamped_vy = std::clamp(v_body.vy, -chassis_lim_.max_v, chassis_lim_.max_v);
@@ -30,7 +30,7 @@ void Drive::setVelocity(const foundation::ChassisVel& v_body)
     desired_.vy = clamped_vy;
     desired_.w = clamped_w;
 
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "Drive::setVelocity stored vx={}, vy={}, w={} (limited={})",
         desired_.vx,
         desired_.vy,
@@ -41,7 +41,7 @@ void Drive::setVelocity(const foundation::ChassisVel& v_body)
 libstp::kinematics::MotorCommands Drive::update(const double dt) const
 {
     const foundation::ChassisCmd cmd{desired_.vx, desired_.vy, desired_.w};
-    LIBSTP_LOG_INFO("Drive::update dt={} -> applying cmd vx={}, vy={}, wz={}", dt, cmd.vx, cmd.vy, cmd.wz);
+    LIBSTP_LOG_TRACE("Drive::update dt={} -> applying cmd vx={}, vy={}, wz={}", dt, cmd.vx, cmd.vy, cmd.wz);
     LIBSTP_LOG_TRACE("Drive::update target wheel count={} (if available)", kinematics_->wheelCount());
 
     return kinematics_->applyCommand(cmd, dt);
@@ -61,14 +61,14 @@ std::size_t Drive::wheelCount() const
 
 void Drive::softStop()
 {
-    LIBSTP_LOG_INFO("Drive::softStop invoked; zeroing desired velocity");
+    LIBSTP_LOG_TRACE("Drive::softStop invoked; zeroing desired velocity");
     setVelocity(foundation::ChassisVel(0, 0, 0));
 }
 
 
 void Drive::hardStop()
 {
-    LIBSTP_LOG_INFO("Drive::hardStop invoked; zeroing desired velocity");
+    LIBSTP_LOG_TRACE("Drive::hardStop invoked; zeroing desired velocity");
     desired_ = foundation::ChassisVel{0, 0, 0};
     kinematics_->hardStop();
 }

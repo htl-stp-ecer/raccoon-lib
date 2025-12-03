@@ -5,7 +5,7 @@
 #pragma once
 #include "hal/Motor.hpp"
 #include "velocity_controller.hpp"
-#include "calibration/calibration_result.hpp"
+#include "calibration/motor/calibration_result.hpp"
 
 namespace libstp::calibration
 {

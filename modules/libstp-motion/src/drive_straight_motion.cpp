@@ -93,7 +93,7 @@ namespace libstp::motion
         const double initial_heading = odometry().getHeading();
         initial_heading_rad_ = initial_heading;
 
-        LIBSTP_LOG_INFO("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, initial_heading = {:.3f} rad",
+        LIBSTP_LOG_TRACE("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, initial_heading = {:.3f} rad",
                     cfg_.distance_m, cfg_.max_speed_mps, initial_heading);
     }
 
@@ -124,13 +124,13 @@ namespace libstp::motion
         const double current_heading = odometry().getHeading();
         const double yaw_error = odometry().getHeadingError(initial_heading_rad_);
 
-        LIBSTP_LOG_INFO("DriveStraightMotion update: forward = {:.3f} m, lateral = {:.3f} m, heading = {:.3f} rad, yaw_error = {:.3f} rad",
+        LIBSTP_LOG_TRACE("DriveStraightMotion update: forward = {:.3f} m, lateral = {:.3f} m, heading = {:.3f} rad, yaw_error = {:.3f} rad",
                     distance_info.forward, distance_info.lateral, current_heading, yaw_error);
 
         // Check if we've reached the target distance
         const double remaining = cfg_.distance_m - distance_info.forward;
         const double remaining_abs = std::abs(remaining);
-        LIBSTP_LOG_INFO("DriveStraightMotion remaining_distance = {:.3f} m", remaining);
+        LIBSTP_LOG_TRACE("DriveStraightMotion remaining_distance = {:.3f} m", remaining);
 
         if (remaining_abs <= cfg_.distance_tolerance_m)
         {
@@ -144,7 +144,7 @@ namespace libstp::motion
         const double lateral_error_world = distance_info.lateral;
         const double forward_progress = distance_info.forward;
 
-        LIBSTP_LOG_INFO("DriveStraightMotion lateral_error = {:.3f} m", lateral_error_world);
+        LIBSTP_LOG_TRACE("DriveStraightMotion lateral_error = {:.3f} m", lateral_error_world);
 
         // Check if kinematics supports lateral motion
         const bool supports_lateral = drive().getKinematics().supportsLateralMotion();
@@ -161,7 +161,7 @@ namespace libstp::motion
             vy_cmd = -lateral_pid_->update(lateral_error_world, dt);
             vy_cmd = std::clamp(vy_cmd, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
             omega_cmd = heading_pid_->update(yaw_error, dt);
-            LIBSTP_LOG_INFO("DriveStraightMotion [MECANUM] vy_cmd = {:.3f} m/s, omega_cmd = {:.3f} rad/s", vy_cmd, omega_cmd);
+            LIBSTP_LOG_TRACE("DriveStraightMotion [MECANUM] vy_cmd = {:.3f} m/s, omega_cmd = {:.3f} rad/s", vy_cmd, omega_cmd);
         }
         else
         {
@@ -172,7 +172,7 @@ namespace libstp::motion
             {
                 // Large lateral error: enter reorientation mode
                 reorienting_ = true;
-                LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL] Large lateral error ({:.3f} m), entering reorientation mode", lateral_error_abs);
+                LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL] Large lateral error ({:.3f} m), entering reorientation mode", lateral_error_abs);
             }
 
             if (reorienting_)
@@ -186,14 +186,14 @@ namespace libstp::motion
                 const double yaw_to_target = odometry().getHeadingError(target_heading);
 
                 omega_cmd = heading_pid_->update(yaw_to_target, dt);
-                LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL-REORIENT] yaw_to_target = {:.3f} rad, omega_cmd = {:.3f} rad/s",
+                LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL-REORIENT] yaw_to_target = {:.3f} rad, omega_cmd = {:.3f} rad/s",
                             yaw_to_target, omega_cmd);
 
                 // Exit reorientation when aligned and lateral error is small
                 if (std::abs(yaw_to_target) < 0.1 && lateral_error_abs < cfg_.lateral_reorient_threshold_m * 0.7)
                 {
                     reorienting_ = false;
-                    LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL] Exiting reorientation mode");
+                    LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL] Exiting reorientation mode");
                 }
             }
             else
@@ -202,7 +202,7 @@ namespace libstp::motion
                 const double heading_bias = std::atan(cfg_.lateral_heading_bias_gain * lateral_error_world);
                 const double biased_yaw_error = yaw_error + heading_bias;
                 omega_cmd = heading_pid_->update(biased_yaw_error, dt);
-                LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL-BIAS] heading_bias = {:.3f} rad, biased_yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s",
+                LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL-BIAS] heading_bias = {:.3f} rad, biased_yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s",
                             heading_bias, biased_yaw_error, omega_cmd);
             }
         }
@@ -220,14 +220,14 @@ namespace libstp::motion
         if (reorienting_)
         {
             vx_cmd *= 0.3;  // Slow down to 30% during reorientation
-            LIBSTP_LOG_INFO("DriveStraightMotion [DIFFERENTIAL-REORIENT] Reducing vx_cmd to {:.3f} m/s", vx_cmd);
+            LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL-REORIENT] Reducing vx_cmd to {:.3f} m/s", vx_cmd);
         }
 
         // Apply scaling from previous saturation feedback (reduce translation first, then heading if needed)
         vx_cmd *= speed_scale_;
         vy_cmd *= speed_scale_;
         const double omega_cmd_scaled = omega_cmd * heading_scale_;
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "DriveStraightMotion scaled cmd: vx = {:.3f} m/s, vy = {:.3f} m/s, omega = {:.3f} rad/s (speed_scale={:.3f}, heading_scale={:.3f})",
             vx_cmd,
             vy_cmd,
@@ -260,7 +260,7 @@ namespace libstp::motion
                     heading_scale_ * cfg_.heading_saturation_derating_factor);
             }
 
-            LIBSTP_LOG_INFO(
+            LIBSTP_LOG_TRACE(
                 "DriveStraightMotion: Saturation detected (mask=0x{:X}, yaw_error={:.3f}) -> speed_scale {:.3f}->{:.3f}, heading_scale {:.3f}->{:.3f}",
                 motor_cmd.saturation_mask,
                 yaw_error,
@@ -279,7 +279,7 @@ namespace libstp::motion
 
             if (prev_speed_scale != speed_scale_ || prev_heading_scale != heading_scale_)
             {
-                LIBSTP_LOG_INFO(
+                LIBSTP_LOG_TRACE(
                     "DriveStraightMotion: Recovery -> speed_scale {:.3f}->{:.3f}, heading_scale {:.3f}->{:.3f}",
                     prev_speed_scale,
                     speed_scale_,

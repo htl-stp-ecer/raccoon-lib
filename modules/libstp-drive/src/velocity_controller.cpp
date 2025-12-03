@@ -12,7 +12,7 @@ using namespace libstp::drive;
 VelocityController::VelocityController(foundation::PidGains g, foundation::Feedforward ff)
     : g_(g), ff_(ff)
 {
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "VelocityController::ctor gains(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
         g_.kp,
         g_.ki,
@@ -25,7 +25,7 @@ VelocityController::VelocityController(foundation::PidGains g, foundation::Feedf
 void VelocityController::setGains(const foundation::PidGains& g)
 {
     g_ = g;
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "VelocityController::setGains kp={} ki={} kd={}",
         g_.kp,
         g_.ki,
@@ -34,7 +34,7 @@ void VelocityController::setGains(const foundation::PidGains& g)
 void VelocityController::setFF(const foundation::Feedforward& ff)
 {
     ff_ = ff;
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "VelocityController::setFF kS={} kV={} kA={}",
         ff_.kS,
         ff_.kV,
@@ -90,7 +90,7 @@ double VelocityController::compute(double w_ref, double a_ref, double w_meas, do
         u_cmd,
         out_sat ? *out_sat : (u_cmd != u_raw));
 
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "VelocityController::compute result u_cmd={} (clamped from {}), out_sat={}",
         u_cmd,
         u_raw,

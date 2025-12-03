@@ -3,7 +3,7 @@
 //
 
 #include "kinematics/mecanum/mecanum.hpp"
-#include "calibration/calibration.hpp"
+#include "calibration/motor/calibration.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
@@ -39,7 +39,7 @@ namespace libstp::kinematics::mecanum
         if (trackWidth <= 0.0) throw std::invalid_argument("trackWidth must be positive");
         if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
         setWheelLimits(max_velocity, max_acceleration);
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics::ctor wheelbase={} trackWidth={} wheelRadius={} max_vel={} max_accel={}",
             wheelbase,
             trackWidth,
@@ -58,7 +58,7 @@ namespace libstp::kinematics::mecanum
         back_left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         back_right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
 
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics::setWheelLimits max_velocity={} max_acceleration={}",
             max_wheel_velocity_,
             max_wheel_acceleration_);
@@ -71,7 +71,7 @@ namespace libstp::kinematics::mecanum
 
     MotorCommands MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics::applyCommand dt={} cmd vx={} vy={} wz={}",
             dt,
             cmd.vx,
@@ -135,7 +135,7 @@ namespace libstp::kinematics::mecanum
         back_left_motor_.adapter.setVelocityWithAccel(bl_limited, bl_accel, dt, &bl_sat);
         back_right_motor_.adapter.setVelocityWithAccel(br_limited, br_accel, dt, &br_sat);
 
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "MecanumKinematics command applied fl={} fr={} bl={} br={} sat_fl={} sat_fr={} sat_bl={} sat_br={} dt={}",
             fl_limited,
             fr_limited,
@@ -185,7 +185,7 @@ namespace libstp::kinematics::mecanum
 
     void MecanumKinematics::hardStop()
     {
-        LIBSTP_LOG_INFO("MecanumKinematics::hardStop invoked");
+        LIBSTP_LOG_TRACE("MecanumKinematics::hardStop invoked");
         front_left_motor_.target_w = 0.0;
         front_right_motor_.target_w = 0.0;
         back_left_motor_.target_w = 0.0;
@@ -213,12 +213,7 @@ namespace libstp::kinematics::mecanum
         front_right_motor_.adapter.resetEncoderTracking();
         back_left_motor_.adapter.resetEncoderTracking();
         back_right_motor_.adapter.resetEncoderTracking();
-        LIBSTP_LOG_INFO("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
-    }
-
-    std::vector<calibration::CalibrationResult> MecanumKinematics::calibrateMotors()
-    {
-        return calibrateMotors(calibration::CalibrationConfig{});
+        LIBSTP_LOG_TRACE("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
     std::vector<calibration::CalibrationResult> MecanumKinematics::calibrateMotors(

@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="BackendCodeEditorMiscSettings">
-    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="11" type="long" />
+    <option name="/Default/Environment/Hierarchy/GeneratedFilesCacheKey/Timestamp/@EntryValue" value="14" type="long" />
     <option name="/Default/Housekeeping/FeatureSuggestion/FeatureSuggestionManager/DisabledSuggesters/=SwitchToGoToActionSuggester/@EntryIndexedValue" value="true" type="bool" />
     <option name="/Default/Housekeeping/GlobalSettingsUpgraded/IsUpgraded/@EntryValue" value="true" type="bool" />
     <option name="/Default/RiderDebugger/RiderRestoreDecompile/RestoreDecompileSetting/@EntryValue" value="false" type="bool" />
@@ -105,14 +105,40 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2d718979-9808-4efc-9938-6bc2e09841db" name="Changes" comment="Refactor logging system: replace spdlog with foundation logging macros and update calibration file metadata">
+      <change afterPath="$PROJECT_DIR$/modules/libstp-kinematics/src/kinematics.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/drive_straight_motion.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/strafe_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/strafe_motion.hpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/include/motion/turn_motion.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CALIBRATION_GUIDE.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/CALIBRATION_QUICKSTART.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/bindings/calibration.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/bindings/calibration.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration_config.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/calibration_result.hpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/motion_calibration.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/include/calibration/motion_calibration.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/src/calibration.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-calibration/src/motion_calibration.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-calibration/src/motion_calibration.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/include/drive/motor_adapter.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/drive.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/motor_adapter.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/rate_limiter.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-drive/src/velocity_controller.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-drive/src/velocity_controller.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-foundation/src/logging.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-foundation/src/logging.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-hal/src/Motor.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/include/kinematics/kinematics.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/bindings/bindings.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/include/kinematics/differential/differential.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/differential/src/differential.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/bindings/bindings.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/bindings/bindings.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/include/kinematics/mecanum/mecanum.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-kinematics/models/mecanum/src/mecanum.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-kinematics/src/dummy.cpp" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/drive_straight_motion.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/strafe_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/strafe_motion.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-motion/src/turn_motion.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-odometry/models/fused/src/fused_odometry.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/modules/libstp-platforms/wombat/motor/src/Motor.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -149,46 +175,47 @@
     <setting file="file://$PROJECT_DIR$/modules/libstp-hal/bindings/bindings.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/core/src/MockPlatform.cpp" root0="SKIP_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/modules/libstp-platforms/mock/motor/src/Motor.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="mock://diff.h" root0="SKIP_HIGHLIGHTING" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;customColor&quot;: &quot;&quot;,
   &quot;associatedIndex&quot;: 5
 }</component>
   <component name="ProjectId" id="349iycPwHi9EmMkurnnmwepaj5N" />
-  <component name="ProjectStatusUIService"><![CDATA[{
-  "uiKindId": "Widget"
-}]]></component>
+  <component name="ProjectStatusUIService">{
+  &quot;uiKindId&quot;: &quot;Widget&quot;
+}</component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.defs.executor": "Run",
-    "Python.gen_defs.executor": "Run",
-    "RunOnceActivity.RadMigrateCodeStyle": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "RunOnceActivity.west.config.association.type.startup.service": "true",
-    "SHELLCHECK.PATH": "/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck",
-    "Shell Script.deploy.sh.executor": "Run",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/home/tobias/Documents/Botball/library/modules/libstp-calibration",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "CMakeSettings",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.defs.executor&quot;: &quot;Run&quot;,
+    &quot;Python.gen_defs.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.RadMigrateCodeStyle&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.west.config.association.type.startup.service&quot;: &quot;true&quot;,
+    &quot;SHELLCHECK.PATH&quot;: &quot;/home/tobias/.local/share/JetBrains/CLion2025.2/Shell Script/shellcheck&quot;,
+    &quot;Shell Script.deploy.sh.executor&quot;: &quot;Run&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/tobias/Documents/Botball/library/modules/libstp-calibration&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;CMakeSettings&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/modules/libstp-calibration" />
@@ -204,11 +231,6 @@
     </key>
   </component>
   <component name="RunManager" selected="CMake Application._core">
-    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true">
-      <method v="2">
-        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
-      </method>
-    </configuration>
     <configuration name="test-c-client" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="VERSION" TARGET_NAME="test-c-client" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="VERSION" RUN_TARGET_NAME="test-c-client" TEST_MODE="SUITE_TEST">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
@@ -729,7 +751,10 @@
       <workItem from="1763710672487" duration="10061000" />
       <workItem from="1764069076086" duration="7628000" />
       <workItem from="1764255874700" duration="15764000" />
-      <workItem from="1764316380804" duration="7601000" />
+      <workItem from="1764316380804" duration="7918000" />
+      <workItem from="1764496610022" duration="6676000" />
+      <workItem from="1764572848782" duration="11927000" />
+      <workItem from="1764761784814" duration="316000" />
     </task>
     <task id="LOCAL-00001" summary="Refactor motor calibration and drive configuration: update Motor class to include calibration parameters and remove unnecessary methods">
       <option name="closed" value="true" />
@@ -803,7 +828,15 @@
       <option name="project" value="LOCAL" />
       <updated>1764324117659</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="Refactor logging system: replace spdlog with foundation logging macros and update calibration file metadata">
+      <option name="closed" value="true" />
+      <created>1764332608001</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1764332608001</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
