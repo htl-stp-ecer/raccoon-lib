@@ -23,8 +23,8 @@ namespace libstp::hal::analog
 
         explicit AnalogSensor(int port);
 
-        ~AnalogSensor();
+        virtual ~AnalogSensor();
 
-        int read() const;
+        virtual int read() const;
     };
 }

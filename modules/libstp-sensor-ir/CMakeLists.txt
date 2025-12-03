@@ -1,0 +1,1 @@
+register_libstp_module(sensor_ir "FALSE" "hal;button")
