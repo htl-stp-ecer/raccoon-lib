@@ -15,6 +15,21 @@ namespace libstp::odometry
 
 namespace libstp::calibration
 {
+    /**
+     * @brief Motion calibration orchestrator
+     *
+     * Coordinates turn, drive, and strafe motion calibration.
+     * Uses the existing motion_calibration.cpp implementation which contains
+     * test runners, optimizers, and tuners inline.
+     *
+     * @note Future refactoring will extract these components:
+     *   - motion/motion_test_runner
+     *   - motion/simplex_optimizer
+     *   - motion/angle_controller_tuner
+     *   - motion/distance_controller_tuner
+     *   - motion/heading_controller_tuner
+     *   - motion/lateral_controller_tuner
+     */
     class MotionCalibrator
     {
     public:
@@ -41,7 +56,7 @@ namespace libstp::calibration
             double kd{0.0};
         };
 
-        // Tuning methods (placeholder implementations)
+        // Tuning methods
         PidGainsMotion tuneAngleController();
         PidGainsMotion tuneDistanceController();
         PidGainsMotion tuneHeadingController();

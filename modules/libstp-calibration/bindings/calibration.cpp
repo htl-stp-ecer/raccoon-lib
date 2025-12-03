@@ -5,8 +5,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "calibration/calibration.hpp"
+#include "calibration/motor/calibration.hpp"
+#include "calibration/motion_calibration.hpp"
 #include "foundation/motor.hpp"
+#include "drive/drive.hpp"
+#include "odometry/odometry.hpp"
 
 namespace py = pybind11;
 
@@ -101,4 +104,80 @@ PYBIND11_MODULE(calibration, m)
                    " ki=" + std::to_string(r.pid.ki) +
                    " kd=" + std::to_string(r.pid.kd) + ">";
         });
+
+    // Motion calibration configuration
+    py::class_<libstp::calibration::MotionCalibrationConfig>(m, "MotionCalibrationConfig")
+        .def(py::init<>())
+        .def_readwrite("initial_kp", &libstp::calibration::MotionCalibrationConfig::initial_kp,
+                      "Initial proportional gain estimate")
+        .def_readwrite("max_iterations", &libstp::calibration::MotionCalibrationConfig::max_iterations,
+                      "Maximum tuning iterations per controller")
+        .def_readwrite("target_settling_time", &libstp::calibration::MotionCalibrationConfig::target_settling_time,
+                      "Target settling time in seconds")
+        .def_readwrite("max_overshoot", &libstp::calibration::MotionCalibrationConfig::max_overshoot,
+                      "Maximum allowed overshoot (as fraction, e.g. 0.15 = 15%)")
+        .def_readwrite("target_steady_state_error", &libstp::calibration::MotionCalibrationConfig::target_steady_state_error,
+                      "Target steady-state error")
+        .def_readwrite("max_test_duration", &libstp::calibration::MotionCalibrationConfig::max_test_duration,
+                      "Maximum total calibration duration in seconds")
+        .def_readwrite("max_single_test_time", &libstp::calibration::MotionCalibrationConfig::max_single_test_time,
+                      "Timeout for individual tests");
+
+    // Motion type enum
+    py::enum_<libstp::calibration::MotionType>(m, "MotionType")
+        .value("TURN", libstp::calibration::MotionType::TURN)
+        .value("DRIVE_STRAIGHT", libstp::calibration::MotionType::DRIVE_STRAIGHT)
+        .value("STRAFE", libstp::calibration::MotionType::STRAFE);
+
+    // Motion calibration gain set
+    py::class_<libstp::calibration::MotionCalibrationResult::GainSet>(m, "MotionGainSet")
+        .def(py::init<>())
+        .def_readonly("kp", &libstp::calibration::MotionCalibrationResult::GainSet::kp)
+        .def_readonly("ki", &libstp::calibration::MotionCalibrationResult::GainSet::ki)
+        .def_readonly("kd", &libstp::calibration::MotionCalibrationResult::GainSet::kd)
+        .def_readonly("motion_type", &libstp::calibration::MotionCalibrationResult::GainSet::motion_type)
+        .def_readonly("controller_name", &libstp::calibration::MotionCalibrationResult::GainSet::controller_name)
+        .def("__repr__", [](const libstp::calibration::MotionCalibrationResult::GainSet &g) {
+            return "<MotionGainSet " + g.controller_name + " kp=" + std::to_string(g.kp) +
+                   " ki=" + std::to_string(g.ki) + " kd=" + std::to_string(g.kd) + ">";
+        });
+
+    // Motion calibration result
+    py::class_<libstp::calibration::MotionCalibrationResult>(m, "MotionCalibrationResult")
+        .def(py::init<>())
+        .def_readonly("gains", &libstp::calibration::MotionCalibrationResult::gains,
+                     "List of calibrated gain sets")
+        .def_readonly("success", &libstp::calibration::MotionCalibrationResult::success,
+                     "Whether calibration succeeded")
+        .def_readonly("error_message", &libstp::calibration::MotionCalibrationResult::error_message,
+                     "Error message if failed")
+        .def_readonly("duration_seconds", &libstp::calibration::MotionCalibrationResult::duration_seconds,
+                     "Calibration duration")
+        .def("__repr__", [](const libstp::calibration::MotionCalibrationResult &r) {
+            return std::string("<MotionCalibrationResult success=") + (r.success ? "True" : "False") +
+                   " gains=" + std::to_string(r.gains.size()) + ">";
+        });
+
+    // Motion calibrator
+    py::class_<libstp::calibration::MotionCalibrator>(m, "MotionCalibrator")
+        .def(py::init<libstp::drive::Drive&, libstp::odometry::IOdometry&>(),
+             py::arg("drive"),
+             py::arg("odometry"),
+             py::keep_alive<1, 2>(),
+             py::keep_alive<1, 3>())
+        .def(py::init<libstp::drive::Drive&, libstp::odometry::IOdometry&,
+                      libstp::calibration::MotionCalibrationConfig>(),
+             py::arg("drive"),
+             py::arg("odometry"),
+             py::arg("config"),
+             py::keep_alive<1, 2>(),
+             py::keep_alive<1, 3>())
+        .def("calibrate", &libstp::calibration::MotionCalibrator::calibrate,
+             "Run full motion calibration (turn + drive straight + strafe if supported)")
+        .def("calibrate_turn_motion", &libstp::calibration::MotionCalibrator::calibrateTurnMotion,
+             "Calibrate only turn motion")
+        .def("calibrate_drive_straight_motion", &libstp::calibration::MotionCalibrator::calibrateDriveStraightMotion,
+             "Calibrate only drive straight motion")
+        .def("calibrate_strafe_motion", &libstp::calibration::MotionCalibrator::calibrateStrafeMotion,
+             "Calibrate only strafe motion");
 }

@@ -5,7 +5,7 @@
 #include <pybind11/stl.h>
 
 #include "kinematics/mecanum/mecanum.hpp"
-#include "calibration/calibration.hpp"
+#include "calibration/motor/calibration.hpp"
 #include "hal/Motor.hpp"
 
 namespace py = pybind11;

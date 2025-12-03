@@ -3,7 +3,7 @@
 //
 
 #include "kinematics/differential/differential.hpp"
-#include "calibration/calibration.hpp"
+#include "calibration/motor/calibration.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
@@ -30,7 +30,7 @@ namespace libstp::kinematics::differential
         if (wheelbase <= 0.0) throw std::invalid_argument("wheelbase must be positive");
         if (wheelRadius <= 0.0) throw std::invalid_argument("wheelRadius must be positive");
         setWheelLimits(max_velocity, max_acceleration);
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics::ctor wheelbase={} wheelRadius={} max_vel={} max_accel={}",
             wheelbase,
             wheelRadius,
@@ -46,7 +46,7 @@ namespace libstp::kinematics::differential
         left_motor_.limiter.setMaxRate(max_wheel_acceleration_);
         right_motor_.limiter.setMaxRate(max_wheel_acceleration_);
 
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics::setWheelLimits max_velocity={} max_acceleration={}",
             max_wheel_velocity_,
             max_wheel_acceleration_);
@@ -59,7 +59,7 @@ namespace libstp::kinematics::differential
 
     MotorCommands DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
     {
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics::applyCommand dt={} cmd vx={} wz={}",
             dt,
             cmd.vx,
@@ -102,7 +102,7 @@ namespace libstp::kinematics::differential
         left_motor_.adapter.setVelocityWithAccel(left_limited, left_accel, dt, &left_saturated);
         right_motor_.adapter.setVelocityWithAccel(right_limited, right_accel, dt, &right_saturated);
 
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "DifferentialKinematics command applied left={} right={} sat_left={} sat_right={} dt={}",
             left_limited,
             right_limited,
@@ -138,7 +138,7 @@ namespace libstp::kinematics::differential
 
     void DifferentialKinematics::hardStop()
     {
-        LIBSTP_LOG_INFO("DifferentialKinematics::hardStop invoked");
+        LIBSTP_LOG_TRACE("DifferentialKinematics::hardStop invoked");
         left_motor_.target_w = 0.0;
         right_motor_.target_w = 0.0;
         left_motor_.adapter.resetController();
@@ -156,12 +156,7 @@ namespace libstp::kinematics::differential
     {
         left_motor_.adapter.resetEncoderTracking();
         right_motor_.adapter.resetEncoderTracking();
-        LIBSTP_LOG_INFO("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
-    }
-
-    std::vector<calibration::CalibrationResult> DifferentialKinematics::calibrateMotors()
-    {
-        return calibrateMotors(calibration::CalibrationConfig{});
+        LIBSTP_LOG_TRACE("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
     std::vector<calibration::CalibrationResult> DifferentialKinematics::calibrateMotors(

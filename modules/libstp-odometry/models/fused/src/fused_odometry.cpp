@@ -26,7 +26,7 @@ namespace libstp::odometry::fused
             LIBSTP_LOG_WARN("FusedOdometry::ctor - IMU not ready after timeout, proceeding anyway");
         }
 
-        LIBSTP_LOG_INFO("FusedOdometry::ctor initialized with IMU and kinematics");
+        LIBSTP_LOG_TRACE("FusedOdometry::ctor initialized with IMU and kinematics");
     }
 
     Eigen::Quaternionf FusedOdometry::getRelativeOrientation() const
@@ -54,7 +54,7 @@ namespace libstp::odometry::fused
         if (!imu_initialized_) {
             initial_imu_orientation_ = imu_->getOrientation();
             imu_initialized_ = true;
-            LIBSTP_LOG_INFO(
+            LIBSTP_LOG_TRACE(
                 "FusedOdometry: IMU initialized with quat=({}, {}, {}, {})",
                 initial_imu_orientation_.w(),
                 initial_imu_orientation_.x(),
@@ -160,7 +160,7 @@ namespace libstp::odometry::fused
         // Re-initialize IMU to current reading
         imu_initialized_ = false;
 
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "FusedOdometry::reset to pose pos=({:.3f}, {:.3f}, {:.3f}) quat=({:.3f}, {:.3f}, {:.3f}, {:.3f})",
             pose.position.x(), pose.position.y(), pose.position.z(),
             pose.orientation.w(), pose.orientation.x(), pose.orientation.y(), pose.orientation.z()
@@ -190,6 +190,6 @@ namespace libstp::odometry::fused
         // Re-initialize IMU to current reading
         imu_initialized_ = false;
 
-        LIBSTP_LOG_INFO("FusedOdometry::reset to origin");
+        LIBSTP_LOG_TRACE("FusedOdometry::reset to origin");
     }
 }

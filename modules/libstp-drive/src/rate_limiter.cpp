@@ -33,14 +33,14 @@ void RateLimiter::setMaxRate(const double r)
     if (!speedRampsEnabled())
     {
         max_rate_ = 0.0;
-        LIBSTP_LOG_INFO(
+        LIBSTP_LOG_TRACE(
             "RateLimiter::setMaxRate speed ramps disabled (requested max_rate={} ignored)",
             r);
         return;
     }
 
     max_rate_ = std::max(0.0, r);
-    LIBSTP_LOG_INFO("RateLimiter::setMaxRate max_rate={}", max_rate_);
+    LIBSTP_LOG_TRACE("RateLimiter::setMaxRate max_rate={}", max_rate_);
 }
 
 double RateLimiter::maxRate() const

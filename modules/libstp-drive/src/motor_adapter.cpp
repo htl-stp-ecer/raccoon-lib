@@ -2,7 +2,8 @@
 // Created by tobias on 9/8/25.
 //
 #include "drive/motor_adapter.hpp"
-#include "calibration/calibration.hpp"
+#include "calibration/motor/calibration.hpp"
+#include "calibration/motor/calibration_config.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
 #include <cmath>
@@ -21,7 +22,7 @@ MotorAdapter::MotorAdapter(hal::motor::Motor* motor)
         return;
     }
 
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "MotorAdapter::ctor port={} inverted={} pid(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
         motor_->port,
         motor_->inverted,
@@ -37,13 +38,13 @@ void MotorAdapter::updateEncoderVelocity(double dt)
 {
     if (!motor_)
     {
-        LIBSTP_LOG_INFO("MotorAdapter::updateEncoderVelocity skipped: null motor");
+        LIBSTP_LOG_TRACE("MotorAdapter::updateEncoderVelocity skipped: null motor");
         return;
     }
 
     if (dt <= 0.0)
     {
-        LIBSTP_LOG_INFO("MotorAdapter::updateEncoderVelocity skipped: non-positive dt={}", dt);
+        LIBSTP_LOG_TRACE("MotorAdapter::updateEncoderVelocity skipped: non-positive dt={}", dt);
         return;
     }
 
@@ -115,7 +116,7 @@ void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, b
 {
     if (!motor_)
     {
-        LIBSTP_LOG_INFO("MotorAdapter::setVelocityWithAccel skipped: null motor");
+        LIBSTP_LOG_TRACE("MotorAdapter::setVelocityWithAccel skipped: null motor");
         if (out_saturated) *out_saturated = false;
         return;
     }
@@ -132,7 +133,7 @@ void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, b
     last_u_cmd_ = u;
     if (out_saturated) *out_saturated = saturated || (std::abs(u) >= u_max - 1e-6);
 
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "MotorAdapter::setVelocityWithAccel port={} w_ref={} a_ref={} dt={} w_meas={} u_cmd={} saturated={} limited_cmd={}",
         motor_->port,
         w_ref,
@@ -148,7 +149,7 @@ void MotorAdapter::setVelocity(double w_ref, double dt)
 {
     bool dummy = false;
     setVelocityWithAccel(w_ref, 0.0, dt, &dummy);
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "MotorAdapter::setVelocity port={} w_ref={} dt={}",
         motor_ ? motor_->port : -1,
         w_ref,
@@ -159,7 +160,7 @@ void MotorAdapter::setPercent(double percent)
 {
     if (!motor_)
     {
-        LIBSTP_LOG_INFO("MotorAdapter::setPercent skipped: null motor");
+        LIBSTP_LOG_TRACE("MotorAdapter::setPercent skipped: null motor");
         return;
     }
 
@@ -167,7 +168,7 @@ void MotorAdapter::setPercent(double percent)
     double u = std::clamp(percent, -u_max, u_max);
     motor_->setSpeed(static_cast<int>(std::lround(u)));
     last_u_cmd_ = u;
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_TRACE(
         "MotorAdapter::setPercent port={} percent={} clamped={}",
         motor_->port,
         percent,
@@ -184,19 +185,19 @@ void MotorAdapter::brake()
 {
     if (!motor_)
     {
-        LIBSTP_LOG_INFO("MotorAdapter::brake skipped: null motor");
+        LIBSTP_LOG_TRACE("MotorAdapter::brake skipped: null motor");
         return;
     }
     motor_->brake();
     resetController();
-    LIBSTP_LOG_INFO("MotorAdapter::brake port={} last_u_cmd={} reset controller", motor_->port, last_u_cmd_);
+    LIBSTP_LOG_TRACE("MotorAdapter::brake port={} last_u_cmd={} reset controller", motor_->port, last_u_cmd_);
 }
 
 void MotorAdapter::resetEncoderTracking()
 {
     pos_prev_init_ = false;
     w_meas_filt_ = 0.0;
-    LIBSTP_LOG_INFO("MotorAdapter::resetEncoderTracking port={} - cleared position history", motor_ ? motor_->port : -1);
+    LIBSTP_LOG_TRACE("MotorAdapter::resetEncoderTracking port={} - cleared position history", motor_ ? motor_->port : -1);
 }
 
 
@@ -219,30 +220,29 @@ libstp::calibration::CalibrationResult MotorAdapter::calibrate(const calibration
         return result;
     }
 
-    LIBSTP_LOG_INFO("Starting calibration for motor on port {}", motor_->port);
+    LIBSTP_LOG_DEBUG("Starting calibration for motor on port {}", motor_->port);
 
     // Create calibrator and run calibration
     calibration::MotorCalibrator calibrator(*motor_, config);
     calibration::CalibrationResult result = calibrator.calibrate();
 
-    if (result.success)
-    {
-        // Apply the calibrated parameters
-        foundation::MotorCalibration new_cal;
-        new_cal.pid = result.pid;
-        new_cal.ff = result.ff;
-        // Preserve other calibration parameters
-        new_cal.ticks_to_rad = motor_->getCalibration().ticks_to_rad;
-        new_cal.vel_lpf_alpha = motor_->getCalibration().vel_lpf_alpha;
-
-        updateCalibration(new_cal);
-        LIBSTP_LOG_INFO("Calibration completed successfully for motor on port {}", motor_->port);
-    }
-    else
+    if (!result.success)
     {
         LIBSTP_LOG_ERROR("Calibration failed for motor on port {}: {}",
-                    motor_->port, result.error_message);
+                         motor_->port, result.error_message);
+        return result;
     }
+
+    // Apply the calibrated parameters
+    foundation::MotorCalibration new_cal;
+    new_cal.pid = result.pid;
+    new_cal.ff = result.ff;
+    // Preserve other calibration parameters
+    new_cal.ticks_to_rad = motor_->getCalibration().ticks_to_rad;
+    new_cal.vel_lpf_alpha = motor_->getCalibration().vel_lpf_alpha;
+
+    updateCalibration(new_cal);
+    LIBSTP_LOG_TRACE("Calibration completed successfully for motor on port {}", motor_->port);
 
     return result;
 }
@@ -259,7 +259,7 @@ void MotorAdapter::updateCalibration(const foundation::MotorCalibration& cal)
     controller_.setGains(cal.pid);
     controller_.setFF(cal.ff);
 
-    LIBSTP_LOG_INFO("Updated calibration for motor on port {}: kp={:.3f}, ki={:.3f}, kd={:.3f}, kS={:.3f}, kV={:.3f}, kA={:.3f}",
+    LIBSTP_LOG_TRACE("Updated calibration for motor on port {}: kp={:.3f}, ki={:.3f}, kd={:.3f}, kS={:.3f}, kV={:.3f}, kA={:.3f}",
                 motor_->port,
                 cal.pid.kp, cal.pid.ki, cal.pid.kd,
                 cal.ff.kS, cal.ff.kV, cal.ff.kA);

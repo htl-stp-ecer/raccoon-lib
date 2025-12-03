@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "calibration/motor/calibration_config.hpp"
+#include "calibration/motor/calibration_result.hpp"
 #include "foundation/types.hpp"
 
 namespace libstp::kinematics
@@ -42,5 +44,10 @@ namespace libstp::kinematics
          * from causing incorrect velocity/position estimates in the next update cycle.
          */
         virtual void resetEncoders() = 0;
+
+        virtual std::vector<calibration::CalibrationResult> calibrateMotors(
+            const calibration::CalibrationConfig& config) = 0;
+
+        virtual std::vector<calibration::CalibrationResult> calibrateMotors();
     };
 }

@@ -61,7 +61,7 @@ namespace libstp::kinematics::mecanum
         void resetEncoders() override;
 
         // Calibration methods
-        std::vector<calibration::CalibrationResult> calibrateMotors();
-        std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config);
+        using kinematics::IKinematics::calibrateMotors;
+        std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config) override;
     };
 }
