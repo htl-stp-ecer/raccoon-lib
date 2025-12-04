@@ -11,6 +11,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+build-docker/
 develop-eggs/
 dist/
 downloads/
@@ -141,7 +142,9 @@ dmypy.json
 cython_debug/
 
 _skbuild/
+_skbuild-docker/
 .pyodide-xbuildenv/
 cmake-build-debug
 .cmake-cache
+.cmake-cache-docker/
 .idea/

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # -------- Config (env overridable) --------
 PROJECT_NAME="${PROJECT_NAME:-libstp}"
-BUILD_DIR="${BUILD_DIR:-build}"
+BUILD_DIR="${BUILD_DIR:-build-docker}"
 PLATFORM="${PLATFORM:-linux/arm64/v8}"
 IMAGE_NAME="${IMAGE_NAME:-libstp-dev:arm64}"
 CCACHE_VOL="${CCACHE_VOL:-libstp-ccache}"
@@ -65,6 +65,8 @@ docker_exec() {
     -e PYTHONDONTWRITEBYTECODE=1 \
     -e CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS" \
     -e MAKEFLAGS="-j$BUILD_JOBS" \
+    -e SKBUILD_BUILD_DIR=/src/_skbuild-docker \
+    -e FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker \
     --cpus="$(nproc)" \
     -w /src \
     "$IMAGE_NAME" \
@@ -87,7 +89,7 @@ docker_exec g++ --version
 echo "• Installing build dependencies first..."
 docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
-docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation"
+docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args=-DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
 
 WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
 if [[ ! -f "$WHEEL_FILE" ]]; then

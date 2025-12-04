@@ -2,7 +2,7 @@
 // Created by eternalRose on 11/17/25.
 //
 #include <pybind11/pybind11.h>
-#include "../include/button.hpp"
+#include "button/button.hpp"
 
 namespace py = pybind11;
 

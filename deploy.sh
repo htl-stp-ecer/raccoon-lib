@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_NAME="${PROJECT_NAME:-libstp}"
-BUILD_DIR="${BUILD_DIR:-build}"
+BUILD_DIR="${BUILD_DIR:-build-docker}"
 
 REMOTE_USER="${RPI_USER:-pi}"
 REMOTE_HOST="${RPI_HOST:-10.179.198.232}"
