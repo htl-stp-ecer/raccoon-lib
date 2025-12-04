@@ -1,7 +1,7 @@
 //
 // Created by eternalRose on 11/17/25.
 //
-#include "../include/button.hpp"
+#include "button/button.hpp"
 
 #include <chrono>
 #include <thread>
@@ -24,7 +24,11 @@ namespace libstp::button {
     }
 
     void Button::waitForButtonPress() {
-        while (!isPressed()) {
+        while (isPressed()) { // wait until released
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        while (!isPressed()) { // wait until pressedFor the
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }

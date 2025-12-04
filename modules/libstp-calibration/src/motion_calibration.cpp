@@ -538,6 +538,8 @@ namespace libstp::calibration
             double kd = gains_array[2];
 
             LIBSTP_LOG_DEBUG("Testing gains: kp={:.3f}, ki={:.3f}, kd={:.3f}", kp, ki, kd);
+            LIBSTP_LOG_INFO("Press the button to confirm a {} turn test...", test_angle);
+            //Button::waitUntilButtonPressed();
 
             // Run test with these gains
             auto result = runTurnTest(drive_, odometry_, test_angle, test_rate,
