@@ -2,13 +2,17 @@ import math
 import time
 
 from libstp.sensor_ir import IRSensor
-from libstp.button import Button
+import libstp.button as Button
 
 class IRSensorCalibration:
+    def __init__(self, buttonPort):
+        Button.set_digital(buttonPort)
+
     def calibrateSensors(self, irsensors):
-        print("Press the button when rdy to scan the white values")
-        Button.wait_for_button()
-        t_end = time.time() + 60
+        print("Press the button when ready to scan the white values")
+        Button.wait_for_button_press()
+        print("Collecting data")
+        t_end = time.time() + 10
         whiteValues = []
         blackValues = []
         while time.time() < t_end:
@@ -16,20 +20,24 @@ class IRSensorCalibration:
                 whiteValues.append(irsensor.read())
                 time.sleep(0.01)
 
-        print("Press the button when rdy to scan the black values")
-        t_end = time.time() + 60
+        print("Press the button when ready to scan the black values")
+        Button.wait_for_button_press()
+        print("Collecting data")
+        t_end = time.time() + 10
 
         while time.time() < t_end:
             for irsensor in irsensors:
                 blackValues.append(irsensor.read())
                 time.sleep(0.01)
 
-
         print("Done now calibrating")
 
         if len(whiteValues) == 0 or len(blackValues) == 0:
             print("Got no Values for either White or Black")
             return
+
+        for i in irsensors:
+            self.calibrateSingle(i, blackValues, whiteValues)
 
 
     def __mean(self, v):
@@ -64,7 +72,6 @@ class IRSensorCalibration:
         #todo maybe remove factor later
         whiteThresh = (whiteMean + 0.5 * delta)
         blackThresh = (blackMean - 0.5 * delta)
-
         irsensor.setCalibration(whiteThresh, blackThresh)
         print(f"Calibration successful: white mean = {whiteMean}, black mean = {blackMean}")
         print(f"Thresholds set: white = {whiteThresh}, black = {blackThresh}")
