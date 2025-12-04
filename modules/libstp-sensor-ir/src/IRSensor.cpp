@@ -7,6 +7,7 @@
 #include <iostream>
 #include <numeric>
 
+#include "foundation/logging.hpp"
 #include "spdlog/spdlog.h"
 using namespace libstp::sensors::ir;
 
@@ -32,15 +33,13 @@ bool IRSensor::isOnBlack() {
 float IRSensor::probabilityOfBlack() {
     float value = read();
 
-    const float low = blackThreshold;
-    const float high = whiteThreshold;
+    const float high = blackThreshold;
+    const float low  = whiteThreshold;
 
-    if (value <= low) return 1.0f;
-    if (value >= high) return 0.0f;
-    const float t = (value - low) / (high - low);
-    std::cout << value << " ; " <<  t << std::endl;
-
-    return 1.0f - t;
+    LIBSTP_LOG_INFO(std::to_string(low) + "; Black: " + std::to_string(high) + "; value: " + std::to_string(value));
+    if (value <= low)  return 0.0f;
+    if (value >= high) return 1.0f;
+    return (value - low) / (high - low);
 }
 
 float IRSensor::probabilityOfWhite() {
