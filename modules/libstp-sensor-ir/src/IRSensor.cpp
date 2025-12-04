@@ -4,6 +4,7 @@
 
 #include "IRSensor.hpp"
 
+#include <iostream>
 #include <numeric>
 
 #include "spdlog/spdlog.h"
@@ -15,7 +16,7 @@ IRSensor::IRSensor(const int &port, float calibrationFactor) : AnalogSensor(port
                                                                calibrationFactor(calibrationFactor * 0.5) {
 }
 
-void IRSensor::setCalibration(const int newBlackThreshold, const int newWhiteThreshold) {
+void IRSensor::setCalibration(const float newBlackThreshold, const float newWhiteThreshold) {
     this->whiteThreshold=newWhiteThreshold;
     this->blackThreshold=newBlackThreshold;
 }
@@ -29,7 +30,17 @@ bool IRSensor::isOnBlack() {
 }
 
 float IRSensor::probabilityOfBlack() {
-    return 0; // Todo: implement proper probability calculation
+    float value = read();
+
+    const float low = blackThreshold;
+    const float high = whiteThreshold;
+
+    if (value <= low) return 1.0f;
+    if (value >= high) return 0.0f;
+    const float t = (value - low) / (high - low);
+    std::cout << value << " ; " <<  t << std::endl;
+
+    return 1.0f - t;
 }
 
 float IRSensor::probabilityOfWhite() {
