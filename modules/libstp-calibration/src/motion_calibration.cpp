@@ -16,6 +16,8 @@
 #include <numeric>
 #include <numbers>
 
+#include "button/button.hpp"
+
 namespace libstp::calibration
 {
     namespace
@@ -539,7 +541,7 @@ namespace libstp::calibration
 
             LIBSTP_LOG_DEBUG("Testing gains: kp={:.3f}, ki={:.3f}, kd={:.3f}", kp, ki, kd);
             LIBSTP_LOG_INFO("Press the button to confirm a {} turn test...", test_angle);
-            //Button::waitUntilButtonPressed();
+            button::Button::waitForButtonPress();
 
             // Run test with these gains
             auto result = runTurnTest(drive_, odometry_, test_angle, test_rate,

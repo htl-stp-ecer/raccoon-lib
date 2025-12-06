@@ -13,7 +13,7 @@ void init_motor(const py::module& m)
              py::arg("calibration") = libstp::foundation::MotorCalibration{})
         .def_static("disable_all", &libstp::hal::motor::Motor::disableAll)
         .def("set_speed", &libstp::hal::motor::Motor::setSpeed, py::arg("percent"))
-        .def("get_speed", &libstp::hal::motor::Motor::getPosition)
+        .def("get_position", &libstp::hal::motor::Motor::getPosition)
         .def("brake", &libstp::hal::motor::Motor::brake)
         .def_readwrite("port", &libstp::hal::motor::Motor::port);
 }
