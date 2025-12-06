@@ -12,7 +12,7 @@ class IRSensorCalibration:
     def calibrateSensors(self, irsensors):
         print("Press the button when ready to scan the values")
         Button.wait_for_button_press()
-        values = self._collectValues(irsensors, 10)
+        values = self._collectValues(irsensors, 7)
 
         if not values:
             print("Got no values for WHITE or BLACK")
@@ -36,8 +36,8 @@ class IRSensorCalibration:
         kmeans = KMeans(n_clusters=2, n_init=10, random_state=42)
         kmeans.fit(all_values)
         centers = sorted(kmeans.cluster_centers_.flatten())
-        white_center = centers[0]
-        black_center = centers[1]
-        irsensor.setCalibration(black_center, white_center)
-        print(f"White center: {white_center}, Black center: {black_center}")
+        whiteThresh = centers[0]
+        blackThresh = centers[1]
+        irsensor.setCalibration(blackThresh, whiteThresh)
+        print(f"White Threshold: {whiteThresh}, Black Threshold: {blackThresh}")
         return True
