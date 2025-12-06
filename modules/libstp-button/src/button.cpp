@@ -18,12 +18,16 @@ namespace libstp::button {
 
     bool Button::isPressed() {
         if (digital_sensor_ == nullptr) {
-            return false;
+            throw std::runtime_error("Button digital sensor not initialized.");
         }
         return digital_sensor_->read();
     }
 
     void Button::waitForButtonPress() {
+        if (digital_sensor_ == nullptr) {
+            throw std::runtime_error("Button digital sensor not initialized.");
+        }
+
         while (isPressed()) { // wait until released
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
