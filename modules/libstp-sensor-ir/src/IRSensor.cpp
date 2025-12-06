@@ -4,9 +4,7 @@
 
 #include "IRSensor.hpp"
 
-#include <iostream>
-#include <numeric>
-
+#include "Kmeans.hpp"
 #include "foundation/logging.hpp"
 #include "spdlog/spdlog.h"
 using namespace libstp::sensors::ir;
@@ -30,7 +28,25 @@ bool IRSensor::isOnBlack() {
     return read() > blackThreshold;
 }
 
-float IRSensor::probabilityOfBlack() {
+
+void IRSensor::calibrate(const std::vector<float>& values) {
+    if (values.empty()) {
+        LIBSTP_LOG_WARN("No values provided");
+        return;
+    }
+
+    std::vector<double> data(values.begin(), values.end());
+
+    kmeans::KMeans km(10);
+    kmeans::KMeansResult res = km.fit(data);
+
+    whiteThreshold = static_cast<float>(res.centroid1);
+    blackThreshold = static_cast<float>(res.centroid2);
+
+    LIBSTP_LOG_DEBUG("Sucessful calibration: whiteThreshold (" + std::to_string(whiteThreshold) + ") blackThreshold (" + std::to_string(blackThreshold) + ")");
+}
+
+float IRSensor::probabilityOfBlack() const {
     float value = read();
 
     const float high = blackThreshold;
