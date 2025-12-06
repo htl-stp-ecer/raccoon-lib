@@ -4,8 +4,10 @@
 
 #include "IRSensor.hpp"
 
+#include <iostream>
 #include <numeric>
 
+#include "foundation/logging.hpp"
 #include "spdlog/spdlog.h"
 using namespace libstp::sensors::ir;
 
@@ -15,7 +17,7 @@ IRSensor::IRSensor(const int &port, float calibrationFactor) : AnalogSensor(port
                                                                calibrationFactor(calibrationFactor * 0.5) {
 }
 
-void IRSensor::setCalibration(const int newBlackThreshold, const int newWhiteThreshold) {
+void IRSensor::setCalibration(const float newBlackThreshold, const float newWhiteThreshold) {
     this->whiteThreshold=newWhiteThreshold;
     this->blackThreshold=newBlackThreshold;
 }
@@ -29,7 +31,15 @@ bool IRSensor::isOnBlack() {
 }
 
 float IRSensor::probabilityOfBlack() {
-    return 0; // Todo: implement proper probability calculation
+    float value = read();
+
+    const float high = blackThreshold;
+    const float low  = whiteThreshold;
+
+    LIBSTP_LOG_INFO(std::to_string(low) + "; Black: " + std::to_string(high) + "; value: " + std::to_string(value));
+    if (value <= low)  return 0.0f;
+    if (value >= high) return 1.0f;
+    return (value - low) / (high - low);
 }
 
 float IRSensor::probabilityOfWhite() {
