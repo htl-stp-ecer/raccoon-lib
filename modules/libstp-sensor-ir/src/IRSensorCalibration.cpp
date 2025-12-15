@@ -16,21 +16,42 @@ IRSensorCalibration::IRSensorCalibration(const int &buttonPort) {
     button::Button::setDigital(buttonPort);
 }
 
-void IRSensorCalibration::calibrateSensors(const std::vector<IRSensor*>& sensors, float durationSeconds) {
-    LIBSTP_LOG_INFO("Press the button when ready to scan the values");
-    button::Button::waitForButtonPress();
+void IRSensorCalibration::calibrateSensors(const std::vector<IRSensor*>& sensors,
+                                           float durationSeconds)
+{
+    constexpr int MAX_ATTEMPTS = 5;
 
-    std::vector<float> values = collectValues(sensors, durationSeconds);
+    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 
-    if (values.empty()) {
-        LIBSTP_LOG_WARN("Got no values for WHITE or BLACK");
-        return;
+        LIBSTP_LOG_INFO("Press the button when ready to scan the values (Attempt "
+                        + std::to_string(attempt) + "/" + std::to_string(MAX_ATTEMPTS) + ")");
+        button::Button::waitForButtonPress();
+
+        std::vector<float> values = collectValues(sensors, durationSeconds);
+
+        if (values.empty()) {
+            LIBSTP_LOG_WARN("No sensor values collected.");
+            continue;
+        }
+
+        bool allGood = true;
+
+        for (auto* sensor : sensors) {
+            if (!sensor->calibrate(values)) {
+                allGood = false;
+                break;
+            }
+        }
+
+        if (allGood) {
+            LIBSTP_LOG_INFO("All sensors calibrated successfully.");
+            return;
+        }
+        LIBSTP_LOG_WARN("Retrying...");
     }
-
-    for (auto* sensor : sensors) {
-        sensor->calibrate(values);
-    }
+    LIBSTP_LOG_ERROR("Calibration failed after maximum attempts.");
 }
+
 
 
 std::vector<float> IRSensorCalibration::collectValues(const std::vector<IRSensor*>& sensors, float durationSeconds) {
