@@ -7,6 +7,7 @@
 #include <thread>
 
 namespace libstp::button {
+
     hal::digital::DigitalSensor* Button::digital_sensor_ = nullptr;
 
     void Button::setDigital(int port) {
@@ -28,11 +29,7 @@ namespace libstp::button {
             throw std::runtime_error("Button digital sensor not initialized.");
         }
 
-        while (isPressed()) { // wait until released
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        while (!isPressed()) { // wait until pressedFor the
+        while (!isPressed()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }

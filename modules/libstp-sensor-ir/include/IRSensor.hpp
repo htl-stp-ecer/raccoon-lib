@@ -22,13 +22,21 @@ namespace libstp::sensors::ir {
 
         explicit IRSensor(const int& port, float calibrationFactor);
 
+        static float mean(const std::vector<float>& v);
+
+        static float stddev(const std::vector<float>& v);
+
+        static float variance(const std::vector<float>& v, float m);
+
+        bool calibrate(const std::vector<float>& values);
+
         void setCalibration(float newBlackThreshold, float newWhiteThreshold);
 
         bool isOnWhite() const;
 
         virtual bool isOnBlack();
 
-        float probabilityOfBlack();
-        float probabilityOfWhite();
+        float probabilityOfBlack() const;
+        float probabilityOfWhite() const;
     };
 }
