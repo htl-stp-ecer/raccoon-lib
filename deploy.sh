@@ -5,7 +5,7 @@ PROJECT_NAME="${PROJECT_NAME:-libstp}"
 BUILD_DIR="${BUILD_DIR:-build-docker}"
 
 REMOTE_USER="${RPI_USER:-pi}"
-REMOTE_HOST="${RPI_HOST:-10.142.98.232}"
+REMOTE_HOST="${RPI_HOST:-10.236.125.232}"
 REMOTE_DIR="${RPI_DIR:-/home/pi/python-libs}"
 PYTHON_CMD="${PYTHON_CMD:-python3}"
 
