@@ -1,1 +1,1 @@
-register_libstp_module(hal "FALSE" "foundation")
+register_libstp_module(hal "FALSE" "foundation;lcm")
