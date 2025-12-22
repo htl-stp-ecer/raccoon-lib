@@ -112,10 +112,6 @@ class RenderScreen(ClassNameLogger):
                 return
             await self.calibrate_black_white(trie)
 
-        if black_value is None or white_value is None:
-            return
-        print(f"Set values to: black {black_value} white {white_value}")
-
     async def calibrate_wfl(self, trie=0):
         self.cancel_event.clear()
         self.change_screen("calibrate_sensors")
