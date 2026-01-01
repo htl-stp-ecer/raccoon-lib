@@ -6,18 +6,24 @@ from typing import Any, Dict
 from libstp.screen.exlcm.screen_render_t import screen_render_t
 from libstp.screen.exlcm.screen_render_answer_t import screen_render_answer_t
 from libstp.hal import AnalogSensor
-
+from libstp.sensor_ir import IRSensor
+from libstp.sensor_ir import IRSensorCalibration
 from libstp.class_name_logger import ClassNameLogger
-
+from libstp.button import Button
 
 class RenderScreen(ClassNameLogger):
-    def __init__(self, port: int):
+    def __init__(self, port: int | list[int]):
         super().__init__()
         self.screen_name = ""
         self.port = port
         self.LCM = lcm.LCM()
         self.cancel_event = asyncio.Event()
-        self.sensor = AnalogSensor(port)
+        if (isinstance(port, int)):
+            self.sensors = [IRSensor(port)]
+        else:
+            self.sensors = []
+            for i in port:
+                self.sensors.append(IRSensor(i))
         self.LCM.subscribe("libstp/screen_render/cancel", self.__handle_cancel_request)
         asyncio.create_task(self.__lcm_pump_async())
 
@@ -61,16 +67,17 @@ class RenderScreen(ClassNameLogger):
         return await self.__wait_for_lcm_message(timeout=timeout)
 
     async def __wait_for_button(self):
-        for _ in range(10):
-            if self.cancel_event.is_set():
-                self.debug("Cancelled wait_for_button")
-                raise asyncio.CancelledError()
-            await asyncio.sleep(1)
+        await Button.wait_for_button_press()
+#        for _ in range(10):
+#            if self.cancel_event.is_set():
+#                self.debug("Cancelled wait_for_button")
+#                raise asyncio.CancelledError()
+#            await asyncio.sleep(1)
 
     def __get_analog_value(self):
-        value = self.sensor.read()
+        value = self.sensors.read()
         while value == 0:
-            value = self.sensor.read()
+            value = self.sensors.read()
         return value
 
     async def calibrate_black_white(self, trie=0) -> None:
@@ -81,28 +88,13 @@ class RenderScreen(ClassNameLogger):
             self.debug("Black White Sensor calibration cancelled before start")
             return
 
-        self.debug("Calibrating black request")
-        self.send_state({"port": self.port, "type": "blackWhite", "state": "calibrate_black"})
+        self.debug("Overview calibration screen request")
+        self.send_state({"type": "IR", "state": "overview"})
 
-        await self.__wait_for_button()
-        black_value = self.__get_analog_value()
-        self.debug("Black Value: " + str(black_value))
-
-        self.debug("Calibrating white request")
-        self.send_state({"port": self.port, "type": "blackWhite", "state": "calibrate_white"})
-
-        await self.__wait_for_button()
-        white_value = self.__get_analog_value()
-        self.debug("White Value: " + str(white_value))
-
+        if not IRSensorCalibration().calibrateSensors(self.sensors, 5.0):
+            return
         self.debug("Time to confirm")
-        self.send_state({
-            "port": self.port,
-            "type": "blackWhite",
-            "state": "confirm",
-            "white_value": white_value,
-            "black_value": black_value
-        })
+
 
         try:
             msg = await self.__wait_for_finish(timeout=120)
@@ -119,8 +111,6 @@ class RenderScreen(ClassNameLogger):
                 self.warn("Could not finish calibrating sensors")
                 return
             await self.calibrate_black_white(trie)
-
-        print(f"Set values to: black {black_value} white {white_value}")
 
     async def calibrate_wfl(self, trie=0):
         self.cancel_event.clear()

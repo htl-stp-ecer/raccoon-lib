@@ -8,6 +8,7 @@
 #include <set>
 #endif
 #include "hal/Analog.hpp"
+
 namespace libstp::sensors::ir {
     class IRSensor : public hal::analog::AnalogSensor
     {
