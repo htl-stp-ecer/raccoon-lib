@@ -37,5 +37,6 @@ namespace libstp::motion
         double elapsed_time_{0.0};          // Time elapsed since start
         bool finished_{false};
         double speed_scale_{1.0};  // Current speed scaling factor due to saturation
+        int unsaturated_cycles_{0};  // Hysteresis counter for saturation recovery
     };
 }

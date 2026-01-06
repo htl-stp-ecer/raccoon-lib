@@ -23,47 +23,24 @@ namespace libstp::motion
     {
     }
 
+    DriveStraightMotion::DriveStraightMotion(MotionContext ctx, foundation::Meters distance, foundation::MetersPerSecond max_speed)
+        : DriveStraightMotion(ctx, DriveStraightConfig{
+            .distance_m = distance.value,
+            .max_speed_mps = max_speed.value
+        })
+    {
+    }
+
     DriveStraightMotion::DriveStraightMotion(MotionContext ctx, DriveStraightConfig config)
         : Motion(ctx), cfg_(config)
     {
         cfg_.max_speed_mps = std::abs(cfg_.max_speed_mps);
         if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.05;
 
-        const auto& pid_cfg = ctx_.pid_config;
-
-        // Create PID controllers using unified config
-        MotionPidController::Config distance_pid_cfg;
-        distance_pid_cfg.kp = pid_cfg.distance_kp;
-        distance_pid_cfg.ki = pid_cfg.distance_ki;
-        distance_pid_cfg.kd = pid_cfg.distance_kd;
-        distance_pid_cfg.output_min = pid_cfg.output_min;
-        distance_pid_cfg.output_max = pid_cfg.output_max;
-        distance_pid_cfg.integral_max = pid_cfg.integral_max;
-        distance_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
-        distance_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
-        distance_pid_ = std::make_unique<MotionPidController>(distance_pid_cfg);
-
-        MotionPidController::Config heading_pid_cfg;
-        heading_pid_cfg.kp = pid_cfg.heading_kp;
-        heading_pid_cfg.ki = pid_cfg.heading_ki;
-        heading_pid_cfg.kd = pid_cfg.heading_kd;
-        heading_pid_cfg.output_min = pid_cfg.output_min;
-        heading_pid_cfg.output_max = pid_cfg.output_max;
-        heading_pid_cfg.integral_max = pid_cfg.integral_max;
-        heading_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
-        heading_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
-        heading_pid_ = std::make_unique<MotionPidController>(heading_pid_cfg);
-
-        MotionPidController::Config lateral_pid_cfg;
-        lateral_pid_cfg.kp = pid_cfg.lateral_kp;
-        lateral_pid_cfg.ki = pid_cfg.lateral_ki;
-        lateral_pid_cfg.kd = pid_cfg.lateral_kd;
-        lateral_pid_cfg.output_min = pid_cfg.output_min;
-        lateral_pid_cfg.output_max = pid_cfg.output_max;
-        lateral_pid_cfg.integral_max = pid_cfg.integral_max;
-        lateral_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
-        lateral_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
-        lateral_pid_ = std::make_unique<MotionPidController>(lateral_pid_cfg);
+        // Create PID controllers using factory (eliminates boilerplate)
+        distance_pid_ = createPidController(ctx_.pid_config, PidType::Distance);
+        heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
+        lateral_pid_ = createPidController(ctx_.pid_config, PidType::Lateral);
     }
 
     void DriveStraightMotion::start()
@@ -75,6 +52,7 @@ namespace libstp::motion
         heading_scale_ = 1.0;
         reorienting_ = false;
         elapsed_time_ = 0.0;
+        unsaturated_cycles_ = 0;
 
         // Reset odometry to establish new origin for this motion
         odometry().reset();
@@ -105,7 +83,7 @@ namespace libstp::motion
 
         if (finished_)
         {
-            drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+            drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             if (dt > 0.0)
             {
                 [[maybe_unused]] const auto motor_cmd = drive().update(dt);
@@ -115,6 +93,7 @@ namespace libstp::motion
 
         if (dt <= 0.0)
         {
+            LIBSTP_LOG_WARN("DriveStraightMotion::update called with invalid dt={:.6f}s (must be > 0)", dt);
             return;
         }
 
@@ -147,7 +126,7 @@ namespace libstp::motion
         if (remaining_abs <= ctx_.pid_config.distance_tolerance_m)
         {
             complete();
-            drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+            drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
             return;
         }
@@ -226,13 +205,13 @@ namespace libstp::motion
         if (std::abs(vx_cmd) < 1e-4)
         {
             const double direction = (remaining >= 0.0) ? 1.0 : -1.0;
-            vx_cmd = direction * std::min(cfg_.max_speed_mps, 0.05);
+            vx_cmd = direction * std::min(cfg_.max_speed_mps, ctx_.pid_config.min_speed_mps);
         }
 
         // Reduce forward speed during reorientation (differential only)
         if (reorienting_)
         {
-            vx_cmd *= 0.3;  // Slow down to 30% during reorientation
+            vx_cmd *= ctx_.pid_config.reorientation_speed_factor;
             LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL-REORIENT] Reducing vx_cmd to {:.3f} m/s", vx_cmd);
         }
 
@@ -249,14 +228,17 @@ namespace libstp::motion
             heading_scale_);
 
         // ===== SEND COMMANDS =====
-        foundation::ChassisVel cmd{vx_cmd, vy_cmd, omega_cmd_scaled};
+        foundation::ChassisVelocity cmd{vx_cmd, vy_cmd, omega_cmd_scaled};
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 
-        // Adjust scaling based on saturation feedback
+        // Adjust scaling based on saturation feedback with hysteresis to prevent oscillation
         const double yaw_error_abs = std::abs(yaw_error);
         if (motor_cmd.saturated_any && yaw_error_abs > ctx_.pid_config.heading_saturation_error_rad)
         {
+            // Reset hysteresis counter on saturation
+            unsaturated_cycles_ = 0;
+
             const double prev_speed_scale = speed_scale_;
             const double prev_heading_scale = heading_scale_;
 
@@ -284,20 +266,32 @@ namespace libstp::motion
         }
         else if (!motor_cmd.saturated_any && yaw_error_abs < ctx_.pid_config.heading_recovery_error_rad)
         {
-            const double prev_speed_scale = speed_scale_;
-            const double prev_heading_scale = heading_scale_;
+            // Hysteresis: only recover after sustained period without saturation
+            ++unsaturated_cycles_;
 
-            speed_scale_ = std::min(1.0, speed_scale_ + ctx_.pid_config.saturation_recovery_rate);
-            heading_scale_ = std::min(1.0, heading_scale_ + ctx_.pid_config.heading_recovery_rate);
+            // Only recover if we've been unsaturated long enough AND we're below recovery threshold
+            const bool can_recover = unsaturated_cycles_ >= ctx_.pid_config.saturation_hold_cycles;
+            const bool needs_recovery = speed_scale_ < ctx_.pid_config.saturation_recovery_threshold ||
+                                        heading_scale_ < ctx_.pid_config.saturation_recovery_threshold;
 
-            if (prev_speed_scale != speed_scale_ || prev_heading_scale != heading_scale_)
+            if (can_recover && needs_recovery)
             {
-                LIBSTP_LOG_TRACE(
-                    "DriveStraightMotion: Recovery -> speed_scale {:.3f}->{:.3f}, heading_scale {:.3f}->{:.3f}",
-                    prev_speed_scale,
-                    speed_scale_,
-                    prev_heading_scale,
-                    heading_scale_);
+                const double prev_speed_scale = speed_scale_;
+                const double prev_heading_scale = heading_scale_;
+
+                speed_scale_ = std::min(1.0, speed_scale_ + ctx_.pid_config.saturation_recovery_rate);
+                heading_scale_ = std::min(1.0, heading_scale_ + ctx_.pid_config.heading_recovery_rate);
+
+                if (prev_speed_scale != speed_scale_ || prev_heading_scale != heading_scale_)
+                {
+                    LIBSTP_LOG_TRACE(
+                        "DriveStraightMotion: Recovery (after {} cycles) -> speed_scale {:.3f}->{:.3f}, heading_scale {:.3f}->{:.3f}",
+                        unsaturated_cycles_,
+                        prev_speed_scale,
+                        speed_scale_,
+                        prev_heading_scale,
+                        heading_scale_);
+                }
             }
         }
     }

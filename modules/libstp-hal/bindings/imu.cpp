@@ -3,13 +3,14 @@
 //
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
+#include <memory>
 #include "hal/IMU.hpp"
 
 namespace py = pybind11;
 
 void init_imu(const py::module& m)
 {
-    py::class_<libstp::hal::imu::IMU>(m, "IMU")
+    py::class_<libstp::hal::imu::IMU, std::shared_ptr<libstp::hal::imu::IMU>>(m, "IMU")
         .def(py::init<>())
         .def("read", [](libstp::hal::imu::IMU& self)
         {

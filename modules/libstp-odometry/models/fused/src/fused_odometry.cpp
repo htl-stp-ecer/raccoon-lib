@@ -8,9 +8,12 @@
 
 namespace libstp::odometry::fused
 {
-    FusedOdometry::FusedOdometry(hal::imu::IMU* imu, kinematics::IKinematics* kinematics)
-        : imu_(imu)
-        , kinematics_(kinematics)
+    FusedOdometry::FusedOdometry(std::shared_ptr<hal::imu::IMU> imu,
+                                   std::shared_ptr<kinematics::IKinematics> kinematics,
+                                   FusedOdometryConfig config)
+        : config_(config)
+        , imu_(std::move(imu))
+        , kinematics_(std::move(kinematics))
         , position_(Eigen::Vector3f::Zero())
         , orientation_(Eigen::Quaternionf::Identity())
         , origin_position_(Eigen::Vector3f::Zero())
@@ -18,12 +21,13 @@ namespace libstp::odometry::fused
         , initial_imu_orientation_(Eigen::Quaternionf::Identity())
         , imu_initialized_(false)
     {
-        if (!imu) throw std::invalid_argument("imu cannot be null");
-        if (!kinematics) throw std::invalid_argument("kinematics cannot be null");
+        if (!imu_) throw std::invalid_argument("imu cannot be null");
+        if (!kinematics_) throw std::invalid_argument("kinematics cannot be null");
 
         // Wait for IMU to receive initial data from coprocessor
-        if (imu_ && !imu_->waitForReady(1000)) {
-            LIBSTP_LOG_WARN("FusedOdometry::ctor - IMU not ready after timeout, proceeding anyway");
+        if (!imu_->waitForReady(config_.imu_ready_timeout_ms)) {
+            LIBSTP_LOG_WARN("FusedOdometry::ctor - IMU not ready after {}ms timeout, proceeding anyway",
+                          config_.imu_ready_timeout_ms);
         }
 
         LIBSTP_LOG_TRACE("FusedOdometry::ctor initialized with IMU and kinematics");
@@ -73,7 +77,7 @@ namespace libstp::odometry::fused
         // ===== POSITION: Integrate velocity from kinematics =====
 
         // Get body-frame velocity from kinematics (uses wheel encoders internally)
-        const foundation::ChassisState body_velocity = kinematics_->estimateState();
+        const foundation::ChassisVelocity body_velocity = kinematics_->estimateState();
 
         // Create 3D velocity vector in body frame (2D motion, z=0)
         const Eigen::Vector3f v_body(body_velocity.vx, body_velocity.vy, 0.0f);
@@ -170,8 +174,9 @@ namespace libstp::odometry::fused
     void FusedOdometry::reset()
     {
         // Wait for IMU to receive initial data from coprocessor
-        if (imu_ && !imu_->waitForReady(1000)) {
-            LIBSTP_LOG_WARN("FusedOdometry::reset - IMU not ready after timeout, proceeding anyway");
+        if (imu_ && !imu_->waitForReady(config_.imu_ready_timeout_ms)) {
+            LIBSTP_LOG_WARN("FusedOdometry::reset - IMU not ready after {}ms timeout, proceeding anyway",
+                          config_.imu_ready_timeout_ms);
         }
 
         // Reset encoder tracking to prevent stale position deltas

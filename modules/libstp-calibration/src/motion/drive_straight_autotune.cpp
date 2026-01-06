@@ -104,7 +104,7 @@ namespace libstp::calibration
             const double error = odometry::wrapAngle(-heading);  // target heading = 0 rad
             const double yaw_cmd = (error >= 0.0) ? cfg_.relay_yaw_rate : -cfg_.relay_yaw_rate;
 
-            drive_.setVelocity(foundation::ChassisVel{forward_speed, 0.0, yaw_cmd});
+            drive_.setVelocity(foundation::ChassisVelocity{forward_speed, 0.0, yaw_cmd});
             [[maybe_unused]] const auto cmd = drive_.update(dt);
 
             headings.push_back(heading);
@@ -131,7 +131,7 @@ namespace libstp::calibration
         }
 
         // Stop motion
-        drive_.setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+        drive_.setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
         [[maybe_unused]] const auto stop_cmd = drive_.update(dt);
 
         result.relay_output = cfg_.relay_yaw_rate;

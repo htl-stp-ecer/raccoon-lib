@@ -3,6 +3,7 @@
 #include "motion/motion.hpp"
 #include "motion/motion_pid.hpp"
 #include "motion/trapezoidal_profile.hpp"
+#include "foundation/types.hpp"
 #include <memory>
 
 namespace libstp::motion
@@ -19,7 +20,13 @@ namespace libstp::motion
     class TurnMotion final : public Motion
     {
     public:
+        /// @deprecated Use the type-safe overload with Radians and RadiansPerSecond instead
+        [[deprecated("Use TurnMotion(ctx, Radians, RadiansPerSecond) for type safety")]]
         TurnMotion(MotionContext ctx, double angle_deg, double max_angular_rate_rad_per_sec);
+
+        /// Type-safe constructor using strongly-typed units
+        TurnMotion(MotionContext ctx, foundation::Radians angle, foundation::RadiansPerSecond max_angular_rate);
+
         TurnMotion(MotionContext ctx, TurnConfig config);
 
         void start() override;
@@ -36,5 +43,6 @@ namespace libstp::motion
         double elapsed_time_{0.0};        // Time elapsed since start
         bool finished_{false};
         double angular_scale_{1.0};  // Current angular speed scaling factor due to saturation
+        int unsaturated_cycles_{0};  // Hysteresis counter for saturation recovery
     };
 }
