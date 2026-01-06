@@ -24,32 +24,9 @@ namespace libstp::motion
         // Validate configuration parameters
         if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.3;
 
-        const auto& pid_cfg = ctx_.pid_config;
-
-        // Create PID controllers using unified config
-        // For lateral movement, use the lateral PID gains
-        MotionPidController::Config lateral_pid_cfg;
-        lateral_pid_cfg.kp = pid_cfg.lateral_kp;
-        lateral_pid_cfg.ki = pid_cfg.lateral_ki;
-        lateral_pid_cfg.kd = pid_cfg.lateral_kd;
-        lateral_pid_cfg.output_min = pid_cfg.output_min;
-        lateral_pid_cfg.output_max = pid_cfg.output_max;
-        lateral_pid_cfg.integral_max = pid_cfg.integral_max;
-        lateral_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
-        lateral_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
-        lateral_pid_ = std::make_unique<MotionPidController>(lateral_pid_cfg);
-
-        // For heading correction, use the heading PID gains
-        MotionPidController::Config heading_pid_cfg;
-        heading_pid_cfg.kp = pid_cfg.heading_kp;
-        heading_pid_cfg.ki = pid_cfg.heading_ki;
-        heading_pid_cfg.kd = pid_cfg.heading_kd;
-        heading_pid_cfg.output_min = pid_cfg.output_min;
-        heading_pid_cfg.output_max = pid_cfg.output_max;
-        heading_pid_cfg.integral_max = pid_cfg.integral_max;
-        heading_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
-        heading_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
-        heading_pid_ = std::make_unique<MotionPidController>(heading_pid_cfg);
+        // Create PID controllers using factory (eliminates boilerplate)
+        lateral_pid_ = createPidController(ctx_.pid_config, PidType::Lateral);
+        heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
     }
 
     void StrafeMotion::start()
@@ -59,6 +36,7 @@ namespace libstp::motion
         finished_ = false;
         speed_scale_ = 1.0;
         elapsed_time_ = 0.0;
+        unsaturated_cycles_ = 0;
 
         // Reset odometry to establish new origin for this motion
         odometry().reset();
@@ -89,7 +67,7 @@ namespace libstp::motion
 
         if (finished_)
         {
-            drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+            drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             if (dt > 0.0)
             {
                 [[maybe_unused]] const auto motor_cmd = drive().update(dt);
@@ -99,6 +77,7 @@ namespace libstp::motion
 
         if (dt <= 0.0)
         {
+            LIBSTP_LOG_WARN("StrafeMotion::update called with invalid dt={:.6f}s (must be > 0)", dt);
             return;
         }
 
@@ -132,7 +111,7 @@ namespace libstp::motion
         if (error_abs <= ctx_.pid_config.distance_tolerance_m)
         {
             complete();
-            drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+            drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
             LIBSTP_LOG_TRACE("StrafeMotion completed: final error = {:.3f} m", lateral_error);
             return;
@@ -159,13 +138,16 @@ namespace libstp::motion
                     vy_cmd, vy_cmd_scaled, speed_scale_, omega_correction);
 
         // Send command: no forward motion, lateral strafe, with heading correction
-        foundation::ChassisVel cmd{0.0, vy_cmd_scaled, omega_correction};
+        foundation::ChassisVelocity cmd{0.0, vy_cmd_scaled, omega_correction};
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 
-        // Adjust scaling based on saturation feedback
+        // Adjust scaling based on saturation feedback with hysteresis to prevent oscillation
         if (motor_cmd.saturated_any)
         {
+            // Reset hysteresis counter on saturation
+            unsaturated_cycles_ = 0;
+
             const double prev_scale = speed_scale_;
             speed_scale_ = std::max(
                 ctx_.pid_config.saturation_min_scale,
@@ -176,14 +158,22 @@ namespace libstp::motion
         }
         else
         {
-            // Recover scaling when not saturated
-            const double prev_scale = speed_scale_;
-            speed_scale_ = std::min(1.0, speed_scale_ + ctx_.pid_config.saturation_recovery_rate);
+            // Hysteresis: only recover after sustained period without saturation
+            ++unsaturated_cycles_;
 
-            if (prev_scale != speed_scale_)
+            const bool can_recover = unsaturated_cycles_ >= ctx_.pid_config.saturation_hold_cycles;
+            const bool needs_recovery = speed_scale_ < ctx_.pid_config.saturation_recovery_threshold;
+
+            if (can_recover && needs_recovery)
             {
-                LIBSTP_LOG_TRACE("StrafeMotion: Recovery -> speed_scale {:.3f}->{:.3f}",
-                            prev_scale, speed_scale_);
+                const double prev_scale = speed_scale_;
+                speed_scale_ = std::min(1.0, speed_scale_ + ctx_.pid_config.saturation_recovery_rate);
+
+                if (prev_scale != speed_scale_)
+                {
+                    LIBSTP_LOG_TRACE("StrafeMotion: Recovery (after {} cycles) -> speed_scale {:.3f}->{:.3f}",
+                                unsaturated_cycles_, prev_scale, speed_scale_);
+                }
             }
         }
     }

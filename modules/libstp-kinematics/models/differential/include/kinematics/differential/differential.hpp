@@ -47,8 +47,8 @@ namespace libstp::kinematics::differential
         void setWheelLimits(double max_velocity, double max_acceleration);
 
         [[nodiscard]] std::size_t wheelCount() const override;
-        MotorCommands applyCommand(const foundation::ChassisCmd& cmd, double dt) override;
-        [[nodiscard]] foundation::ChassisState estimateState() const override;
+        MotorCommands applyCommand(const foundation::ChassisVelocity& cmd, double dt) override;
+        [[nodiscard]] foundation::ChassisVelocity estimateState() const override;
         void hardStop() override;
         [[nodiscard]] bool supportsLateralMotion() const override;
         void resetEncoders() override;

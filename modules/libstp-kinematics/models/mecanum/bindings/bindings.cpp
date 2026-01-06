@@ -3,6 +3,7 @@
 //
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <memory>
 
 #include "kinematics/mecanum/mecanum.hpp"
 #include "calibration/motor/calibration.hpp"
@@ -19,7 +20,8 @@ PYBIND11_MODULE(kinematics_mecanum, m)
     py::module_::import("libstp.hal");
     py::module_::import("libstp.calibration");
 
-    py::class_<libstp::kinematics::mecanum::MecanumKinematics, libstp::kinematics::IKinematics>(m, "MecanumKinematics")
+    py::class_<libstp::kinematics::mecanum::MecanumKinematics, libstp::kinematics::IKinematics,
+                std::shared_ptr<libstp::kinematics::mecanum::MecanumKinematics>>(m, "MecanumKinematics")
         .def(py::init<libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,

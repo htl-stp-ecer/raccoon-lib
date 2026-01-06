@@ -44,6 +44,10 @@ namespace libstp::motion
         double heading_min_scale{0.25};                   // Minimum heading scale
         double heading_recovery_rate{0.05};               // Recovery rate for heading scale
 
+        // Hysteresis parameters to prevent oscillation
+        int saturation_hold_cycles{5};              // Cycles to hold before starting recovery
+        double saturation_recovery_threshold{0.95}; // Only recover when scale is below this
+
         // Tolerances
         double distance_tolerance_m{0.01};       // Position completion tolerance (meters)
         double angle_tolerance_rad{0.02};        // Angular completion tolerance (radians, ~1.15 degrees)
@@ -60,6 +64,9 @@ namespace libstp::motion
 
         // Minimum speeds (to prevent stalling)
         double min_speed_mps{0.05};              // Minimum translational speed
+
+        // Reorientation behavior (differential drive)
+        double reorientation_speed_factor{0.3};  // Reduce forward speed to this fraction during reorientation
     };
 
     /**

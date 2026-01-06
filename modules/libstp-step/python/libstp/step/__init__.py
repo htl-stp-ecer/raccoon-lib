@@ -53,7 +53,11 @@ class Step(ClassNameLogger):
             if tracker.config.enabled:
                 signature = self._generate_signature()
                 start_time = time.perf_counter()
-        except Exception:
+        except ImportError:
+            # Timing module not available - this is expected in some configurations
+            tracker = None
+        except Exception as exc:
+            self.warn(f"Failed to initialize step timing tracker: {exc}")
             tracker = None
 
         try:
@@ -78,7 +82,55 @@ class Step(ClassNameLogger):
         """Actual step logic implemented by subclasses."""
         raise NotImplementedError
 
-    @abstractmethod
     def to_simulation_step(self) -> SimulationStep:
-        """Convert this step to a SimulationStep representation."""
-        raise NotImplementedError
+        """
+        Convert this step to a SimulationStep representation.
+
+        Default implementation uses timing data from the database if available,
+        otherwise returns reasonable defaults. Override this method in subclasses
+        to provide accurate delta values for position/heading changes.
+        """
+        signature = self._generate_signature()
+
+        # Try to get timing statistics from database
+        avg_duration_ms = 100.0  # Default: 100ms
+        stddev_ms = 10.0  # Default: 10ms
+
+        try:
+            from libstp.timing import StepTimingTracker
+
+            tracker = StepTimingTracker.get_instance()
+            if tracker.config.enabled:
+                import asyncio
+
+                async def fetch_timing() -> tuple[float, float]:
+                    durations = await tracker.database.fetch_recent_durations(
+                        signature, tracker.config.window_size
+                    )
+                    if len(durations) >= 2:
+                        import statistics
+                        mean_s = statistics.mean(durations)
+                        stddev_s = statistics.stdev(durations)
+                        return mean_s * 1000.0, stddev_s * 1000.0
+                    return 100.0, 10.0
+
+                # Run in event loop if one exists, otherwise use default values
+                try:
+                    loop = asyncio.get_running_loop()
+                    # Can't await in sync context, use defaults
+                except RuntimeError:
+                    # No running loop, can create one
+                    avg_duration_ms, stddev_ms = asyncio.run(fetch_timing())
+
+        except ImportError:
+            pass  # Timing module not available
+        except Exception as exc:
+            self.debug(f"Could not fetch timing data for {signature}: {exc}")
+
+        return SimulationStep(
+            id=signature,
+            label=self.__class__.__name__,
+            average_duration_ms=avg_duration_ms,
+            duration_stddev_ms=stddev_ms,
+            delta=SimulationStepDelta(forward=0.0, strafe=0.0, angular=0.0),
+        )

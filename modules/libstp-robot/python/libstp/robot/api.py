@@ -1,34 +1,131 @@
-from libstp.class_name_logger import ClassNameLogger
+from abc import ABC, abstractmethod
+from typing import Any, List, Optional, Protocol, TYPE_CHECKING, runtime_checkable
 import asyncio
 
-class GenericRobot(ClassNameLogger):
-    def __init__(self):
-        self._check_required_variables()
+from libstp.class_name_logger import ClassNameLogger
 
-    def _check_required_variables(self):
-        if not hasattr(self, "defs"):
-            self.error("Robot must have a defs variable (Robot.defs)")
-            raise AttributeError("Robot must have a defs variable (Robot.defs)")
+if TYPE_CHECKING:
+    from libstp.drive import Drive
+    from libstp.odometry import Odometry
 
-        if not hasattr(self, "drive"):
-            self.error("Robot must have a drive variable (Robot.drive)")
-            raise AttributeError("Robot must have a drive variable (Robot.drive)")
 
-        if not hasattr(self, "missions"):
+@runtime_checkable
+class RobotDefinitionsProtocol(Protocol):
+    """
+    Protocol defining the structure of robot hardware definitions.
+
+    Implementations should define motor and servo attributes as class variables.
+    Example:
+        class MyDefs:
+            left_motor = Motor(port=0, ...)
+            right_motor = Motor(port=1, ...)
+            arm_servo = Servo(port=0, ...)
+    """
+
+    pass  # Marker protocol - actual attributes are robot-specific
+
+
+@runtime_checkable
+class MissionProtocol(Protocol):
+    """Protocol for mission objects that can be run on a robot."""
+
+    async def run(self, robot: "GenericRobot") -> None:
+        """Execute the mission on the given robot."""
+        ...
+
+
+class GenericRobot(ABC, ClassNameLogger):
+    """
+    Abstract base class for all robots.
+
+    Subclasses must implement:
+        - defs: Hardware definitions (motors, servos, etc.)
+        - drive: Drive system for chassis control
+        - odometry: Odometry system for position tracking
+
+    Optional attributes:
+        - missions: List of missions to execute
+        - setup_mission: Mission to run before main missions
+        - shutdown_mission: Mission to run after all missions complete
+    """
+
+    @property
+    @abstractmethod
+    def defs(self) -> RobotDefinitionsProtocol:
+        """Hardware definitions (motors, servos, sensors)."""
+        ...
+
+    @property
+    @abstractmethod
+    def drive(self) -> "Drive":
+        """Drive system for chassis velocity control."""
+        ...
+
+    @property
+    @abstractmethod
+    def odometry(self) -> "Odometry":
+        """Odometry system for position tracking."""
+        ...
+
+    @property
+    def missions(self) -> List[MissionProtocol]:
+        """List of missions to execute. Override to provide missions."""
+        return []
+
+    @property
+    def setup_mission(self) -> Optional[MissionProtocol]:
+        """Optional mission to run before main missions."""
+        return None
+
+    @property
+    def shutdown_mission(self) -> Optional[MissionProtocol]:
+        """Optional mission to run after all missions complete."""
+        return None
+
+    def __init__(self) -> None:
+        """Initialize the robot and log configuration status."""
+        if not self.missions:
             self.warn("Robot does not have any missions attached")
 
-        if hasattr(self, "setup_mission"):
-            self.info("Setup mission for mission found")
+        if self.setup_mission is not None:
+            self.info("Setup mission found")
 
-        if hasattr(self, "shutdown_mission"):
-            self.info("Shutdown mission for mission found")
-    def start(self):
+        if self.shutdown_mission is not None:
+            self.info("Shutdown mission found")
+
+    def start(self) -> None:
+        """
+        Start executing the robot's missions.
+
+        Runs setup_mission (if present), then all missions in order,
+        then shutdown_mission (if present).
+
+        Note: This method blocks until all missions complete.
+        For non-blocking execution, use start_async() instead.
+        """
         self.info("Starting robot")
+        asyncio.run(self._run_missions())
 
-        async def main_loop():
-            for mission in self.missions:
-                self.info(f"Starting mission: {mission}")
-                await mission.run(self)
-                self.info(f"Finished mission: {mission}")
+    async def start_async(self) -> None:
+        """
+        Async version of start() for use in existing event loops.
 
-        asyncio.run(main_loop())
+        Useful for testing or integration with other async code.
+        """
+        self.info("Starting robot (async)")
+        await self._run_missions()
+
+    async def _run_missions(self) -> None:
+        """Internal mission execution loop."""
+        if self.setup_mission is not None:
+            self.info("Running setup mission")
+            await self.setup_mission.run(self)
+
+        for mission in self.missions:
+            self.info(f"Starting mission: {mission}")
+            await mission.run(self)
+            self.info(f"Finished mission: {mission}")
+
+        if self.shutdown_mission is not None:
+            self.info("Running shutdown mission")
+            await self.shutdown_mission.run(self)

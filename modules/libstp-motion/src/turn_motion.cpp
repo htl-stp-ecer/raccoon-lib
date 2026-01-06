@@ -23,26 +23,22 @@ namespace libstp::motion
     {
     }
 
+    TurnMotion::TurnMotion(MotionContext ctx, foundation::Radians angle, foundation::RadiansPerSecond max_angular_rate)
+        : TurnMotion(ctx, TurnConfig{
+            .target_angle_rad = angle.value,
+            .max_angular_rate = max_angular_rate.value
+        })
+    {
+    }
+
     TurnMotion::TurnMotion(MotionContext ctx, TurnConfig config)
         : Motion(ctx), cfg_(config)
     {
         // Validate configuration parameters
         if (cfg_.max_angular_rate <= 0.0) cfg_.max_angular_rate = 0.5;
 
-        const auto& pid_cfg = ctx_.pid_config;
-
-        // Create PID controller using unified config
-        MotionPidController::Config angle_pid_cfg;
-        angle_pid_cfg.kp = pid_cfg.heading_kp;  // Use heading PID gains for turn motion
-        angle_pid_cfg.ki = pid_cfg.heading_ki;
-        angle_pid_cfg.kd = pid_cfg.heading_kd;
-        angle_pid_cfg.output_min = pid_cfg.output_min;
-        angle_pid_cfg.output_max = pid_cfg.output_max;
-        angle_pid_cfg.integral_max = pid_cfg.integral_max;
-        angle_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
-        angle_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
-
-        angle_pid_ = std::make_unique<MotionPidController>(angle_pid_cfg);
+        // Create PID controller using factory (turn uses heading gains)
+        angle_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
     }
 
     void TurnMotion::start()
@@ -52,6 +48,7 @@ namespace libstp::motion
         finished_ = false;
         angular_scale_ = 1.0;
         elapsed_time_ = 0.0;
+        unsaturated_cycles_ = 0;
 
         // Reset odometry to establish new origin for this motion
         // This zeros the heading, so our initial heading is 0.0
@@ -81,7 +78,7 @@ namespace libstp::motion
 
         if (finished_)
         {
-            drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+            drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             if (dt > 0.0)
             {
                 [[maybe_unused]] const auto motor_cmd = drive().update(dt);
@@ -91,6 +88,7 @@ namespace libstp::motion
 
         if (dt <= 0.0)
         {
+            LIBSTP_LOG_WARN("TurnMotion::update called with invalid dt={:.6f}s (must be > 0)", dt);
             return;
         }
 
@@ -119,7 +117,7 @@ namespace libstp::motion
         if (error_abs <= ctx_.pid_config.angle_tolerance_rad)
         {
             complete();
-            drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
+            drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
             LIBSTP_LOG_DEBUG("TurnMotion completed: final error = {:.3f} rad ({:.1f} deg)", heading_error, heading_error / kDegToRad);
             return;
@@ -145,13 +143,16 @@ namespace libstp::motion
                     omega_cmd, omega_cmd_scaled, angular_scale_);
 
         // Send command: no translation, only rotation
-        foundation::ChassisVel cmd{0.0, 0.0, omega_cmd_scaled};
+        foundation::ChassisVelocity cmd{0.0, 0.0, omega_cmd_scaled};
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 
-        // Adjust scaling based on saturation feedback
+        // Adjust scaling based on saturation feedback with hysteresis to prevent oscillation
         if (motor_cmd.saturated_any)
         {
+            // Reset hysteresis counter on saturation
+            unsaturated_cycles_ = 0;
+
             const double prev_scale = angular_scale_;
             angular_scale_ = std::max(
                 ctx_.pid_config.saturation_min_scale,
@@ -162,14 +163,22 @@ namespace libstp::motion
         }
         else
         {
-            // Recover scaling when not saturated
-            const double prev_scale = angular_scale_;
-            angular_scale_ = std::min(1.0, angular_scale_ + ctx_.pid_config.saturation_recovery_rate);
+            // Hysteresis: only recover after sustained period without saturation
+            ++unsaturated_cycles_;
 
-            if (prev_scale != angular_scale_)
+            const bool can_recover = unsaturated_cycles_ >= ctx_.pid_config.saturation_hold_cycles;
+            const bool needs_recovery = angular_scale_ < ctx_.pid_config.saturation_recovery_threshold;
+
+            if (can_recover && needs_recovery)
             {
-                LIBSTP_LOG_TRACE("TurnMotion: Recovery -> angular_scale {:.3f}->{:.3f}",
-                            prev_scale, angular_scale_);
+                const double prev_scale = angular_scale_;
+                angular_scale_ = std::min(1.0, angular_scale_ + ctx_.pid_config.saturation_recovery_rate);
+
+                if (prev_scale != angular_scale_)
+                {
+                    LIBSTP_LOG_TRACE("TurnMotion: Recovery (after {} cycles) -> angular_scale {:.3f}->{:.3f}",
+                                unsaturated_cycles_, prev_scale, angular_scale_);
+                }
             }
         }
     }
