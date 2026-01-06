@@ -28,48 +28,41 @@ namespace libstp::motion
     {
         cfg_.max_speed_mps = std::abs(cfg_.max_speed_mps);
         if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.05;
-        if (cfg_.distance_tolerance_m <= 0.0) cfg_.distance_tolerance_m = 0.005;
-        if (cfg_.distance_kp <= 0.0) cfg_.distance_kp = 1.0;
-        if (cfg_.heading_kp < 0.0) cfg_.heading_kp = 0.0;
-        if (cfg_.max_heading_rate < 0.0) cfg_.max_heading_rate = 0.0;
-        cfg_.saturation_derating_factor = std::clamp(cfg_.saturation_derating_factor, 0.1, 0.99);
-        cfg_.saturation_min_speed_scale = std::clamp(cfg_.saturation_min_speed_scale, 0.01, 1.0);
-        cfg_.saturation_recovery_rate = std::clamp(cfg_.saturation_recovery_rate, 0.0, 0.5);
-        cfg_.saturation_heading_error_rad = std::clamp(cfg_.saturation_heading_error_rad, 0.0, 0.5);
-        cfg_.heading_saturation_derating_factor = std::clamp(cfg_.heading_saturation_derating_factor, 0.1, 0.99);
-        cfg_.heading_min_scale = std::clamp(cfg_.heading_min_scale, 0.05, 1.0);
-        cfg_.heading_recovery_rate = std::clamp(cfg_.heading_recovery_rate, 0.0, 0.5);
-        cfg_.heading_recovery_error_rad = std::clamp(cfg_.heading_recovery_error_rad, 0.0, 0.5);
 
-        // Create PID controllers
+        const auto& pid_cfg = ctx_.pid_config;
+
+        // Create PID controllers using unified config
         MotionPidController::Config distance_pid_cfg;
-        distance_pid_cfg.kp = cfg_.distance_kp;
-        distance_pid_cfg.ki = cfg_.distance_ki;
-        distance_pid_cfg.kd = cfg_.distance_kd;
-        distance_pid_cfg.output_min = -cfg_.max_speed_mps;
-        distance_pid_cfg.output_max = cfg_.max_speed_mps;
-        distance_pid_cfg.integral_max = (cfg_.distance_ki > 0.01) ? (cfg_.max_speed_mps / cfg_.distance_ki) : 10.0;
-        distance_pid_cfg.integral_deadband = cfg_.distance_tolerance_m;
+        distance_pid_cfg.kp = pid_cfg.distance_kp;
+        distance_pid_cfg.ki = pid_cfg.distance_ki;
+        distance_pid_cfg.kd = pid_cfg.distance_kd;
+        distance_pid_cfg.output_min = pid_cfg.output_min;
+        distance_pid_cfg.output_max = pid_cfg.output_max;
+        distance_pid_cfg.integral_max = pid_cfg.integral_max;
+        distance_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
+        distance_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
         distance_pid_ = std::make_unique<MotionPidController>(distance_pid_cfg);
 
         MotionPidController::Config heading_pid_cfg;
-        heading_pid_cfg.kp = cfg_.heading_kp;
-        heading_pid_cfg.ki = cfg_.heading_ki;
-        heading_pid_cfg.kd = cfg_.heading_kd;
-        heading_pid_cfg.output_min = -cfg_.max_heading_rate;
-        heading_pid_cfg.output_max = cfg_.max_heading_rate;
-        heading_pid_cfg.integral_max = (cfg_.heading_ki > 0.01) ? (cfg_.max_heading_rate / cfg_.heading_ki) : 10.0;
-        heading_pid_cfg.integral_deadband = 0.01;  // ~0.5 degrees
+        heading_pid_cfg.kp = pid_cfg.heading_kp;
+        heading_pid_cfg.ki = pid_cfg.heading_ki;
+        heading_pid_cfg.kd = pid_cfg.heading_kd;
+        heading_pid_cfg.output_min = pid_cfg.output_min;
+        heading_pid_cfg.output_max = pid_cfg.output_max;
+        heading_pid_cfg.integral_max = pid_cfg.integral_max;
+        heading_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
+        heading_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
         heading_pid_ = std::make_unique<MotionPidController>(heading_pid_cfg);
 
         MotionPidController::Config lateral_pid_cfg;
-        lateral_pid_cfg.kp = cfg_.lateral_kp;
-        lateral_pid_cfg.ki = cfg_.lateral_ki;
-        lateral_pid_cfg.kd = cfg_.lateral_kd;
-        lateral_pid_cfg.output_min = -cfg_.max_speed_mps;
-        lateral_pid_cfg.output_max = cfg_.max_speed_mps;
-        lateral_pid_cfg.integral_max = (cfg_.lateral_ki > 0.01) ? (cfg_.max_speed_mps / cfg_.lateral_ki) : 10.0;
-        lateral_pid_cfg.integral_deadband = 0.005;  // 5mm
+        lateral_pid_cfg.kp = pid_cfg.lateral_kp;
+        lateral_pid_cfg.ki = pid_cfg.lateral_ki;
+        lateral_pid_cfg.kd = pid_cfg.lateral_kd;
+        lateral_pid_cfg.output_min = pid_cfg.output_min;
+        lateral_pid_cfg.output_max = pid_cfg.output_max;
+        lateral_pid_cfg.integral_max = pid_cfg.integral_max;
+        lateral_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
+        lateral_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
         lateral_pid_ = std::make_unique<MotionPidController>(lateral_pid_cfg);
     }
 
@@ -81,6 +74,7 @@ namespace libstp::motion
         speed_scale_ = 1.0;
         heading_scale_ = 1.0;
         reorienting_ = false;
+        elapsed_time_ = 0.0;
 
         // Reset odometry to establish new origin for this motion
         odometry().reset();
@@ -93,8 +87,16 @@ namespace libstp::motion
         const double initial_heading = odometry().getHeading();
         initial_heading_rad_ = initial_heading;
 
-        LIBSTP_LOG_TRACE("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, initial_heading = {:.3f} rad",
-                    cfg_.distance_m, cfg_.max_speed_mps, initial_heading);
+        // Create trapezoidal profile for smooth motion
+        TrapezoidalProfile::State initial{0.0, 0.0};  // Start at position=0, velocity=0
+        TrapezoidalProfile::Constraints constraints{
+            .max_velocity = cfg_.max_speed_mps,
+            .max_acceleration = ctx_.pid_config.max_linear_acceleration
+        };
+        profile_ = std::make_unique<TrapezoidalProfile>(initial, cfg_.distance_m, constraints);
+
+        LIBSTP_LOG_TRACE("DriveStraightMotion started: target_distance = {:.3f} m, max_speed = {:.3f} m/s, initial_heading = {:.3f} rad, profile_time = {:.3f} s",
+                    cfg_.distance_m, cfg_.max_speed_mps, initial_heading, profile_->getTotalTime());
     }
 
     void DriveStraightMotion::update(double dt)
@@ -116,23 +118,33 @@ namespace libstp::motion
             return;
         }
 
+        // Update elapsed time
+        elapsed_time_ += dt;
+
         // Update odometry first
         odometry().update(dt);
+
+        // Get setpoint from trapezoidal profile
+        const auto setpoint = profile_->getSetpoint(elapsed_time_);
 
         // Get all distance and heading info from odometry
         const auto distance_info = odometry().getDistanceFromOrigin();
         const double current_heading = odometry().getHeading();
         const double yaw_error = odometry().getHeadingError(initial_heading_rad_);
 
-        LIBSTP_LOG_TRACE("DriveStraightMotion update: forward = {:.3f} m, lateral = {:.3f} m, heading = {:.3f} rad, yaw_error = {:.3f} rad",
-                    distance_info.forward, distance_info.lateral, current_heading, yaw_error);
+        // Compute distance error against the ramped setpoint (not the final target!)
+        const double distance_error = setpoint.position - distance_info.forward;
+        const double error_to_final_target = cfg_.distance_m - distance_info.forward;
 
-        // Check if we've reached the target distance
-        const double remaining = cfg_.distance_m - distance_info.forward;
+        LIBSTP_LOG_TRACE("DriveStraightMotion update: forward = {:.3f} m, setpoint = {:.3f} m, target = {:.3f} m, lateral = {:.3f} m, heading = {:.3f} rad, yaw_error = {:.3f} rad",
+                    distance_info.forward, setpoint.position, cfg_.distance_m, distance_info.lateral, current_heading, yaw_error);
+
+        // Check if we've reached the final target distance
+        const double remaining = error_to_final_target;
         const double remaining_abs = std::abs(remaining);
         LIBSTP_LOG_TRACE("DriveStraightMotion remaining_distance = {:.3f} m", remaining);
 
-        if (remaining_abs <= cfg_.distance_tolerance_m)
+        if (remaining_abs <= ctx_.pid_config.distance_tolerance_m)
         {
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
@@ -168,7 +180,7 @@ namespace libstp::motion
             // DIFFERENTIAL STRATEGY: Combined approach (bias + stop-and-reorient)
             const double lateral_error_abs = std::abs(lateral_error_world);
 
-            if (lateral_error_abs > cfg_.lateral_reorient_threshold_m && !reorienting_)
+            if (lateral_error_abs > ctx_.pid_config.lateral_reorient_threshold_m && !reorienting_)
             {
                 // Large lateral error: enter reorientation mode
                 reorienting_ = true;
@@ -181,7 +193,7 @@ namespace libstp::motion
                 // We want to turn to point at the path line at our current forward progress
                 // Lateral error tells us how far perpendicular we are from the path
                 // We want a heading that will bring us back to the path
-                const double desired_heading_bias = std::atan2(-lateral_error_world, std::max(0.1, cfg_.lateral_reorient_threshold_m));
+                const double desired_heading_bias = std::atan2(-lateral_error_world, std::max(0.1, ctx_.pid_config.lateral_reorient_threshold_m));
                 const double target_heading = initial_heading_rad_ + desired_heading_bias;
                 const double yaw_to_target = odometry().getHeadingError(target_heading);
 
@@ -190,7 +202,7 @@ namespace libstp::motion
                             yaw_to_target, omega_cmd);
 
                 // Exit reorientation when aligned and lateral error is small
-                if (std::abs(yaw_to_target) < 0.1 && lateral_error_abs < cfg_.lateral_reorient_threshold_m * 0.7)
+                if (std::abs(yaw_to_target) < 0.1 && lateral_error_abs < ctx_.pid_config.lateral_reorient_threshold_m * 0.7)
                 {
                     reorienting_ = false;
                     LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL] Exiting reorientation mode");
@@ -199,7 +211,7 @@ namespace libstp::motion
             else
             {
                 // Normal mode: bias heading slightly to correct lateral drift
-                const double heading_bias = std::atan(cfg_.lateral_heading_bias_gain * lateral_error_world);
+                const double heading_bias = std::atan(ctx_.pid_config.lateral_heading_bias_gain * lateral_error_world);
                 const double biased_yaw_error = yaw_error + heading_bias;
                 omega_cmd = heading_pid_->update(biased_yaw_error, dt);
                 LIBSTP_LOG_TRACE("DriveStraightMotion [DIFFERENTIAL-BIAS] heading_bias = {:.3f} rad, biased_yaw_error = {:.3f} rad, omega_cmd = {:.3f} rad/s",
@@ -208,7 +220,8 @@ namespace libstp::motion
         }
 
         // ===== FORWARD VELOCITY CONTROL =====
-        double vx_cmd = distance_pid_->update(remaining, dt);
+        // Use the distance error against the setpoint (not the final target)
+        double vx_cmd = distance_pid_->update(distance_error, dt);
 
         if (std::abs(vx_cmd) < 1e-4)
         {
@@ -242,22 +255,22 @@ namespace libstp::motion
 
         // Adjust scaling based on saturation feedback
         const double yaw_error_abs = std::abs(yaw_error);
-        if (motor_cmd.saturated_any && yaw_error_abs > cfg_.saturation_heading_error_rad)
+        if (motor_cmd.saturated_any && yaw_error_abs > ctx_.pid_config.heading_saturation_error_rad)
         {
             const double prev_speed_scale = speed_scale_;
             const double prev_heading_scale = heading_scale_;
 
-            if (speed_scale_ > cfg_.saturation_min_speed_scale + 1e-6)
+            if (speed_scale_ > ctx_.pid_config.saturation_min_scale + 1e-6)
             {
                 speed_scale_ = std::max(
-                    cfg_.saturation_min_speed_scale,
-                    speed_scale_ * cfg_.saturation_derating_factor);
+                    ctx_.pid_config.saturation_min_scale,
+                    speed_scale_ * ctx_.pid_config.saturation_derating_factor);
             }
             else
             {
                 heading_scale_ = std::max(
-                    cfg_.heading_min_scale,
-                    heading_scale_ * cfg_.heading_saturation_derating_factor);
+                    ctx_.pid_config.heading_min_scale,
+                    heading_scale_ * ctx_.pid_config.heading_saturation_derating_factor);
             }
 
             LIBSTP_LOG_TRACE(
@@ -269,13 +282,13 @@ namespace libstp::motion
                 prev_heading_scale,
                 heading_scale_);
         }
-        else if (!motor_cmd.saturated_any && yaw_error_abs < cfg_.heading_recovery_error_rad)
+        else if (!motor_cmd.saturated_any && yaw_error_abs < ctx_.pid_config.heading_recovery_error_rad)
         {
             const double prev_speed_scale = speed_scale_;
             const double prev_heading_scale = heading_scale_;
 
-            speed_scale_ = std::min(1.0, speed_scale_ + cfg_.saturation_recovery_rate);
-            heading_scale_ = std::min(1.0, heading_scale_ + cfg_.heading_recovery_rate);
+            speed_scale_ = std::min(1.0, speed_scale_ + ctx_.pid_config.saturation_recovery_rate);
+            heading_scale_ = std::min(1.0, heading_scale_ + ctx_.pid_config.heading_recovery_rate);
 
             if (prev_speed_scale != speed_scale_ || prev_heading_scale != heading_scale_)
             {
