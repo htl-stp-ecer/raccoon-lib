@@ -14,8 +14,8 @@
 
 namespace libstp::kinematics::differential
 {
-    DifferentialKinematics::DifferentialKinematics(hal::motor::Motor* left_motor,
-                                                   hal::motor::Motor* right_motor,
+    DifferentialKinematics::DifferentialKinematics(hal::motor::IMotor* left_motor,
+                                                   hal::motor::IMotor* right_motor,
                                                    double wheelbase,
                                                    double wheelRadius,
                                                    double max_velocity,

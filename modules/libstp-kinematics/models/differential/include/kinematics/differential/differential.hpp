@@ -6,7 +6,7 @@
 #include "kinematics/kinematics.hpp"
 #include "drive/motor_adapter.hpp"
 #include "drive/rate_limiter.hpp"
-#include "hal/Motor.hpp"
+#include "hal/IMotor.hpp"
 #include <vector>
 
 namespace libstp::calibration {
@@ -36,8 +36,8 @@ namespace libstp::kinematics::differential
         double max_wheel_acceleration_{0.0};
 
     public:
-        DifferentialKinematics(hal::motor::Motor* left_motor,
-                               hal::motor::Motor* right_motor,
+        DifferentialKinematics(hal::motor::IMotor* left_motor,
+                               hal::motor::IMotor* right_motor,
                                double wheelbase,
                                double wheelRadius,
                                double max_velocity,

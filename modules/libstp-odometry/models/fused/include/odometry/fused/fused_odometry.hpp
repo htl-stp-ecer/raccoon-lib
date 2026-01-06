@@ -7,7 +7,7 @@
 #include <memory>
 
 #include "odometry/odometry.hpp"
-#include "hal/IMU.hpp"
+#include "hal/IIMU.hpp"
 #include "kinematics/kinematics.hpp"
 
 namespace libstp::odometry::fused
@@ -40,7 +40,7 @@ namespace libstp::odometry::fused
         FusedOdometryConfig config_;
 
         // Hardware interfaces (shared ownership)
-        std::shared_ptr<hal::imu::IMU> imu_;
+        std::shared_ptr<hal::imu::IIMU> imu_;
         std::shared_ptr<kinematics::IKinematics> kinematics_;
 
         // Current state
@@ -65,7 +65,7 @@ namespace libstp::odometry::fused
          * @param kinematics Shared pointer to kinematics model (provides velocity estimates)
          * @param config Configuration options (optional)
          */
-        FusedOdometry(std::shared_ptr<hal::imu::IMU> imu,
+        FusedOdometry(std::shared_ptr<hal::imu::IIMU> imu,
                       std::shared_ptr<kinematics::IKinematics> kinematics,
                       FusedOdometryConfig config = {});
 

@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "hal/Motor.hpp"
+#include "hal/IMotor.hpp"
 #include "velocity_controller.hpp"
 #include "calibration/motor/calibration_result.hpp"
 
@@ -17,7 +17,7 @@ namespace libstp::drive
     class MotorAdapter
     {
     public:
-        explicit MotorAdapter(hal::motor::Motor* motor);
+        explicit MotorAdapter(hal::motor::IMotor* motor);
 
         void setVelocityWithAccel(double w_ref, double a_ref, double dt, bool* out_saturated);
 
@@ -40,8 +40,8 @@ namespace libstp::drive
          */
         void resetEncoderTracking();
 
-        hal::motor::Motor& motor();
-        [[nodiscard]] const hal::motor::Motor& motor() const;
+        hal::motor::IMotor& motor();
+        [[nodiscard]] const hal::motor::IMotor& motor() const;
 
         void updateEncoderVelocity(double dt);
 
@@ -55,7 +55,7 @@ namespace libstp::drive
         [[nodiscard]] const VelocityController& getController() const { return controller_; }
 
     private:
-        hal::motor::Motor* motor_{nullptr};
+        hal::motor::IMotor* motor_{nullptr};
         VelocityController controller_;
 
         mutable double w_meas_filt_{0.0};

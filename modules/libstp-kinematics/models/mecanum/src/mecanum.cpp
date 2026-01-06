@@ -14,10 +14,10 @@
 
 namespace libstp::kinematics::mecanum
 {
-    MecanumKinematics::MecanumKinematics(hal::motor::Motor* front_left_motor,
-                                         hal::motor::Motor* front_right_motor,
-                                         hal::motor::Motor* back_left_motor,
-                                         hal::motor::Motor* back_right_motor,
+    MecanumKinematics::MecanumKinematics(hal::motor::IMotor* front_left_motor,
+                                         hal::motor::IMotor* front_right_motor,
+                                         hal::motor::IMotor* back_left_motor,
+                                         hal::motor::IMotor* back_right_motor,
                                          const double wheelbase,
                                          const double trackWidth,
                                          const double wheelRadius,

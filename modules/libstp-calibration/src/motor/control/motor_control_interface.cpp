@@ -7,7 +7,7 @@
 
 namespace libstp::calibration::motor
 {
-    MotorControlInterface::MotorControlInterface(hal::motor::Motor& motor)
+    MotorControlInterface::MotorControlInterface(hal::motor::IMotor& motor)
         : motor_(motor)
     {
         adapter_ = std::make_unique<drive::MotorAdapter>(&motor_);
