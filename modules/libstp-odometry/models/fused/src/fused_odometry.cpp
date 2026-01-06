@@ -8,7 +8,7 @@
 
 namespace libstp::odometry::fused
 {
-    FusedOdometry::FusedOdometry(std::shared_ptr<hal::imu::IMU> imu,
+    FusedOdometry::FusedOdometry(std::shared_ptr<hal::imu::IIMU> imu,
                                    std::shared_ptr<kinematics::IKinematics> kinematics,
                                    FusedOdometryConfig config)
         : config_(config)

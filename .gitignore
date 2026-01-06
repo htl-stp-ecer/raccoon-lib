@@ -148,3 +148,4 @@ cmake-build-debug
 .cmake-cache
 .cmake-cache-docker/
 .idea/
+build-test

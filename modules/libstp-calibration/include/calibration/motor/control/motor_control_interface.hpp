@@ -1,6 +1,6 @@
 #pragma once
 
-#include "hal/Motor.hpp"
+#include "hal/IMotor.hpp"
 #include <memory>
 
 namespace libstp::drive
@@ -13,7 +13,7 @@ namespace libstp::calibration::motor
     class MotorControlInterface
     {
     public:
-        explicit MotorControlInterface(hal::motor::Motor& motor);
+        explicit MotorControlInterface(hal::motor::IMotor& motor);
         ~MotorControlInterface();
 
         void setCommand(double percent);
@@ -27,7 +27,7 @@ namespace libstp::calibration::motor
         const drive::MotorAdapter& getAdapter() const { return *adapter_; }
 
     private:
-        hal::motor::Motor& motor_;
+        hal::motor::IMotor& motor_;
         std::unique_ptr<drive::MotorAdapter> adapter_;
     };
 }

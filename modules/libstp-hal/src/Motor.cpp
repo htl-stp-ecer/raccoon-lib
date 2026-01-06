@@ -33,10 +33,10 @@ void Motor::unregisterMotorPort(const int port)
 
 Motor::~Motor()
 {
-    LIBSTP_LOG_DEBUG("Destroying motor on port {}", port);
+    LIBSTP_LOG_DEBUG("Destroying motor on port {}", port_);
     brake();
 #ifdef SAFETY_CHECKS_ENABLED
-    unregisterMotorPort(port);
+    unregisterMotorPort(port_);
 #endif
 }
 

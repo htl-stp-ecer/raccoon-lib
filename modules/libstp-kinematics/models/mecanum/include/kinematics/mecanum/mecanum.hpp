@@ -7,7 +7,7 @@
 #include "drive/motor_adapter.hpp"
 #include "drive/rate_limiter.hpp"
 #include "foundation/config.hpp"
-#include "hal/Motor.hpp"
+#include "hal/IMotor.hpp"
 #include <vector>
 
 namespace libstp::calibration {
@@ -40,10 +40,10 @@ namespace libstp::kinematics::mecanum
         double max_wheel_acceleration_{0.0};
 
     public:
-        MecanumKinematics(hal::motor::Motor* front_left_motor,
-                         hal::motor::Motor* front_right_motor,
-                         hal::motor::Motor* back_left_motor,
-                         hal::motor::Motor* back_right_motor,
+        MecanumKinematics(hal::motor::IMotor* front_left_motor,
+                         hal::motor::IMotor* front_right_motor,
+                         hal::motor::IMotor* back_left_motor,
+                         hal::motor::IMotor* back_right_motor,
                          double wheelbase,
                          double trackWidth,
                          double wheelRadius,

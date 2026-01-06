@@ -88,6 +88,19 @@ docker_exec g++ --version
 
 echo "• Installing build dependencies first..."
 docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
+
+# Run tests before building wheel (skip with SKIP_TESTS=1)
+# Uses separate directory since scikit-build manages its own cmake build internally
+if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
+  echo "• Running unit tests..."
+  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
+  docker_exec "ninja -C /src/build-test -j$BUILD_JOBS"
+  docker_exec "ctest --test-dir /src/build-test --output-on-failure"
+  echo "✓ All tests passed"
+else
+  echo "• Skipping tests (SKIP_TESTS=1)"
+fi
+
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
 docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args=-DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
 
