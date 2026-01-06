@@ -43,12 +43,15 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
     if (percent < MIN_SPEED || percent > MAX_SPEED) throw std::out_of_range("speed -100 - 100");
 #endif
 
+    // Wake motor latch before sending a power command to avoid stop latch blocking.
+    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port, 0);
+
     int scaled = percent * 4; // -400 to 400
     if (inverted)
     {
         scaled = -scaled;
     }
-    LIBSTP_LOG_TRACE(
+    LIBSTP_LOG_DEBUG(
         "Wombat Motor port={} setSpeed percent={} scaled={} inverted={}",
         port,
         percent,
@@ -71,15 +74,19 @@ int libstp::hal::motor::Motor::getPosition() const
 
 void libstp::hal::motor::Motor::brake() const
 {
+    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port, 1);
     platform::wombat::core::LcmDataWriter::instance().setMotor(port, 0);
-    LIBSTP_LOG_TRACE("Wombat Motor port={} brake", port);
+    LIBSTP_LOG_DEBUG("Wombat Motor port={} brake (stop latch engaged)", port);
 }
 
 void libstp::hal::motor::Motor::disableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
+    {
+        platform::wombat::core::LcmDataWriter::instance().setMotorStop(p, 1);
         platform::wombat::core::LcmDataWriter::instance().setMotor(p, 0);
-    LIBSTP_LOG_DEBUG("Wombat Motor disableAll executed");
+    }
+    LIBSTP_LOG_DEBUG("Wombat Motor disableAll executed (stop latch engaged)");
 }
 
 const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibration() const

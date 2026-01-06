@@ -2,6 +2,7 @@
 
 #include "drive/drive.hpp"
 #include "odometry/odometry.hpp"
+#include "motion/motion_config.hpp"
 
 namespace libstp::motion
 {
@@ -9,6 +10,7 @@ namespace libstp::motion
     {
         drive::Drive& drive;
         odometry::IOdometry& odometry;
+        const UnifiedMotionPidConfig& pid_config;
     };
 
     class Motion

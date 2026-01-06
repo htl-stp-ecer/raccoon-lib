@@ -5,10 +5,32 @@ from typing import Optional, Protocol, runtime_checkable
 from libstp.class_name_logger import ClassNameLogger
 from libstp.robot.api import GenericRobot
 
+from dataclasses import dataclass
+
 
 @runtime_checkable
 class StepProtocol(Protocol):
     async def run_step(self, robot: GenericRobot) -> None: ...
+
+@dataclass
+class SimulationStepDelta:
+    forward: float # in meters
+    strafe: float # in meters
+    angular: float # in radians
+
+@dataclass
+class SimulationStep:
+    # unique identifier for this step
+    id: str
+    # For display purposes only
+    label: str | None
+    # how long does it take on avg to execute this step
+    average_duration_ms: float
+    # std deviation of execution time
+    duration_stddev_ms: float
+    # how much this step changes the robot's position
+    delta: SimulationStepDelta
+
 
 class Step(ClassNameLogger):
     def __init__(self) -> None:
@@ -54,4 +76,9 @@ class Step(ClassNameLogger):
     @abstractmethod
     async def _execute_step(self, robot: GenericRobot) -> None:
         """Actual step logic implemented by subclasses."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_simulation_step(self) -> SimulationStep:
+        """Convert this step to a SimulationStep representation."""
         raise NotImplementedError

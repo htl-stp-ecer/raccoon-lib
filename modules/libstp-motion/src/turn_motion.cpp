@@ -26,26 +26,23 @@ namespace libstp::motion
     TurnMotion::TurnMotion(MotionContext ctx, TurnConfig config)
         : Motion(ctx), cfg_(config)
     {
-        // Validate and clamp configuration parameters
+        // Validate configuration parameters
         if (cfg_.max_angular_rate <= 0.0) cfg_.max_angular_rate = 0.5;
-        if (cfg_.angle_tolerance_rad <= 0.0) cfg_.angle_tolerance_rad = 0.01;
-        if (cfg_.angle_kp <= 0.0) cfg_.angle_kp = 2.0;
-        if (cfg_.min_angular_rate < 0.0) cfg_.min_angular_rate = 0.0;
-        cfg_.saturation_derating_factor = std::clamp(cfg_.saturation_derating_factor, 0.1, 0.99);
-        cfg_.saturation_min_scale = std::clamp(cfg_.saturation_min_scale, 0.05, 1.0);
-        cfg_.saturation_recovery_rate = std::clamp(cfg_.saturation_recovery_rate, 0.0, 0.5);
 
-        // Create PID controller
-        MotionPidController::Config pid_cfg;
-        pid_cfg.kp = cfg_.angle_kp;
-        pid_cfg.ki = cfg_.angle_ki;
-        pid_cfg.kd = cfg_.angle_kd;
-        pid_cfg.output_min = -cfg_.max_angular_rate;
-        pid_cfg.output_max = cfg_.max_angular_rate;
-        pid_cfg.integral_max = (cfg_.angle_ki > 0.01) ? (cfg_.max_angular_rate / cfg_.angle_ki) : 10.0;
-        pid_cfg.integral_deadband = cfg_.angle_tolerance_rad;
+        const auto& pid_cfg = ctx_.pid_config;
 
-        angle_pid_ = std::make_unique<MotionPidController>(pid_cfg);
+        // Create PID controller using unified config
+        MotionPidController::Config angle_pid_cfg;
+        angle_pid_cfg.kp = pid_cfg.heading_kp;  // Use heading PID gains for turn motion
+        angle_pid_cfg.ki = pid_cfg.heading_ki;
+        angle_pid_cfg.kd = pid_cfg.heading_kd;
+        angle_pid_cfg.output_min = pid_cfg.output_min;
+        angle_pid_cfg.output_max = pid_cfg.output_max;
+        angle_pid_cfg.integral_max = pid_cfg.integral_max;
+        angle_pid_cfg.integral_deadband = pid_cfg.integral_deadband;
+        angle_pid_cfg.derivative_lpf_alpha = pid_cfg.derivative_lpf_alpha;
+
+        angle_pid_ = std::make_unique<MotionPidController>(angle_pid_cfg);
     }
 
     void TurnMotion::start()
@@ -54,6 +51,7 @@ namespace libstp::motion
         started_ = true;
         finished_ = false;
         angular_scale_ = 1.0;
+        elapsed_time_ = 0.0;
 
         // Reset odometry to establish new origin for this motion
         // This zeros the heading, so our initial heading is 0.0
@@ -65,8 +63,16 @@ namespace libstp::motion
         // Target heading is simply the desired turn angle (since we reset to 0)
         target_heading_rad_ = cfg_.target_angle_rad;
 
-        LIBSTP_LOG_TRACE("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s",
-                    cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate);
+        // Create trapezoidal profile for smooth motion
+        TrapezoidalProfile::State initial{0.0, 0.0};  // Start at heading=0, velocity=0
+        TrapezoidalProfile::Constraints constraints{
+            .max_velocity = cfg_.max_angular_rate,
+            .max_acceleration = ctx_.pid_config.max_angular_acceleration
+        };
+        profile_ = std::make_unique<TrapezoidalProfile>(initial, target_heading_rad_, constraints);
+
+        LIBSTP_LOG_TRACE("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s, profile_time = {:.3f} s",
+                    cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate, profile_->getTotalTime());
     }
 
     void TurnMotion::update(double dt)
@@ -88,22 +94,29 @@ namespace libstp::motion
             return;
         }
 
+        // Update elapsed time
+        elapsed_time_ += dt;
+
         // Update odometry first
         odometry().update(dt);
 
-        // Get current heading and compute error
-        // getHeadingError() automatically computes the shortest angular path and handles wraparound
+        // Get setpoint from trapezoidal profile
+        const auto setpoint = profile_->getSetpoint(elapsed_time_);
         const double current_heading = odometry().getHeading();
-        const double heading_error = odometry().getHeadingError(target_heading_rad_);
 
-        LIBSTP_LOG_TRACE("TurnMotion update: current_heading = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
+        // Compute error against the ramped setpoint (not the final target!)
+        const double heading_error = odometry().getHeadingError(setpoint.position);
+        const double error_to_final_target = odometry().getHeadingError(target_heading_rad_);
+
+        LIBSTP_LOG_TRACE("TurnMotion update: current = {:.3f} rad ({:.1f} deg), setpoint = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
                     current_heading, current_heading / kDegToRad,
+                    setpoint.position, setpoint.position / kDegToRad,
                     target_heading_rad_, target_heading_rad_ / kDegToRad,
                     heading_error, heading_error / kDegToRad);
 
-        // Check if we've reached the target angle
-        const double error_abs = std::abs(heading_error);
-        if (error_abs <= cfg_.angle_tolerance_rad)
+        // Check if we've reached the final target angle
+        const double error_abs = std::abs(error_to_final_target);
+        if (error_abs <= ctx_.pid_config.angle_tolerance_rad)
         {
             complete();
             drive().setVelocity(foundation::ChassisVel{0.0, 0.0, 0.0});
@@ -119,10 +132,10 @@ namespace libstp::motion
 
         // Apply minimum angular rate to prevent stalling
         // Only apply minimum if error is still significant
-        if (error_abs > cfg_.angle_tolerance_rad && std::abs(omega_cmd) < cfg_.min_angular_rate)
+        if (error_abs > ctx_.pid_config.angle_tolerance_rad && std::abs(omega_cmd) < ctx_.pid_config.min_angular_rate)
         {
             const double direction = (heading_error >= 0.0) ? 1.0 : -1.0;
-            omega_cmd = direction * cfg_.min_angular_rate;
+            omega_cmd = direction * ctx_.pid_config.min_angular_rate;
             LIBSTP_LOG_TRACE("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
         }
 
@@ -141,8 +154,8 @@ namespace libstp::motion
         {
             const double prev_scale = angular_scale_;
             angular_scale_ = std::max(
-                cfg_.saturation_min_scale,
-                angular_scale_ * cfg_.saturation_derating_factor);
+                ctx_.pid_config.saturation_min_scale,
+                angular_scale_ * ctx_.pid_config.saturation_derating_factor);
 
             LIBSTP_LOG_TRACE("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
                         motor_cmd.saturation_mask, prev_scale, angular_scale_);
@@ -151,7 +164,7 @@ namespace libstp::motion
         {
             // Recover scaling when not saturated
             const double prev_scale = angular_scale_;
-            angular_scale_ = std::min(1.0, angular_scale_ + cfg_.saturation_recovery_rate);
+            angular_scale_ = std::min(1.0, angular_scale_ + ctx_.pid_config.saturation_recovery_rate);
 
             if (prev_scale != angular_scale_)
             {
@@ -169,5 +182,6 @@ namespace libstp::motion
     void TurnMotion::complete()
     {
         finished_ = true;
+        drive().hardStop();
     }
 }

@@ -68,7 +68,7 @@ void Drive::softStop()
 
 void Drive::hardStop()
 {
-    LIBSTP_LOG_TRACE("Drive::hardStop invoked; zeroing desired velocity");
+    LIBSTP_LOG_DEBUG("Drive::hardStop invoked; zeroing desired velocity");
     desired_ = foundation::ChassisVel{0, 0, 0};
     kinematics_->hardStop();
 }
