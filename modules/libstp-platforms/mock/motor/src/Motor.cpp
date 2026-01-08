@@ -9,7 +9,7 @@ constexpr int MIN_SPEED = -100;
 constexpr int MAX_SPEED = 100;
 
 libstp::hal::motor::Motor::Motor(const int port, const bool inverted,
-                                 const foundation::MotorCalibration& calibration) : port(port), inverted(inverted),
+                                 const foundation::MotorCalibration& calibration) : port_(port), inverted_(inverted),
     calibration_(calibration)
 {
 #ifdef SAFETY_CHECKS_ENABLED
@@ -23,8 +23,8 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted,
     platform::mock::core::MockPlatform::instance().init();
     LIBSTP_LOG_INFO(
         "Mock Motor ctor port={} inverted={} pid(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
-        this->port,
-        this->inverted,
+        port_,
+        inverted_,
         calibration_.pid.kp,
         calibration_.pid.ki,
         calibration_.pid.kd,
@@ -33,7 +33,7 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted,
         calibration_.ff.kA);
 }
 
-void libstp::hal::motor::Motor::setSpeed(const int percent) const
+void libstp::hal::motor::Motor::setSpeed(const int percent)
 {
 #ifdef SAFETY_CHECKS_ENABLED
     if (percent < MIN_SPEED || percent > MAX_SPEED) throw std::out_of_range("speed -100 - 100");
@@ -43,29 +43,29 @@ void libstp::hal::motor::Motor::setSpeed(const int percent) const
     const bool zero = percent == 0;
     auto dir = MotorDir::Off;
     if (!zero)
-        dir = (inverted ? percent < 0 : percent > 0) ? MotorDir::CW : MotorDir::CCW;
+        dir = (inverted_ ? percent < 0 : percent > 0) ? MotorDir::CW : MotorDir::CCW;
     const auto duty = static_cast<uint32_t>(std::abs(percent) * 4); // 0-400
     LIBSTP_LOG_INFO(
         "Mock Motor port={} setSpeed percent={} dir={} duty={} inverted={}",
-        port,
+        port_,
         percent,
         static_cast<int>(dir),
         duty,
-        inverted);
-    setMotor(port, dir, duty);
+        inverted_);
+    setMotor(port_, dir, duty);
 }
 
 int libstp::hal::motor::Motor::getPosition() const
 {
-    const int value = static_cast<int>(platform::mock::core::bemf(port));
-    LIBSTP_LOG_TRACE("Mock Motor port={} getPosition -> {}", port, value);
+    const int value = static_cast<int>(platform::mock::core::bemf(port_));
+    LIBSTP_LOG_TRACE("Mock Motor port={} getPosition -> {}", port_, value);
     return value;
 }
 
-void libstp::hal::motor::Motor::brake() const
+void libstp::hal::motor::Motor::brake()
 {
-    platform::mock::core::setMotor(port, platform::mock::core::MotorDir::Off, 0);
-    LIBSTP_LOG_INFO("Mock Motor port={} brake", port);
+    platform::mock::core::setMotor(port_, platform::mock::core::MotorDir::Off, 0);
+    LIBSTP_LOG_INFO("Mock Motor port={} brake", port_);
 }
 
 void libstp::hal::motor::Motor::disableAll()

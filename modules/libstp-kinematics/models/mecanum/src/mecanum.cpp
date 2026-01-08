@@ -14,10 +14,10 @@
 
 namespace libstp::kinematics::mecanum
 {
-    MecanumKinematics::MecanumKinematics(hal::motor::Motor* front_left_motor,
-                                         hal::motor::Motor* front_right_motor,
-                                         hal::motor::Motor* back_left_motor,
-                                         hal::motor::Motor* back_right_motor,
+    MecanumKinematics::MecanumKinematics(hal::motor::IMotor* front_left_motor,
+                                         hal::motor::IMotor* front_right_motor,
+                                         hal::motor::IMotor* back_left_motor,
+                                         hal::motor::IMotor* back_right_motor,
                                          const double wheelbase,
                                          const double trackWidth,
                                          const double wheelRadius,
@@ -69,7 +69,7 @@ namespace libstp::kinematics::mecanum
         return 4;
     }
 
-    MotorCommands MecanumKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
+    MotorCommands MecanumKinematics::applyCommand(const foundation::ChassisVelocity& cmd, double dt)
     {
         LIBSTP_LOG_TRACE(
             "MecanumKinematics::applyCommand dt={} cmd vx={} vy={} wz={}",
@@ -156,7 +156,7 @@ namespace libstp::kinematics::mecanum
         return result;
     }
 
-    foundation::ChassisState MecanumKinematics::estimateState() const
+    foundation::ChassisVelocity MecanumKinematics::estimateState() const
     {
         const double w_fl = front_left_motor_.adapter.getVelocity();
         const double w_fr = front_right_motor_.adapter.getVelocity();
@@ -168,19 +168,19 @@ namespace libstp::kinematics::mecanum
         // Body frame convention: +x forward, +y to the right
         const double vx = (w_fl + w_fr + w_bl + w_br) * m_wheelRadius / 4.0;
         const double vy = (w_fl - w_fr - w_bl + w_br) * m_wheelRadius / 4.0;
-        const double w = (-w_fl + w_fr - w_bl + w_br) * m_wheelRadius / (4.0 * L);
+        const double wz = (-w_fl + w_fr - w_bl + w_br) * m_wheelRadius / (4.0 * L);
 
         LIBSTP_LOG_TRACE(
-            "MecanumKinematics::estimateState wheels fl={} fr={} bl={} br={} -> vx={} vy={} w={}",
+            "MecanumKinematics::estimateState wheels fl={} fr={} bl={} br={} -> vx={} vy={} wz={}",
             w_fl,
             w_fr,
             w_bl,
             w_br,
             vx,
             vy,
-            w);
+            wz);
 
-        return foundation::ChassisState{vx, vy, w};
+        return foundation::ChassisVelocity{vx, vy, wz};
     }
 
     void MecanumKinematics::hardStop()

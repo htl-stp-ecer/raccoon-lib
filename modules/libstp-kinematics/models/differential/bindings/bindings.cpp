@@ -3,6 +3,7 @@
 //
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <memory>
 
 #include "kinematics/differential/differential.hpp"
 #include "calibration/motor/calibration.hpp"
@@ -19,7 +20,8 @@ PYBIND11_MODULE(kinematics_differential, m)
     py::module_::import("libstp.hal");
     py::module_::import("libstp.calibration");
 
-    py::class_<libstp::kinematics::differential::DifferentialKinematics, libstp::kinematics::IKinematics>(
+    py::class_<libstp::kinematics::differential::DifferentialKinematics, libstp::kinematics::IKinematics,
+                std::shared_ptr<libstp::kinematics::differential::DifferentialKinematics>>(
             m, "DifferentialKinematics")
         .def(py::init<libstp::hal::motor::Motor*, libstp::hal::motor::Motor*, double, double, double, double>(),
              py::arg("left_motor"),
@@ -41,5 +43,9 @@ PYBIND11_MODULE(kinematics_differential, m)
              py::overload_cast<const libstp::calibration::CalibrationConfig&>(
                  &libstp::kinematics::differential::DifferentialKinematics::calibrateMotors),
              py::arg("config"),
-             "Calibrate both motors with custom configuration");
+             "Calibrate both motors with custom configuration")
+        .def("reset_encoders", &libstp::kinematics::differential::DifferentialKinematics::resetEncoders,
+             "Reset encoder tracking to prevent stale deltas after odometry reset")
+        .def("supports_lateral_motion", &libstp::kinematics::differential::DifferentialKinematics::supportsLateralMotion,
+             "Returns False since differential drives cannot strafe");
 }

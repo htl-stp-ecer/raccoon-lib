@@ -1,9 +1,16 @@
-python_example Documentation
-============================
+libstp Documentation
+====================
 
-Contents:
+Robotics library for Botball.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Contents:
 
-   python_example
+   autoapi/index
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`

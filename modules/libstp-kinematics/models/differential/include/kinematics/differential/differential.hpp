@@ -6,7 +6,7 @@
 #include "kinematics/kinematics.hpp"
 #include "drive/motor_adapter.hpp"
 #include "drive/rate_limiter.hpp"
-#include "hal/Motor.hpp"
+#include "hal/IMotor.hpp"
 #include <vector>
 
 namespace libstp::calibration {
@@ -36,8 +36,8 @@ namespace libstp::kinematics::differential
         double max_wheel_acceleration_{0.0};
 
     public:
-        DifferentialKinematics(hal::motor::Motor* left_motor,
-                               hal::motor::Motor* right_motor,
+        DifferentialKinematics(hal::motor::IMotor* left_motor,
+                               hal::motor::IMotor* right_motor,
                                double wheelbase,
                                double wheelRadius,
                                double max_velocity,
@@ -47,8 +47,8 @@ namespace libstp::kinematics::differential
         void setWheelLimits(double max_velocity, double max_acceleration);
 
         [[nodiscard]] std::size_t wheelCount() const override;
-        MotorCommands applyCommand(const foundation::ChassisCmd& cmd, double dt) override;
-        [[nodiscard]] foundation::ChassisState estimateState() const override;
+        MotorCommands applyCommand(const foundation::ChassisVelocity& cmd, double dt) override;
+        [[nodiscard]] foundation::ChassisVelocity estimateState() const override;
         void hardStop() override;
         [[nodiscard]] bool supportsLateralMotion() const override;
         void resetEncoders() override;

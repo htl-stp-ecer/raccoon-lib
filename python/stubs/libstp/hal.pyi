@@ -1,0 +1,68 @@
+"""
+Python bindings for libstp-hal
+"""
+from __future__ import annotations
+import libstp.foundation
+__all__: list[str] = ['AnalogSensor', 'DigitalSensor', 'IMU', 'Motor', 'Servo']
+class AnalogSensor:
+    port: int
+    def __init__(self, port: int) -> None:
+        ...
+    def read(self) -> int:
+        ...
+class DigitalSensor:
+    port: int
+    def __init__(self, port: int) -> None:
+        ...
+    def read(self) -> bool:
+        ...
+class IMU:
+    def __init__(self) -> None:
+        ...
+    def calibrate(self) -> None:
+        """
+        Calibrate the IMU sensor
+        """
+    def get_orientation(self) -> tuple:
+        """
+        Get the current orientation as a quaternion (w, x, y, z)
+        """
+    def read(self) -> tuple:
+        """
+        Read acceleration, gyroscope, and magnetometer data
+        """
+class Motor:
+    @staticmethod
+    def disable_all() -> None:
+        ...
+    def __init__(self, port: int, inverted: bool = False, calibration: libstp.foundation.MotorCalibration = ...) -> None:
+        ...
+    def brake(self) -> None:
+        ...
+    def get_calibration(self) -> libstp.foundation.MotorCalibration:
+        ...
+    def get_position(self) -> int:
+        ...
+    def set_speed(self, percent: int) -> None:
+        ...
+    @property
+    def inverted(self) -> bool:
+        ...
+    @property
+    def port(self) -> int:
+        ...
+class Servo:
+    port: int
+    @staticmethod
+    def fully_disable_all() -> None:
+        ...
+    def __init__(self, port: int) -> None:
+        ...
+    def disable(self) -> None:
+        ...
+    def enable(self) -> None:
+        ...
+    def get_position(self) -> int:
+        ...
+    def set_position(self, position: int) -> None:
+        ...

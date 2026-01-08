@@ -6,7 +6,7 @@ and velocity control.
 
 ## API (essentials)
 
-- `setVelocity(ChassisVel v)` — set desired body velocities (from Motion).
+- `setVelocity(ChassisVelocity v)` — set desired body velocities (from Motion).
 - `update(double dt)` — runs per-wheel ω/ω̇ limiting and wheel velocity controllers; writes to HAL; returns `Achieved` (
   achieved body velocity + saturation info).
 - `estimateState()` — estimate body state via encoders (`kinematics::IKinematics::forward`).
@@ -21,8 +21,8 @@ drive.setWheelLimits({.max_w=80.0, .max_w_dot=800.0});
 drive.setWheelControllerGains({.kp=0.6, .ki=2.0, .kd=0.0, .ff=1.0});
 
 for (;;) {
-  foundation::ChassisCmd cmd = motion.updateAndGetCmd(dt); // your Motion
-  drive.setVelocity({cmd.vx, cmd.vy, cmd.w});
+  foundation::ChassisVelocity cmd = motion.updateAndGetCmd(dt); // your Motion
+  drive.setVelocity({cmd.vx, cmd.vy, cmd.wz});
   libstp::drive::Achieved a = drive.update(dt);
   // if (a.saturated_any) motion.derate(...)
 }
