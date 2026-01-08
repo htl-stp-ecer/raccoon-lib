@@ -9,7 +9,48 @@ from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger
 from libstp.foundation import error, info, debug, initialize_logging
 
+# Core hardware
 Motor = _hal.Motor
+Servo = _hal.Servo
+
+# Re-export submodules for easier access
+from libstp import hal
+from libstp import foundation
+
+# Import step module
+from libstp.step import Step, StepProtocol, SimulationStep, SimulationStepDelta
+
+# Robot API
+from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol, MissionProtocol
+
+# Mission API
+from libstp.mission.api import Mission
+
+__all__ = [
+    # Core hardware
+    "Motor",
+    "Servo",
+    # Submodules
+    "hal",
+    "foundation",
+    # Step classes
+    "Step",
+    "StepProtocol",
+    "SimulationStep",
+    "SimulationStepDelta",
+    # Robot API
+    "GenericRobot",
+    "RobotDefinitionsProtocol",
+    "MissionProtocol",
+    # Mission API
+    "Mission",
+    # Logging
+    "error",
+    "info",
+    "debug",
+    "initialize_logging",
+    "ClassNameLogger",
+]
 
 _PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}
 _HOOKS_INSTALLED = False

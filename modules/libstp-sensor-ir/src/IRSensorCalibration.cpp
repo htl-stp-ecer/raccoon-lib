@@ -13,7 +13,7 @@
 using namespace libstp::sensors::ir;
 
 IRSensorCalibration::IRSensorCalibration(const int &buttonPort) {
-    button::Button::setDigital(buttonPort);
+    button::Button::instance().setDigital(buttonPort);
 }
 
 bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensors,
@@ -24,7 +24,7 @@ bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensor
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         LIBSTP_LOG_INFO("Press the button when ready to scan the values (Attempt "
             + std::to_string(attempt) + "/" + std::to_string(MAX_ATTEMPTS) + ")");
-        button::Button::waitForButtonPress();
+        button::Button::instance().waitForButtonPress();
         hal::screen_render::ScreenRender::instance().sendState(
             R"({"type":"IR","state":"readData"})"
         );

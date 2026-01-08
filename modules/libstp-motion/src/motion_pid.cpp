@@ -1,9 +1,46 @@
 #include "motion/motion_pid.hpp"
+#include "motion/motion_config.hpp"
 #include <algorithm>
 #include <cmath>
 
 namespace libstp::motion
 {
+    std::unique_ptr<MotionPidController> createPidController(
+        const UnifiedMotionPidConfig& unified_config,
+        PidType type)
+    {
+        MotionPidController::Config cfg;
+
+        // Set type-specific gains
+        switch (type)
+        {
+        case PidType::Distance:
+            cfg.kp = unified_config.distance_kp;
+            cfg.ki = unified_config.distance_ki;
+            cfg.kd = unified_config.distance_kd;
+            break;
+        case PidType::Heading:
+            cfg.kp = unified_config.heading_kp;
+            cfg.ki = unified_config.heading_ki;
+            cfg.kd = unified_config.heading_kd;
+            break;
+        case PidType::Lateral:
+            cfg.kp = unified_config.lateral_kp;
+            cfg.ki = unified_config.lateral_ki;
+            cfg.kd = unified_config.lateral_kd;
+            break;
+        }
+
+        // Set shared parameters
+        cfg.output_min = unified_config.output_min;
+        cfg.output_max = unified_config.output_max;
+        cfg.integral_max = unified_config.integral_max;
+        cfg.integral_deadband = unified_config.integral_deadband;
+        cfg.derivative_lpf_alpha = unified_config.derivative_lpf_alpha;
+
+        return std::make_unique<MotionPidController>(cfg);
+    }
+
     MotionPidController::MotionPidController(Config config)
         : cfg_(config)
     {

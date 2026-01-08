@@ -4,6 +4,12 @@
 
 using namespace platform::wombat::core;
 
+void LcmDataWriter::setMotorStop(uint8_t port, int value) {
+    exlcm::scalar_i32_t stop{};
+    stop.value = value;
+    lcm.publish("libstp/motor/" + std::to_string(port) + "/stop_cmd", &stop);
+}
+
 void LcmDataWriter::setMotor(uint8_t port, int valueData) {
     exlcm::scalar_i32_t publishedValue{};
 

@@ -18,10 +18,10 @@ namespace libstp::drive
         Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
               const MotionLimits& chassis_lim);
 
-        void setVelocity(const foundation::ChassisVel& v_body);
+        void setVelocity(const foundation::ChassisVelocity& v_body);
         [[nodiscard]] kinematics::MotorCommands update(double dt) const;
 
-        [[nodiscard]] foundation::ChassisState estimateState() const;
+        [[nodiscard]] foundation::ChassisVelocity estimateState() const;
         [[nodiscard]] std::size_t wheelCount() const;
 
         void softStop();
@@ -35,6 +35,6 @@ namespace libstp::drive
 
         MotionLimits chassis_lim_{};
 
-        foundation::ChassisVel desired_{};
+        foundation::ChassisVelocity desired_{};
     };
 }

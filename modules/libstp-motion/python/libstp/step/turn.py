@@ -3,7 +3,7 @@ import math
 from libstp.motion import TurnMotion, TurnConfig
 from libstp.robot.api import GenericRobot
 
-from . import Step
+from . import Step, SimulationStep, SimulationStepDelta
 
 
 class Turn(Step):
@@ -22,6 +22,15 @@ class Turn(Step):
             f"Turn(angle_deg={math.degrees(self.config.target_angle_rad):.1f}, "
             f"speed={self.config.max_angular_rate:.3f})"
         )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        base.delta = SimulationStepDelta(
+            forward=0.0,
+            strafe=0.0,
+            angular=self.config.target_angle_rad,
+        )
+        return base
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         """
@@ -62,9 +71,6 @@ def turn_ccw(degrees: float, speed: float = 1.0) -> Turn:
     config = TurnConfig()
     config.target_angle_rad = math.radians(degrees)  # Positive for CCW
     config.max_angular_rate = speed
-    config.angle_tolerance_rad = math.radians(1.0)  # 1 degree tolerance
-    config.angle_kp = 3.0
-    config.min_angular_rate = 0.1
     return Turn(config)
 
 
@@ -82,7 +88,4 @@ def turn_cw(degrees: float, speed: float = 1.0) -> Turn:
     config = TurnConfig()
     config.target_angle_rad = -math.radians(degrees)  # Negative for CW
     config.max_angular_rate = speed
-    config.angle_tolerance_rad = math.radians(1.0)  # 1 degree tolerance
-    config.angle_kp = 3.0
-    config.min_angular_rate = 0.1
     return Turn(config)

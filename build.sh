@@ -3,6 +3,7 @@ set -euo pipefail
 
 # -------- Config (env overridable) --------
 PROJECT_NAME="${PROJECT_NAME:-libstp}"
+BUILD_DOCS="${BUILD_DOCS:-0}"
 BUILD_DIR="${BUILD_DIR:-build-docker}"
 PLATFORM="${PLATFORM:-linux/arm64/v8}"
 IMAGE_NAME="${IMAGE_NAME:-libstp-dev:arm64}"
@@ -88,6 +89,19 @@ docker_exec g++ --version
 
 echo "• Installing build dependencies first..."
 docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
+
+# Run tests before building wheel (skip with SKIP_TESTS=1)
+# Uses separate directory since scikit-build manages its own cmake build internally
+if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
+  echo "• Running unit tests..."
+  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test"
+  docker_exec "ninja -C /src/build-test -j$BUILD_JOBS"
+  docker_exec "ctest --test-dir /src/build-test --output-on-failure"
+  echo "✓ All tests passed"
+else
+  echo "• Skipping tests (SKIP_TESTS=1)"
+fi
+
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
 docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args=-DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
 
@@ -99,3 +113,43 @@ fi
 
 echo "✓ Built Python wheel → $WHEEL_FILE"
 ls -la "$WHEEL_FILE"
+
+# -------- Generate Python stubs (optional, runs in Docker) --------
+if [[ "$BUILD_DOCS" == "1" ]]; then
+  echo "• Generating Python type stubs..."
+  WHEEL_BASENAME=$(basename "$WHEEL_FILE")
+  docker_exec "pip install --quiet pybind11-stubgen && \
+    pip install --quiet /src/$BUILD_DIR/$WHEEL_BASENAME && \
+    pybind11-stubgen libstp -o /src/python/stubs --ignore-all-errors 2>/dev/null || true"
+
+  if [[ -d "python/stubs/libstp" ]]; then
+    echo "  ✓ Stubs generated: python/stubs/libstp/"
+  else
+    echo "  ⚠ Stub generation failed or produced no output"
+  fi
+fi
+
+# -------- Documentation (optional, runs on host) --------
+if [[ "$BUILD_DOCS" == "1" ]]; then
+  echo "• Building documentation..."
+  DOCS_DIR="$(dirname "$0")/docs"
+
+  # C++ docs (Doxygen)
+  if command -v doxygen >/dev/null 2>&1; then
+    echo "  → Generating C++ docs with Doxygen..."
+    mkdir -p "$DOCS_DIR/_build/doxygen"
+    (cd "$DOCS_DIR" && doxygen Doxyfile)
+    echo "  ✓ C++ docs: $DOCS_DIR/_build/doxygen/html/index.html"
+  else
+    echo "  ⚠ Doxygen not installed, skipping C++ docs"
+  fi
+
+  # Python docs (Sphinx)
+  if command -v sphinx-build >/dev/null 2>&1; then
+    echo "  → Generating Python docs with Sphinx..."
+    (cd "$DOCS_DIR" && make html)
+    echo "  ✓ Python docs: $DOCS_DIR/_build/html/index.html"
+  else
+    echo "  ⚠ Sphinx not installed, skipping Python docs"
+  fi
+fi

@@ -18,7 +18,8 @@ PYBIND11_MODULE(odometry, m)
     // Ensure foundation types are registered
     py::module_::import("libstp.foundation");
 
-    py::class_<libstp::odometry::IOdometry>(m, "IOdometry")
+    py::class_<libstp::odometry::IOdometry,
+                std::shared_ptr<libstp::odometry::IOdometry>>(m, "IOdometry")
         .def("update", &libstp::odometry::IOdometry::update,
              py::arg("dt"))
         .def("get_pose", &libstp::odometry::IOdometry::getPose)
