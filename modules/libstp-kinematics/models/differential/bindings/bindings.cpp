@@ -43,5 +43,9 @@ PYBIND11_MODULE(kinematics_differential, m)
              py::overload_cast<const libstp::calibration::CalibrationConfig&>(
                  &libstp::kinematics::differential::DifferentialKinematics::calibrateMotors),
              py::arg("config"),
-             "Calibrate both motors with custom configuration");
+             "Calibrate both motors with custom configuration")
+        .def("reset_encoders", &libstp::kinematics::differential::DifferentialKinematics::resetEncoders,
+             "Reset encoder tracking to prevent stale deltas after odometry reset")
+        .def("supports_lateral_motion", &libstp::kinematics::differential::DifferentialKinematics::supportsLateralMotion,
+             "Returns False since differential drives cannot strafe");
 }

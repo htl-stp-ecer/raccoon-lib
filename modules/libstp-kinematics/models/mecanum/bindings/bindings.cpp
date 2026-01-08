@@ -49,5 +49,9 @@ PYBIND11_MODULE(kinematics_mecanum, m)
              py::overload_cast<const libstp::calibration::CalibrationConfig&>(
                  &libstp::kinematics::mecanum::MecanumKinematics::calibrateMotors),
              py::arg("config"),
-             "Calibrate all 4 motors with custom configuration");
+             "Calibrate all 4 motors with custom configuration")
+        .def("reset_encoders", &libstp::kinematics::mecanum::MecanumKinematics::resetEncoders,
+             "Reset encoder tracking to prevent stale deltas after odometry reset")
+        .def("supports_lateral_motion", &libstp::kinematics::mecanum::MecanumKinematics::supportsLateralMotion,
+             "Returns True since mecanum drives can strafe");
 }
