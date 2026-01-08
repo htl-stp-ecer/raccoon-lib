@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from . import Step, StepProtocol
+from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
 
 class Sequential(Step):
     """
@@ -34,6 +34,30 @@ class Sequential(Step):
         first = self.steps[0].__class__.__name__ if self.steps else "None"
         last = self.steps[-1].__class__.__name__ if self.steps else "None"
         return f"Sequential(count={len(self.steps)}, first={first}, last={last})"
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        # Aggregate deltas from all child steps
+        total_forward = 0.0
+        total_strafe = 0.0
+        total_angular = 0.0
+        total_duration_ms = 0.0
+        total_variance = 0.0
+        for step in self.steps:
+            child = step.to_simulation_step()
+            total_forward += child.delta.forward
+            total_strafe += child.delta.strafe
+            total_angular += child.delta.angular
+            total_duration_ms += child.average_duration_ms
+            total_variance += child.duration_stddev_ms ** 2
+        base.delta = SimulationStepDelta(
+            forward=total_forward,
+            strafe=total_strafe,
+            angular=total_angular,
+        )
+        base.average_duration_ms = total_duration_ms
+        base.duration_stddev_ms = total_variance ** 0.5
+        return base
 
     async def _execute_step(self, robot) -> None:
         """

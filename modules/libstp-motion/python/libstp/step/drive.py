@@ -2,7 +2,7 @@ import asyncio
 from libstp.motion import DriveStraightMotion, DriveStraightConfig
 from libstp.robot.api import GenericRobot
 
-from . import Step
+from . import Step, SimulationStep, SimulationStepDelta
 
 
 class Drive(Step):
@@ -24,6 +24,15 @@ class Drive(Step):
             f"Drive(distance_m={self.config.distance_m:.3f}, "
             f"speed={self.config.max_speed_mps:.3f})"
         )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        base.delta = SimulationStepDelta(
+            forward=self.config.distance_m,
+            strafe=0.0,
+            angular=0.0,
+        )
+        return base
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         """
@@ -54,8 +63,6 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     """Drive forward for a specified duration at a given speed"""
     config = DriveStraightConfig()
     config.distance_m = cm / 100.0
-    config.distance_tolerance_m = 0.01
-    config.heading_kp = 5
     config.max_speed_mps = speed
     return Drive(config)
 
@@ -64,8 +71,6 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     """Drive backward for a specified duration at a given speed"""
     config = DriveStraightConfig()
     config.distance_m = -cm / 100.0  # Negative distance for backwards
-    config.distance_tolerance_m = 0.01
-    config.heading_kp = 5
     config.max_speed_mps = speed  # Speed should be positive (magnitude only)
     return Drive(config)
 

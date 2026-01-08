@@ -2,7 +2,7 @@ import asyncio
 from libstp.motion import StrafeMotion, StrafeConfig
 from libstp.robot.api import GenericRobot
 
-from . import Step
+from . import Step, SimulationStep, SimulationStepDelta
 
 
 class Strafe(Step):
@@ -21,6 +21,15 @@ class Strafe(Step):
             f"Strafe(distance_m={self.config.target_distance_m:.3f}, "
             f"speed={self.config.max_speed_mps:.3f})"
         )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        base.delta = SimulationStepDelta(
+            forward=0.0,
+            strafe=self.config.target_distance_m,
+            angular=0.0,
+        )
+        return base
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         """
@@ -61,10 +70,6 @@ def strafe_left(cm: float, speed: float = 0.3) -> Strafe:
     config = StrafeConfig()
     config.target_distance_m = -cm / 100.0  # Negative for left (odometry convention: negative lateral = left)
     config.max_speed_mps = speed
-    config.distance_tolerance_m = 0.02  # 2 cm tolerance
-    config.distance_kp = 2.0
-    config.heading_kp = 3.0
-    config.min_speed_mps = 0.05
     return Strafe(config)
 
 
@@ -82,8 +87,4 @@ def strafe_right(cm: float, speed: float = 0.3) -> Strafe:
     config = StrafeConfig()
     config.target_distance_m = cm / 100.0  # Positive for right (odometry convention: positive lateral = right)
     config.max_speed_mps = speed
-    config.distance_tolerance_m = 0.02  # 2 cm tolerance
-    config.distance_kp = 2.0
-    config.heading_kp = 3.0
-    config.min_speed_mps = 0.05
     return Strafe(config)

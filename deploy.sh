@@ -15,7 +15,7 @@ echo -e "${GREEN}Deploying ${PROJECT_NAME} to Raspberry Pi...${NC}"
 echo -e "${BLUE}Target: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}${NC}"
 
 echo -e "${YELLOW}Building Python wheel (containerized ARM toolchain)...${NC}"
-bash ./build.sh
+BUILD_DOCS=1 bash ./build.sh
 
 WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
 if [[ ! -f "$WHEEL_FILE" ]]; then
@@ -61,3 +61,13 @@ echo -e "${GREEN}Deployment complete!${NC}"
 echo -e "${BLUE}Python package deployed and installed on: ${REMOTE_USER}@${REMOTE_HOST}${NC}"
 echo -e "${YELLOW}To use: ssh ${REMOTE_USER}@${REMOTE_HOST} '${PYTHON_CMD} -c \"import ${PROJECT_NAME}\"'${NC}"
 echo -e "${YELLOW}Wheel location: ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/${WHEEL_BASENAME}${NC}"
+
+# Documentation hint
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/docs/_build/html/index.html" ]] || [[ -f "$SCRIPT_DIR/docs/_build/doxygen/html/index.html" ]]; then
+  echo ""
+  echo -e "${BLUE}Documentation:${NC}"
+  [[ -f "$SCRIPT_DIR/docs/_build/doxygen/html/index.html" ]] && echo -e "  C++:    file://$SCRIPT_DIR/docs/_build/doxygen/html/index.html"
+  [[ -f "$SCRIPT_DIR/docs/_build/html/index.html" ]] && echo -e "  Python: file://$SCRIPT_DIR/docs/_build/html/index.html"
+  echo -e "${YELLOW}Serve locally: python3 -m http.server 8000 -d $SCRIPT_DIR/docs/_build/html${NC}"
+fi
