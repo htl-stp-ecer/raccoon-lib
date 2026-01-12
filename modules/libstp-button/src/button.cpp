@@ -1,6 +1,3 @@
-//
-// Created by eternalRose on 11/17/25.
-//
 #include "button/button.hpp"
 
 #include <chrono>

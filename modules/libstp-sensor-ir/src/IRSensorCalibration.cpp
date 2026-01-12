@@ -12,64 +12,52 @@
 
 using namespace libstp::sensors::ir;
 
-IRSensorCalibration::IRSensorCalibration(const int &buttonPort) {
-    button::Button::setDigital(buttonPort);
-}
-
 bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensors,
                                            float durationSeconds) {
-    constexpr int MAX_ATTEMPTS = 5;
     hal::screen_render::ScreenRender::instance().setCurrentScreenSetting("calibrate_sensors");
 
-    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        LIBSTP_LOG_INFO("Press the button when ready to scan the values (Attempt "
-            + std::to_string(attempt) + "/" + std::to_string(MAX_ATTEMPTS) + ")");
-        button::Button::waitForButtonPress();
-        hal::screen_render::ScreenRender::instance().sendState(
-            R"({"type":"IR","state":"readData"})"
-        );
+    hal::screen_render::ScreenRender::instance().sendState(
+        R"({"type":"IR","state":"readData"})"
+    );
 
-        std::vector<float> values = collectValues(sensors, durationSeconds);
-        if (values.empty()) {
-            LIBSTP_LOG_WARN("No sensor values collected.");
-            continue;
-        }
-
-        bool allGood = true;
-
-        for (auto *sensor: sensors) {
-            if (!sensor->calibrate(values)) {
-                allGood = false;
-                break;
-            }
-        }
-
-        if (allGood) {
-            LIBSTP_LOG_INFO("All sensors calibrated successfully.");
-            std::ostringstream json;
-            json << R"({"type":"IR","state":"confirm",)"
-                    << R"("collected_values":[)";
-
-            for (size_t i = 0; i < values.size(); ++i) {
-                json << values[i];
-                if (i + 1 < values.size()) {
-                    json << ",";
-                }
-            }
-
-            json << "],"
-                    << R"("black_thresh":)" << sensors[0]->blackThreshold << ","
-                    << R"("white_thresh":)" << sensors[0]->whiteThreshold
-                    << "}";
-
-            hal::screen_render::ScreenRender::instance().sendState(json.str());
-            return true;
-        }
-        LIBSTP_LOG_WARN("Retrying...");
-        hal::screen_render::ScreenRender::instance().sendState(R"({"type":"IR","state":"retrying"})");
+    std::vector<float> values = collectValues(sensors, durationSeconds);
+    if (values.empty()) {
+        LIBSTP_LOG_WARN("No sensor values collected.");
+        return false;
     }
-    LIBSTP_LOG_ERROR("Calibration failed after maximum attempts.");
-    hal::screen_render::ScreenRender::instance().sendState(R"({"type":"IR","state":"tooManyAttempts"})");
+
+    bool allGood = true;
+
+    for (auto *sensor: sensors) {
+        if (!sensor->calibrate(values)) {
+            allGood = false;
+            break;
+        }
+    }
+
+    if (allGood) {
+        LIBSTP_LOG_INFO("All sensors calibrated successfully.");
+        std::ostringstream json;
+        json << R"({"type":"IR","state":"confirm",)"
+                << R"("collected_values":[)";
+
+        for (size_t i = 0; i < values.size(); ++i) {
+            json << values[i];
+            if (i + 1 < values.size()) {
+                json << ",";
+            }
+        }
+
+        json << "],"
+                << R"("black_thresh":)" << sensors[0]->blackThreshold << ","
+                << R"("white_thresh":)" << sensors[0]->whiteThreshold
+                << "}";
+
+        hal::screen_render::ScreenRender::instance().sendState(json.str());
+        return true;
+    }
+    LIBSTP_LOG_WARN("Retrying...");
+    hal::screen_render::ScreenRender::instance().sendState(R"({"type":"IR","state":"retrying"})");
     return false;
 }
 
