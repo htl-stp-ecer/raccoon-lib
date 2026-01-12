@@ -1,7 +1,7 @@
 #pragma once
 
 #include "foundation/motor.hpp"
-#include "hal/Motor.hpp"
+#include "hal/IMotor.hpp"
 #include <memory>
 
 #include "calibration_config.hpp"
@@ -38,7 +38,7 @@ namespace libstp::calibration
     class MotorCalibrator
     {
     public:
-        explicit MotorCalibrator(hal::motor::Motor& motor, CalibrationConfig config = {});
+        explicit MotorCalibrator(hal::motor::IMotor& motor, CalibrationConfig config = {});
         ~MotorCalibrator();
 
         // Main calibration entry point

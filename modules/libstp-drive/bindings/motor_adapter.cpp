@@ -22,9 +22,5 @@ void init_motor_adapter(const py::module& m)
         .def("get_raw_percent", &libstp::drive::MotorAdapter::getRawPercent)
         .def("reset_controller", &libstp::drive::MotorAdapter::resetController)
         .def("brake", &libstp::drive::MotorAdapter::brake)
-        .def("motor",
-             static_cast<libstp::hal::motor::Motor& (libstp::drive::MotorAdapter::*)()>(&
-                 libstp::drive::MotorAdapter::motor),
-             py::return_value_policy::reference_internal)
         .def("update_encoder_velocity", &libstp::drive::MotorAdapter::updateEncoderVelocity, py::arg("dt"));
 }

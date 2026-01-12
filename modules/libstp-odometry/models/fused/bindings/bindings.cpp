@@ -4,6 +4,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
+#include <memory>
 
 #include "odometry/fused/fused_odometry.hpp"
 #include "hal/IMU.hpp"
@@ -35,7 +36,15 @@ PYBIND11_MODULE(odometry_fused, m)
                    " straight_line=" + std::to_string(d.straight_line) + ">";
         });
 
-    py::class_<libstp::odometry::fused::FusedOdometry, libstp::odometry::IOdometry>(
+    // FusedOdometryConfig struct
+    py::class_<libstp::odometry::fused::FusedOdometryConfig>(m, "FusedOdometryConfig",
+            "Configuration for FusedOdometry.")
+        .def(py::init<>())
+        .def_readwrite("imu_ready_timeout_ms", &libstp::odometry::fused::FusedOdometryConfig::imu_ready_timeout_ms,
+                      "Timeout waiting for IMU to be ready (milliseconds, default: 1000)");
+
+    py::class_<libstp::odometry::fused::FusedOdometry, libstp::odometry::IOdometry,
+                std::shared_ptr<libstp::odometry::fused::FusedOdometry>>(
             m, "FusedOdometry",
             "Fused odometry combining IMU orientation with kinematics velocity integration.\n"
             "Integrates IMU orientation tracking with auto-calibration.\n"
@@ -43,17 +52,19 @@ PYBIND11_MODULE(odometry_fused, m)
             "Tracks distances from origin in forward/lateral directions.\n"
             "Provides all coordinate frame transformations.\n"
             "Position will drift over time - use reset() with external references to correct.")
-        .def(py::init<libstp::hal::imu::IMU*, libstp::kinematics::IKinematics*>(),
+        .def(py::init<std::shared_ptr<libstp::hal::imu::IMU>,
+                      std::shared_ptr<libstp::kinematics::IKinematics>,
+                      libstp::odometry::fused::FusedOdometryConfig>(),
              py::arg("imu"),
              py::arg("kinematics"),
-             py::keep_alive<1, 2>(),  // Keep IMU alive
-             py::keep_alive<1, 3>(),  // Keep kinematics alive
+             py::arg("config") = libstp::odometry::fused::FusedOdometryConfig{},
              "Create fused odometry with IMU and kinematics model.\n\n"
              "IMU will be auto-calibrated on first update - the initial orientation\n"
              "is captured and all subsequent readings are relative to it.\n\n"
              "Args:\n"
-             "    imu: IMU sensor instance\n"
-             "    kinematics: Kinematics model (provides velocity estimates)")
+             "    imu: IMU sensor instance (shared_ptr)\n"
+             "    kinematics: Kinematics model (shared_ptr, provides velocity estimates)\n"
+             "    config: Optional configuration (default uses 1000ms IMU timeout)")
         .def("update", &libstp::odometry::fused::FusedOdometry::update,
              py::arg("dt"),
              "Update odometry estimate with time delta.\n\n"

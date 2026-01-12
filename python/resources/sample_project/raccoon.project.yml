@@ -19,6 +19,71 @@ robot:
   voltage_comp:
     nominal: 12.0
 
+  # Unified Motion PID Configuration (speed-independent)
+  # These values are used by all motion primitives: drive, turn, strafe
+  motion_pid:
+    # Distance/Position PID gains (for forward/backward and lateral movement)
+    distance:
+      kp: 2.0
+      ki: 0.0
+      kd: 0.0
+
+    # Heading/Angular PID gains (for maintaining heading and turning)
+    heading:
+      kp: 3.0
+      ki: 0.0
+      kd: 0.0
+
+    # Lateral drift correction PID gains (for correcting lateral drift during drive)
+    lateral:
+      kp: 2.0
+      ki: 0.0
+      kd: 0.0
+
+    # Trapezoidal profile parameters (for smooth motion with ramped setpoints)
+    profile:
+      max_linear_acceleration: 1.0    # Maximum linear acceleration (m/s²) for drive/strafe
+      max_angular_acceleration: 3.0   # Maximum angular acceleration (rad/s²) for turns
+
+    # Advanced PID parameters
+    integral_max: 10.0              # Anti-windup limit for all PIDs
+    integral_deadband: 0.01         # Don't integrate within this error
+    derivative_lpf_alpha: 0.1       # Low-pass filter coefficient for derivative term
+    output_min: -10.0               # Minimum PID output
+    output_max: 10.0                # Maximum PID output
+
+    # Saturation handling (speed-independent derating factors)
+    saturation:
+      derating_factor: 0.85         # Multiply speed scale on saturation
+      min_scale: 0.1                # Never reduce speed scale below this
+      recovery_rate: 0.02           # How quickly speed scale recovers per cycle
+
+    # Heading-specific saturation handling
+    heading_saturation:
+      derating_factor: 0.85         # Multiply heading scale when still saturated
+      min_scale: 0.25               # Minimum heading scale
+      recovery_rate: 0.05           # Recovery rate for heading scale
+
+    # Tolerances
+    tolerances:
+      distance_m: 0.01              # Position completion tolerance (meters)
+      angle_rad: 0.02               # Angular completion tolerance (radians, ~1.15 degrees)
+
+    # Rate limits
+    rate_limits:
+      max_heading_rate: 3.0         # Maximum heading correction rate (rad/s)
+      min_angular_rate: 0.1         # Minimum turning speed to prevent stalling
+
+    # Lateral drift handling (for differential drive)
+    lateral_drift:
+      heading_bias_gain: 0.5        # How much to bias heading based on lateral error
+      reorient_threshold_m: 0.15    # Stop and reorient if lateral error exceeds this
+      heading_saturation_error_rad: 0.01    # Only derate when heading error exceeds this
+      heading_recovery_error_rad: 0.005     # Allow recovery once heading error is below this
+
+    # Minimum speeds (to prevent stalling)
+    min_speed_mps: 0.05             # Minimum translational speed
+
 
 definitions:
   left_motor:
