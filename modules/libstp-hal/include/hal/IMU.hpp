@@ -5,25 +5,26 @@
 #pragma once
 
 #include <Eigen/Geometry>
+#include "hal/IIMU.hpp"
 
 namespace libstp::hal::imu
 {
-    class IMU
+    class IMU : public IIMU
     {
 #ifdef SAFETY_CHECKS_ENABLED
         static bool imuInstanceCreated;
 #endif
     public:
         IMU();
-        
-        ~IMU();
-        
-        void read(float* accel, float* gyro, float* magneto);
-        void calibrate();
-        [[nodiscard]] Eigen::Quaternionf getOrientation();
+
+        ~IMU() override;
+
+        void read(float* accel, float* gyro, float* magneto) override;
+        void calibrate() override;
+        [[nodiscard]] Eigen::Quaternionf getOrientation() override;
 
         // Wait for IMU to receive initial orientation data
         // Returns true if data received within timeout_ms, false otherwise
-        bool waitForReady(int timeout_ms = 1000);
+        bool waitForReady(int timeout_ms = 1000) override;
     };
 }

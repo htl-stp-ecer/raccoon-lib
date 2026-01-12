@@ -7,28 +7,33 @@
 #ifdef SAFETY_CHECKS_ENABLED
 #include <set>
 #endif
-
+#include <memory>
 #include "hal/Digital.hpp"
 
 namespace libstp::button {
 
-    class Button {
-    private:
-        static hal::digital::DigitalSensor* digital_sensor_;
-
-        Button() = delete;
-
+    class Button final {
     public:
+        static Button& instance();
+
+        // Set up the digital sensor using a port number (creates the sensor internally).
+        void setDigital(int port);
+        // Alternatively inject an already-created sensor (helps in tests).
+        void setDigital(std::unique_ptr<hal::digital::DigitalSensor> sensor);
+
+        bool isPressed() const;
+
+        void waitForButtonPress() const;
+
         Button(const Button&) = delete;
         Button& operator=(const Button&) = delete;
         Button(Button&&) = delete;
         Button& operator=(Button&&) = delete;
 
-        static bool isPressed();
+    private:
+        Button() = default;
+        ~Button();
 
-        static void setDigital(int port);
-
-        static void waitForButtonPress();
+        std::unique_ptr<hal::digital::DigitalSensor> digital_sensor_;
     };
-
-}
+} // namespace libstp::button

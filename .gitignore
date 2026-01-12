@@ -145,6 +145,8 @@ _skbuild/
 _skbuild-docker/
 .pyodide-xbuildenv/
 cmake-build-debug
-.cmake-cache
-.cmake-cache-docker/
+.cmake-cache*
 .idea/
+build-test
+
+qemu_python*

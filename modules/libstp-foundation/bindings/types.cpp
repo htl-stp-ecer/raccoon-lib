@@ -11,17 +11,10 @@
 
 namespace {
 
-std::string chassis_cmd_to_string(const libstp::foundation::ChassisCmd& cmd)
+std::string chassis_velocity_to_string(const libstp::foundation::ChassisVelocity& vel)
 {
     std::ostringstream oss;
-    oss << "ChassisCmd(vx=" << cmd.vx << ", vy=" << cmd.vy << ", wz=" << cmd.wz << ")";
-    return oss.str();
-}
-
-std::string chassis_state_to_string(const libstp::foundation::ChassisState& state)
-{
-    std::ostringstream oss;
-    oss << "ChassisState(vx=" << state.vx << ", vy=" << state.vy << ", wz=" << state.wz << ")";
+    oss << "ChassisVelocity(vx=" << vel.vx << ", vy=" << vel.vy << ", wz=" << vel.wz << ")";
     return oss.str();
 }
 
@@ -40,21 +33,14 @@ namespace py = pybind11;
 
 void init_types(const py::module& m)
 {
-    py::class_<libstp::foundation::ChassisCmd>(m, "ChassisCmd")
+    py::class_<libstp::foundation::ChassisVelocity>(m, "ChassisVelocity")
+        .def(py::init<>())
         .def(py::init<double, double, double>())
-        .def_readwrite("vx", &libstp::foundation::ChassisCmd::vx)
-        .def_readwrite("vy", &libstp::foundation::ChassisCmd::vy)
-        .def_readwrite("wz", &libstp::foundation::ChassisCmd::wz)
-        .def("__repr__", &chassis_cmd_to_string)
-        .def("__str__", &chassis_cmd_to_string);
-
-    py::class_<libstp::foundation::ChassisState>(m, "ChassisState")
-        .def(py::init<double, double, double>())
-        .def_readwrite("vx", &libstp::foundation::ChassisState::vx)
-        .def_readwrite("vy", &libstp::foundation::ChassisState::vy)
-        .def_readwrite("wz", &libstp::foundation::ChassisState::wz)
-        .def("__repr__", &chassis_state_to_string)
-        .def("__str__", &chassis_state_to_string);
+        .def_readwrite("vx", &libstp::foundation::ChassisVelocity::vx)
+        .def_readwrite("vy", &libstp::foundation::ChassisVelocity::vy)
+        .def_readwrite("wz", &libstp::foundation::ChassisVelocity::wz)
+        .def("__repr__", &chassis_velocity_to_string)
+        .def("__str__", &chassis_velocity_to_string);
 
     py::class_<libstp::foundation::Pose>(m, "Pose")
         .def(py::init<>())
