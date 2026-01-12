@@ -13,6 +13,7 @@ from libstp.class_name_logger import ClassNameLogger
 from libstp import button
 
 
+
 class RenderScreen(ClassNameLogger):
     def __init__(self, sensors: List[IRSensor]):
         super().__init__()
@@ -53,6 +54,9 @@ class RenderScreen(ClassNameLogger):
 
     def send_state(self, data: Dict[str, Any]):
         self.__send_screen_render_request_to_lcm(data)
+
+    async def __wait_for_lcm_message(self, timeout: float = 10.0):
+        loop = asyncio.get_running_loop()
 
     async def __wait_for_button(self, button_port=10):
         self.info("Press the button when ready.")
