@@ -22,6 +22,11 @@ from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol
 from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
 from libstp.screen.api import RenderScreen
+from libstp.drive import Drive, MotionLimits
+from libstp.kinematics_mecanum import MecanumKinematics
+from libstp.odometry_fused import FusedOdometry
+from libstp.foundation import Feedforward, MotorCalibration, PidGains
+from libstp.hal import IMU
 
 __all__ = [
     # Core hardware
@@ -55,7 +60,17 @@ __all__ = [
     "StepTimingTracker",
     "RenderScreen",
     "Sequential",
-    "seq"
+    "seq",
+    "calibrate_sensors",
+    "CalibrateSensors",
+    "Drive",
+    "FusedOdometry",
+    "MecanumKinematics",
+    "MotionLimits",
+    "Feedforward",
+    "MotorCalibration",
+    "PidGains",
+    "IMU"
 ]
 
 _PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}
