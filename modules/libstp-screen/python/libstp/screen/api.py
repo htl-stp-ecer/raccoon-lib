@@ -81,7 +81,6 @@ class RenderScreen(ClassNameLogger):
             while not self.cancel_event.is_set():
                 try:
                     msg = await asyncio.wait_for(future, timeout=timeout)
-                    self.info(msg)
                     return msg.value
                 except asyncio.TimeoutError:
                     return "retry"
