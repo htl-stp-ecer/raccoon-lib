@@ -2,7 +2,7 @@ import asyncio
 import json
 
 import lcm
-from typing import Any, Dict
+from typing import Any, Dict, List
 from libstp.screen.exlcm.screen_render_t import screen_render_t
 from libstp.screen.exlcm.screen_render_answer_t import screen_render_answer_t
 from libstp.hal import AnalogSensor
@@ -12,18 +12,12 @@ from libstp.class_name_logger import ClassNameLogger
 from libstp import button as _button
 
 class RenderScreen(ClassNameLogger):
-    def __init__(self, port: int | list[int]):
+    def __init__(self, sensors: List[IRSensor]):
         super().__init__()
         self.screen_name = ""
-        self.port = port
+        self.sensors = sensors
         self.LCM = lcm.LCM()
         self.cancel_event = asyncio.Event()
-        if (isinstance(port, int)):
-            self.sensors = [IRSensor(port)]
-        else:
-            self.sensors = []
-            for i in port:
-                self.sensors.append(IRSensor(i))
         self.LCM.subscribe("libstp/screen_render/cancel", self.__handle_cancel_request)
         asyncio.create_task(self.__lcm_pump_async())
 

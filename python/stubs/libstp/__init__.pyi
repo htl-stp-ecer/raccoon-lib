@@ -13,6 +13,8 @@ from libstp.mission.api import Mission
 from libstp.robot.api import GenericRobot
 from libstp.robot.api import MissionProtocol
 from libstp.robot.api import RobotDefinitionsProtocol
+from libstp.sensor_ir import IRSensor
+from libstp.sensor_ir import IRSensorCalibration
 from libstp.step import SimulationStep
 from libstp.step import SimulationStepDelta
 from libstp.step import Step
@@ -24,8 +26,9 @@ from . import foundation
 from . import hal
 from . import mission
 from . import robot
+from . import sensor_ir
 from . import step
-__all__: list = ['Motor', 'Servo', 'hal', 'foundation', 'Step', 'StepProtocol', 'SimulationStep', 'SimulationStepDelta', 'GenericRobot', 'RobotDefinitionsProtocol', 'MissionProtocol', 'Mission', 'error', 'info', 'debug', 'initialize_logging', 'ClassNameLogger']
+__all__: list = ['Motor', 'Servo', 'hal', 'foundation', 'Step', 'StepProtocol', 'SimulationStep', 'SimulationStepDelta', 'GenericRobot', 'RobotDefinitionsProtocol', 'MissionProtocol', 'Mission', 'error', 'info', 'debug', 'initialize_logging', 'ClassNameLogger', 'IRSensor', 'IRSensorCalibration']
 def _disable_all_motors() -> None:
     ...
 def _forward_signal(signum: int, frame: FrameType | None) -> None:
