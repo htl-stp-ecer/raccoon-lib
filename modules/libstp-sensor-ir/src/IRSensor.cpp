@@ -9,11 +9,10 @@
 
 using namespace libstp::sensors::ir;
 
-IRSensor::IRSensor(const int &port, float calibrationFactor)
+IRSensor::IRSensor(const int &port)
     : AnalogSensor(port),
       whiteThreshold(0),
-      blackThreshold(0),
-      calibrationFactor(calibrationFactor * 0.5f) {
+      blackThreshold(0){
 }
 
 void IRSensor::setCalibration(const float newBlackThreshold,
