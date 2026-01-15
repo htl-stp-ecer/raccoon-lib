@@ -17,10 +17,10 @@
 namespace libstp::calibration
 {
 
-MotorCalibrator::MotorCalibrator(hal::motor::Motor& motor, CalibrationConfig config)
+MotorCalibrator::MotorCalibrator(hal::motor::IMotor& motor, CalibrationConfig config)
     : config_(std::move(config))
 {
-    LIBSTP_LOG_TRACE("MotorCalibrator created for motor port {}", motor.port);
+    LIBSTP_LOG_TRACE("MotorCalibrator created for motor port {}", motor.getPort());
 
     // Create motor control interface
     motor_control_ = std::make_unique<motor::MotorControlInterface>(motor);

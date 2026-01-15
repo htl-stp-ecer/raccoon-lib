@@ -1,7 +1,12 @@
 #pragma once
 
+#include <memory>
+
 namespace libstp::motion
 {
+    // Forward declaration
+    struct UnifiedMotionPidConfig;
+
     class MotionPidController
     {
     public:
@@ -34,4 +39,28 @@ namespace libstp::motion
         double filtered_derivative_{0.0};
         bool first_update_{true};
     };
+
+    /**
+     * PID controller type for factory creation.
+     */
+    enum class PidType
+    {
+        Distance,  // For forward/backward distance control
+        Heading,   // For heading/yaw control
+        Lateral    // For lateral drift correction
+    };
+
+    /**
+     * Factory function to create PID controllers from unified config.
+     *
+     * This eliminates boilerplate when creating multiple PID controllers
+     * with the same shared parameters but different gains.
+     *
+     * @param unified_config The unified motion PID configuration
+     * @param type The type of PID controller to create
+     * @return A unique_ptr to the configured PID controller
+     */
+    std::unique_ptr<MotionPidController> createPidController(
+        const UnifiedMotionPidConfig& unified_config,
+        PidType type);
 }

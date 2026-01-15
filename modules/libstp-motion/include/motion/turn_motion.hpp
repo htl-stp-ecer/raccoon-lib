@@ -1,6 +1,9 @@
 #pragma once
 
 #include "motion/motion.hpp"
+#include "motion/motion_pid.hpp"
+#include "motion/trapezoidal_profile.hpp"
+#include "foundation/types.hpp"
 #include <memory>
 
 namespace libstp::motion
@@ -11,20 +14,19 @@ namespace libstp::motion
     {
         double target_angle_rad{0.0};        // Target turn angle (positive = CCW, negative = CW)
         double max_angular_rate{1.0};        // Maximum turning speed (rad/s)
-        double angle_tolerance_rad{0.02};    // Completion tolerance (~1.15 degrees)
-        double angle_kp{3.0};                // Proportional gain for angular control
-        double angle_ki{0.0};                // Integral gain for angular control
-        double angle_kd{0.0};                // Derivative gain for angular control
-        double min_angular_rate{0.1};        // Minimum turning speed to prevent stalling
-        double saturation_derating_factor{0.85};  // Multiply angular speed by this on each saturation hit
-        double saturation_min_scale{0.2};         // Never reduce angular scale below this
-        double saturation_recovery_rate{0.05};    // How quickly angular scale recovers per cycle
+        // Note: PID gains, tolerances, and saturation parameters are now in UnifiedMotionPidConfig (accessible via MotionContext)
     };
 
     class TurnMotion final : public Motion
     {
     public:
+        /// @deprecated Use the type-safe overload with Radians and RadiansPerSecond instead
+        [[deprecated("Use TurnMotion(ctx, Radians, RadiansPerSecond) for type safety")]]
         TurnMotion(MotionContext ctx, double angle_deg, double max_angular_rate_rad_per_sec);
+
+        /// Type-safe constructor using strongly-typed units
+        TurnMotion(MotionContext ctx, foundation::Radians angle, foundation::RadiansPerSecond max_angular_rate);
+
         TurnMotion(MotionContext ctx, TurnConfig config);
 
         void start() override;
@@ -36,8 +38,11 @@ namespace libstp::motion
 
         TurnConfig cfg_{};
         std::unique_ptr<MotionPidController> angle_pid_;  // PID controller for angle control
-        double target_heading_rad_{0.0};  // Target heading to reach
+        std::unique_ptr<TrapezoidalProfile> profile_;     // Trapezoidal profile for smooth setpoint
+        double target_heading_rad_{0.0};  // Final target heading to reach
+        double elapsed_time_{0.0};        // Time elapsed since start
         bool finished_{false};
         double angular_scale_{1.0};  // Current angular speed scaling factor due to saturation
+        int unsaturated_cycles_{0};  // Hysteresis counter for saturation recovery
     };
 }

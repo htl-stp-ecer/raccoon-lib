@@ -33,7 +33,13 @@ function(register_libstp_module module_name is_interface additional_libraries)
                 target_link_libraries(${module_name} INTERFACE ${additional_libraries})
             endif ()
         else ()
-            add_library(${module_name} STATIC ${MODULE_SRC})
+            # Default to STATIC libs to avoid shared-lib cycles across modules.
+            set(_lib_type STATIC)
+            # Some modules need to be shared so state lives in one place across bindings.
+            if (module_name STREQUAL "button")
+                set(_lib_type SHARED)
+            endif ()
+            add_library(${module_name} ${_lib_type} ${MODULE_SRC})
             target_include_directories(${module_name}
                     PUBLIC
                     $<BUILD_INTERFACE:${_INC_BUILD}>
@@ -43,6 +49,10 @@ function(register_libstp_module module_name is_interface additional_libraries)
                 message(STATUS "Link (PUBLIC) deps to ${module_name}: ${additional_libraries}")
                 target_link_libraries(${module_name} PUBLIC ${additional_libraries})
             endif ()
+            if (_lib_type STREQUAL "SHARED")
+                # Install shared libs alongside Python modules so $ORIGIN works.
+                install(TARGETS ${module_name} DESTINATION libstp)
+            endif ()
         endif ()
     endif ()
 
@@ -51,10 +61,13 @@ function(register_libstp_module module_name is_interface additional_libraries)
         set(PY_LIB_NAME "libstp_${module_name}")
         python_add_library(${PY_LIB_NAME} MODULE
                 ${MODULE_BINDINGS}
-                ${MODULE_SRC}
                 WITH_SOABI
         )
         set_target_properties(${PY_LIB_NAME} PROPERTIES OUTPUT_NAME ${module_name})
+        # Ensure extension can locate sibling shared libs (e.g., libbutton.so) at runtime.
+        set_target_properties(${PY_LIB_NAME} PROPERTIES
+                BUILD_RPATH "$ORIGIN"
+                INSTALL_RPATH "$ORIGIN")
         target_include_directories(${PY_LIB_NAME}
                 PRIVATE
                 ${_INC_BUILD}

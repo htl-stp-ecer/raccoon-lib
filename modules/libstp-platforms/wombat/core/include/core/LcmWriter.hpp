@@ -26,6 +26,8 @@ namespace platform::wombat::core
             return writer;
         }
 
+        // Publish motor stop latch command. Non-zero -> stop/latch; 0 -> wake/enable.
+        void setMotorStop(uint8_t port, int value);
         void setMotor(uint8_t port, int valueData);
         void setServo(uint8_t port, int valueData);
         void requestDataDump();
@@ -57,4 +59,3 @@ namespace platform::wombat::core
         }
     };
 }
-
