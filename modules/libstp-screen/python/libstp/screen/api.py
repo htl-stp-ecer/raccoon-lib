@@ -10,7 +10,9 @@ from libstp.hal import AnalogSensor
 from libstp.sensor_ir import IRSensor
 from libstp.sensor_ir import IRSensorCalibration
 from libstp.class_name_logger import ClassNameLogger
-from libstp import button as _button
+from libstp import button
+
+
 
 
 
