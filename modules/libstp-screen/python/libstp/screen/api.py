@@ -55,17 +55,17 @@ class RenderScreen(ClassNameLogger):
         self.__send_screen_render_request_to_lcm(data)
 
     async def __wait_for_button(self, button_port=10):
-        Button.set_digital(button_port)
+        self.info("Press the button when ready.")
         try:
             while True:
-                pressed = Button.is_pressed()
+                pressed = _button.is_pressed()
                 if pressed:
                     return True
                 await asyncio.sleep(0.01)
         except asyncio.CancelledError:
             return False
 
-    async def __wait_for_lcm_message(self, timeout: float = 10.0):
+    async def __wait_for_lcm_message(self, timeout = 10.0):
         loop = asyncio.get_running_loop()
         future = loop.create_future()
         def handler(channel, data):
@@ -77,6 +77,7 @@ class RenderScreen(ClassNameLogger):
             while not self.cancel_event.is_set():
                 try:
                     msg = await asyncio.wait_for(future, timeout=timeout)
+                    self.info(msg)
                     return msg.value
                 except asyncio.TimeoutError:
                     return "retry"
@@ -84,10 +85,14 @@ class RenderScreen(ClassNameLogger):
         finally:
             self.LCM.unsubscribe(sub)
 
-    async def __wait_for_finish(self, timeout: float = 10.0):
+    async def __wait_for_finish(self, timeout = 10.0):
         return await self.__wait_for_lcm_message(timeout=timeout)
 
     async def __calibrateSensorsRequest(self, button_port=10, trie=0, MAX_ATTEMPTS=5):
+        self.info("Calibration Request: Attempt " + str(trie) + " / " + str(MAX_ATTEMPTS))
+        if trie == 0:
+            _button.set_digital(button_port)
+
         if self.cancel_event.is_set():
             return False
         if not await self.__wait_for_button(button_port):
