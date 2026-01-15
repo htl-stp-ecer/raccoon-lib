@@ -3,9 +3,11 @@ from typing import Any, List, Optional, Protocol, TYPE_CHECKING, runtime_checkab
 import asyncio
 
 from libstp.class_name_logger import ClassNameLogger
+from libstp.hal import AnalogSensor
 
 if TYPE_CHECKING:
     from libstp.drive import Drive
+    from libstp.mission.api import MissionProtocol
     from libstp.odometry import Odometry
 
 
@@ -22,17 +24,7 @@ class RobotDefinitionsProtocol(Protocol):
             arm_servo = Servo(port=0, ...)
     """
 
-    pass  # Marker protocol - actual attributes are robot-specific
-
-
-@runtime_checkable
-class MissionProtocol(Protocol):
-    """Protocol for mission objects that can be run on a robot."""
-
-    async def run(self, robot: "GenericRobot") -> None:
-        """Execute the mission on the given robot."""
-        ...
-
+    analog_sensors: List[AnalogSensor]
 
 class GenericRobot(ABC, ClassNameLogger):
     """
@@ -68,17 +60,17 @@ class GenericRobot(ABC, ClassNameLogger):
         ...
 
     @property
-    def missions(self) -> List[MissionProtocol]:
+    def missions(self) -> List["MissionProtocol"]:
         """List of missions to execute. Override to provide missions."""
         return []
 
     @property
-    def setup_mission(self) -> Optional[MissionProtocol]:
+    def setup_mission(self) -> Optional["MissionProtocol"]:
         """Optional mission to run before main missions."""
         return None
 
     @property
-    def shutdown_mission(self) -> Optional[MissionProtocol]:
+    def shutdown_mission(self) -> Optional["MissionProtocol"]:
         """Optional mission to run after all missions complete."""
         return None
 
