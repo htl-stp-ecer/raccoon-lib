@@ -10,7 +10,5 @@ namespace py = pybind11;
 
 void init_ir_sensor_calib(py::module& m) {
     py::class_<libstp::sensors::ir::IRSensorCalibration>(m, "IRSensorCalibration")
-    .def(py::init<const int>(),
-        py::arg("buttonPort") = 10)
-    .def("calibrateSensors", &libstp::sensors::ir::IRSensorCalibration::calibrateSensors);
+    .def_static("calibrateSensors", &libstp::sensors::ir::IRSensorCalibration::calibrateSensors);
 }

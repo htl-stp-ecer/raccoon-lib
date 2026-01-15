@@ -19,9 +19,8 @@ namespace libstp::sensors::ir {
         float blackMean = 0.0f;
         float whiteStdDev = 1.0f;
         float blackStdDev = 1.0f;
-        float calibrationFactor;
 
-        explicit IRSensor(const int& port, float calibrationFactor);
+        explicit IRSensor(const int& port);
 
         static float mean(const std::vector<float>& v);
 
