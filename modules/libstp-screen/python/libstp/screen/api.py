@@ -10,11 +10,7 @@ from libstp.hal import AnalogSensor
 from libstp.sensor_ir import IRSensor
 from libstp.sensor_ir import IRSensorCalibration
 from libstp.class_name_logger import ClassNameLogger
-from libstp import button
-
-
-
-
+from libstp import _button
 
 class RenderScreen(ClassNameLogger):
     def __init__(self, sensors: List[IRSensor]):
