@@ -14,8 +14,8 @@
 
 namespace libstp::kinematics::differential
 {
-    DifferentialKinematics::DifferentialKinematics(hal::motor::Motor* left_motor,
-                                                   hal::motor::Motor* right_motor,
+    DifferentialKinematics::DifferentialKinematics(hal::motor::IMotor* left_motor,
+                                                   hal::motor::IMotor* right_motor,
                                                    double wheelbase,
                                                    double wheelRadius,
                                                    double max_velocity,
@@ -57,7 +57,7 @@ namespace libstp::kinematics::differential
         return 2;
     }
 
-    MotorCommands DifferentialKinematics::applyCommand(const foundation::ChassisCmd& cmd, double dt)
+    MotorCommands DifferentialKinematics::applyCommand(const foundation::ChassisVelocity& cmd, double dt)
     {
         LIBSTP_LOG_TRACE(
             "DifferentialKinematics::applyCommand dt={} cmd vx={} wz={}",
@@ -118,22 +118,22 @@ namespace libstp::kinematics::differential
         return result;
     }
 
-    foundation::ChassisState DifferentialKinematics::estimateState() const
+    foundation::ChassisVelocity DifferentialKinematics::estimateState() const
     {
         const double w_left = left_motor_.adapter.getVelocity();
         const double w_right = right_motor_.adapter.getVelocity();
 
         const double vx = (w_left + w_right) * m_wheelRadius / 2.0;
-        const double w = (w_right - w_left) * m_wheelRadius / m_wheelbase;
+        const double wz = (w_right - w_left) * m_wheelRadius / m_wheelbase;
 
         LIBSTP_LOG_TRACE(
-            "DifferentialKinematics::estimateState wheel_left={} wheel_right={} vx={} w={}",
+            "DifferentialKinematics::estimateState wheel_left={} wheel_right={} vx={} wz={}",
             w_left,
             w_right,
             vx,
-            w);
+            wz);
 
-        return foundation::ChassisState{vx, 0.0, w};
+        return foundation::ChassisVelocity{vx, 0.0, wz};
     }
 
     void DifferentialKinematics::hardStop()

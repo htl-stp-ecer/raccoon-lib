@@ -4,6 +4,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <memory>
 
 #include "kinematics/kinematics.hpp"
 #include "foundation/types.hpp"
@@ -14,7 +15,7 @@ PYBIND11_MODULE(kinematics, m)
 {
     m.doc() = "Python bindings for libstp-kinematics";
 
-    py::class_<libstp::kinematics::IKinematics>(m, "IKinematics")
+    py::class_<libstp::kinematics::IKinematics, std::shared_ptr<libstp::kinematics::IKinematics>>(m, "IKinematics")
         .def("wheel_count", &libstp::kinematics::IKinematics::wheelCount)
         .def("apply_command", &libstp::kinematics::IKinematics::applyCommand,
              py::arg("cmd"), py::arg("dt"))

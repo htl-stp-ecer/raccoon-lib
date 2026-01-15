@@ -13,46 +13,41 @@ void init_strafe(py::module_& m)
     py::class_<StrafeConfig>(m, "StrafeConfig")
         .def(py::init<>())
         .def_readwrite("target_distance_m", &StrafeConfig::target_distance_m)
-        .def_readwrite("max_speed_mps", &StrafeConfig::max_speed_mps)
-        .def_readwrite("distance_tolerance_m", &StrafeConfig::distance_tolerance_m)
-        .def_readwrite("distance_kp", &StrafeConfig::distance_kp)
-        .def_readwrite("distance_ki", &StrafeConfig::distance_ki)
-        .def_readwrite("distance_kd", &StrafeConfig::distance_kd)
-        .def_readwrite("heading_kp", &StrafeConfig::heading_kp)
-        .def_readwrite("heading_ki", &StrafeConfig::heading_ki)
-        .def_readwrite("heading_kd", &StrafeConfig::heading_kd)
-        .def_readwrite("min_speed_mps", &StrafeConfig::min_speed_mps)
-        .def_readwrite("saturation_derating_factor", &StrafeConfig::saturation_derating_factor)
-        .def_readwrite("saturation_min_scale", &StrafeConfig::saturation_min_scale)
-        .def_readwrite("saturation_recovery_rate", &StrafeConfig::saturation_recovery_rate);
+        .def_readwrite("max_speed_mps", &StrafeConfig::max_speed_mps);
 
     py::class_<StrafeMotion, Motion, std::shared_ptr<StrafeMotion>>(m, "StrafeMotion")
         .def(py::init([](libstp::drive::Drive& drive,
                          libstp::odometry::IOdometry& odometry,
+                         const UnifiedMotionPidConfig& pid_config,
                          double distance_m,
                          double max_speed_mps)
         {
-            MotionContext ctx{drive, odometry};
+            MotionContext ctx{drive, odometry, pid_config};
             return std::make_shared<StrafeMotion>(ctx, distance_m, max_speed_mps);
         }),
             py::arg("drive"),
             py::arg("odometry"),
+            py::arg("pid_config"),
             py::arg("distance_m"),
             py::arg("max_speed_mps"),
             py::keep_alive<1, 2>(),
-            py::keep_alive<1, 3>())
+            py::keep_alive<1, 3>(),
+            py::keep_alive<1, 4>())
         .def(py::init([](libstp::drive::Drive& drive,
                          libstp::odometry::IOdometry& odometry,
+                         const UnifiedMotionPidConfig& pid_config,
                          const StrafeConfig& config)
         {
-            MotionContext ctx{drive, odometry};
+            MotionContext ctx{drive, odometry, pid_config};
             return std::make_shared<StrafeMotion>(ctx, config);
         }),
             py::arg("drive"),
             py::arg("odometry"),
+            py::arg("pid_config"),
             py::arg("config"),
             py::keep_alive<1, 2>(),
-            py::keep_alive<1, 3>())
+            py::keep_alive<1, 3>(),
+            py::keep_alive<1, 4>())
         .def("start", &StrafeMotion::start)
         .def("update", &StrafeMotion::update, py::arg("dt"))
         .def("is_finished", &StrafeMotion::isFinished);

@@ -4,12 +4,21 @@
 
 #pragma once
 
+#include <memory>
+
 #include "odometry/odometry.hpp"
-#include "hal/IMU.hpp"
+#include "hal/IIMU.hpp"
 #include "kinematics/kinematics.hpp"
 
 namespace libstp::odometry::fused
 {
+    /**
+     * Configuration for FusedOdometry
+     */
+    struct FusedOdometryConfig {
+        int imu_ready_timeout_ms{1000};  ///< Timeout waiting for IMU to be ready (milliseconds)
+    };
+
     /**
      * Fused odometry implementation combining IMU orientation with kinematics velocity
      *
@@ -27,9 +36,12 @@ namespace libstp::odometry::fused
     class FusedOdometry : public IOdometry
     {
     private:
-        // Hardware interfaces
-        hal::imu::IMU* imu_;
-        kinematics::IKinematics* kinematics_;
+        // Configuration
+        FusedOdometryConfig config_;
+
+        // Hardware interfaces (shared ownership)
+        std::shared_ptr<hal::imu::IIMU> imu_;
+        std::shared_ptr<kinematics::IKinematics> kinematics_;
 
         // Current state
         Eigen::Vector3f position_;           // Current position in world frame
@@ -49,10 +61,13 @@ namespace libstp::odometry::fused
     public:
         /**
          * Construct fused odometry with IMU and kinematics
-         * @param imu Pointer to IMU instance
-         * @param kinematics Pointer to kinematics model (provides velocity estimates)
+         * @param imu Shared pointer to IMU instance
+         * @param kinematics Shared pointer to kinematics model (provides velocity estimates)
+         * @param config Configuration options (optional)
          */
-        FusedOdometry(hal::imu::IMU* imu, kinematics::IKinematics* kinematics);
+        FusedOdometry(std::shared_ptr<hal::imu::IIMU> imu,
+                      std::shared_ptr<kinematics::IKinematics> kinematics,
+                      FusedOdometryConfig config = {});
 
         ~FusedOdometry() override = default;
 
