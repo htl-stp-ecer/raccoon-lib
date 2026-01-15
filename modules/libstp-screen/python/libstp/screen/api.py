@@ -62,7 +62,7 @@ class RenderScreen(ClassNameLogger):
         self.info("Press the button when ready.")
         try:
             while True:
-                pressed = button.is_pressed()
+                pressed = _button.is_pressed()
                 if pressed:
                     return True
                 await asyncio.sleep(0.01)
@@ -95,7 +95,7 @@ class RenderScreen(ClassNameLogger):
     async def __calibrateSensorsRequest(self, button_port=10, trie=0, MAX_ATTEMPTS=5):
         self.info("Calibration Request: Attempt " + str(trie) + " / " + str(MAX_ATTEMPTS))
         if trie == 0:
-            button.set_digital(button_port)
+            _button.set_digital(button_port)
 
         if self.cancel_event.is_set():
             return False
