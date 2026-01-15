@@ -7,24 +7,21 @@ from typing import Dict
 
 from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger
-from libstp.foundation import error, info, debug, initialize_logging
-
+from libstp.foundation import error, info, debug, warn, initialize_logging
+from libstp.sensor_ir import IRSensor, IRSensorCalibration
 # Core hardware
 Motor = _hal.Motor
 Servo = _hal.Servo
+AnalogSensor = _hal.AnalogSensor
+DigitalSensor = _hal.DigitalSensor
 
-# Re-export submodules for easier access
 from libstp import hal
 from libstp import foundation
-
-# Import step module
-from libstp.step import Step, StepProtocol, SimulationStep, SimulationStepDelta
-
-# Robot API
-from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol, MissionProtocol
-
-# Mission API
-from libstp.mission.api import Mission
+from libstp.step import *
+from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol
+from libstp.mission.api import Mission, MissionProtocol
+from libstp.timing import StepTimingTracker
+from libstp.screen.api import RenderScreen
 
 __all__ = [
     # Core hardware
@@ -48,8 +45,17 @@ __all__ = [
     "error",
     "info",
     "debug",
+    "warn",
     "initialize_logging",
     "ClassNameLogger",
+    "IRSensor",
+    "IRSensorCalibration",
+    "AnalogSensor",
+    "DigitalSensor",
+    "StepTimingTracker",
+    "RenderScreen",
+    "Sequential",
+    "seq"
 ]
 
 _PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}

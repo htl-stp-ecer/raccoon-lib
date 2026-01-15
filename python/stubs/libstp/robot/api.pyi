@@ -26,7 +26,7 @@ class GenericRobot(abc.ABC, libstp.class_name_logger.ClassNameLogger):
             - shutdown_mission: Mission to run after all missions complete
         
     """
-    __abstractmethods__: typing.ClassVar[frozenset]  # value = frozenset({'drive', 'defs', 'odometry'})
+    __abstractmethods__: typing.ClassVar[frozenset]  # value = frozenset({'odometry', 'defs', 'drive'})
     _abc_impl: typing.ClassVar[_abc._abc_data]  # value = <_abc._abc_data object>
     def __init__(self) -> None:
         """
