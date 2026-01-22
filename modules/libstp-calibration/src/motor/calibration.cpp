@@ -131,7 +131,7 @@ foundation::Feedforward MotorCalibrator::calibrateFeedforward()
     double kS_percent, r_squared;
     int sample_count;
     double kV_percent = velocity_cal_->findVelocityConstant(
-        kS_percent, r_squared, sample_count, calibration_start_time_, emergency_stop_);
+        kS_percent, r_squared, sample_count, calibration_start_time_, emergency_stop_, kS_threshold);
 
     // Store metrics
     result_.metrics.static_friction_forward = kS_percent;

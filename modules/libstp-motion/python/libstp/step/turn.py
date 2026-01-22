@@ -1,6 +1,6 @@
 import asyncio
 import math
-from libstp.motion import TurnMotion, TurnConfig
+from libstp.motion import TurnMotion, TurnConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
 from . import Step, SimulationStep, SimulationStepDelta
@@ -38,7 +38,7 @@ class Turn(Step):
 
         :param robot: The robot instance to interact with hardware
         """
-        motion = TurnMotion(robot.drive, robot.odometry, self.config)
+        motion = TurnMotion(robot.drive, robot.odometry, UnifiedMotionPidConfig(), self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 
         update_rate = 1 / 10  # 10 Hz

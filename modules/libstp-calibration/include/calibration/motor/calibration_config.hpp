@@ -31,7 +31,7 @@ namespace libstp::calibration
 
         // Safety parameters
         double max_test_distance_m{0.6};       // Emergency stop distance
-        double max_single_test_duration{30.0}; // Timeout per individual test
+        double max_single_test_duration{60.0}; // Timeout per individual test
         double max_calibration_duration{120.0}; // Total calibration timeout
         int max_retries{3};                    // Retry attempts on failure
 

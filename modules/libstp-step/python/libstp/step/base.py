@@ -36,6 +36,8 @@ class Step(ClassNameLogger):
                 duration = time.perf_counter() - start_time
                 try:
                     await tracker.record_execution(signature, duration)
+                except asyncio.CancelledError:
+                    self.debug("Timing recording cancelled - skipping")
                 except Exception as exc:
                     self.error(f"Failed to record step timing: {exc}")
 

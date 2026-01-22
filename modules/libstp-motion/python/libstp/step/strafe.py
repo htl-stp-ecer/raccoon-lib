@@ -1,5 +1,5 @@
 import asyncio
-from libstp.motion import StrafeMotion, StrafeConfig
+from libstp.motion import StrafeMotion, StrafeConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
 from . import Step, SimulationStep, SimulationStepDelta
@@ -37,7 +37,7 @@ class Strafe(Step):
 
         :param robot: The robot instance to interact with hardware
         """
-        motion = StrafeMotion(robot.drive, robot.odometry, self.config)
+        motion = StrafeMotion(robot.drive, robot.odometry, UnifiedMotionPidConfig(), self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 
         update_rate = 1 / 10  # 10 Hz

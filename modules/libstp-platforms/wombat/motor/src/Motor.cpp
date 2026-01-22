@@ -45,19 +45,13 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
 
     // Wake motor latch before sending a power command to avoid stop latch blocking.
     platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
-
-    int scaled = percent * 4; // -400 to 400
-    if (inverted_)
-    {
-        scaled = -scaled;
-    }
+    const int directionPercent = inverted_ ? -percent : percent;
     LIBSTP_LOG_DEBUG(
-        "Wombat Motor port={} setSpeed percent={} scaled={} inverted={}",
+        "Wombat Motor port={} setSpeed percent={} inverted={}",
         port_,
         percent,
-        scaled,
         inverted_);
-    platform::wombat::core::LcmDataWriter::instance().setMotor(port_, scaled);
+    platform::wombat::core::LcmDataWriter::instance().setMotor(port_, directionPercent);
 }
 
 int libstp::hal::motor::Motor::getPosition() const

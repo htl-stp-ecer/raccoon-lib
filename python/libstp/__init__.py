@@ -27,6 +27,7 @@ from libstp.kinematics_mecanum import MecanumKinematics
 from libstp.odometry_fused import FusedOdometry
 from libstp.foundation import Feedforward, MotorCalibration, PidGains
 from libstp.hal import IMU
+from libstp.kinematics_differential import DifferentialKinematics
 
 __all__ = [
     # Core hardware
@@ -70,7 +71,10 @@ __all__ = [
     "Feedforward",
     "MotorCalibration",
     "PidGains",
-    "IMU"
+    "IMU",
+    "calibrate_distance",
+    "calibrate_wait_for_light",
+    "DifferentialKinematics"
 ]
 
 _PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}
