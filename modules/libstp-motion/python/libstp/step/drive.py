@@ -1,5 +1,5 @@
 import asyncio
-from libstp.motion import DriveStraightMotion, DriveStraightConfig
+from libstp.motion import DriveStraightMotion, DriveStraightConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
 from . import Step, SimulationStep, SimulationStepDelta
@@ -40,7 +40,7 @@ class Drive(Step):
 
         :param robot: The robot instance to interact with hardware
         """
-        motion = DriveStraightMotion(robot.drive, robot.odometry, self.config)
+        motion = DriveStraightMotion(robot.drive, robot.odometry, UnifiedMotionPidConfig(), self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 
         update_rate = 1 / 10
@@ -73,6 +73,47 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     config.distance_m = -cm / 100.0  # Negative distance for backwards
     config.max_speed_mps = speed  # Speed should be positive (magnitude only)
     return Drive(config)
+
+
+def drive_forward_calibrated(cm: float, speed: float = 1.0) -> Drive:
+    """
+    Drive forward with distance calibration applied.
+
+    Uses the global distance scaler to adjust the requested distance
+    based on prior calibration. Run calibrate_distance() first to set
+    the scale factor.
+
+    Args:
+        cm: Distance to drive in centimeters
+        speed: Speed (0-1, default 1.0)
+
+    Returns:
+        Drive step with calibrated distance
+    """
+    from libstp.step.calibrate_distance import get_distance_scaler
+    scaled_cm = get_distance_scaler().apply(cm)
+    return drive_forward(scaled_cm, speed)
+
+
+def drive_backward_calibrated(cm: float, speed: float = 1.0) -> Drive:
+    """
+    Drive backward with distance calibration applied.
+
+    Uses the global distance scaler to adjust the requested distance
+    based on prior calibration. Run calibrate_distance() first to set
+    the scale factor.
+
+    Args:
+        cm: Distance to drive in centimeters
+        speed: Speed (0-1, default 1.0)
+
+    Returns:
+        Drive step with calibrated distance
+    """
+    from libstp.step.calibrate_distance import get_distance_scaler
+    scaled_cm = get_distance_scaler().apply(cm)
+    return drive_backward(scaled_cm, speed)
+
 
 #
 # def strafe_left(seconds: float, speed: float, do_correction=True) -> Drive:

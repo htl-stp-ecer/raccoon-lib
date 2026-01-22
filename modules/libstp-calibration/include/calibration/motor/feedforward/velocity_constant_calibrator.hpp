@@ -28,7 +28,8 @@ namespace libstp::calibration::feedforward
             double& r_squared,
             int& sample_count,
             double start_time,
-            bool& emergency_stop
+            bool& emergency_stop,
+            double static_friction_offset = 0.0
         );
 
     private:

@@ -4,6 +4,7 @@
 #include "calibration/motor/utils/math_utils.hpp"
 #include "calibration/motor/utils/time_utils.hpp"
 #include "foundation/logging.hpp"
+#include <algorithm>
 #include <chrono>
 #include <thread>
 
@@ -24,12 +25,21 @@ namespace libstp::calibration::feedforward
         double& r_squared,
         int& sample_count,
         double start_time,
-        bool& emergency_stop)
+        bool& emergency_stop,
+        double static_friction_offset)
     {
         std::vector<double> commands;
         std::vector<double> velocities;
 
-        for (double cmd : config_.velocity_test_commands) {
+        // Offset test commands by static friction to ensure motor actually moves
+        double offset = std::max(0.0, static_friction_offset + 5.0); // Add 5% margin above static friction
+        if (offset > 5.0) {
+            LIBSTP_LOG_INFO("Applying {:.1f}% offset to velocity tests (static friction={:.1f}%)",
+                        offset, static_friction_offset);
+        }
+
+        for (double base_cmd : config_.velocity_test_commands) {
+            double cmd = base_cmd + offset;
             if ((utils::getCurrentTime() - start_time) > config_.max_single_test_duration)
                 break;
 
