@@ -62,6 +62,6 @@ class Timeout(Step):
             self.error(f"Step timed out after {self.timeout_seconds} seconds")
         except Exception:
             raise
-def timeout(step: Step, seconds: float) -> Timeout:
+def timeout(step: StepProtocol, seconds: float) -> Timeout:
     """Apply a timeout to a step"""
     return Timeout(step=step, timeout_seconds=seconds)

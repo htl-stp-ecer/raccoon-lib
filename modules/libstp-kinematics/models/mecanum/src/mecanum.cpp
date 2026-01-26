@@ -280,4 +280,14 @@ namespace libstp::kinematics::mecanum
 
         return results;
     }
+
+    std::vector<hal::motor::IMotor*> MecanumKinematics::getMotors() const
+    {
+        return {
+            &const_cast<hal::motor::IMotor&>(front_left_motor_.adapter.motor()),
+            &const_cast<hal::motor::IMotor&>(front_right_motor_.adapter.motor()),
+            &const_cast<hal::motor::IMotor&>(back_left_motor_.adapter.motor()),
+            &const_cast<hal::motor::IMotor&>(back_right_motor_.adapter.motor())
+        };
+    }
 }

@@ -22,7 +22,7 @@ namespace libstp::calibration
         // Feedforward calibration parameters
         double static_friction_increment{0.5}; // Command increment for static friction search (%)
         double static_friction_max{40.0};      // Maximum command to try for static friction
-        double min_velocity_threshold{0.5};    // Minimum velocity (rad/s) to consider movement
+        double min_velocity_threshold{1.0};    // Minimum velocity (rad/s) to consider movement (above encoder noise)
         std::vector<double> velocity_test_commands{10.0, 15.0, 20.0, 25.0}; // Test speeds (%) - lower to avoid saturation
         double velocity_test_duration{1.5};    // Duration per velocity test
         double velocity_settling_time{0.5};    // Time to wait for settling
@@ -50,7 +50,7 @@ namespace libstp::calibration
             double kp_min{0.1};
             double kp_max{10.0};
             double ki_min{0.0};
-            double ki_max{15.0};     // Raised to allow calculated values through (was 5.0)
+            double ki_max{10.0};     // Motor velocity control typically needs moderate ki
             double kd_min{0.0};
             double kd_max{2.0};
         } ranges;

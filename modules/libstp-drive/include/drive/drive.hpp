@@ -4,11 +4,13 @@
 
 #pragma once
 #include <memory>
+#include <vector>
 
 #include "kinematics/kinematics.hpp"
 #include "foundation/types.hpp"
 #include "drive/limits.hpp"
 #include "foundation/config.hpp"
+#include "hal/IMotor.hpp"
 
 namespace libstp::drive
 {
@@ -29,6 +31,10 @@ namespace libstp::drive
 
         [[nodiscard]] kinematics::IKinematics& getKinematics() { return *kinematics_; }
         [[nodiscard]] const kinematics::IKinematics& getKinematics() const { return *kinematics_; }
+
+        [[nodiscard]] double getWheelRadius() const { return kinematics_->getWheelRadius(); }
+
+        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const { return kinematics_->getMotors(); }
 
     private:
         std::unique_ptr<kinematics::IKinematics> kinematics_;

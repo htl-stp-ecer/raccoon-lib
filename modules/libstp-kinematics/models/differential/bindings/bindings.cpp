@@ -47,5 +47,7 @@ PYBIND11_MODULE(kinematics_differential, m)
         .def("reset_encoders", &libstp::kinematics::differential::DifferentialKinematics::resetEncoders,
              "Reset encoder tracking to prevent stale deltas after odometry reset")
         .def("supports_lateral_motion", &libstp::kinematics::differential::DifferentialKinematics::supportsLateralMotion,
-             "Returns False since differential drives cannot strafe");
+             "Returns False since differential drives cannot strafe")
+        .def("get_wheel_radius", &libstp::kinematics::differential::DifferentialKinematics::getWheelRadius,
+             "Get the wheel radius in meters");
 }

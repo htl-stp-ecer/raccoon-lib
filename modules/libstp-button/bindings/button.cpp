@@ -3,6 +3,7 @@
 //
 #include <pybind11/pybind11.h>
 #include "button/button.hpp"
+#include "hal/Digital.hpp"
 
 namespace py = pybind11;
 
@@ -15,6 +16,10 @@ void init_button(py::module& m) {
     m.def("set_digital", [](int port) {
         libstp::button::Button::instance().setDigital(port);
     }, "Set the digital sensor port", py::arg("port"));
+
+    m.def("set_digital", [](libstp::hal::digital::DigitalSensor& sensor) {
+        libstp::button::Button::instance().setDigital(sensor.port);
+    }, "Set the digital sensor from existing sensor", py::arg("sensor"));
 
     m.def("wait_for_button_press", []() {
         libstp::button::Button::instance().waitForButtonPress();

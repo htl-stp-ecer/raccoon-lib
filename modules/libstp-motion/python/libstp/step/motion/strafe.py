@@ -2,7 +2,7 @@ import asyncio
 from libstp.motion import StrafeMotion, StrafeConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
-from . import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta
 
 
 class Strafe(Step):

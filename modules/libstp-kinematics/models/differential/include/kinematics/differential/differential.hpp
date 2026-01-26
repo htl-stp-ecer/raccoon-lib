@@ -56,5 +56,9 @@ namespace libstp::kinematics::differential
         // Calibration methods
         using kinematics::IKinematics::calibrateMotors;
         std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config) override;
+
+        [[nodiscard]] double getWheelRadius() const override { return m_wheelRadius; }
+
+        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
     };
 }

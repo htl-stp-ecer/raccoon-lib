@@ -17,5 +17,7 @@ void init_motor(const py::module& m)
         .def("brake", &libstp::hal::motor::Motor::brake)
         .def_property_readonly("port", &libstp::hal::motor::Motor::getPort)
         .def_property_readonly("inverted", &libstp::hal::motor::Motor::isInverted)
-        .def("get_calibration", &libstp::hal::motor::Motor::getCalibration);
+        .def("get_calibration", &libstp::hal::motor::Motor::getCalibration)
+        .def("set_calibration", &libstp::hal::motor::Motor::setCalibration, py::arg("calibration"),
+             "Update motor calibration (including ticks_to_rad)");
 }
