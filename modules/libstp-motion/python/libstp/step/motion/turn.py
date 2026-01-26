@@ -3,7 +3,7 @@ import math
 from libstp.motion import TurnMotion, TurnConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
-from . import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta
 
 
 class Turn(Step):
@@ -57,7 +57,7 @@ class Turn(Step):
             await asyncio.sleep(update_rate)
 
 
-def turn_ccw(degrees: float, speed: float = 1.0) -> Turn:
+def turn_left(degrees: float, speed: float = 1.0) -> Turn:
     """
     Turn counter-clockwise by specified degrees at a given speed.
 
@@ -74,7 +74,7 @@ def turn_ccw(degrees: float, speed: float = 1.0) -> Turn:
     return Turn(config)
 
 
-def turn_cw(degrees: float, speed: float = 1.0) -> Turn:
+def turn_right(degrees: float, speed: float = 1.0) -> Turn:
     """
     Turn clockwise by specified degrees at a given speed.
 

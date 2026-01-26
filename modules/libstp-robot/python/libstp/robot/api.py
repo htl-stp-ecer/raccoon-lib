@@ -3,7 +3,8 @@ from typing import Any, List, Optional, Protocol, TYPE_CHECKING, runtime_checkab
 import asyncio
 
 from libstp.class_name_logger import ClassNameLogger
-from libstp.hal import AnalogSensor
+from libstp.hal import AnalogSensor, DigitalSensor
+from libstp.timing import Synchronizer
 
 if TYPE_CHECKING:
     from libstp.drive import Drive
@@ -22,9 +23,12 @@ class RobotDefinitionsProtocol(Protocol):
             left_motor = Motor(port=0, ...)
             right_motor = Motor(port=1, ...)
             arm_servo = Servo(port=0, ...)
+
+    Drive motors are accessed via robot.drive.get_motors() instead of defs.
     """
 
     analog_sensors: List[AnalogSensor]
+    button: DigitalSensor
 
 class GenericRobot(ABC, ClassNameLogger):
     """
@@ -74,8 +78,19 @@ class GenericRobot(ABC, ClassNameLogger):
         """Optional mission to run after all missions complete."""
         return None
 
+    @property
+    def synchronizer(self) -> Synchronizer:
+        """Synchronizer for coordinating async tasks."""
+        if not hasattr(self, "_synchronizer"):
+            self._synchronizer = Synchronizer()
+        return self._synchronizer
+
     def __init__(self) -> None:
         """Initialize the robot and log configuration status."""
+        # Initialize button from defs
+        from libstp import button
+        button.set_digital(self.defs.button)
+
         if not self.missions:
             self.warn("Robot does not have any missions attached")
 
@@ -109,15 +124,19 @@ class GenericRobot(ABC, ClassNameLogger):
 
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
+        initialize_timer() # reset clock to 0
         if self.setup_mission is not None:
             self.info("Running setup mission")
             await self.setup_mission.run(self)
 
+        initialize_timer() # reset clock to 0 before main missions
+        self.synchronizer.start_recording()
         for mission in self.missions:
             self.info(f"Starting mission: {mission}")
             await mission.run(self)
             self.info(f"Finished mission: {mission}")
 
+        initialize_timer() # reset clock to 0 before shutdown mission
         if self.shutdown_mission is not None:
             self.info("Running shutdown mission")
             await self.shutdown_mission.run(self)

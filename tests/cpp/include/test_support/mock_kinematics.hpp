@@ -17,6 +17,8 @@ namespace libstp::test
         MOCK_METHOD(void, resetEncoders, (), (override));
         MOCK_METHOD(std::vector<calibration::CalibrationResult>, calibrateMotors,
                     (const calibration::CalibrationConfig&), (override));
+        MOCK_METHOD(double, getWheelRadius, (), (const, override));
+        MOCK_METHOD(std::vector<hal::motor::IMotor*>, getMotors, (), (const, override));
 
         // Configurable behavior helpers
         void setSupportsLateral(bool supports) {
@@ -31,10 +33,15 @@ namespace libstp::test
             ON_CALL(*this, wheelCount()).WillByDefault(testing::Return(count));
         }
 
+        void setWheelRadius(double radius) {
+            ON_CALL(*this, getWheelRadius()).WillByDefault(testing::Return(radius));
+        }
+
         // Default setup for differential drive
         void setupAsDifferential() {
             setWheelCount(2);
             setSupportsLateral(false);
+            setWheelRadius(0.05); // 50mm default wheel radius
             setEstimatedState(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             ON_CALL(*this, applyCommand(testing::_, testing::_))
                 .WillByDefault(testing::Return(kinematics::MotorCommands{}));
@@ -44,6 +51,7 @@ namespace libstp::test
         void setupAsMecanum() {
             setWheelCount(4);
             setSupportsLateral(true);
+            setWheelRadius(0.05); // 50mm default wheel radius
             setEstimatedState(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             ON_CALL(*this, applyCommand(testing::_, testing::_))
                 .WillByDefault(testing::Return(kinematics::MotorCommands{}));

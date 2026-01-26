@@ -197,4 +197,12 @@ namespace libstp::kinematics::differential
 
         return results;
     }
+
+    std::vector<hal::motor::IMotor*> DifferentialKinematics::getMotors() const
+    {
+        return {
+            &const_cast<hal::motor::IMotor&>(left_motor_.adapter.motor()),
+            &const_cast<hal::motor::IMotor&>(right_motor_.adapter.motor())
+        };
+    }
 }

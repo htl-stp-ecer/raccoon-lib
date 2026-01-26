@@ -2,7 +2,7 @@ import asyncio
 from libstp.motion import DriveStraightMotion, DriveStraightConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
-from . import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta
 
 
 class Drive(Step):
@@ -59,8 +59,42 @@ class Drive(Step):
             await asyncio.sleep(update_rate)
 
 
+def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
+    """
+    Internal: Drive forward without calibration check.
+
+    Used by calibrate_distance() to perform the calibration drive.
+    Do not use directly - use drive_forward() instead.
+    """
+    config = DriveStraightConfig()
+    config.distance_m = cm / 100.0
+    config.max_speed_mps = speed
+    return Drive(config)
+
+
 def drive_forward(cm: float, speed: float = 1.0) -> Drive:
-    """Drive forward for a specified duration at a given speed"""
+    """
+    Drive forward a specified distance.
+
+    Requires distance calibration to be performed first via calibrate_distance().
+    Raises CalibrationRequiredError if not calibrated.
+
+    Note: Calibration is now applied via per-wheel ticks_to_rad adjustment,
+    so no runtime scaling is needed here. The calibration affects odometry
+    directly through the motor's ticks_to_rad value.
+
+    Args:
+        cm: Distance to drive in centimeters
+        speed: Speed (0-1, default 1.0)
+
+    Returns:
+        Drive step with calibrated distance
+
+    Raises:
+        CalibrationRequiredError: If calibrate_distance() has not been run
+    """
+    from libstp.step.calibrate_distance import require_distance_calibration
+    require_distance_calibration()
     config = DriveStraightConfig()
     config.distance_m = cm / 100.0
     config.max_speed_mps = speed
@@ -68,51 +102,32 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
 
 
 def drive_backward(cm: float, speed: float = 1.0) -> Drive:
-    """Drive backward for a specified duration at a given speed"""
+    """
+    Drive backward a specified distance.
+
+    Requires distance calibration to be performed first via calibrate_distance().
+    Raises CalibrationRequiredError if not calibrated.
+
+    Note: Calibration is now applied via per-wheel ticks_to_rad adjustment,
+    so no runtime scaling is needed here. The calibration affects odometry
+    directly through the motor's ticks_to_rad value.
+
+    Args:
+        cm: Distance to drive in centimeters
+        speed: Speed (0-1, default 1.0)
+
+    Returns:
+        Drive step with calibrated distance
+
+    Raises:
+        CalibrationRequiredError: If calibrate_distance() has not been run
+    """
+    from libstp.step.calibrate_distance import require_distance_calibration
+    require_distance_calibration()
     config = DriveStraightConfig()
     config.distance_m = -cm / 100.0  # Negative distance for backwards
-    config.max_speed_mps = speed  # Speed should be positive (magnitude only)
+    config.max_speed_mps = speed
     return Drive(config)
-
-
-def drive_forward_calibrated(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Drive forward with distance calibration applied.
-
-    Uses the global distance scaler to adjust the requested distance
-    based on prior calibration. Run calibrate_distance() first to set
-    the scale factor.
-
-    Args:
-        cm: Distance to drive in centimeters
-        speed: Speed (0-1, default 1.0)
-
-    Returns:
-        Drive step with calibrated distance
-    """
-    from libstp.step.calibrate_distance import get_distance_scaler
-    scaled_cm = get_distance_scaler().apply(cm)
-    return drive_forward(scaled_cm, speed)
-
-
-def drive_backward_calibrated(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Drive backward with distance calibration applied.
-
-    Uses the global distance scaler to adjust the requested distance
-    based on prior calibration. Run calibrate_distance() first to set
-    the scale factor.
-
-    Args:
-        cm: Distance to drive in centimeters
-        speed: Speed (0-1, default 1.0)
-
-    Returns:
-        Drive step with calibrated distance
-    """
-    from libstp.step.calibrate_distance import get_distance_scaler
-    scaled_cm = get_distance_scaler().apply(cm)
-    return drive_backward(scaled_cm, speed)
 
 
 #

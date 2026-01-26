@@ -32,6 +32,16 @@ class DistanceCalibrationResult:
 
 
 @dataclass
+class LightSensorCalibrationResult:
+    """Result of light sensor calibration during distance calibration."""
+    sensor_port: int
+    black_threshold: float
+    white_threshold: float
+    num_samples: int
+    success: bool
+
+
+@dataclass
 class LCMResponse:
     """Response from an LCM message."""
     value: str

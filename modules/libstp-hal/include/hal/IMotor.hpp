@@ -22,6 +22,7 @@ namespace libstp::hal::motor
         virtual void brake() = 0;
 
         [[nodiscard]] virtual const foundation::MotorCalibration& getCalibration() const = 0;
+        virtual void setCalibration(const foundation::MotorCalibration& calibration) = 0;
         [[nodiscard]] virtual int getPort() const = 0;
         [[nodiscard]] virtual bool isInverted() const = 0;
     };

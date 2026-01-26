@@ -43,5 +43,8 @@ class Defs:
         ),
     )
 
+    # List of drive motors for distance calibration
+    drive_motors = [left_motor, right_motor]
+
 
 __all__ = ["Defs"]

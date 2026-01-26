@@ -4,6 +4,7 @@
 #include "drive/drive.hpp"
 #include "foundation/types.hpp"
 #include "kinematics/kinematics.hpp"
+#include "hal/Motor.hpp"
 
 #include <sstream>
 namespace py = pybind11;
@@ -21,5 +22,17 @@ void init_drive(const py::module& m)
         .def("estimate_state", &libstp::drive::Drive::estimateState)
         .def("wheel_count", &libstp::drive::Drive::wheelCount)
         .def("soft_stop", &libstp::drive::Drive::softStop)
-        .def("hard_stop", &libstp::drive::Drive::hardStop);
+        .def("hard_stop", &libstp::drive::Drive::hardStop)
+        .def("get_wheel_radius", &libstp::drive::Drive::getWheelRadius,
+             "Get the wheel radius from kinematics in meters")
+        .def("get_motors", [](libstp::drive::Drive& self) {
+            auto motors = self.getMotors();
+            std::vector<libstp::hal::motor::Motor*> result;
+            result.reserve(motors.size());
+            for (auto* m : motors) {
+                result.push_back(static_cast<libstp::hal::motor::Motor*>(m));
+            }
+            return result;
+        }, py::return_value_policy::reference,
+           "Get all drive motors managed by the kinematics");
 }

@@ -32,6 +32,7 @@ namespace libstp::hal::motor
         void brake() override;
 
         [[nodiscard]] const foundation::MotorCalibration& getCalibration() const override;
+        void setCalibration(const foundation::MotorCalibration& calibration) override;
         [[nodiscard]] int getPort() const override { return port_; }
         [[nodiscard]] bool isInverted() const override { return inverted_; }
 

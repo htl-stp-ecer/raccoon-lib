@@ -79,3 +79,9 @@ const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibr
 {
     return calibration_;
 }
+
+void libstp::hal::motor::Motor::setCalibration(const foundation::MotorCalibration& calibration)
+{
+    calibration_ = calibration;
+    LIBSTP_LOG_INFO("Mock Motor port={} setCalibration ticks_to_rad={}", port_, calibration_.ticks_to_rad);
+}

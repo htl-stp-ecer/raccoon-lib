@@ -53,5 +53,7 @@ PYBIND11_MODULE(kinematics_mecanum, m)
         .def("reset_encoders", &libstp::kinematics::mecanum::MecanumKinematics::resetEncoders,
              "Reset encoder tracking to prevent stale deltas after odometry reset")
         .def("supports_lateral_motion", &libstp::kinematics::mecanum::MecanumKinematics::supportsLateralMotion,
-             "Returns True since mecanum drives can strafe");
+             "Returns True since mecanum drives can strafe")
+        .def("get_wheel_radius", &libstp::kinematics::mecanum::MecanumKinematics::getWheelRadius,
+             "Get the wheel radius in meters");
 }

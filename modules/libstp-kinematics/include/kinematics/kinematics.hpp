@@ -9,6 +9,7 @@
 #include "calibration/motor/calibration_config.hpp"
 #include "calibration/motor/calibration_result.hpp"
 #include "foundation/types.hpp"
+#include "hal/IMotor.hpp"
 
 namespace libstp::kinematics
 {
@@ -49,5 +50,17 @@ namespace libstp::kinematics
             const calibration::CalibrationConfig& config) = 0;
 
         virtual std::vector<calibration::CalibrationResult> calibrateMotors();
+
+        /**
+         * @brief Get the wheel radius used by this kinematics model
+         * @return Wheel radius in meters
+         */
+        [[nodiscard]] virtual double getWheelRadius() const = 0;
+
+        /**
+         * @brief Get pointers to all drive motors managed by this kinematics model
+         * @return Vector of motor pointers (non-owning)
+         */
+        [[nodiscard]] virtual std::vector<hal::motor::IMotor*> getMotors() const = 0;
     };
 }

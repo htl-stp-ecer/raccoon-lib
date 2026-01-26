@@ -60,8 +60,9 @@ namespace libstp::calibration::pid
         foundation::PidGains pid;
 
         if (params.delay > 0.001 && params.K > 0.001) {
+            // Simplified tuning for motor velocity control
             pid.kp = 0.6 * params.tau / (params.K * params.delay);
-            pid.ki = pid.kp / (4.0 * params.delay);
+            pid.ki = 0.5 * pid.kp;  // Conservative: ki proportional to kp
             pid.kd = pid.kp * params.delay / 3.0;
         } else {
             LIBSTP_LOG_WARN("Invalid step response parameters, using fallback gains");

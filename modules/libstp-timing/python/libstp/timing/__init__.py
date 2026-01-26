@@ -1,6 +1,7 @@
 from .tracker import StepTimingTracker, AnomalyCallback
 from .models import AnomalyDetection, StepStatistics
 from .config import TimingConfig
+from .synchronizer import Synchronizer
 
 __all__ = [
     "StepTimingTracker",
@@ -8,4 +9,5 @@ __all__ = [
     "AnomalyDetection",
     "StepStatistics",
     "TimingConfig",
+    "Synchronizer"
 ]
