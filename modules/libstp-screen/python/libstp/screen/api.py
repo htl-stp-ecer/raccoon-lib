@@ -12,23 +12,33 @@ from libstp.hal import AnalogSensor
 from libstp.sensor_ir import IRSensor
 from libstp.sensor_ir import IRSensorCalibration
 from libstp.class_name_logger import ClassNameLogger
-from libstp import button as  _button
+from libstp import button as _button
+from libstp import calibration_store as CalibrationStore
+from libstp.calibration_store import CalibrationType
+
+import os
 
 
 @dataclass
 class WFLCalibrationResult:
     """Result of wait-for-light sensor calibration."""
-    light_off: float    # Sensor value when covered (dark)
-    light_on: float     # Sensor value when exposed to light
-    threshold: float    # Computed threshold for detection
+    light_off: float  # Sensor value when covered (dark)
+    light_on: float  # Sensor value when exposed to light
+    threshold: float  # Computed threshold for detection
+
+
+@dataclass
+class IRSensorCalibrationResult:
+    whiteThresh: float
+    blackThresh: float
 
 
 @dataclass
 class DistanceCalibrationResult:
     """Result of distance calibration."""
-    requested_distance_cm: float    # What we asked the robot to drive
-    measured_distance_cm: float     # What the human measured
-    scale_factor: float             # measured / requested
+    requested_distance_cm: float  # What we asked the robot to drive
+    measured_distance_cm: float  # What the human measured
+    scale_factor: float  # measured / requested
 
 
 @dataclass
@@ -36,6 +46,7 @@ class LCMResponse:
     """Response from an LCM message."""
     value: str
     reason: str
+
 
 class RenderScreen(ClassNameLogger):
     def __init__(self, sensors: List[IRSensor]):
@@ -49,7 +60,6 @@ class RenderScreen(ClassNameLogger):
         self.LCM.subscribe("libstp/screen_render/cancel", self.__handle_cancel_request)
         asyncio.create_task(self.__lcm_pump_async())
         self._original_sigint_handler = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, self.__handle_sigint)
 
     def __handle_sigint(self, signum, frame):
         self.cancel_event.set()
@@ -89,28 +99,6 @@ class RenderScreen(ClassNameLogger):
         except asyncio.CancelledError:
             return False
 
-    async def __wait_for_lcm_message(self, timeout = 10.0):
-        loop = asyncio.get_running_loop()
-        future = loop.create_future()
-        def handler(channel, data):
-            msg = screen_render_answer_t.decode(data)
-            if msg.screen_name == self.screen_name and not future.done():
-                loop.call_soon_threadsafe(future.set_result, msg)
-        sub = self.LCM.subscribe("libstp/screen_render/answer", handler)
-        try:
-            while not self.cancel_event.is_set():
-                try:
-                    msg = await asyncio.wait_for(future, timeout=timeout)
-                    return msg.value
-                except asyncio.TimeoutError:
-                    return "retry"
-            raise asyncio.CancelledError()
-        finally:
-            self.LCM.unsubscribe(sub)
-
-    async def __wait_for_finish(self, timeout = 10.0):
-        return await self.__wait_for_lcm_message(timeout=timeout)
-
     async def __wait_for_lcm_response(self, timeout: float = 10.0) -> LCMResponse:
         """Wait for LCM message and return both value and reason."""
         loop = asyncio.get_event_loop()
@@ -118,6 +106,7 @@ class RenderScreen(ClassNameLogger):
 
         def handler(channel, data):
             msg = screen_render_answer_t.decode(data)
+            self.info(msg.screen_name)
             if msg.screen_name == self.screen_name and not future.done():
                 self.debug(msg.reason)
                 loop.call_soon_threadsafe(future.set_result, msg)
@@ -126,39 +115,100 @@ class RenderScreen(ClassNameLogger):
 
         try:
             msg = await asyncio.wait_for(future, timeout=timeout)
+            self.info("Message received")
             return LCMResponse(value=msg.value, reason=msg.reason)
         except asyncio.TimeoutError:
             return LCMResponse(value="retry", reason="timeout")
         finally:
             self.LCM.unsubscribe(sub)
 
-    async def __calibrateSensorsRequest(self, button_port=10, trie=0, MAX_ATTEMPTS=5):
-        self.info("Calibration Request: Attempt " + str(trie) + " / " + str(MAX_ATTEMPTS))
-        if trie == 0:
-            _button.set_digital(button_port)
 
-    async def calibrate_black_white(self, trie=0) -> None:
+    async def __calibrate_sensors_request(self, usePre=False, button_port=10, trie=0, MAX_ATTEMPTS=5):
+        if not usePre:
+            self.info(f"Calibration Request: Attempt {trie} / {MAX_ATTEMPTS}")
+            if trie == 0:
+                self.send_state({"type": "IR", "state": "overview"})
+                _button.set_digital(button_port)
+            if self.cancel_event.is_set():
+                return "canceled"
+
+            if not await self.__wait_for_button(button_port):
+                return "canceled"
+
+        loop = asyncio.get_running_loop()
+
+        try:
+            result = await loop.run_in_executor(
+                None,
+                IRSensorCalibration.calibrateSensors,
+                self.sensors,
+                5.0,
+                usePre
+            )
+        except asyncio.CancelledError:
+            return "canceled"
+
+        if not result:
+            trie += 1
+            if trie >= MAX_ATTEMPTS:
+                self.send_state({"type": "IR", "state": "tooManyAttempts"})
+                return "tooManyAttempts"
+
+            self.send_state({"type": "IR", "state": "retrying"})
+            return await self.__calibrate_sensors_request(
+                usePre, button_port, trie, MAX_ATTEMPTS
+            )
+
+        return "success"
+
+    def __check_for_stored_readings(self, calibrationType: CalibrationType):
+        return CalibrationStore.has_readings(calibrationType)
+
+    async def calibrate_black_white(self, trie=0, MAX_ATTEMPTS=5) -> Optional[IRSensorCalibrationResult]:
         self.cancel_event.clear()
         self._calibration_task = asyncio.current_task()
         self.change_screen("calibrate_sensors")
-        self.send_state({"type": "IR", "state": "overview"})
-        result = await self.__calibrateSensorsRequest(MAX_ATTEMPTS=MAX_ATTEMPTS)
-        if not result:
-            self.info("Calibration canceled")
-            self.send_state({"type": "IR", "state": "canceled"})
-            return
+        self.send_state({"type": "IR", "state": "modeChoice",
+                         "hasValues": self.__check_for_stored_readings(CalibrationType.IR_SENSOR)})
+
         try:
-            msg = await self.__wait_for_finish(timeout=120)
+            mode = await self.__wait_for_lcm_response(timeout=120)
         except asyncio.CancelledError:
             self.send_state({"type": "IR", "state": "canceled"})
-            return
+            return None
+        use_pre = mode.value == "useExisting"
+        result = await self.__calibrate_sensors_request(
+            usePre=use_pre,
+            MAX_ATTEMPTS=MAX_ATTEMPTS
+        )
+
+        if result == "tooManyAttempts":
+            self.info("Calibration failed: too many attempts")
+            return None
+
+        if result != "success":
+            self.info("Calibration canceled")
+            self.send_state({"type": "IR", "state": "canceled"})
+            return None
+
+        try:
+            msg = await self.__wait_for_lcm_response(timeout=120)
+        except asyncio.CancelledError:
+            self.send_state({"type": "IR", "state": "canceled"})
+            return None
         except asyncio.TimeoutError:
-            msg = "retry"
-        if msg == "retry":
+            msg = LCMResponse(value="retry", reason="Timeout")
+
+        if msg.value == "retry":
             trie += 1
             if trie >= 5:
-                return
-            await self.calibrate_black_white(trie)
+                return None
+            return await self.calibrate_black_white(trie)
+
+        return IRSensorCalibrationResult(
+            whiteThresh=self.sensors[0].whiteThreshold,
+            blackThresh=self.sensors[0].blackThreshold
+        )
 
     async def calibrate_wfl(self, sensor: AnalogSensor, trie: int = 0) -> Optional[WFLCalibrationResult]:
         """
@@ -200,13 +250,8 @@ class RenderScreen(ClassNameLogger):
 
         # State 3: Confirm with editable values
         self.send_state({
-            "port": port,
-            "type": "waitForLight",
-            "state": "confirm",
-            "wfl_off_value": wfl_off_value,
-            "wfl_on_value": wfl_on_value
-        })
-
+            "port": port, "type": "waitForLight", "state": "confirm", "wfl_off_value": wfl_off_value,
+            "wfl_on_value": wfl_on_value})
         try:
             msg = await self.__wait_for_finish(timeout=120)
         except asyncio.CancelledError:
@@ -229,7 +274,6 @@ class RenderScreen(ClassNameLogger):
             light_on=wfl_on_value,
             threshold=threshold
         )
-
 
     async def __lcm_pump_async(self):
         while True:
