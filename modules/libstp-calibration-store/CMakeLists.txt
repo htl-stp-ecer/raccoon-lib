@@ -1,0 +1,1 @@
+register_libstp_module(calibration_store "False" "foundation;yaml-cpp")

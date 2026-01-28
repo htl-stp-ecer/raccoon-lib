@@ -1,1 +1,1 @@
-register_libstp_module(sensor_ir "FALSE" "hal;button;kmeans")
+register_libstp_module(sensor_ir "FALSE" "hal;button;kmeans;calibration_store")

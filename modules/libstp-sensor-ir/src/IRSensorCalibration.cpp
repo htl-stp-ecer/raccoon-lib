@@ -1,37 +1,44 @@
-//
-// Created by eternalRose on 12/6/25.
-//
-
 #include "IRSensorCalibration.hpp"
 
 #include <chrono>
 #include <thread>
 #include <hal/ScreenRender.hpp>
+
+#include "CalibrationStore.hpp"
 #include "button/button.hpp"
 #include "foundation/logging.hpp"
 
 using namespace libstp::sensors::ir;
 
 bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensors,
-                                           float durationSeconds) {
+                                           float durationSeconds,
+                                           bool usePre) {
     hal::screen_render::ScreenRender::instance().setCurrentScreenSetting("calibrate_sensors");
 
-    hal::screen_render::ScreenRender::instance().sendState(
-        R"({"type":"IR","state":"readData"})"
-    );
-
-    std::vector<float> values = collectValues(sensors, durationSeconds);
-    if (values.empty()) {
-        LIBSTP_LOG_WARN("No sensor values collected.");
-        return false;
-    }
-
+    std::vector<float> values;
     bool allGood = true;
 
-    for (auto *sensor: sensors) {
-        if (!sensor->calibrate(values)) {
-            allGood = false;
-            break;
+    if (usePre) {
+        values = calibration_store::CalibrationStore::instance().getReadings(calibration_store::CalibrationType::IR_SENSOR);
+        for (auto *sensor: sensors) {
+            sensor->whiteThreshold = values[0];
+            sensor->blackThreshold = values[1];
+        }
+    } else {
+        hal::screen_render::ScreenRender::instance().sendState(
+    R"({"type":"IR","state":"readData"})"
+        );
+        values = collectValues(sensors, durationSeconds);
+        if (values.empty()) {
+            LIBSTP_LOG_WARN("No sensor values collected.");
+            return false;
+        }
+
+        for (auto *sensor: sensors) {
+            if (!sensor->calibrate(values)) {
+                allGood = false;
+                break;
+            }
         }
     }
 
@@ -52,7 +59,9 @@ bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensor
                 << R"("black_thresh":)" << sensors[0]->blackThreshold << ","
                 << R"("white_thresh":)" << sensors[0]->whiteThreshold
                 << "}";
-
+        calibration_store::CalibrationStore::instance().storeReading(sensors[0]->blackThreshold,
+                                                                     sensors[0]->whiteThreshold,
+                                                                     calibration_store::CalibrationType::IR_SENSOR);
         hal::screen_render::ScreenRender::instance().sendState(json.str());
         return true;
     }
