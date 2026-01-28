@@ -15,6 +15,6 @@ namespace libstp::sensors::ir {
     public:
         static std::vector<float> collectValues(const std::vector<IRSensor*>& sensors, float durationSeconds = 5.0f);
 
-        static bool calibrateSensors(const std::vector<IRSensor*>& sensors, float durationSeconds = 5.0f);
+        static bool calibrateSensors(const std::vector<IRSensor*>& sensors, float durationSeconds = 5.0f, bool usePre = false);
     };
 }

@@ -14,5 +14,7 @@ void init_ir_sensor(py::module& m) {
              py::arg("port"))
         .def("setCalibration", &libstp::sensors::ir::IRSensor::setCalibration)
         .def("probabilityOfBlack", &libstp::sensors::ir::IRSensor::probabilityOfBlack)
-        .def("probabilityOfWhite", &libstp::sensors::ir::IRSensor::probabilityOfWhite);
+        .def("probabilityOfWhite", &libstp::sensors::ir::IRSensor::probabilityOfWhite)
+        .def("whiteThreshold", []() { return &libstp::sensors::ir::IRSensor::whiteThreshold;})
+        .def("blackThreshold", []() { return &libstp::sensors::ir::IRSensor::blackThreshold;});
 }
