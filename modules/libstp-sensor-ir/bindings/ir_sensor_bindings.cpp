@@ -19,5 +19,7 @@ void init_ir_sensor(py::module& m) {
         .def_readonly("blackThreshold", &libstp::sensors::ir::IRSensor::blackThreshold)
         .def_readonly("whiteThreshold", &libstp::sensors::ir::IRSensor::whiteThreshold)
         .def("probabilityOfBlack", &libstp::sensors::ir::IRSensor::probabilityOfBlack)
-        .def("probabilityOfWhite", &libstp::sensors::ir::IRSensor::probabilityOfWhite);
+        .def("probabilityOfWhite", &libstp::sensors::ir::IRSensor::probabilityOfWhite)
+        .def("whiteThreshold", []() { return &libstp::sensors::ir::IRSensor::whiteThreshold;})
+        .def("blackThreshold", []() { return &libstp::sensors::ir::IRSensor::blackThreshold;});
 }
