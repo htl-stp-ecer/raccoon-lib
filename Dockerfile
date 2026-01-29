@@ -1,5 +1,5 @@
 
-FROM --platform=linux/arm64/v8 python:3.11-bookworm
+FROM --platform=linux/arm64/v8 python:3.13-trixie
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TZ=Europe/Vienna
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ >/etc/timezone

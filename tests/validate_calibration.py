@@ -12,7 +12,7 @@ def test_imports():
             CalibrationRequiredError,
             PerWheelCalibration,
             is_distance_calibrated,
-            require_distance_calibration,
+            check_distance_calibration,
             reset_distance_calibration,
         )
         print("OK")
@@ -27,7 +27,7 @@ def test_calibration_functions():
     try:
         from libstp.step.calibrate_distance import (
             is_distance_calibrated,
-            require_distance_calibration,
+            check_distance_calibration,
             reset_distance_calibration,
             CalibrationRequiredError
         )
@@ -36,7 +36,7 @@ def test_calibration_functions():
         assert is_distance_calibrated() == False, "Expected uncalibrated"
 
         try:
-            require_distance_calibration()
+            check_distance_calibration()
             print("FAILED: Should have raised CalibrationRequiredError")
             return False
         except CalibrationRequiredError:

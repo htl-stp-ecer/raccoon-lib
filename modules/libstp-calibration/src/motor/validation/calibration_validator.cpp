@@ -89,6 +89,11 @@ namespace libstp::calibration::validation
         const foundation::PidGains& pid,
         const foundation::Feedforward& ff)
     {
+        if (!config_.validate_parameter_ranges) {
+            LIBSTP_LOG_INFO("Parameter range validation disabled");
+            return true;
+        }
+
         bool valid = true;
 
         if (ff.kS < config_.ranges.kS_min || ff.kS > config_.ranges.kS_max) {

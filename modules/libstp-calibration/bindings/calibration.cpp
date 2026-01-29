@@ -42,6 +42,8 @@ PYBIND11_MODULE(calibration, m)
                       "Duration of validation test (default: 2.0s)")
         .def_readwrite("validation_max_error", &libstp::calibration::CalibrationConfig::validation_max_error,
                       "Maximum acceptable tracking error (default: 0.2 = 20%)")
+        .def_readwrite("validate_parameter_ranges", &libstp::calibration::CalibrationConfig::validate_parameter_ranges,
+                      "Enforce feedforward/PID parameter ranges (default: False)")
         .def("__repr__", [](const libstp::calibration::CalibrationConfig &c) {
             return "<CalibrationConfig use_relay=" + std::string(c.use_relay_feedback ? "True" : "False") + ">";
         });

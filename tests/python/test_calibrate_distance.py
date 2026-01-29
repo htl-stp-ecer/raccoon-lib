@@ -32,16 +32,16 @@ class TestCalibrationFunctions:
         assert is_distance_calibrated() is False
 
     @requires_libstp
-    def test_require_distance_calibration_raises_when_not_calibrated(self):
-        """Test that require_distance_calibration raises when not calibrated."""
+    def test_check_distance_calibration_raises_when_not_calibrated(self):
+        """Test that check_distance_calibration raises when not calibrated."""
         from libstp.step.calibrate_distance import (
             reset_distance_calibration,
-            require_distance_calibration,
+            check_distance_calibration,
             CalibrationRequiredError
         )
         reset_distance_calibration()
         with pytest.raises(CalibrationRequiredError):
-            require_distance_calibration()
+            check_distance_calibration()
 
     @requires_libstp
     def test_reset_distance_calibration(self):
@@ -361,7 +361,7 @@ class TestExportedSymbols:
             CalibrationRequiredError,
             PerWheelCalibration,
             is_distance_calibrated,
-            require_distance_calibration,
+            check_distance_calibration,
             reset_distance_calibration,
         )
 
@@ -371,5 +371,5 @@ class TestExportedSymbols:
         assert CalibrationRequiredError is not None
         assert PerWheelCalibration is not None
         assert is_distance_calibrated is not None
-        assert require_distance_calibration is not None
+        assert check_distance_calibration is not None
         assert reset_distance_calibration is not None

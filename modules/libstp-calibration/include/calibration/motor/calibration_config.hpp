@@ -39,6 +39,9 @@ namespace libstp::calibration
         double validation_duration{2.0};       // Duration of validation test
         double validation_max_error{0.2};      // Maximum acceptable tracking error (20%)
 
+        // Parameter range validation
+        bool validate_parameter_ranges{false}; // Enforce ranges below when true
+
         // Value range validation (normalized units 0-1 for feedforward)
         struct ValidationRanges {
             double kS_min{0.0};      // Static friction in normalized units [0-1]
