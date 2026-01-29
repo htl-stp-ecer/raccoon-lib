@@ -4,7 +4,6 @@ from libstp.robot.api import GenericRobot
 
 from .. import Step, SimulationStep, SimulationStepDelta
 
-
 class Drive(Step):
     def __init__(self,
                  config: DriveStraightConfig,
@@ -128,24 +127,3 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     config.distance_m = -cm / 100.0  # Negative distance for backwards
     config.max_speed_mps = speed
     return Drive(config)
-
-
-#
-# def strafe_left(seconds: float, speed: float, do_correction=True) -> Drive:
-#     """Strafe left for a specified duration at a given speed"""
-#     return Drive(for_seconds_condition(seconds), Speed(0, speed, 0), do_correction)
-#
-#
-# def strafe_right(seconds: float, speed: float, do_correction=True) -> Drive:
-#     """Strafe right for a specified duration at a given speed"""
-#     return Drive(for_seconds_condition(seconds), Speed(0, -speed, 0), do_correction)
-#
-#
-# def turn_cw(degrees: float, speed: float, do_correction=True) -> Drive:
-#     """Turn clockwise by specified degrees at a given speed"""
-#     return Drive(for_cw_condition(degrees), Speed(0, 0, -speed), do_correction)
-#
-#
-# def turn_ccw(degrees: float, speed: float, do_correction=True) -> Drive:
-#     """Turn counter-clockwise by specified degrees at a given speed"""
-#     return Drive(for_ccw_condition(degrees), Speed(0, 0, speed), do_correction)
