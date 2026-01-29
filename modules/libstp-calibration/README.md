@@ -111,6 +111,7 @@ calibration/
 ```cpp
 libstp::calibration::CalibrationConfig config;
 config.use_relay_feedback = false;  // Use step response (conservative)
+config.validate_parameter_ranges = false;  // Disable strict range checks (default)
 config.velocity_test_commands = {10.0, 15.0, 20.0};  // Test speeds (%)
 config.max_calibration_duration = 120.0;  // Timeout (seconds)
 

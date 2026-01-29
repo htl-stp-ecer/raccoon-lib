@@ -5,6 +5,7 @@ import asyncio
 from libstp.class_name_logger import ClassNameLogger
 from libstp.hal import AnalogSensor, DigitalSensor
 from libstp.timing import Synchronizer
+from libstp.foundation import initialize_timer
 
 if TYPE_CHECKING:
     from libstp.drive import Drive

@@ -39,7 +39,7 @@ namespace libstp::calibration::data
 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-            if ((utils::getCurrentTime() - start_time) > 30.0 || emergency_stop) {
+            if (emergency_stop) {
                 break;
             }
         }

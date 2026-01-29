@@ -93,8 +93,8 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     Raises:
         CalibrationRequiredError: If calibrate_distance() has not been run
     """
-    from libstp.step.calibrate_distance import require_distance_calibration
-    require_distance_calibration()
+    from libstp.step.calibration import check_distance_calibration
+    check_distance_calibration()
     config = DriveStraightConfig()
     config.distance_m = cm / 100.0
     config.max_speed_mps = speed
@@ -122,8 +122,8 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     Raises:
         CalibrationRequiredError: If calibrate_distance() has not been run
     """
-    from libstp.step.calibrate_distance import require_distance_calibration
-    require_distance_calibration()
+    from libstp.step.calibration import check_distance_calibration
+    check_distance_calibration()
     config = DriveStraightConfig()
     config.distance_m = -cm / 100.0  # Negative distance for backwards
     config.max_speed_mps = speed

@@ -18,6 +18,7 @@ DigitalSensor = _hal.DigitalSensor
 from libstp import hal
 from libstp import foundation
 from libstp.step import *
+from libstp.step import __all__ as _step_all
 from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol
 from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
@@ -33,14 +34,11 @@ __all__ = [
     # Core hardware
     "Motor",
     "Servo",
+    "AnalogSensor",
+    "DigitalSensor",
     # Submodules
     "hal",
     "foundation",
-    # Step classes
-    "Step",
-    "StepProtocol",
-    "SimulationStep",
-    "SimulationStepDelta",
     # Robot API
     "GenericRobot",
     "RobotDefinitionsProtocol",
@@ -54,27 +52,26 @@ __all__ = [
     "warn",
     "initialize_logging",
     "ClassNameLogger",
+    # Sensors
     "IRSensor",
     "IRSensorCalibration",
-    "AnalogSensor",
-    "DigitalSensor",
+    # Timing
     "StepTimingTracker",
+    # Screen
     "RenderScreen",
-    "Sequential",
-    "seq",
-    "calibrate_sensors",
-    "CalibrateSensors",
+    # Drive & Kinematics
     "Drive",
     "FusedOdometry",
     "MecanumKinematics",
+    "DifferentialKinematics",
     "MotionLimits",
+    # Calibration
     "Feedforward",
     "MotorCalibration",
     "PidGains",
     "IMU",
-    "calibrate_distance",
-    "calibrate_wait_for_light",
-    "DifferentialKinematics"
+    # All step exports
+    *_step_all,
 ]
 
 _PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}

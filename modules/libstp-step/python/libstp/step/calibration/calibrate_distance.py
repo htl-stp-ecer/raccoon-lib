@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from libstp.screen.api import RenderScreen, DistanceCalibrationResult, LightSensorCalibrationResult
 from libstp.step import Step
-
+from libstp.foundation import warn
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
     from libstp.sensor_ir import IRSensor
@@ -24,12 +24,10 @@ def is_distance_calibrated() -> bool:
     return _calibrated
 
 
-def require_distance_calibration() -> None:
+def check_distance_calibration() -> None:
     """Raise CalibrationRequiredError if not calibrated."""
     if not _calibrated:
-        raise CalibrationRequiredError(
-            "Distance calibration required. Run calibrate_distance() first."
-        )
+        warn("Distance calibration highly suggested. Run calibrate_distance() first.")
 
 
 def reset_distance_calibration() -> None:
@@ -103,8 +101,8 @@ class CalibrateDistance(Step):
         Args:
             robot: The robot instance for driving
         """
-        from libstp.step.drive import _drive_forward_uncalibrated
-        from libstp.step.stop import stop
+        from libstp.step.motion.drive import _drive_forward_uncalibrated
+        from libstp.step.motion.stop import stop
         from libstp.sensor_ir import IRSensor
         from libstp.foundation import MotorCalibration
 

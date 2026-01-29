@@ -126,6 +126,9 @@ def example_custom_parameters():
     config.velocity_test_commands = [15.0, 30.0, 45.0, 60.0, 75.0]  # More test points
     config.velocity_test_duration = 2.5  # Longer per test
 
+    # Optional: enforce parameter range validation (off by default)
+    config.validate_parameter_ranges = True
+
     print("Running calibration with custom parameters...")
     results = robot.drive.calibrate_motors(config)
 
