@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from libstp.device import NativeDevice
-from libstp_helpers.api.steps import Step
 from typing import Any, Optional
+from . import Step, dsl
+from libstp.robot.api import GenericRobot
 
-
+@dsl(hidden=True)
 class BreakpointStep(Step):
     def __init__(self, label: Optional[str] = None) -> None:
         """
@@ -16,19 +16,16 @@ class BreakpointStep(Step):
         super().__init__()
         self._label = label
 
-    async def run_step(self, device: NativeDevice, definitions: Any) -> None:
+    async def _execute_step(self, robot: GenericRobot) -> None:
         """
         Execute the breakpoint step. At runtime this simply logs the breakpoint hit.
-
-        Args:
-            device: The device to run on.
-            definitions: Additional definitions needed for execution.
         """
-        await super().run_step(device, definitions)
         label_suffix = f" ({self._label})" if self._label else ""
         self.info(f"Breakpoint reached{label_suffix}")
+        # ToDo: fully block process until lcm message has been sent to continue / unblock
 
 
+@dsl(hidden=True)
 def breakpoint(label: Optional[str] = None) -> BreakpointStep:
     """
     Create a breakpoint step marker.

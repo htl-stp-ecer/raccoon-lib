@@ -1,4 +1,5 @@
 from .base import Step
+from .annotation import dsl, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .sequential import Sequential, seq
 from .calibration import *
@@ -22,7 +23,9 @@ __all__ = [
     "WaitForSeconds",
     "wait",
     "WaitForButton",
-    "wait_for_button"
+    "wait_for_button",
+    "dsl",
+    "DslMeta",
     *_calibration_all,
     *_logic_all,
     *_motion_all,
