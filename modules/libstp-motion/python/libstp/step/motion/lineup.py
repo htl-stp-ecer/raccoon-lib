@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from libstp.foundation import ChassisVelocity, PIDController
 from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq
+from libstp.foundation import info
 
 from .. import Step, SimulationStep, SimulationStepDelta
 from .drive_until import SurfaceColor, drive_until_black, drive_until_white
@@ -101,6 +102,8 @@ class LineUp(Step):
         last_time = asyncio.get_event_loop().time() - update_rate
 
         while True:
+            # print current confidences
+
             current_time = asyncio.get_event_loop().time()
             delta_time = max(current_time - last_time, 0.0)
             last_time = current_time
@@ -110,7 +113,8 @@ class LineUp(Step):
                 continue
 
             left_conf, right_conf = self._get_confidences()
-
+            info(f"LineUp: Left Conf={left_conf:.3f}, "
+                 f"Right Conf={right_conf:.3f}")
             # Check if aligned
             if self._is_aligned(left_conf, right_conf):
                 robot.drive.hard_stop()
@@ -119,31 +123,31 @@ class LineUp(Step):
             now = time.monotonic()
 
             # Stall detection
-            if last_left_conf is not None and last_right_conf is not None:
-                no_change = (
-                    abs(left_conf - last_left_conf) < self.config.no_progress_eps and
-                    abs(right_conf - last_right_conf) < self.config.no_progress_eps
-                )
-                if no_change:
-                    stalled_since = stalled_since or now
-                else:
-                    stalled_since = None
+            # if last_left_conf is not None and last_right_conf is not None:
+            #     no_change = (
+            #         abs(left_conf - last_left_conf) < self.config.no_progress_eps and
+            #         abs(right_conf - last_right_conf) < self.config.no_progress_eps
+            #     )
+            #     if no_change:
+            #         stalled_since = stalled_since or now
+            #     else:
+            #         stalled_since = None
 
             last_left_conf = left_conf
             last_right_conf = right_conf
 
             # Apply boost kick if stalled
-            if stalled_since is not None and now - stalled_since > self.config.stall_delay_s:
-                if now - stalled_since < self.config.stall_delay_s + self.config.boost_time_s:
-                    # Apply straight boost
-                    boost_speed = self.config.boost_duty if self.config.base_speed >= 0 else -self.config.boost_duty
-                    velocity = ChassisVelocity(boost_speed, 0.0, 0.0)
-                    robot.drive.set_velocity(velocity)
-                    robot.drive.update(delta_time)
-                    await asyncio.sleep(update_rate)
-                    continue
-                else:
-                    stalled_since = None  # Reset after kick
+            # if stalled_since is not None and now - stalled_since > self.config.stall_delay_s:
+            #     if now - stalled_since < self.config.stall_delay_s + self.config.boost_time_s:
+            #         # Apply straight boost
+            #         boost_speed = self.config.boost_duty if self.config.base_speed >= 0 else -self.config.boost_duty
+            #         velocity = ChassisVelocity(boost_speed, 0.0, 0.0)
+            #         robot.drive.set_velocity(velocity)
+            #         robot.drive.update(delta_time)
+            #         await asyncio.sleep(update_rate)
+            #         continue
+            #     else:
+            #         stalled_since = None  # Reset after kick
 
             # Normal PID control
             # Error is 0.5 - confidence (we want confidence to reach threshold)
