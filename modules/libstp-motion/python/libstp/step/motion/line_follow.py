@@ -8,7 +8,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from libstp.foundation import ChassisVelocity, PIDController
+from libstp.foundation import ChassisVelocity, PIDController, info
 from libstp.sensor_ir import IRSensor
 
 from .. import Step, SimulationStep, SimulationStepDelta
@@ -127,6 +127,8 @@ class LineFollow(Step):
             # Strafe and rotation from PID
             strafe = -pid_output * self.config.strafe_gain
             rotation = pid_output
+
+            info(f"LineFollow: left={left_conf:.2f}, right={right_conf:.2f}, error={error:.2f}, ")
 
             velocity = ChassisVelocity(forward, strafe, rotation)
             robot.drive.set_velocity(velocity)

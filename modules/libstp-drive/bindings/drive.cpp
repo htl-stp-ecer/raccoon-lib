@@ -18,7 +18,9 @@ void init_drive(const py::module& m)
                                                           chassis_lim);
         }), py::arg("kinematics"), py::arg("chassis_lim"), py::keep_alive<1, 2>())
         .def("set_velocity", &libstp::drive::Drive::setVelocity, py::arg("v_body"))
-        .def("update", &libstp::drive::Drive::update, py::arg("dt"))
+        .def("update", [](libstp::drive::Drive& self, double dt) {
+            self.update(dt);  // Ignore MotorCommands return value
+        }, py::arg("dt"))
         .def("estimate_state", &libstp::drive::Drive::estimateState)
         .def("wheel_count", &libstp::drive::Drive::wheelCount)
         .def("soft_stop", &libstp::drive::Drive::softStop)
