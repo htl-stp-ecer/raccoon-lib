@@ -3,9 +3,10 @@ import math
 from libstp.motion import TurnMotion, TurnConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
-from .. import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
 
+@dsl(hidden=True)
 class Turn(Step):
     def __init__(self, config: TurnConfig):
         """
@@ -56,7 +57,10 @@ class Turn(Step):
             motion.update(delta_time)
             await asyncio.sleep(update_rate)
 
+        robot.drive.hard_stop()
 
+
+@dsl(tags=["motion", "turn"])
 def turn_left(degrees: float, speed: float = 1.0) -> Turn:
     """
     Turn counter-clockwise by specified degrees at a given speed.
@@ -74,6 +78,7 @@ def turn_left(degrees: float, speed: float = 1.0) -> Turn:
     return Turn(config)
 
 
+@dsl(tags=["motion", "turn"])
 def turn_right(degrees: float, speed: float = 1.0) -> Turn:
     """
     Turn clockwise by specified degrees at a given speed.

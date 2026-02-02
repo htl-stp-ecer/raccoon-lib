@@ -3,6 +3,7 @@
 //
 
 #pragma once
+#include <string>
 #include <vector>
 
 namespace libstp::calibration
@@ -38,6 +39,11 @@ namespace libstp::calibration
         // Validation parameters
         double validation_duration{2.0};       // Duration of validation test
         double validation_max_error{0.2};      // Maximum acceptable tracking error (20%)
+        std::vector<double> validation_test_commands{10.0, 15.0, 20.0}; // Validation command set (%)
+
+        // Validation data export (optional)
+        bool export_validation_profiles{false}; // Export validation command vs measured data
+        std::string validation_output_dir{"logs/motor_validation"}; // CSV output directory
 
         // Parameter range validation
         bool validate_parameter_ranges{false}; // Enforce ranges below when true

@@ -2,9 +2,10 @@ import asyncio
 from libstp.motion import StrafeMotion, StrafeConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
-from .. import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
 
+@dsl(hidden=True)
 class Strafe(Step):
     def __init__(self, config: StrafeConfig):
         """
@@ -55,7 +56,10 @@ class Strafe(Step):
             motion.update(delta_time)
             await asyncio.sleep(update_rate)
 
+        robot.drive.hard_stop()
 
+
+@dsl(tags=["motion", "strafe"])
 def strafe_left(cm: float, speed: float = 0.3) -> Strafe:
     """
     Strafe left by specified distance at a given speed.
@@ -73,6 +77,7 @@ def strafe_left(cm: float, speed: float = 0.3) -> Strafe:
     return Strafe(config)
 
 
+@dsl(tags=["motion", "strafe"])
 def strafe_right(cm: float, speed: float = 0.3) -> Strafe:
     """
     Strafe right by specified distance at a given speed.

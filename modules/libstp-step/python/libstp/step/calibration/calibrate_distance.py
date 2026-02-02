@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from libstp.screen.api import RenderScreen, DistanceCalibrationResult, LightSensorCalibrationResult
 from libstp.step import Step
+from libstp.step.annotation import dsl
 from libstp.foundation import warn
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -45,6 +46,7 @@ class PerWheelCalibration:
     delta_ticks: int
 
 
+@dsl(hidden=True)
 class CalibrateDistance(Step):
     """Step for calibrating robot distance estimation via per-wheel ticks_to_rad adjustment."""
 
@@ -360,6 +362,7 @@ class CalibrateDistance(Step):
             return None
 
 
+@dsl(tags=["calibration", "distance"])
 def calibrate_distance(
     distance_cm: float = 30.0,
     calibrate_light_sensors: bool = False

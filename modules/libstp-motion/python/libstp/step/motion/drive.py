@@ -2,8 +2,10 @@ import asyncio
 from libstp.motion import DriveStraightMotion, DriveStraightConfig, UnifiedMotionPidConfig
 from libstp.robot.api import GenericRobot
 
-from .. import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
+
+@dsl(hidden=True)
 class Drive(Step):
     def __init__(self,
                  config: DriveStraightConfig,
@@ -57,7 +59,10 @@ class Drive(Step):
             motion.update(delta_time)
             await asyncio.sleep(update_rate)
 
+        robot.drive.hard_stop()
 
+
+@dsl(hidden=True)
 def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
     """
     Internal: Drive forward without calibration check.
@@ -71,6 +76,7 @@ def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
     return Drive(config)
 
 
+@dsl(tags=["motion", "drive"])
 def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     """
     Drive forward a specified distance.
@@ -100,6 +106,7 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     return Drive(config)
 
 
+@dsl(tags=["motion", "drive"])
 def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     """
     Drive backward a specified distance.

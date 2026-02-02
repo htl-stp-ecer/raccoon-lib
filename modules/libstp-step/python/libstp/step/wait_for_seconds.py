@@ -2,7 +2,10 @@ import asyncio
 from typing import Union
 
 from . import Step, SimulationStep, SimulationStepDelta
+from .annotation import dsl
 
+
+@dsl(hidden=True)
 class WaitForSeconds(Step):
     """
     A step that waits for a specified duration before completing.
@@ -44,12 +47,12 @@ class WaitForSeconds(Step):
             device: The device to run on (not used in this step)
             definitions: Additional definitions needed for execution
         """
-        robot.drive.hard_stop()
 
         # Simply wait for the specified duration
         await asyncio.sleep(self.seconds)
 
 
+@dsl(tags=["timing", "wait"])
 def wait(seconds: float) -> WaitForSeconds:
     """Wait for specified seconds"""
     return WaitForSeconds(seconds=seconds)

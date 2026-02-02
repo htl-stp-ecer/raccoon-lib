@@ -7,15 +7,14 @@ wheel control based on sensor feedback.
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
 from libstp.foundation import ChassisVelocity, PIDController
+from libstp.foundation import info
 from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq
-from libstp.foundation import info
+from typing import TYPE_CHECKING
 
-from .. import Step, SimulationStep, SimulationStepDelta
 from .drive_until import SurfaceColor, drive_until_black, drive_until_white
+from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -28,10 +27,17 @@ class LineUpConfig:
     right_sensor: IRSensor
     base_speed: float = 0.3  # m/s base forward/backward speed
     confidence_threshold: float = 0.7  # stop when both sensors exceed this
+    dead_zone: float = 0.1  # minimum confidence error to act
     target: SurfaceColor = SurfaceColor.BLACK
     kp: float = 1.0
     ki: float = 0.0
     kd: float = 0.0
+
+    # Gradual back-off parameters
+    initial_speed_mult: float = 1.0  # approach at base_speed (was 1.5, caused overshoot)
+    min_speed_mult: float = 0.5  # minimum speed multiplier near target
+    backoff_start: float = 0.02  # start slowing at first hint of line
+    backoff_curve: float = 0.5  # aggressive early drop (< 1 = drop fast, > 1 = stay fast longer)
 
     # Stall detection parameters
     no_progress_eps: float = 0.004  # confidence delta that counts as "no movement"
@@ -40,6 +46,7 @@ class LineUpConfig:
     boost_duty: float = 0.85  # boost speed as fraction of max
 
 
+@dsl(hidden=True)
 class LineUp(Step):
     """
     Align the robot on a line using two IR sensors with PID control.
@@ -83,9 +90,41 @@ class LineUp(Step):
         return left_conf, right_conf
 
     def _is_aligned(self, left_conf: float, right_conf: float) -> bool:
-        """Check if both sensors are on the target with sufficient confidence."""
-        return (left_conf >= self.config.confidence_threshold and
-                right_conf >= self.config.confidence_threshold)
+        """Check if both sensors are at the edge (near confidence_threshold)."""
+        return (abs(left_conf - self.config.confidence_threshold) <= self.config.dead_zone and
+                abs(right_conf - self.config.confidence_threshold) <= self.config.dead_zone)
+
+    def _get_speed_multiplier(self, left_conf: float, right_conf: float) -> float:
+        """
+        Calculate speed multiplier based on proximity to target.
+
+        Returns a value between min_speed_mult and initial_speed_mult.
+        - Below backoff_start -> initial_speed_mult (full speed)
+        - At/above confidence_threshold -> min_speed_mult (slow/precise)
+        - In between -> gradual curve
+
+        Uses the MAXIMUM confidence (leading sensor) so we slow down
+        as soon as one sensor starts seeing the line.
+        """
+        cfg = self.config
+        max_conf = max(left_conf, right_conf)
+
+        # Below backoff_start -> full speed
+        if max_conf < cfg.backoff_start:
+            return cfg.initial_speed_mult
+
+        # At or above threshold -> minimum speed
+        if max_conf >= (cfg.confidence_threshold - cfg.dead_zone*2):
+            return cfg.min_speed_mult
+
+        # Map [backoff_start, confidence_threshold] -> [0, 1]
+        range_size = cfg.confidence_threshold - cfg.backoff_start
+        proximity = (max_conf - cfg.backoff_start) / range_size
+
+        # Apply exponential curve
+        decay = proximity ** cfg.backoff_curve
+        mult_range = cfg.initial_speed_mult - cfg.min_speed_mult
+        return cfg.initial_speed_mult - (decay * mult_range)
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """Execute the lineup step."""
@@ -113,8 +152,8 @@ class LineUp(Step):
                 continue
 
             left_conf, right_conf = self._get_confidences()
-            info(f"LineUp: Left Conf={left_conf:.3f}, "
-                 f"Right Conf={right_conf:.3f}")
+            speed_mult = self._get_speed_multiplier(left_conf, right_conf)
+            info(f"LineUp: L={left_conf:.2f} R={right_conf:.2f} mult={speed_mult:.2f}")
             # Check if aligned
             if self._is_aligned(left_conf, right_conf):
                 robot.drive.hard_stop()
@@ -149,24 +188,32 @@ class LineUp(Step):
             #     else:
             #         stalled_since = None  # Reset after kick
 
-            # Normal PID control
-            # Error is 0.5 - confidence (we want confidence to reach threshold)
-            # Positive error means we need to move forward more
-            left_error = 0.5 - left_conf
-            right_error = 0.5 - right_conf
+            # Error: positive = need to move toward line, negative = need to back off
+            left_error = self.config.confidence_threshold - left_conf
+            right_error = self.config.confidence_threshold - right_conf
 
             left_output = left_pid.calculate(left_error)
             right_output = right_pid.calculate(right_error)
 
-            # Convert per-wheel outputs to chassis velocity
-            # For differential drive: wz = (v_right - v_left) / track_width
-            # We approximate by using angular velocity proportional to the difference
-            left_speed = left_output * self.config.base_speed
-            right_speed = right_output * self.config.base_speed
+            effective_speed = self.config.base_speed * speed_mult
 
-            # Convert to chassis velocity (average for forward, difference for rotation)
-            vx = (left_speed + right_speed) / 2.0
-            wz = (right_speed - left_speed) * 2.0  # Scale factor for rotation
+            # For lineup: we want ROTATION to bring lagging sensor to edge
+            # Only add forward/backward when BOTH sensors need to move same direction
+            # (both too low = drive forward, both too high = back up)
+
+            # Rotation: difference between outputs
+            wz = (right_output - left_output) * effective_speed * 2.0
+
+            # Forward/backward: only when both errors have same sign
+            # This prevents driving forward while one sensor is already past the edge
+            if left_error * right_error > 0:
+                # Both need same direction - use the smaller magnitude (conservative)
+                vx = min(abs(left_output), abs(right_output)) * effective_speed
+                if left_error < 0:  # both past edge, back up
+                    vx = -vx
+            else:
+                # Sensors on opposite sides of target - pure rotation, no forward/back
+                vx = 0.0
 
             velocity = ChassisVelocity(vx, 0.0, wz)
             robot.drive.set_velocity(velocity)
@@ -175,15 +222,16 @@ class LineUp(Step):
             await asyncio.sleep(update_rate)
 
 
+@dsl(hidden=True)
 def lineup(
-    left_sensor: IRSensor,
-    right_sensor: IRSensor,
-    base_speed: float = 0.3,
-    confidence_threshold: float = 0.7,
-    target: SurfaceColor = SurfaceColor.BLACK,
-    kp: float = 1.0,
-    ki: float = 0.0,
-    kd: float = 0.0,
+        left_sensor: IRSensor,
+        right_sensor: IRSensor,
+        base_speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+        target: SurfaceColor = SurfaceColor.BLACK,
+        kp: float = 1.0,
+        ki: float = 0.0,
+        kd: float = 0.0,
 ) -> LineUp:
     """
     Create a LineUp step to align on a line.
@@ -214,14 +262,15 @@ def lineup(
     return LineUp(config)
 
 
+@dsl(tags=["motion", "lineup"])
 def forward_lineup_on_black(
-    left_sensor: IRSensor,
-    right_sensor: IRSensor,
-    base_speed: float = 0.3,
-    confidence_threshold: float = 0.7,
-    kp: float = 1.0,
-    ki: float = 0.0,
-    kd: float = 0.0,
+        left_sensor: IRSensor,
+        right_sensor: IRSensor,
+        base_speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+        kp: float = 1.0,
+        ki: float = 0.0,
+        kd: float = 0.0,
 ) -> Sequential:
     """
     Drive forward past white, then line up on black.
@@ -240,7 +289,7 @@ def forward_lineup_on_black(
         Sequential step: drive_until_white -> lineup_on_black
     """
     return seq([
-        drive_until_white(left_sensor, abs(base_speed)),
+        drive_until_white([left_sensor, right_sensor], abs(base_speed)),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
@@ -252,14 +301,15 @@ def forward_lineup_on_black(
     ])
 
 
+@dsl(tags=["motion", "lineup"])
 def forward_lineup_on_white(
-    left_sensor: IRSensor,
-    right_sensor: IRSensor,
-    base_speed: float = 0.3,
-    confidence_threshold: float = 0.7,
-    kp: float = 1.0,
-    ki: float = 0.0,
-    kd: float = 0.0,
+        left_sensor: IRSensor,
+        right_sensor: IRSensor,
+        base_speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+        kp: float = 1.0,
+        ki: float = 0.0,
+        kd: float = 0.0,
 ) -> Sequential:
     """
     Drive forward past black, then line up on white.
@@ -278,7 +328,7 @@ def forward_lineup_on_white(
         Sequential step: drive_until_black -> lineup_on_white
     """
     return seq([
-        drive_until_black(left_sensor, abs(base_speed)),
+        drive_until_black([left_sensor, right_sensor], abs(base_speed)),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
@@ -290,14 +340,15 @@ def forward_lineup_on_white(
     ])
 
 
+@dsl(tags=["motion", "lineup"])
 def backward_lineup_on_black(
-    left_sensor: IRSensor,
-    right_sensor: IRSensor,
-    base_speed: float = 0.3,
-    confidence_threshold: float = 0.7,
-    kp: float = 1.0,
-    ki: float = 0.0,
-    kd: float = 0.0,
+        left_sensor: IRSensor,
+        right_sensor: IRSensor,
+        base_speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+        kp: float = 1.0,
+        ki: float = 0.0,
+        kd: float = 0.0,
 ) -> Sequential:
     """
     Drive backward past white, then line up on black.
@@ -313,7 +364,7 @@ def backward_lineup_on_black(
         Sequential step: drive_until_white (backward) -> lineup_on_black (backward)
     """
     return seq([
-        drive_until_white(left_sensor, -abs(base_speed)),
+        drive_until_white([left_sensor, right_sensor], -abs(base_speed)),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
@@ -325,14 +376,15 @@ def backward_lineup_on_black(
     ])
 
 
+@dsl(tags=["motion", "lineup"])
 def backward_lineup_on_white(
-    left_sensor: IRSensor,
-    right_sensor: IRSensor,
-    base_speed: float = 0.3,
-    confidence_threshold: float = 0.7,
-    kp: float = 1.0,
-    ki: float = 0.0,
-    kd: float = 0.0,
+        left_sensor: IRSensor,
+        right_sensor: IRSensor,
+        base_speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+        kp: float = 1.0,
+        ki: float = 0.0,
+        kd: float = 0.0,
 ) -> Sequential:
     """
     Drive backward past black, then line up on white.
@@ -348,7 +400,7 @@ def backward_lineup_on_white(
         Sequential step: drive_until_black (backward) -> lineup_on_white (backward)
     """
     return seq([
-        drive_until_black(left_sensor, -abs(base_speed)),
+        drive_until_black([left_sensor, right_sensor], -abs(base_speed)),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,

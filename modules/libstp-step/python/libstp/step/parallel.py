@@ -5,8 +5,10 @@ from libstp.robot.api import GenericRobot
 
 from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
 from .sequential import seq, Sequential
+from .annotation import dsl
 
 
+@dsl(hidden=True)
 class Parallel(Step):
     """
     Parallel step executor that runs steps concurrently.
@@ -100,6 +102,7 @@ class Parallel(Step):
             self._last_completed_step = completed_steps[-1]
 
 
+@dsl(hidden=True)
 def parallel(*args) -> Parallel:
     """
     Create a parallel sequence of steps.

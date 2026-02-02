@@ -3,11 +3,13 @@ from typing import Optional, TYPE_CHECKING
 from libstp.hal import AnalogSensor
 from libstp.screen.api import RenderScreen, WFLCalibrationResult
 from libstp.step import Step
+from libstp.step.annotation import dsl
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
 
+@dsl(hidden=True)
 class CalibrateWaitForLight(Step):
     """Step for calibrating a wait-for-light sensor."""
 
@@ -52,6 +54,7 @@ class CalibrateWaitForLight(Step):
             self.warn("WFL calibration was cancelled or failed")
 
 
+@dsl(tags=["calibration", "light"])
 def calibrate_wait_for_light(sensor: AnalogSensor) -> CalibrateWaitForLight:
     """
     Create a wait-for-light calibration step.

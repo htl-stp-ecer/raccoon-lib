@@ -2,7 +2,10 @@ import asyncio
 from typing import Union
 
 from . import Step, StepProtocol
+from .annotation import dsl
 
+
+@dsl(hidden=True)
 class Timeout(Step):
     """
     A step that executes another step with a timeout limit.
@@ -62,6 +65,7 @@ class Timeout(Step):
             self.error(f"Step timed out after {self.timeout_seconds} seconds")
         except Exception:
             raise
+@dsl(tags=["control", "timeout"])
 def timeout(step: StepProtocol, seconds: float) -> Timeout:
     """Apply a timeout to a step"""
     return Timeout(step=step, timeout_seconds=seconds)

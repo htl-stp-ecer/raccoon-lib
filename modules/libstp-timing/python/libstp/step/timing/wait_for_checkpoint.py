@@ -1,7 +1,9 @@
 from typing import Any, Union
 from .. import Step
+from ..annotation import dsl
 
 
+@dsl(hidden=True)
 class WaitForCheckpoint(Step):
     def __init__(self, checkpoint_seconds: Union[float, int]) -> None:
         """
@@ -31,6 +33,7 @@ class WaitForCheckpoint(Step):
         await robot.synchronizer.wait_until_checkpoint(self.checkpoint_seconds)
 
 
+@dsl(tags=["timing", "sync"])
 def wait_for_checkpoint(checkpoint_seconds: float) -> WaitForCheckpoint:
     """Synchronize for specified seconds"""
     return WaitForCheckpoint(checkpoint_seconds=checkpoint_seconds)

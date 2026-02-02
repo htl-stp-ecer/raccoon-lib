@@ -11,6 +11,62 @@ void init_motion_base(py::module_& m)
     // Unified Motion PID Configuration
     py::class_<UnifiedMotionPidConfig>(m, "UnifiedMotionPidConfig")
         .def(py::init<>())
+        .def(py::init([](py::kwargs kwargs) {
+            UnifiedMotionPidConfig cfg;
+            auto set_if = [&](const char* name, auto& field) {
+                if (kwargs.contains(name)) {
+                    field = kwargs[name].cast<std::decay_t<decltype(field)>>();
+                }
+            };
+
+            // Distance PID gains
+            set_if("distance_kp", cfg.distance_kp);
+            set_if("distance_ki", cfg.distance_ki);
+            set_if("distance_kd", cfg.distance_kd);
+            // Heading PID gains
+            set_if("heading_kp", cfg.heading_kp);
+            set_if("heading_ki", cfg.heading_ki);
+            set_if("heading_kd", cfg.heading_kd);
+            // Lateral PID gains
+            set_if("lateral_kp", cfg.lateral_kp);
+            set_if("lateral_ki", cfg.lateral_ki);
+            set_if("lateral_kd", cfg.lateral_kd);
+            // Trapezoidal profile parameters
+            set_if("max_linear_acceleration", cfg.max_linear_acceleration);
+            set_if("max_angular_acceleration", cfg.max_angular_acceleration);
+            // Advanced PID parameters
+            set_if("integral_max", cfg.integral_max);
+            set_if("integral_deadband", cfg.integral_deadband);
+            set_if("derivative_lpf_alpha", cfg.derivative_lpf_alpha);
+            set_if("output_min", cfg.output_min);
+            set_if("output_max", cfg.output_max);
+            // Saturation handling
+            set_if("saturation_derating_factor", cfg.saturation_derating_factor);
+            set_if("saturation_min_scale", cfg.saturation_min_scale);
+            set_if("saturation_recovery_rate", cfg.saturation_recovery_rate);
+            // Heading-specific saturation
+            set_if("heading_saturation_derating_factor", cfg.heading_saturation_derating_factor);
+            set_if("heading_min_scale", cfg.heading_min_scale);
+            set_if("heading_recovery_rate", cfg.heading_recovery_rate);
+            // Hysteresis parameters
+            set_if("saturation_hold_cycles", cfg.saturation_hold_cycles);
+            set_if("saturation_recovery_threshold", cfg.saturation_recovery_threshold);
+            // Tolerances
+            set_if("distance_tolerance_m", cfg.distance_tolerance_m);
+            set_if("angle_tolerance_rad", cfg.angle_tolerance_rad);
+            // Rate limits
+            set_if("max_heading_rate", cfg.max_heading_rate);
+            set_if("min_angular_rate", cfg.min_angular_rate);
+            // Lateral drift handling
+            set_if("lateral_heading_bias_gain", cfg.lateral_heading_bias_gain);
+            set_if("lateral_reorient_threshold_m", cfg.lateral_reorient_threshold_m);
+            set_if("heading_saturation_error_rad", cfg.heading_saturation_error_rad);
+            set_if("heading_recovery_error_rad", cfg.heading_recovery_error_rad);
+            // Minimum speeds
+            set_if("min_speed_mps", cfg.min_speed_mps);
+
+            return cfg;
+        }))
         // Distance PID gains
         .def_readwrite("distance_kp", &UnifiedMotionPidConfig::distance_kp)
         .def_readwrite("distance_ki", &UnifiedMotionPidConfig::distance_ki)

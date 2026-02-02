@@ -24,6 +24,7 @@ from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
 from libstp.screen.api import RenderScreen
 from libstp.drive import Drive, MotionLimits
+from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
 from libstp.odometry_fused import FusedOdometry
 from libstp.foundation import Feedforward, MotorCalibration, PidGains
@@ -65,6 +66,7 @@ __all__ = [
     "MecanumKinematics",
     "DifferentialKinematics",
     "MotionLimits",
+    "UnifiedMotionPidConfig",
     # Calibration
     "Feedforward",
     "MotorCalibration",

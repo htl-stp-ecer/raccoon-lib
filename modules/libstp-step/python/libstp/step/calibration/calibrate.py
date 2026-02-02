@@ -2,8 +2,10 @@ from libstp.robot.api import GenericRobot
 from libstp.screen.api import RenderScreen
 from libstp.sensor_ir import IRSensor
 from libstp.step import Step
+from libstp.step.annotation import dsl
 
 
+@dsl(hidden=True)
 class CalibrateSensors(Step):
     def __init__(self, calibration_time: float = 5.0) -> None:
         super().__init__()
@@ -17,5 +19,6 @@ class CalibrateSensors(Step):
         await screen.calibrate_black_white()
 
 
+@dsl(tags=["calibration", "sensor"])
 def calibrate_sensors(calibration_time: float = 5.0) -> CalibrateSensors:
     return CalibrateSensors(calibration_time)

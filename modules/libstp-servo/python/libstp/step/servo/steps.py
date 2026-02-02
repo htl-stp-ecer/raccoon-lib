@@ -6,6 +6,7 @@ from typing import Optional, Union
 from libstp.hal import Servo
 from libstp.robot.api import GenericRobot
 from libstp.step import Step
+from libstp.step.annotation import dsl
 
 from .constants import SERVO_MAX_ANGLE, SERVO_MIN_ANGLE
 from .resolver import resolve_servo
@@ -16,6 +17,7 @@ from .utility import (
 )
 
 
+@dsl(hidden=True)
 class SetServoPosition(Step):
     def __init__(
         self, servo: Servo, target_angle: float, duration: Optional[float] = None
@@ -43,27 +45,30 @@ class SetServoPosition(Step):
     async def _execute_step(self, robot: GenericRobot) -> None:
         target_position = angle_to_position(self._target_angle)
 
-        self._servo_ref.servo.enable()
+        self._servo_ref.enable()
 
         duration = self._duration
         if duration is None:
-            current_angle = position_to_angle(self._servo_ref.servo.get_position())
+            current_angle = position_to_angle(self._servo_ref.get_position())
             duration = estimate_servo_move_time(current_angle, self._target_angle)
 
-        self._servo_ref.servo.set_position(target_position)
+        self._servo_ref.set_position(target_position)
         if duration and duration > 0:
             await asyncio.sleep(duration)
 
+@dsl(tags=["servo", "actuator"])
 def servo(servo: Servo, angle: float) -> SetServoPosition:
     """Create a step to set a servo to a specific angle with estimated timing."""
     return SetServoPosition(servo=servo, target_angle=angle, duration=None)
 
 
+@dsl(tags=["servo", "actuator"])
 def slow_servo(servo: Servo, angle: float, duration: float) -> SetServoPosition:
     """Create a timed step to move a servo to an angle over the specified duration."""
     return SetServoPosition(servo=servo, target_angle=angle, duration=duration)
 
 
+@dsl(hidden=True)
 class ShakeServo(Step):
     def __init__(
         self, servo: Servo, duration: float, angle_a: float, angle_b: float
@@ -93,13 +98,13 @@ class ShakeServo(Step):
         )
 
     async def _execute_step(self, robot: GenericRobot) -> None:
-        self._servo_ref.servo.enable()
+        self._servo_ref.enable()
 
         pos_a = angle_to_position(self._angle_a)
         pos_b = angle_to_position(self._angle_b)
 
         if pos_a == pos_b or self._duration == 0:
-            self._servo_ref.servo.set_position(pos_a)
+            self._servo_ref.set_position(pos_a)
             if self._duration > 0:
                 await asyncio.sleep(self._duration)
             return
@@ -112,14 +117,15 @@ class ShakeServo(Step):
         end_time = loop.time() + self._duration
 
         while loop.time() < end_time:
-            self._servo_ref.servo.set_position(pos_a)
+            self._servo_ref.set_position(pos_a)
             await asyncio.sleep(move_time)
             if loop.time() >= end_time:
                 break
-            self._servo_ref.servo.set_position(pos_b)
+            self._servo_ref.set_position(pos_b)
             await asyncio.sleep(move_time)
 
 
+@dsl(tags=["servo", "actuator"])
 def shake_servo(servo: Servo, duration: float, angle_a: float, angle_b: float) -> ShakeServo:
     """Create a step to shake a servo between two angles for a fixed duration."""
     return ShakeServo(servo=servo, duration=duration, angle_a=angle_a, angle_b=angle_b)

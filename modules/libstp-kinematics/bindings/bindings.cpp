@@ -15,10 +15,14 @@ PYBIND11_MODULE(kinematics, m)
 {
     m.doc() = "Python bindings for libstp-kinematics";
 
+    py::module_::import("libstp.hal");
+
     py::class_<libstp::kinematics::IKinematics, std::shared_ptr<libstp::kinematics::IKinematics>>(m, "IKinematics")
         .def("wheel_count", &libstp::kinematics::IKinematics::wheelCount)
         .def("apply_command", &libstp::kinematics::IKinematics::applyCommand,
              py::arg("cmd"), py::arg("dt"))
         .def("estimate_state", &libstp::kinematics::IKinematics::estimateState)
-        .def("hard_stop", &libstp::kinematics::IKinematics::hardStop);
+        .def("hard_stop", &libstp::kinematics::IKinematics::hardStop)
+        .def_property_readonly("motors", &libstp::kinematics::IKinematics::getMotors,
+             "List of motors managed by this kinematics model");
 }

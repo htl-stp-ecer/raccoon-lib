@@ -1,7 +1,9 @@
 from typing import Any
 from .. import Step
+from ..annotation import dsl
 
 
+@dsl(hidden=True)
 class DoUntilCheckpoint(Step):
 
     def __init__(self, checkpoint: float, step) -> None:
@@ -17,6 +19,7 @@ class DoUntilCheckpoint(Step):
         await robot.synchronizer.do_until_checkpoint(self.checkpoint, self._job_while_wait, robot)
 
 
+@dsl(tags=["timing", "sync"])
 def do_until_checkpoint(checkpoint: float, step) -> DoUntilCheckpoint:
     """Run a function until a checkpoint is reached"""
     return DoUntilCheckpoint(checkpoint=checkpoint, step=step)

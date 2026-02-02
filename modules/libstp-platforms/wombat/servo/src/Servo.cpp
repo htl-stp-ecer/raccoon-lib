@@ -12,7 +12,7 @@
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 4;
 constexpr int MIN_POSITION = 0;
-constexpr int MAX_POSITION = 180;
+constexpr int MAX_POSITION = 2047;
 
 libstp::hal::servo::Servo::Servo(const int port): port(port)
 {

@@ -3,8 +3,10 @@ from asyncio import CancelledError
 from typing import Any
 
 from .. import Step
+from ..annotation import dsl
 
 
+@dsl(hidden=True)
 class DoWhileActive(Step):
 
     def __init__(self, reference_step: Step, task: Step) -> None:
@@ -24,5 +26,6 @@ class DoWhileActive(Step):
             pass
 
 
+@dsl(tags=["control", "concurrent"])
 def do_while_active(reference_step: Step, task: Step):
     return DoWhileActive(reference_step=reference_step, task=task)
