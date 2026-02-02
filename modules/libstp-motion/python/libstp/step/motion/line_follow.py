@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from libstp.foundation import ChassisVelocity, PIDController, info
 from libstp.sensor_ir import IRSensor
 
-from .. import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta, dsl
 from .drive_until import SurfaceColor
 
 if TYPE_CHECKING:
@@ -44,6 +44,7 @@ class SingleLineFollowConfig:
     strafe_gain: float = 0.05  # how much to strafe based on error
 
 
+@dsl(hidden=True)
 class LineFollow(Step):
     """
     Follow a line using two IR sensors with PID steering.
@@ -139,6 +140,7 @@ class LineFollow(Step):
         robot.drive.hard_stop()
 
 
+@dsl(hidden=True)
 class SingleSensorLineFollow(Step):
     """
     Follow a line using a single IR sensor.
@@ -209,6 +211,7 @@ class SingleSensorLineFollow(Step):
         robot.drive.hard_stop()
 
 
+@dsl(tags=["motion", "line-follow"])
 def follow_line(
     left_sensor: IRSensor,
     right_sensor: IRSensor,
@@ -247,6 +250,7 @@ def follow_line(
     return LineFollow(config)
 
 
+@dsl(tags=["motion", "line-follow"])
 def follow_line_until_both_black(
     left_sensor: IRSensor,
     right_sensor: IRSensor,
@@ -286,6 +290,7 @@ def follow_line_until_both_black(
     return LineFollow(config)
 
 
+@dsl(tags=["motion", "line-follow"])
 def follow_line_single(
     sensor: IRSensor,
     distance_cm: float,

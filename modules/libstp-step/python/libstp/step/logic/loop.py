@@ -1,7 +1,9 @@
 from typing import Any
 from .. import Step, StepProtocol
+from ..annotation import dsl
 
 
+@dsl(hidden=True)
 class LoopForeverStep(Step):
     def __init__(self, step: StepProtocol):
         """
@@ -33,6 +35,7 @@ class LoopForeverStep(Step):
         while True:
             await self.step.run_step(robot)
 
+@dsl(hidden=True)
 class LoopForStep(Step):
     def __init__(self, step: StepProtocol, iterations: int):
         """
@@ -69,6 +72,7 @@ class LoopForStep(Step):
         for _ in range(self.iterations):
             await self.step.run_step(robot)
 
+@dsl(tags=["control", "loop"])
 def loop_forever(step: StepProtocol) -> LoopForeverStep:
     """
     Create a step that runs another step indefinitely.
@@ -81,6 +85,7 @@ def loop_forever(step: StepProtocol) -> LoopForeverStep:
     """
     return LoopForeverStep(step=step)
 
+@dsl(tags=["control", "loop"])
 def loop_for(step: StepProtocol, iterations: int) -> LoopForStep:
     """
     Create a step that runs another step a specified number of times.

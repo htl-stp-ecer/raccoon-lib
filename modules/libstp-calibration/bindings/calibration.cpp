@@ -42,6 +42,12 @@ PYBIND11_MODULE(calibration, m)
                       "Duration of validation test (default: 2.0s)")
         .def_readwrite("validation_max_error", &libstp::calibration::CalibrationConfig::validation_max_error,
                       "Maximum acceptable tracking error (default: 0.2 = 20%)")
+        .def_readwrite("validation_test_commands", &libstp::calibration::CalibrationConfig::validation_test_commands,
+                      "Validation command set in percent (default: [10, 15, 20])")
+        .def_readwrite("export_validation_profiles", &libstp::calibration::CalibrationConfig::export_validation_profiles,
+                      "Export validation command vs measured data to CSV (default: False)")
+        .def_readwrite("validation_output_dir", &libstp::calibration::CalibrationConfig::validation_output_dir,
+                      "Directory for validation CSV output (default: logs/motor_validation)")
         .def_readwrite("validate_parameter_ranges", &libstp::calibration::CalibrationConfig::validate_parameter_ranges,
                       "Enforce feedforward/PID parameter ranges (default: False)")
         .def("__repr__", [](const libstp::calibration::CalibrationConfig &c) {

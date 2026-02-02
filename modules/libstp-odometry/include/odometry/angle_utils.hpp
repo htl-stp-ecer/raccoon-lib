@@ -127,7 +127,9 @@ inline double extractYaw(const Eigen::Quaternionf& orientation) {
     const double cosy_cosp = 1.0 - 2.0 * (static_cast<double>(q.y() * q.y()) +
                                            static_cast<double>(q.z() * q.z()));
 
-    return std::atan2(siny_cosp, cosy_cosp);
+    // Negate to match robotics convention: positive yaw = CCW when viewed from above
+    // The IMU/coprocessor uses aviation convention (NED) where positive yaw = CW
+    return -std::atan2(siny_cosp, cosy_cosp);
 }
 
 } // namespace odometry

@@ -40,6 +40,13 @@ PYBIND11_MODULE(odometry_fused, m)
     py::class_<libstp::odometry::fused::FusedOdometryConfig>(m, "FusedOdometryConfig",
             "Configuration for FusedOdometry.")
         .def(py::init<>())
+        .def(py::init([](py::kwargs kwargs) {
+            libstp::odometry::fused::FusedOdometryConfig cfg;
+            if (kwargs.contains("imu_ready_timeout_ms")) {
+                cfg.imu_ready_timeout_ms = kwargs["imu_ready_timeout_ms"].cast<int>();
+            }
+            return cfg;
+        }))
         .def_readwrite("imu_ready_timeout_ms", &libstp::odometry::fused::FusedOdometryConfig::imu_ready_timeout_ms,
                       "Timeout waiting for IMU to be ready (milliseconds, default: 1000)");
 

@@ -49,5 +49,7 @@ PYBIND11_MODULE(kinematics_differential, m)
         .def("supports_lateral_motion", &libstp::kinematics::differential::DifferentialKinematics::supportsLateralMotion,
              "Returns False since differential drives cannot strafe")
         .def("get_wheel_radius", &libstp::kinematics::differential::DifferentialKinematics::getWheelRadius,
-             "Get the wheel radius in meters");
+             "Get the wheel radius in meters")
+        .def_property_readonly("motors", &libstp::kinematics::differential::DifferentialKinematics::getMotors,
+             "List of motors managed by this kinematics model");
 }

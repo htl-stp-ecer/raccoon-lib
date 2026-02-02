@@ -1,7 +1,8 @@
 from libstp.robot.api import GenericRobot
-from .. import Step
+from .. import Step, dsl
 
 
+@dsl(hidden=True)
 class Stop(Step):
     """Step that stops all drive motors."""
 
@@ -26,6 +27,7 @@ class Stop(Step):
             robot.drive.soft_stop()
 
 
+@dsl(tags=["motion", "stop"])
 def stop(hard: bool = True) -> Stop:
     """
     Create a step that stops all drive motors.

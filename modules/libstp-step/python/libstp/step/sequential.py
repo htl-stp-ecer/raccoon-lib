@@ -1,7 +1,10 @@
 from typing import List, Optional
 
 from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
+from .annotation import dsl
 
+
+@dsl(hidden=True)
 class Sequential(Step):
     """
     Sequential step executor that runs steps in a sequential order.
@@ -75,6 +78,7 @@ class Sequential(Step):
         for i, step in enumerate(self.steps):
             await step.run_step(robot)
 
+@dsl(hidden=True)
 def seq(steps: List[Step]) -> Sequential:
     """Create a sequential sequence of steps"""
     return Sequential(steps)

@@ -2,13 +2,23 @@
 #include <pybind11/pybind11.h>
 
 #include "foundation/types.hpp"
+#include "hal/IMotor.hpp"
 #include "hal/Motor.hpp"
 
 namespace py = pybind11;
 
 void init_motor(const py::module& m)
 {
-    py::class_<libstp::hal::motor::Motor>(m, "Motor")
+    py::class_<libstp::hal::motor::IMotor>(m, "IMotor")
+        .def("set_speed", &libstp::hal::motor::IMotor::setSpeed, py::arg("percent"))
+        .def("get_position", &libstp::hal::motor::IMotor::getPosition)
+        .def("brake", &libstp::hal::motor::IMotor::brake)
+        .def_property_readonly("port", &libstp::hal::motor::IMotor::getPort)
+        .def_property_readonly("inverted", &libstp::hal::motor::IMotor::isInverted)
+        .def("get_calibration", &libstp::hal::motor::IMotor::getCalibration)
+        .def("set_calibration", &libstp::hal::motor::IMotor::setCalibration, py::arg("calibration"));
+
+    py::class_<libstp::hal::motor::Motor, libstp::hal::motor::IMotor>(m, "Motor")
         .def(py::init<int, bool, libstp::foundation::MotorCalibration>(), py::arg("port"), py::arg("inverted") = false,
              py::arg("calibration") = libstp::foundation::MotorCalibration{})
         .def_static("disable_all", &libstp::hal::motor::Motor::disableAll)

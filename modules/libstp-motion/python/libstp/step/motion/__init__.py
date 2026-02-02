@@ -6,8 +6,6 @@ from .drive_until import (
     SurfaceColor,
     MoveUntil,
     MoveUntilConfig,
-    DriveUntil,  # alias for MoveUntil
-    DriveUntilConfig,  # alias for MoveUntilConfig
     move_until,
     drive_until_black,
     drive_until_white,
@@ -52,8 +50,6 @@ __all__ = [
     "SurfaceColor",
     "MoveUntil",
     "MoveUntilConfig",
-    "DriveUntil",
-    "DriveUntilConfig",
     "move_until",
     "drive_until_black",
     "drive_until_white",

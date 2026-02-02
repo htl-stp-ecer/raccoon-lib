@@ -6,6 +6,7 @@
 #include <numbers>
 
 #include "foundation/types.hpp"
+
 #include "foundation/logging.hpp"
 
 namespace
@@ -68,7 +69,7 @@ namespace libstp::motion
         };
         profile_ = std::make_unique<TrapezoidalProfile>(initial, target_heading_rad_, constraints);
 
-        LIBSTP_LOG_TRACE("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s, profile_time = {:.3f} s",
+        LIBSTP_LOG_INFO("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s, profile_time = {:.3f} s",
                     cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate, profile_->getTotalTime());
     }
 
@@ -106,7 +107,7 @@ namespace libstp::motion
         const double heading_error = odometry().getHeadingError(setpoint.position);
         const double error_to_final_target = odometry().getHeadingError(target_heading_rad_);
 
-        LIBSTP_LOG_TRACE("TurnMotion update: current = {:.3f} rad ({:.1f} deg), setpoint = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
+        LIBSTP_LOG_INFO("TurnMotion update: current = {:.3f} rad ({:.1f} deg), setpoint = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
                     current_heading, current_heading / kDegToRad,
                     setpoint.position, setpoint.position / kDegToRad,
                     target_heading_rad_, target_heading_rad_ / kDegToRad,
@@ -134,12 +135,12 @@ namespace libstp::motion
         {
             const double direction = (heading_error >= 0.0) ? 1.0 : -1.0;
             omega_cmd = direction * ctx_.pid_config.min_angular_rate;
-            LIBSTP_LOG_TRACE("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
+            LIBSTP_LOG_INFO("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
         }
 
         // Apply scaling from previous saturation feedback
         const double omega_cmd_scaled = omega_cmd * angular_scale_;
-        LIBSTP_LOG_TRACE("TurnMotion: omega_cmd = {:.3f} rad/s, scaled = {:.3f} rad/s (scale={:.3f})",
+        LIBSTP_LOG_INFO("TurnMotion: omega_cmd = {:.3f} rad/s, scaled = {:.3f} rad/s (scale={:.3f})",
                     omega_cmd, omega_cmd_scaled, angular_scale_);
 
         // Send command: no translation, only rotation
@@ -158,7 +159,7 @@ namespace libstp::motion
                 ctx_.pid_config.saturation_min_scale,
                 angular_scale_ * ctx_.pid_config.saturation_derating_factor);
 
-            LIBSTP_LOG_TRACE("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
+            LIBSTP_LOG_INFO("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
                         motor_cmd.saturation_mask, prev_scale, angular_scale_);
         }
         else
@@ -176,7 +177,7 @@ namespace libstp::motion
 
                 if (prev_scale != angular_scale_)
                 {
-                    LIBSTP_LOG_TRACE("TurnMotion: Recovery (after {} cycles) -> angular_scale {:.3f}->{:.3f}",
+                    LIBSTP_LOG_INFO("TurnMotion: Recovery (after {} cycles) -> angular_scale {:.3f}->{:.3f}",
                                 unsaturated_cycles_, prev_scale, angular_scale_);
                 }
             }

@@ -5,14 +5,14 @@ This module provides steps for moving (drive, turn, strafe) until IR sensors
 detect black or white lines.
 """
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
 
-from .. import Step, SimulationStep, SimulationStepDelta
+from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -27,7 +27,7 @@ class SurfaceColor(Enum):
 @dataclass
 class MoveUntilConfig:
     """Configuration for MoveUntil step."""
-    sensor: IRSensor
+    sensor: Union[IRSensor, list[IRSensor]]  # Single sensor or list of sensors
     target: SurfaceColor
     forward_speed: float = 0.0  # m/s, positive = forward
     angular_speed: float = 0.0  # rad/s, positive = CCW
@@ -36,17 +36,25 @@ class MoveUntilConfig:
     scale_speed_on_approach: bool = True  # slow down as we approach target
 
 
+@dsl(hidden=True)
 class MoveUntil(Step):
     """
     Move until a sensor detects a specified color (black or white).
 
     Supports any combination of forward, angular, and strafe velocities.
     Optionally scales speed down as the sensor approaches the target confidence.
+    Can accept a single sensor or a list of sensors - triggers when ANY sensor detects.
     """
 
     def __init__(self, config: MoveUntilConfig):
         super().__init__()
         self.config = config
+        # Normalize to list for internal use
+        self._sensors: list[IRSensor] = (
+            config.sensor if isinstance(config.sensor, list) else [config.sensor]
+        )
+        # Track which sensor triggered detection (set after execution)
+        self.triggered_sensor: IRSensor | None = None
 
     def _generate_signature(self) -> str:
         parts = []
@@ -69,23 +77,31 @@ class MoveUntil(Step):
         return base
 
     def _is_condition_met(self) -> bool:
-        """Check if the sensor has detected the target color."""
-        if self.config.target == SurfaceColor.BLACK:
-            confidence = self.config.sensor.probabilityOfBlack()
-        else:
-            confidence = self.config.sensor.probabilityOfWhite()
-        return confidence >= self.config.confidence_threshold
+        """Check if any sensor has detected the target color."""
+        for sensor in self._sensors:
+            if self.config.target == SurfaceColor.BLACK:
+                confidence = sensor.probabilityOfBlack()
+            else:
+                confidence = sensor.probabilityOfWhite()
+            if confidence >= self.config.confidence_threshold:
+                self.triggered_sensor = sensor
+                return True
+        return False
 
     def _get_velocity(self) -> ChassisVelocity:
         """Get velocity, optionally scaled by distance to target."""
         scale = 1.0
         if self.config.scale_speed_on_approach:
-            # Scale by confidence of OPPOSITE color (high when far from target)
-            if self.config.target == SurfaceColor.BLACK:
-                scale = self.config.sensor.probabilityOfWhite()
-            else:
-                scale = self.config.sensor.probabilityOfBlack()
-            scale = max(scale, 0.2)  # Minimum 20% speed
+            # Scale by minimum confidence of OPPOSITE color across all sensors
+            # (use minimum so we slow down when ANY sensor is approaching target)
+            min_opposite_confidence = 1.0
+            for sensor in self._sensors:
+                if self.config.target == SurfaceColor.BLACK:
+                    opposite_confidence = sensor.probabilityOfWhite()
+                else:
+                    opposite_confidence = sensor.probabilityOfBlack()
+                min_opposite_confidence = min(min_opposite_confidence, opposite_confidence)
+            scale = max(min_opposite_confidence, 0.2)  # Minimum 20% speed
 
         return ChassisVelocity(
             self.config.forward_speed * scale,
@@ -115,26 +131,21 @@ class MoveUntil(Step):
 
         robot.drive.hard_stop()
 
-
-# Keep DriveUntil as alias for backwards compatibility
-DriveUntil = MoveUntil
-DriveUntilConfig = MoveUntilConfig
-
-
 # =============================================================================
 # Drive (forward/backward) until sensor
 # =============================================================================
 
+@dsl(tags=["motion", "sensor"])
 def drive_until_black(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     forward_speed: float,
     confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
-    Drive forward/backward until the sensor detects black.
+    Drive forward/backward until any sensor detects black.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         forward_speed: Speed in m/s (positive = forward, negative = backward)
         confidence_threshold: Probability threshold for detection (0-1)
     """
@@ -146,16 +157,17 @@ def drive_until_black(
     ))
 
 
+@dsl(tags=["motion", "sensor"])
 def drive_until_white(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     forward_speed: float,
     confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
-    Drive forward/backward until the sensor detects white.
+    Drive forward/backward until any sensor detects white.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         forward_speed: Speed in m/s (positive = forward, negative = backward)
         confidence_threshold: Probability threshold for detection (0-1)
     """
@@ -171,16 +183,17 @@ def drive_until_white(
 # Turn until sensor
 # =============================================================================
 
+@dsl(tags=["motion", "sensor"])
 def turn_until_black(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     angular_speed: float,
     confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
-    Turn until the sensor detects black.
+    Turn until any sensor detects black.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         angular_speed: Speed in rad/s (positive = CCW, negative = CW)
         confidence_threshold: Probability threshold for detection (0-1)
     """
@@ -192,16 +205,17 @@ def turn_until_black(
     ))
 
 
+@dsl(tags=["motion", "sensor"])
 def turn_until_white(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     angular_speed: float,
     confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
-    Turn until the sensor detects white.
+    Turn until any sensor detects white.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         angular_speed: Speed in rad/s (positive = CCW, negative = CW)
         confidence_threshold: Probability threshold for detection (0-1)
     """
@@ -217,16 +231,17 @@ def turn_until_white(
 # Strafe until sensor
 # =============================================================================
 
+@dsl(tags=["motion", "sensor"])
 def strafe_until_black(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     strafe_speed: float,
     confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
-    Strafe until the sensor detects black.
+    Strafe until any sensor detects black.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         strafe_speed: Speed in m/s (positive = left, negative = right)
         confidence_threshold: Probability threshold for detection (0-1)
     """
@@ -238,16 +253,17 @@ def strafe_until_black(
     ))
 
 
+@dsl(tags=["motion", "sensor"])
 def strafe_until_white(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     strafe_speed: float,
     confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
-    Strafe until the sensor detects white.
+    Strafe until any sensor detects white.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         strafe_speed: Speed in m/s (positive = left, negative = right)
         confidence_threshold: Probability threshold for detection (0-1)
     """
@@ -263,8 +279,9 @@ def strafe_until_white(
 # Generic move_until for custom combinations
 # =============================================================================
 
+@dsl(tags=["motion", "sensor"])
 def move_until(
-    sensor: IRSensor,
+    sensor: Union[IRSensor, list[IRSensor]],
     target: SurfaceColor,
     forward_speed: float = 0.0,
     angular_speed: float = 0.0,
@@ -273,10 +290,10 @@ def move_until(
     scale_speed_on_approach: bool = True,
 ) -> MoveUntil:
     """
-    Move with any combination of velocities until sensor detects target color.
+    Move with any combination of velocities until any sensor detects target color.
 
     Args:
-        sensor: The IR sensor instance
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
         target: Target color (SurfaceColor.BLACK or SurfaceColor.WHITE)
         forward_speed: Forward speed in m/s (positive = forward)
         angular_speed: Angular speed in rad/s (positive = CCW)

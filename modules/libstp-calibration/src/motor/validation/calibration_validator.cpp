@@ -1,5 +1,6 @@
 #include "calibration/motor/validation/calibration_validator.hpp"
 #include "calibration/motor/control/motor_control_interface.hpp"
+#include "drive/motor_adapter.hpp"
 #include "calibration/motor/data/velocity_profile_recorder.hpp"
 #include "calibration/motor/utils/math_utils.hpp"
 #include "foundation/logging.hpp"
@@ -7,6 +8,48 @@
 #include <thread>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
+namespace
+{
+    void write_profile_csv(
+        const libstp::calibration::data::VelocityProfile& profile,
+        const std::string& output_dir,
+        int motor_port,
+        double command_percent)
+    {
+        if (profile.data.empty() || output_dir.empty()) {
+            return;
+        }
+
+        std::error_code ec;
+        std::filesystem::create_directories(output_dir, ec);
+        if (ec) {
+            LIBSTP_LOG_WARN("Failed to create validation output dir {}: {}", output_dir, ec.message());
+            return;
+        }
+
+        std::ostringstream filename;
+        filename << output_dir << "/motor_" << motor_port << "_cmd_"
+                 << std::fixed << std::setprecision(0) << command_percent << ".csv";
+
+        std::ofstream out(filename.str());
+        if (!out) {
+            LIBSTP_LOG_WARN("Failed to write validation CSV: {}", filename.str());
+            return;
+        }
+
+        out << "time_s,command_percent,velocity_rad_s\n";
+        const double t0 = profile.data.front().time;
+        out << std::fixed << std::setprecision(4);
+        for (const auto& point : profile.data) {
+            out << (point.time - t0) << "," << point.command << "," << point.velocity << "\n";
+        }
+    }
+}
 
 namespace libstp::calibration::validation
 {
@@ -31,7 +74,10 @@ namespace libstp::calibration::validation
 
         motor_.reset();
 
-        std::vector<double> test_commands = {10.0, 15.0, 20.0};
+        std::vector<double> test_commands = config_.validation_test_commands;
+        if (test_commands.empty()) {
+            test_commands = {10.0, 15.0, 20.0};
+        }
         std::vector<double> errors;
 
         for (double cmd_percent : test_commands) {
@@ -41,6 +87,11 @@ namespace libstp::calibration::validation
                 emergency_stop,
                 start_time
             );
+
+            if (config_.export_validation_profiles) {
+                const int motor_port = motor_.getAdapter().motor().getPort();
+                write_profile_csv(profile, config_.validation_output_dir, motor_port, cmd_percent);
+            }
 
             // Get steady-state velocity (last 30% of data)
             size_t start_idx = profile.data.size() * 7 / 10;

@@ -14,9 +14,9 @@ namespace libstp::motion
         double distance_kd{0.0};
 
         // Heading/Angular PID gains (used for maintaining heading in drive/strafe, and for turning)
-        double heading_kp{3.0};
+        double heading_kp{2.0};
         double heading_ki{0.0};
-        double heading_kd{0.0};
+        double heading_kd{0.3};
 
         // Lateral drift correction PID gains (used for correcting lateral drift during drive)
         double lateral_kp{2.0};
@@ -25,7 +25,7 @@ namespace libstp::motion
 
         // Trapezoidal profile parameters (for smooth motion with ramped setpoints)
         double max_linear_acceleration{1.0};    // Maximum linear acceleration (m/s²) for drive/strafe
-        double max_angular_acceleration{3.0};   // Maximum angular acceleration (rad/s²) for turns
+        double max_angular_acceleration{2.0};   // Maximum angular acceleration (rad/s²) for turns
 
         // Advanced PID parameters (shared across all controllers)
         double integral_max{10.0};              // Anti-windup limit for all PIDs
@@ -35,9 +35,9 @@ namespace libstp::motion
         double output_max{10.0};                // Maximum PID output
 
         // Saturation handling (speed-independent derating factors)
-        double saturation_derating_factor{0.85};    // Multiply speed scale on saturation
-        double saturation_min_scale{0.1};           // Never reduce speed scale below this
-        double saturation_recovery_rate{0.02};      // How quickly speed scale recovers per cycle
+        double saturation_derating_factor{0.9};     // Multiply speed scale on saturation
+        double saturation_min_scale{0.2};           // Never reduce speed scale below this
+        double saturation_recovery_rate{0.03};      // How quickly speed scale recovers per cycle
 
         // Heading-specific saturation handling
         double heading_saturation_derating_factor{0.85};  // Multiply heading scale when still saturated
@@ -50,7 +50,7 @@ namespace libstp::motion
 
         // Tolerances
         double distance_tolerance_m{0.01};       // Position completion tolerance (meters)
-        double angle_tolerance_rad{0.02};        // Angular completion tolerance (radians, ~1.15 degrees)
+        double angle_tolerance_rad{0.035};       // Angular completion tolerance (radians, ~2 degrees)
 
         // Rate limits (these are speed-related but define maximum rates, not gains)
         double max_heading_rate{3.0};            // Maximum heading correction rate (rad/s)
