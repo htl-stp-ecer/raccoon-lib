@@ -7,10 +7,9 @@ detect black or white lines.
 import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Union
-
 from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
+from typing import TYPE_CHECKING, Union
 
 from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
@@ -31,7 +30,7 @@ class MoveUntilConfig:
     target: SurfaceColor
     forward_speed: float = 0.0  # m/s, positive = forward
     angular_speed: float = 0.0  # rad/s, positive = CCW
-    strafe_speed: float = 0.0   # m/s, positive = left
+    strafe_speed: float = 0.0  # m/s, positive = left
     confidence_threshold: float = 0.7
     scale_speed_on_approach: bool = True  # slow down as we approach target
 
@@ -90,29 +89,19 @@ class MoveUntil(Step):
 
     def _get_velocity(self) -> ChassisVelocity:
         """Get velocity, optionally scaled by distance to target."""
-        scale = 1.0
-        if self.config.scale_speed_on_approach:
-            # Slow down based on target confidence so we can brake before crossing the line.
-            max_target_confidence = 0.0
-            for sensor in self._sensors:
-                if self.config.target == SurfaceColor.BLACK:
-                    target_confidence = sensor.probabilityOfBlack()
-                else:
-                    target_confidence = sensor.probabilityOfWhite()
-                max_target_confidence = max(max_target_confidence, target_confidence)
-            approach_scale = max(1.0 - max_target_confidence, 0.0)
-            scale = max(approach_scale * approach_scale, 0.15)  # Minimum 15% speed
-
         return ChassisVelocity(
-            self.config.forward_speed * scale,
-            self.config.strafe_speed * scale,
-            self.config.angular_speed * scale
+            self.config.forward_speed,
+            self.config.strafe_speed,
+            self.config.angular_speed
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """Execute the move until step."""
-        update_rate = 1 / 20  # 20 Hz
+        update_rate = 1 / 100
         last_time = asyncio.get_event_loop().time() - update_rate
+
+        velocity = self._get_velocity()
+        robot.drive.set_velocity(velocity)
 
         while not self._is_condition_met():
             current_time = asyncio.get_event_loop().time()
@@ -123,13 +112,12 @@ class MoveUntil(Step):
                 await asyncio.sleep(update_rate)
                 continue
 
-            velocity = self._get_velocity()
-            robot.drive.set_velocity(velocity)
             robot.drive.update(delta_time)
 
             await asyncio.sleep(update_rate)
 
         robot.drive.hard_stop()
+
 
 # =============================================================================
 # Drive (forward/backward) until sensor
@@ -137,9 +125,9 @@ class MoveUntil(Step):
 
 @dsl(tags=["motion", "sensor"])
 def drive_until_black(
-    sensor: Union[IRSensor, list[IRSensor]],
-    forward_speed: float,
-    confidence_threshold: float = 0.7,
+        sensor: Union[IRSensor, list[IRSensor]],
+        forward_speed: float,
+        confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
     Drive forward/backward until any sensor detects black.
@@ -159,9 +147,9 @@ def drive_until_black(
 
 @dsl(tags=["motion", "sensor"])
 def drive_until_white(
-    sensor: Union[IRSensor, list[IRSensor]],
-    forward_speed: float,
-    confidence_threshold: float = 0.7,
+        sensor: Union[IRSensor, list[IRSensor]],
+        forward_speed: float,
+        confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
     Drive forward/backward until any sensor detects white.
@@ -185,9 +173,9 @@ def drive_until_white(
 
 @dsl(tags=["motion", "sensor"])
 def turn_until_black(
-    sensor: Union[IRSensor, list[IRSensor]],
-    angular_speed: float,
-    confidence_threshold: float = 0.7,
+        sensor: Union[IRSensor, list[IRSensor]],
+        angular_speed: float,
+        confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
     Turn until any sensor detects black.
@@ -207,9 +195,9 @@ def turn_until_black(
 
 @dsl(tags=["motion", "sensor"])
 def turn_until_white(
-    sensor: Union[IRSensor, list[IRSensor]],
-    angular_speed: float,
-    confidence_threshold: float = 0.7,
+        sensor: Union[IRSensor, list[IRSensor]],
+        angular_speed: float,
+        confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
     Turn until any sensor detects white.
@@ -233,9 +221,9 @@ def turn_until_white(
 
 @dsl(tags=["motion", "sensor"])
 def strafe_until_black(
-    sensor: Union[IRSensor, list[IRSensor]],
-    strafe_speed: float,
-    confidence_threshold: float = 0.7,
+        sensor: Union[IRSensor, list[IRSensor]],
+        strafe_speed: float,
+        confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
     Strafe until any sensor detects black.
@@ -255,9 +243,9 @@ def strafe_until_black(
 
 @dsl(tags=["motion", "sensor"])
 def strafe_until_white(
-    sensor: Union[IRSensor, list[IRSensor]],
-    strafe_speed: float,
-    confidence_threshold: float = 0.7,
+        sensor: Union[IRSensor, list[IRSensor]],
+        strafe_speed: float,
+        confidence_threshold: float = 0.7,
 ) -> MoveUntil:
     """
     Strafe until any sensor detects white.
@@ -281,13 +269,13 @@ def strafe_until_white(
 
 @dsl(tags=["motion", "sensor"])
 def move_until(
-    sensor: Union[IRSensor, list[IRSensor]],
-    target: SurfaceColor,
-    forward_speed: float = 0.0,
-    angular_speed: float = 0.0,
-    strafe_speed: float = 0.0,
-    confidence_threshold: float = 0.7,
-    scale_speed_on_approach: bool = True,
+        sensor: Union[IRSensor, list[IRSensor]],
+        target: SurfaceColor,
+        forward_speed: float = 0.0,
+        angular_speed: float = 0.0,
+        strafe_speed: float = 0.0,
+        confidence_threshold: float = 0.7,
+        scale_speed_on_approach: bool = True,
 ) -> MoveUntil:
     """
     Move with any combination of velocities until any sensor detects target color.

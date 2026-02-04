@@ -9,6 +9,11 @@ from .calibrate_distance import (
     check_distance_calibration,
     reset_distance_calibration,
 )
+from .deadzone import (
+    calibrate_deadzone,
+    CalibrateDeadzone,
+    DeadzoneCalibrationResult,
+)
 
 __all__ = [
     "calibrate",
@@ -21,4 +26,7 @@ __all__ = [
     "is_distance_calibrated",
     "check_distance_calibration",
     "reset_distance_calibration",
+    "calibrate_deadzone",
+    "CalibrateDeadzone",
+    "DeadzoneCalibrationResult",
 ]
