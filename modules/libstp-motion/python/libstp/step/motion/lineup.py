@@ -19,6 +19,7 @@ from .. import Step, SimulationStep, SimulationStepDelta, dsl
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
+
 class Lineup(Step):
     def __init__(
             self,
@@ -52,7 +53,6 @@ class Lineup(Step):
         return (abs(left_conf - self.setpoint) <= self.dead_zone and
                 abs(right_conf - self.setpoint) <= self.dead_zone)
 
-
     async def _execute_step(self, robot: "GenericRobot") -> None:
         update_rate = 1 / 100
         last_time = asyncio.get_event_loop().time() - update_rate
@@ -79,13 +79,12 @@ class Lineup(Step):
             left_error = self.setpoint - left_conf
             right_error = self.setpoint - right_conf
 
-            v_l = left_error * self.speed #left_pid.calculate(left_error)
-            v_r = right_error * self.speed #right_pid.calculate(right_error)
+            v_l = left_error * self.speed  # left_pid.calculate(left_error)
+            v_r = right_error * self.speed  # right_pid.calculate(right_error)
             L = 0.12
 
             vx_target = (v_r + v_l) / 2
             wz_target = (v_r - v_l) / L
-
 
             velocity = ChassisVelocity(vx_target, 0.0, wz_target)
             robot.drive.set_velocity(velocity)
@@ -93,15 +92,22 @@ class Lineup(Step):
 
             await asyncio.sleep(update_rate)
 
+
 @dsl(hidden=True)
 def lineup(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
+        speed: float = 0.15,
+        setpoint: float = 0.5,
+        bandwidth: float = 0.2,
         target: SurfaceColor = SurfaceColor.BLACK,
-) -> LineUp:
-    return LineUp(
+) -> Lineup:
+    return Lineup(
         left_sensor=left_sensor,
         right_sensor=right_sensor,
+        speed=speed,
+        setpoint=setpoint,
+        bandwidth=bandwidth,
         target=target,
     )
 
@@ -110,13 +116,20 @@ def lineup(
 def forward_lineup_on_black(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
+        base_speed: float = 0.3,
         confidence_threshold: float = 0.1,
+        lineup_speed: float = 0.15,
+        lineup_setpoint: float = 0.5,
+        lineup_bandwidth: float = 0.2,
 ) -> Sequential:
     return seq([
         drive_until_white([left_sensor, right_sensor], abs(base_speed), confidence_threshold=confidence_threshold),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
+            speed=abs(lineup_speed),
+            setpoint=lineup_setpoint,
+            bandwidth=lineup_bandwidth,
             target=SurfaceColor.BLACK,
         ),
     ])
@@ -128,9 +141,9 @@ def forward_lineup_on_white(
         right_sensor: IRSensor,
         base_speed: float = 0.3,
         confidence_threshold: float = 0.7,
-        kp: float = 1.0,
-        ki: float = 0.0,
-        kd: float = 0.0,
+        lineup_speed: float = 0.15,
+        lineup_setpoint: float = 0.5,
+        lineup_bandwidth: float = 0.2,
 ) -> Sequential:
     """
     Drive forward past black, then line up on white.
@@ -143,20 +156,26 @@ def forward_lineup_on_white(
         right_sensor: Right IR sensor instance
         base_speed: Forward speed in m/s (must be positive)
         confidence_threshold: Stop when confidence exceeds this
-        kp, ki, kd: PID gains
+        lineup_speed: Speed for lineup step in m/s (magnitude only)
+        lineup_setpoint: Target confidence for lineup alignment
+        lineup_bandwidth: Acceptable band around setpoint
 
     Returns:
         Sequential step: drive_until_black -> lineup_on_white
     """
     return seq([
-        drive_until_black([left_sensor, right_sensor], abs(base_speed)),
+        drive_until_black(
+            [left_sensor, right_sensor],
+            abs(base_speed),
+            confidence_threshold=confidence_threshold,
+        ),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
-            base_speed=abs(base_speed),
-            confidence_threshold=confidence_threshold,
+            speed=abs(lineup_speed),
+            setpoint=lineup_setpoint,
+            bandwidth=lineup_bandwidth,
             target=SurfaceColor.WHITE,
-            kp=kp, ki=ki, kd=kd,
         ),
     ])
 
@@ -167,9 +186,9 @@ def backward_lineup_on_black(
         right_sensor: IRSensor,
         base_speed: float = 0.3,
         confidence_threshold: float = 0.7,
-        kp: float = 1.0,
-        ki: float = 0.0,
-        kd: float = 0.0,
+        lineup_speed: float = 0.15,
+        lineup_setpoint: float = 0.5,
+        lineup_bandwidth: float = 0.2,
 ) -> Sequential:
     """
     Drive backward past white, then line up on black.
@@ -179,20 +198,26 @@ def backward_lineup_on_black(
         right_sensor: Right IR sensor instance
         base_speed: Backward speed in m/s (will be negated)
         confidence_threshold: Stop when confidence exceeds this
-        kp, ki, kd: PID gains
+        lineup_speed: Speed for lineup step in m/s (magnitude only)
+        lineup_setpoint: Target confidence for lineup alignment
+        lineup_bandwidth: Acceptable band around setpoint
 
     Returns:
         Sequential step: drive_until_white (backward) -> lineup_on_black (backward)
     """
     return seq([
-        drive_until_white([left_sensor, right_sensor], -abs(base_speed)),
+        drive_until_white(
+            [left_sensor, right_sensor],
+            -abs(base_speed),
+            confidence_threshold=confidence_threshold,
+        ),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
-            base_speed=-abs(base_speed),
-            confidence_threshold=confidence_threshold,
+            speed=-abs(lineup_speed),
+            setpoint=lineup_setpoint,
+            bandwidth=lineup_bandwidth,
             target=SurfaceColor.BLACK,
-            kp=kp, ki=ki, kd=kd,
         ),
     ])
 
@@ -203,9 +228,9 @@ def backward_lineup_on_white(
         right_sensor: IRSensor,
         base_speed: float = 0.3,
         confidence_threshold: float = 0.7,
-        kp: float = 1.0,
-        ki: float = 0.0,
-        kd: float = 0.0,
+        lineup_speed: float = 0.15,
+        lineup_setpoint: float = 0.5,
+        lineup_bandwidth: float = 0.2,
 ) -> Sequential:
     """
     Drive backward past black, then line up on white.
@@ -215,72 +240,25 @@ def backward_lineup_on_white(
         right_sensor: Right IR sensor instance
         base_speed: Backward speed in m/s (will be negated)
         confidence_threshold: Stop when confidence exceeds this
-        kp, ki, kd: PID gains
+        lineup_speed: Speed for lineup step in m/s (magnitude only)
+        lineup_setpoint: Target confidence for lineup alignment
+        lineup_bandwidth: Acceptable band around setpoint
 
     Returns:
         Sequential step: drive_until_black (backward) -> lineup_on_white (backward)
     """
     return seq([
-        drive_until_black([left_sensor, right_sensor], -abs(base_speed)),
+        drive_until_black(
+            [left_sensor, right_sensor],
+            -abs(base_speed),
+            confidence_threshold=confidence_threshold,
+        ),
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
-            base_speed=-abs(base_speed),
-            confidence_threshold=confidence_threshold,
+            speed=-abs(lineup_speed),
+            setpoint=lineup_setpoint,
+            bandwidth=lineup_bandwidth,
             target=SurfaceColor.WHITE,
-            kp=kp, ki=ki, kd=kd,
         ),
-    ])
-
-
-@dsl(tags=["motion", "lineup"])
-def edge_lineup_on_black(
-        left_sensor: IRSensor,
-        right_sensor: IRSensor,
-        approach_speed: float = 1.0,
-        lineup_speed: float = 0.12,
-        confidence_threshold: float = 0.7,
-        confidence_target: float = 0.5,
-        confidence_tolerance: float = 0.1,
-        steer_gain: float = 1.2,
-        kp: float = 1.0,
-        ki: float = 0.0,
-        kd: float = 0.0,
-) -> Sequential:
-    """
-    Drive until any sensor sees black, then align on the edge slowly.
-
-    This is useful when you're already at the correct distance and want a
-    careful edge lineup using the existing PID-threshold approach.
-
-    Args:
-        left_sensor: Left IR sensor instance
-        right_sensor: Right IR sensor instance
-        approach_speed: Speed in m/s to reach the line (positive = forward)
-        lineup_speed: Slow speed in m/s for edge alignment (magnitude only)
-        confidence_threshold: Stop when confidence exceeds this
-        confidence_target: Edge target confidence (default 0.5)
-        confidence_tolerance: Band around target to accept (default 0.1)
-        steer_gain: Rotation gain for left/right mismatch
-        kp, ki, kd: PID gains
-
-    Returns:
-        Sequential step: drive_until_black -> edge_lineup (slow)
-    """
-    direction = 1.0 if approach_speed >= 0 else -1.0
-    return seq([
-        drive_until_black(
-            [left_sensor, right_sensor],
-            approach_speed,
-            confidence_threshold=confidence_threshold,
-        ),
-        EdgeLineUp(EdgeLineUpConfig(
-            left_sensor=left_sensor,
-            right_sensor=right_sensor,
-            base_speed=direction * abs(lineup_speed),
-            confidence_target=confidence_target,
-            confidence_tolerance=confidence_tolerance,
-            target=SurfaceColor.BLACK,
-            steer_gain=steer_gain,
-        )),
     ])
