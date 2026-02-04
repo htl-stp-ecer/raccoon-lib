@@ -4,12 +4,6 @@
 
 using namespace platform::wombat::core;
 
-void LcmDataWriter::setMotorStop(uint8_t port, int value) {
-    exlcm::scalar_i32_t stop{};
-    stop.value = value;
-    lcm.publish("libstp/motor/" + std::to_string(port) + "/stop_cmd", &stop);
-}
-
 void LcmDataWriter::setMotor(uint8_t port, int valueData) {
     exlcm::scalar_i32_t publishedValue{};
 
@@ -38,6 +32,18 @@ void LcmDataWriter::resetBemfCounters() {
     for (int port = 0; port < 4; ++port) {
         lcm.publish("libstp/bemf/" + std::to_string(port) + "/reset_cmd", &resetCmd);
     }
+}
+
+void LcmDataWriter::setMotorStop(uint8_t port, int value) {
+    exlcm::scalar_i32_t stopCmd{};
+    stopCmd.value = value;
+    lcm.publish("libstp/motor/" + std::to_string(port) + "/stop_cmd", &stopCmd);
+}
+
+void LcmDataWriter::setShutdown(bool enabled) {
+    exlcm::scalar_i32_t shutdownCmd{};
+    shutdownCmd.value = enabled ? 1 : 0;
+    lcm.publish("libstp/system/shutdown_cmd", &shutdownCmd);
 }
 
 LcmDataWriter::LcmDataWriter() {

@@ -33,6 +33,10 @@ namespace platform::wombat::core
         void requestDataDump();
         void resetBemfCounters();
 
+        // STM32 shutdown flag - disables all motors and servos at firmware level.
+        // This is the safest way to ensure motors stop on program exit/crash.
+        void setShutdown(bool enabled);
+
     private:
         explicit LcmDataWriter();
         ~LcmDataWriter() = default;

@@ -1,4 +1,4 @@
-from .calibrate import calibrate_sensors, CalibrateSensors
+from .calibrate import calibrate
 from .calibrate_wfl import calibrate_wait_for_light, CalibrateWaitForLight
 from .calibrate_distance import (
     calibrate_distance,
@@ -11,8 +11,7 @@ from .calibrate_distance import (
 )
 
 __all__ = [
-    "calibrate_sensors",
-    "CalibrateSensors",
+    "calibrate",
     "calibrate_wait_for_light",
     "CalibrateWaitForLight",
     "calibrate_distance",
@@ -21,5 +20,5 @@ __all__ = [
     "PerWheelCalibration",
     "is_distance_calibrated",
     "check_distance_calibration",
-    "reset_distance_calibration"
+    "reset_distance_calibration",
 ]

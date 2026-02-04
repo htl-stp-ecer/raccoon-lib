@@ -37,6 +37,7 @@ namespace libstp::hal::motor
         [[nodiscard]] bool isInverted() const override { return inverted_; }
 
         static void disableAll();
+        static void enableAll();
 
     private:
         int port_;

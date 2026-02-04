@@ -1,24 +1,23 @@
-from libstp.robot.api import GenericRobot
-from libstp.screen.api import RenderScreen
-from libstp.sensor_ir import IRSensor
-from libstp.step import Step
+"""
+Unified calibration step (distance + IR sensors).
+"""
+
 from libstp.step.annotation import dsl
 
-
-@dsl(hidden=True)
-class CalibrateSensors(Step):
-    def __init__(self, calibration_time: float = 5.0) -> None:
-        super().__init__()
-        self.calibration_time = calibration_time
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        sensors = robot.defs.analog_sensors
-        ir_sensors = [sensor for sensor in sensors if isinstance(sensor, IRSensor)]
-
-        screen = RenderScreen(ir_sensors)
-        await screen.calibrate_black_white()
+from .calibrate_distance import CalibrateDistance
 
 
-@dsl(tags=["calibration", "sensor"])
-def calibrate_sensors(calibration_time: float = 5.0) -> CalibrateSensors:
-    return CalibrateSensors(calibration_time)
+@dsl(tags=["calibration"])
+def calibrate(distance_cm: float = 30.0) -> CalibrateDistance:
+    """
+    Create a unified calibration step.
+
+    Runs distance calibration and then IR sensor calibration.
+
+    Args:
+        distance_cm: Distance to drive for calibration (default 30cm)
+
+    Returns:
+        CalibrateDistance step instance
+    """
+    return CalibrateDistance(distance_cm, calibrate_light_sensors=True)
