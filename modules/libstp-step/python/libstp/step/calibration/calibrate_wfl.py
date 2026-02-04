@@ -1,16 +1,33 @@
+"""
+Wait-for-light sensor calibration step using the new UI library.
+"""
+
+from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
 from libstp.hal import AnalogSensor
-from libstp.screen.api import RenderScreen, WFLCalibrationResult
-from libstp.step import Step
 from libstp.step.annotation import dsl
+from libstp.ui.step import UIStep
+from libstp.ui.screens.wfl import (
+    WFLMeasureScreen,
+    WFLConfirmScreen,
+    WFLConfirmResult,
+)
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
 
+@dataclass
+class WFLCalibrationResult:
+    """Result of wait-for-light sensor calibration."""
+    light_off: float
+    light_on: float
+    threshold: float
+
+
 @dsl(hidden=True)
-class CalibrateWaitForLight(Step):
+class CalibrateWaitForLight(UIStep):
     """Step for calibrating a wait-for-light sensor."""
 
     def __init__(self, sensor: AnalogSensor) -> None:
@@ -39,19 +56,43 @@ class CalibrateWaitForLight(Step):
         4. Threshold is computed and stored
 
         Args:
-            robot: The robot instance (not used directly but required by Step interface)
+            robot: The robot instance
         """
-        screen = RenderScreen([])  # No IR sensors needed for WFL calibration
-        result = await screen.calibrate_wfl(self.sensor)
+        port = getattr(self.sensor, 'port', 0)
 
-        if result:
-            self.calibration_result = result
-            self.debug(
-                f"WFL calibration complete: off={result.light_off}, "
-                f"on={result.light_on}, threshold={result.threshold}"
+        while True:
+            # Step 1: Measure light OFF (covered)
+            off_result = await self.show(WFLMeasureScreen(port=port, is_on=False))
+            light_off = off_result.value
+
+            # Step 2: Measure light ON (exposed)
+            on_result = await self.show(WFLMeasureScreen(port=port, is_on=True))
+            light_on = on_result.value
+
+            # Step 3: Confirm values
+            confirm_result = await self.show(
+                WFLConfirmScreen(port=port, light_off=light_off, light_on=light_on)
             )
-        else:
-            self.warn("WFL calibration was cancelled or failed")
+
+            if confirm_result.confirmed:
+                # Store result
+                self.calibration_result = WFLCalibrationResult(
+                    light_off=confirm_result.light_off,
+                    light_on=confirm_result.light_on,
+                    threshold=confirm_result.threshold,
+                )
+
+                # Apply to sensor if it has a set_threshold method
+                if hasattr(self.sensor, 'set_threshold'):
+                    self.sensor.set_threshold(confirm_result.threshold)
+
+                self.debug(
+                    f"WFL calibration complete: off={confirm_result.light_off}, "
+                    f"on={confirm_result.light_on}, threshold={confirm_result.threshold}"
+                )
+                return
+
+            # User wants to retry - loop continues
 
 
 @dsl(tags=["calibration", "light"])

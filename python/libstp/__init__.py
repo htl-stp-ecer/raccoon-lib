@@ -19,10 +19,12 @@ from libstp import hal
 from libstp import foundation
 from libstp.step import *
 from libstp.step import __all__ as _step_all
+from libstp.ui import __all__ as _ui_all
 from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol
 from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
-from libstp.screen.api import RenderScreen
+# UI library (replaces legacy RenderScreen)
+from libstp.ui import UIStep, UIScreen
 from libstp.drive import Drive, MotionLimits
 from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
@@ -58,8 +60,9 @@ __all__ = [
     "IRSensorCalibration",
     # Timing
     "StepTimingTracker",
-    # Screen
-    "RenderScreen",
+    # UI
+    "UIStep",
+    "UIScreen",
     # Drive & Kinematics
     "Drive",
     "FusedOdometry",
@@ -74,6 +77,7 @@ __all__ = [
     "IMU",
     # All step exports
     *_step_all,
+    *_ui_all,
 ]
 
 _PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}

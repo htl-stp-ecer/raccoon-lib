@@ -75,12 +75,31 @@ void libstp::hal::motor::Motor::brake()
 
 void libstp::hal::motor::Motor::disableAll()
 {
+    // First, set the STM32 shutdown flag - this is the safest way to ensure
+    // all motors and servos stop at the firmware level, even if we crash
+    // before completing the individual motor stop commands.
+    platform::wombat::core::LcmDataWriter::instance().setShutdown(true);
+
+    // Also send individual stop commands for redundancy
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
     {
         platform::wombat::core::LcmDataWriter::instance().setMotorStop(p, 1);
         platform::wombat::core::LcmDataWriter::instance().setMotor(p, 0);
     }
-    LIBSTP_LOG_DEBUG("Wombat Motor disableAll executed (stop latch engaged)");
+    LIBSTP_LOG_DEBUG("Wombat Motor disableAll executed (STM32 shutdown + stop latch engaged)");
+}
+
+void libstp::hal::motor::Motor::enableAll()
+{
+    // Clear the STM32 shutdown flag to allow motors and servos to operate
+    platform::wombat::core::LcmDataWriter::instance().setShutdown(false);
+
+    // Clear individual motor stop latches
+    for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
+    {
+        platform::wombat::core::LcmDataWriter::instance().setMotorStop(p, 0);
+    }
+    LIBSTP_LOG_DEBUG("Wombat Motor enableAll executed (STM32 shutdown cleared)");
 }
 
 const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibration() const

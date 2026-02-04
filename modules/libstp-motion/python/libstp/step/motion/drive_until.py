@@ -92,16 +92,16 @@ class MoveUntil(Step):
         """Get velocity, optionally scaled by distance to target."""
         scale = 1.0
         if self.config.scale_speed_on_approach:
-            # Scale by minimum confidence of OPPOSITE color across all sensors
-            # (use minimum so we slow down when ANY sensor is approaching target)
-            min_opposite_confidence = 1.0
+            # Slow down based on target confidence so we can brake before crossing the line.
+            max_target_confidence = 0.0
             for sensor in self._sensors:
                 if self.config.target == SurfaceColor.BLACK:
-                    opposite_confidence = sensor.probabilityOfWhite()
+                    target_confidence = sensor.probabilityOfBlack()
                 else:
-                    opposite_confidence = sensor.probabilityOfBlack()
-                min_opposite_confidence = min(min_opposite_confidence, opposite_confidence)
-            scale = max(min_opposite_confidence, 0.2)  # Minimum 20% speed
+                    target_confidence = sensor.probabilityOfWhite()
+                max_target_confidence = max(max_target_confidence, target_confidence)
+            approach_scale = max(1.0 - max_target_confidence, 0.0)
+            scale = max(approach_scale * approach_scale, 0.15)  # Minimum 15% speed
 
         return ChassisVelocity(
             self.config.forward_speed * scale,

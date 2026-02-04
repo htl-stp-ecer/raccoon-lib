@@ -88,6 +88,10 @@ class GenericRobot(ABC, ClassNameLogger):
 
     def __init__(self) -> None:
         """Initialize the robot and log configuration status."""
+        # Clear STM32 shutdown flag to enable motors and servos
+        from libstp.hal import Motor
+        Motor.enable_all()
+
         # Initialize button from defs
         from libstp import button
         button.set_digital(self.defs.button)
@@ -125,19 +129,51 @@ class GenericRobot(ABC, ClassNameLogger):
 
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
+        missions = list(self.missions)
+        setup_mission = self.setup_mission
+        shutdown_mission = self.shutdown_mission
+
+        self._preload_missions(missions, setup_mission, shutdown_mission)
+
         initialize_timer() # reset clock to 0
-        if self.setup_mission is not None:
+        if setup_mission is not None:
             self.info("Running setup mission")
-            await self.setup_mission.run(self)
+            await setup_mission.run(self)
 
         initialize_timer() # reset clock to 0 before main missions
         self.synchronizer.start_recording()
-        for mission in self.missions:
+        for mission in missions:
             self.info(f"Starting mission: {mission}")
             await mission.run(self)
             self.info(f"Finished mission: {mission}")
 
         initialize_timer() # reset clock to 0 before shutdown mission
-        if self.shutdown_mission is not None:
+        if shutdown_mission is not None:
             self.info("Running shutdown mission")
-            await self.shutdown_mission.run(self)
+            await shutdown_mission.run(self)
+
+    def _preload_missions(
+        self,
+        missions: List["MissionProtocol"],
+        setup_mission: Optional["MissionProtocol"],
+        shutdown_mission: Optional["MissionProtocol"],
+    ) -> None:
+        """Build mission sequences early to validate step construction."""
+        preload_targets: List[tuple[str, "MissionProtocol"]] = []
+        if setup_mission is not None:
+            preload_targets.append(("setup", setup_mission))
+        preload_targets.extend(("main", mission) for mission in missions)
+        if shutdown_mission is not None:
+            preload_targets.append(("shutdown", shutdown_mission))
+
+        if not preload_targets:
+            return
+
+        self.info("Preloading mission sequences")
+        for label, mission in preload_targets:
+            sequence_builder = getattr(mission, "sequence", None)
+            if not callable(sequence_builder):
+                self.warn(f"Mission does not expose sequence() for preload: {mission}")
+                continue
+            self.debug(f"Preloading {label} mission: {mission}")
+            sequence_builder()
