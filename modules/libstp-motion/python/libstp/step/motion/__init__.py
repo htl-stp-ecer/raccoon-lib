@@ -16,7 +16,6 @@ from .drive_until import (
 )
 from .lineup import (
     LineUp,
-    LineUpConfig,
     lineup,
     forward_lineup_on_black,
     forward_lineup_on_white,
@@ -59,7 +58,6 @@ __all__ = [
     "strafe_until_white",
     # Lineup
     "LineUp",
-    "LineUpConfig",
     "lineup",
     "forward_lineup_on_black",
     "forward_lineup_on_white",

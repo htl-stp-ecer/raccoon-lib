@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
 
-class Lineup(Step):
+class LineUp(Step):
     def __init__(
             self,
             left_sensor: IRSensor,
@@ -101,8 +101,8 @@ def lineup(
         setpoint: float = 0.5,
         bandwidth: float = 0.2,
         target: SurfaceColor = SurfaceColor.BLACK,
-) -> Lineup:
-    return Lineup(
+) -> LineUp:
+    return LineUp(
         left_sensor=left_sensor,
         right_sensor=right_sensor,
         speed=speed,

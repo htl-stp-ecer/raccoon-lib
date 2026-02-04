@@ -24,7 +24,7 @@ from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol
 from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
 # UI library (replaces legacy RenderScreen)
-from libstp.ui import UIStep, UIScreen
+from libstp.ui import *
 from libstp.drive import Drive, MotionLimits
 from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
