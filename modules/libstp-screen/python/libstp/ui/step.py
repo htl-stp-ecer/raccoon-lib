@@ -77,11 +77,6 @@ class UIStep(Step, ABC):
         Returns:
             Whatever the screen passed to close()
         """
-        # Ensure only one dynamic screen is active at a time. If a previous
-        # screen is still rendered on the Flutter side, close it before
-        # replacing it to avoid stacked routes that reappear on pop.
-        await self.close_ui()
-
         # Set up screen
         screen._step = self
         screen._closed = False
@@ -224,9 +219,6 @@ class UIStep(Step, ABC):
                 await asyncio.sleep(0.1)
             await self.close_ui()
         """
-        # Same single-screen guarantee as `show`.
-        await self.close_ui()
-
         screen._step = self
         screen._closed = False
         screen._result = None

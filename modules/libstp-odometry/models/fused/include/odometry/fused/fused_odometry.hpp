@@ -5,6 +5,8 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
+#include <chrono>
 
 #include "odometry/odometry.hpp"
 #include "hal/IIMU.hpp"
@@ -16,7 +18,20 @@ namespace libstp::odometry::fused
      * Configuration for FusedOdometry
      */
     struct FusedOdometryConfig {
-        int imu_ready_timeout_ms{1000};  ///< Timeout waiting for IMU to be ready (milliseconds)
+        int imu_ready_timeout_ms;
+        bool enable_accel_fusion;
+        float bemf_trust;
+        float accel_lpf_alpha;
+
+        FusedOdometryConfig(int imu_ready_timeout_ms = 1000,
+                            bool enable_accel_fusion = true,
+                            float bemf_trust = 0.95f,
+                            float accel_lpf_alpha = 0.3f)
+            : imu_ready_timeout_ms(imu_ready_timeout_ms)
+            , enable_accel_fusion(enable_accel_fusion)
+            , bemf_trust(bemf_trust)
+            , accel_lpf_alpha(accel_lpf_alpha)
+        {}
     };
 
     /**
@@ -55,8 +70,26 @@ namespace libstp::odometry::fused
         Eigen::Quaternionf initial_imu_orientation_; // Raw IMU orientation at first update
         bool imu_initialized_;
 
+        // Complementary filter state
+        Eigen::Vector3f fused_body_velocity_{Eigen::Vector3f::Zero()};
+        bool fusion_initialized_{false};
+
+        // IMU accel accumulator (written by LCM thread, read+reset by control thread)
+        mutable std::mutex accel_mutex_;
+        Eigen::Vector3f accel_delta_v_{Eigen::Vector3f::Zero()};       // Accumulated velocity delta from IMU
+        Eigen::Vector3f filtered_imu_accel_{Eigen::Vector3f::Zero()};  // LPF state (LCM thread only)
+        std::chrono::steady_clock::time_point last_accel_time_;
+        bool accel_callback_active_{false};
+
         // Helper methods
         [[nodiscard]] Eigen::Quaternionf getRelativeOrientation() const;
+
+        /**
+         * Get gravity-compensated linear acceleration in body frame
+         * Uses IMU orientation to properly subtract gravity regardless of robot tilt
+         * @return Linear acceleration in body frame (m/s²), X=forward, Y=right, Z=up
+         */
+        [[nodiscard]] Eigen::Vector3f getLinearAcceleration() const;
 
     public:
         /**
@@ -69,7 +102,7 @@ namespace libstp::odometry::fused
                       std::shared_ptr<kinematics::IKinematics> kinematics,
                       FusedOdometryConfig config = {});
 
-        ~FusedOdometry() override = default;
+        ~FusedOdometry() override;
 
         // IOdometry interface implementation
         void update(double dt) override;

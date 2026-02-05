@@ -1,10 +1,17 @@
 """
 Distance calibration step using the new UI library.
+
+Supports two calibration modes:
+- Runtime calibration: Apply measured ticks_to_rad for this run (best accuracy now)
+- Persistent learning: Update YAML baseline using EMA (converges over multiple runs)
 """
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, TYPE_CHECKING
+
+import yaml
 
 from libstp.step.annotation import dsl
 from libstp.ui.step import UIStep
@@ -19,6 +26,12 @@ from libstp.foundation import warn
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
     from libstp.sensor_ir import IRSensor
+
+
+# Default EMA alpha for calibration persistence
+# Higher = slower convergence, more stable baseline
+# 0.7 means ~83% of correction absorbed after 5 calibrations
+DEFAULT_EMA_ALPHA = 0.7
 
 
 class CalibrationRequiredError(Exception):
@@ -62,18 +75,106 @@ class PerWheelCalibration:
     old_ticks_to_rad: float
     new_ticks_to_rad: float
     delta_ticks: int
+    ema_baseline: float = 0.0  # EMA-filtered value for YAML persistence
+    motor_name: Optional[str] = None  # Motor name in YAML definitions
+
+
+def _find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
+    """Find project root by searching upward for raccoon.project.yml."""
+    if start_path is None:
+        try:
+            start_path = Path.cwd()
+        except (FileNotFoundError, OSError):
+            return None
+
+    current = start_path.resolve()
+    while current != current.parent:
+        if (current / "raccoon.project.yml").exists():
+            return current
+        current = current.parent
+    return None
+
+
+def _update_yaml_calibration(
+    results: List[PerWheelCalibration],
+    project_root: Optional[Path] = None,
+) -> bool:
+    """
+    Update ticks_to_rad values in raccoon.project.yml using EMA baselines.
+
+    Args:
+        results: List of calibration results with ema_baseline and motor_name set
+        project_root: Path to project root (auto-detected if None)
+
+    Returns:
+        True if YAML was updated successfully, False otherwise
+    """
+    if project_root is None:
+        project_root = _find_project_root()
+
+    if project_root is None:
+        return False
+
+    config_path = project_root / "raccoon.project.yml"
+    if not config_path.exists():
+        return False
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        if not isinstance(config, dict):
+            return False
+
+        definitions = config.get('definitions', {})
+        updated = False
+
+        for result in results:
+            if result.motor_name and result.motor_name in definitions:
+                motor_def = definitions[result.motor_name]
+                if 'calibration' in motor_def:
+                    motor_def['calibration']['ticks_to_rad'] = result.ema_baseline
+                    updated = True
+
+        if updated:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                yaml.safe_dump(config, f, sort_keys=False, default_flow_style=False)
+
+        return updated
+    except (yaml.YAMLError, OSError, KeyError):
+        return False
+
+
+def _find_motor_name_by_port(config: Dict, port: int) -> Optional[str]:
+    """Find motor definition name by port number."""
+    definitions = config.get('definitions', {})
+    for name, definition in definitions.items():
+        if isinstance(definition, dict) and definition.get('port') == port:
+            return name
+    return None
 
 
 @dsl(hidden=True)
 class CalibrateDistance(UIStep):
-    """Step for calibrating robot distance estimation via per-wheel ticks_to_rad adjustment."""
+    """
+    Step for calibrating robot distance estimation via per-wheel ticks_to_rad adjustment.
+
+    Two calibration mechanisms:
+    1. Runtime: Apply the measured ticks_to_rad directly for best accuracy this run
+    2. Persistent: Update YAML baseline using EMA so it converges over multiple runs
+
+    The EMA formula: new_baseline = old_baseline × α + measured × (1 - α)
+    With α=0.7, after ~5 calibrations the baseline absorbs ~83% of any systematic error.
+    """
 
     _SENSOR_RETRY_SAMPLE_SECONDS = 5.0
 
     def __init__(
         self,
         calibration_distance_cm: float = 30.0,
-        calibrate_light_sensors: bool = False
+        calibrate_light_sensors: bool = False,
+        persist_to_yaml: bool = True,
+        ema_alpha: float = DEFAULT_EMA_ALPHA,
     ) -> None:
         """
         Initialize the distance calibration step.
@@ -81,15 +182,19 @@ class CalibrateDistance(UIStep):
         Args:
             calibration_distance_cm: Distance to drive for calibration (default 30cm)
             calibrate_light_sensors: If True, calibrate IR sensors after distance confirmation
+            persist_to_yaml: If True, update raccoon.project.yml with EMA-filtered baseline
+            ema_alpha: EMA coefficient for baseline updates (0.0-1.0, higher = slower convergence)
         """
         super().__init__()
         self.calibration_distance_cm = calibration_distance_cm
         self.calibrate_light_sensors = calibrate_light_sensors
+        self.persist_to_yaml = persist_to_yaml
+        self.ema_alpha = ema_alpha
         self.result: Optional[DistanceCalibrationResult] = None
         self.per_wheel_results: List[PerWheelCalibration] = []
 
     def _generate_signature(self) -> str:
-        return f"CalibrateDistance(distance_cm={self.calibration_distance_cm}, light_sensors={self.calibrate_light_sensors})"
+        return f"CalibrateDistance(distance_cm={self.calibration_distance_cm}, light_sensors={self.calibrate_light_sensors}, persist={self.persist_to_yaml})"
 
     async def _sample_sensors(
         self,
@@ -306,19 +411,54 @@ class CalibrateDistance(UIStep):
             )
 
             if confirm_result.confirmed:
+                # Load YAML config for motor name lookup and persistence
+                yaml_config: Optional[Dict] = None
+                project_root: Optional[Path] = None
+                if self.persist_to_yaml:
+                    project_root = _find_project_root()
+                    if project_root:
+                        try:
+                            with open(project_root / "raccoon.project.yml", 'r') as f:
+                                yaml_config = yaml.safe_load(f)
+                        except (yaml.YAMLError, OSError):
+                            self.warn("Could not load raccoon.project.yml for persistence")
+
                 # Apply calibration to each motor
                 for result in self.per_wheel_results:
+                    # Compute EMA baseline for persistence
+                    result.ema_baseline = (
+                        result.old_ticks_to_rad * self.ema_alpha +
+                        result.new_ticks_to_rad * (1 - self.ema_alpha)
+                    )
+
+                    # Find motor name for YAML persistence
+                    if yaml_config:
+                        result.motor_name = _find_motor_name_by_port(yaml_config, result.motor_port)
+
                     for motor in drive_motors:
                         if motor.port == result.motor_port:
                             old_cal = motor.get_calibration()
                             new_cal = MotorCalibration()
                             new_cal.ff = old_cal.ff
                             new_cal.pid = old_cal.pid
+                            # Apply FULL measured value for this run (best accuracy now)
                             new_cal.ticks_to_rad = result.new_ticks_to_rad
                             new_cal.vel_lpf_alpha = old_cal.vel_lpf_alpha
                             motor.set_calibration(new_cal)
-                            self.debug(f"Applied calibration to motor {motor.port}")
+
+                            self.debug(
+                                f"Motor {motor.port}: applied {result.new_ticks_to_rad:.6f} "
+                                f"(was {result.old_ticks_to_rad:.6f}, "
+                                f"EMA baseline: {result.ema_baseline:.6f})"
+                            )
                             break
+
+                # Persist EMA baselines to YAML
+                if self.persist_to_yaml and project_root:
+                    if _update_yaml_calibration(self.per_wheel_results, project_root):
+                        self.info("Updated ticks_to_rad baselines in raccoon.project.yml")
+                    else:
+                        self.warn("Failed to persist calibration to raccoon.project.yml")
 
                 # Mark as calibrated
                 global _calibrated
@@ -341,16 +481,34 @@ class CalibrateDistance(UIStep):
 @dsl(tags=["calibration", "distance"])
 def calibrate_distance(
     distance_cm: float = 30.0,
-    calibrate_light_sensors: bool = False
+    calibrate_light_sensors: bool = False,
+    persist_to_yaml: bool = True,
+    ema_alpha: float = DEFAULT_EMA_ALPHA,
 ) -> CalibrateDistance:
     """
     Create a distance calibration step.
 
+    This calibration:
+    1. Applies the measured ticks_to_rad for this run (best accuracy now)
+    2. Persists an EMA-filtered baseline to YAML (converges over multiple runs)
+
+    The EMA formula: new_baseline = old × α + measured × (1 - α)
+    - α=0.7 (default): ~83% of error absorbed after 5 calibrations
+    - α=0.9: Slower, ~41% after 5 calibrations (more stable)
+    - α=0.5: Faster, ~97% after 5 calibrations (more responsive)
+
     Args:
         distance_cm: Distance to drive for calibration (default 30cm)
         calibrate_light_sensors: If True, calibrate IR sensors after distance confirmation
+        persist_to_yaml: If True, update raccoon.project.yml with EMA baseline
+        ema_alpha: EMA coefficient (0.0-1.0, higher = slower convergence)
 
     Returns:
         CalibrateDistance step instance
     """
-    return CalibrateDistance(distance_cm, calibrate_light_sensors)
+    return CalibrateDistance(
+        distance_cm,
+        calibrate_light_sensors,
+        persist_to_yaml,
+        ema_alpha,
+    )

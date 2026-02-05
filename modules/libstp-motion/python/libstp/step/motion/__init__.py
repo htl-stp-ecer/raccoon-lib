@@ -15,8 +15,6 @@ from .drive_until import (
     strafe_until_white,
 )
 from .lineup import (
-    LineUp,
-    lineup,
     forward_lineup_on_black,
     forward_lineup_on_white,
     backward_lineup_on_black,
@@ -57,8 +55,6 @@ __all__ = [
     "strafe_until_black",
     "strafe_until_white",
     # Lineup
-    "LineUp",
-    "lineup",
     "forward_lineup_on_black",
     "forward_lineup_on_white",
     "backward_lineup_on_black",

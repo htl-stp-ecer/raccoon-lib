@@ -39,16 +39,19 @@ PYBIND11_MODULE(odometry_fused, m)
     // FusedOdometryConfig struct
     py::class_<libstp::odometry::fused::FusedOdometryConfig>(m, "FusedOdometryConfig",
             "Configuration for FusedOdometry.")
-        .def(py::init<>())
-        .def(py::init([](py::kwargs kwargs) {
-            libstp::odometry::fused::FusedOdometryConfig cfg;
-            if (kwargs.contains("imu_ready_timeout_ms")) {
-                cfg.imu_ready_timeout_ms = kwargs["imu_ready_timeout_ms"].cast<int>();
-            }
-            return cfg;
-        }))
+        .def(py::init<int, bool, float, float>(),
+             py::arg("imu_ready_timeout_ms") = 1000,
+             py::arg("enable_accel_fusion") = true,
+             py::arg("bemf_trust") = 0.95f,
+             py::arg("accel_lpf_alpha") = 0.3f)
         .def_readwrite("imu_ready_timeout_ms", &libstp::odometry::fused::FusedOdometryConfig::imu_ready_timeout_ms,
-                      "Timeout waiting for IMU to be ready (milliseconds, default: 1000)");
+                      "Timeout waiting for IMU to be ready (milliseconds, default: 1000)")
+        .def_readwrite("enable_accel_fusion", &libstp::odometry::fused::FusedOdometryConfig::enable_accel_fusion,
+                      "Enable complementary filter fusing BEMF + IMU accel (default: true)")
+        .def_readwrite("bemf_trust", &libstp::odometry::fused::FusedOdometryConfig::bemf_trust,
+                      "Complementary filter alpha: 1.0 = pure BEMF, 0.0 = pure IMU (default: 0.95)")
+        .def_readwrite("accel_lpf_alpha", &libstp::odometry::fused::FusedOdometryConfig::accel_lpf_alpha,
+                      "Low-pass filter for accelerometer noise, 0-1, higher = less filtering (default: 0.3)");
 
     py::class_<libstp::odometry::fused::FusedOdometry, libstp::odometry::IOdometry,
                 std::shared_ptr<libstp::odometry::fused::FusedOdometry>>(

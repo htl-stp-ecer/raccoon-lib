@@ -36,7 +36,7 @@ function(register_libstp_module module_name is_interface additional_libraries)
             # Default to STATIC libs to avoid shared-lib cycles across modules.
             set(_lib_type STATIC)
             # Some modules need to be shared so state lives in one place across bindings.
-            if (module_name STREQUAL "button")
+            if (module_name STREQUAL "button" OR module_name STREQUAL "foundation")
                 set(_lib_type SHARED)
             endif ()
             add_library(${module_name} ${_lib_type} ${MODULE_SRC})

@@ -63,3 +63,17 @@ bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)
     // Mock platform always returns true immediately - no async data needed
     return true;
 }
+
+void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (linear_accel == nullptr)
+    {
+        throw std::runtime_error("IMU getLinearAcceleration failed! Output pointer is null.");
+    }
+#endif
+    // Mock returns zero linear acceleration (robot stationary)
+    linear_accel[0] = 0.0f;
+    linear_accel[1] = 0.0f;
+    linear_accel[2] = 0.0f;
+}

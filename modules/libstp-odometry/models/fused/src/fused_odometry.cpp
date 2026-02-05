@@ -5,6 +5,8 @@
 #include "odometry/fused/fused_odometry.hpp"
 #include "odometry/angle_utils.hpp"
 #include "foundation/config.hpp"
+#include <cmath>
+#include <algorithm>
 
 namespace libstp::odometry::fused
 {
@@ -30,7 +32,42 @@ namespace libstp::odometry::fused
                           config_.imu_ready_timeout_ms);
         }
 
+        // Register callback on IMU accel data arrival (runs in LCM thread)
+        if (config_.enable_accel_fusion) {
+            imu_->setLinearAccelCallback([this](float ax, float ay, float az) {
+                std::lock_guard<std::mutex> lock(accel_mutex_);
+
+                auto now = std::chrono::steady_clock::now();
+                if (!accel_callback_active_) {
+                    last_accel_time_ = now;
+                    accel_callback_active_ = true;
+                    return;
+                }
+
+                const float dt = std::chrono::duration<float>(now - last_accel_time_).count();
+                last_accel_time_ = now;
+
+                if (dt <= 0.0f || dt > 0.1f) return;  // skip gaps
+
+                // Low-pass filter
+                const float lpf = std::clamp(config_.accel_lpf_alpha, 0.0f, 1.0f);
+                const Eigen::Vector3f raw(ax, ay, az);
+                filtered_imu_accel_ = lpf * raw + (1.0f - lpf) * filtered_imu_accel_;
+
+                // Accumulate velocity delta (only XY, robot is 2D)
+                accel_delta_v_.x() += filtered_imu_accel_.x() * dt;
+                accel_delta_v_.y() += filtered_imu_accel_.y() * dt;
+            });
+        }
+
         LIBSTP_LOG_TRACE("FusedOdometry::ctor initialized with IMU and kinematics");
+    }
+
+    FusedOdometry::~FusedOdometry()
+    {
+        if (imu_) {
+            imu_->setLinearAccelCallback(nullptr);
+        }
     }
 
     Eigen::Quaternionf FusedOdometry::getRelativeOrientation() const
@@ -48,13 +85,27 @@ namespace libstp::odometry::fused
         return relative.normalized();
     }
 
+    Eigen::Vector3f FusedOdometry::getLinearAcceleration() const
+    {
+        if (!imu_) {
+            return Eigen::Vector3f::Zero();
+        }
+
+        // Get gravity-compensated linear acceleration from IMU (already computed by coprocessor)
+        float linear_accel[3];
+        imu_->getLinearAcceleration(linear_accel);
+        return Eigen::Vector3f(linear_accel[0], linear_accel[1], linear_accel[2]);
+    }
+
     void FusedOdometry::update(double dt)
     {
         if (!imu_ || !kinematics_) return;
+        if (dt <= 0.0) return;
 
-        // ===== ORIENTATION: Read and process IMU =====
+        const float dt_f = static_cast<float>(dt);
 
-        // Initialize IMU baseline on first update
+        // ===== ORIENTATION =====
+
         if (!imu_initialized_) {
             initial_imu_orientation_ = imu_->getOrientation();
             imu_initialized_ = true;
@@ -67,31 +118,67 @@ namespace libstp::odometry::fused
             );
         }
 
-        // Get relative orientation (from initial IMU reading)
         const Eigen::Quaternionf relative_orientation = getRelativeOrientation();
-
-        // Current world orientation = origin orientation * relative orientation
         orientation_ = origin_orientation_ * relative_orientation;
         orientation_.normalize();
 
-        // ===== POSITION: Integrate velocity from kinematics =====
+        // ===== BEMF velocity (read at control loop rate ~20Hz) =====
 
-        // Get body-frame velocity from kinematics (uses wheel encoders internally)
-        const foundation::ChassisVelocity body_velocity = kinematics_->estimateState();
+        const foundation::ChassisVelocity body_velocity_raw = kinematics_->estimateState();
+        const Eigen::Vector3f v_bemf(body_velocity_raw.vx, body_velocity_raw.vy, 0.0f);
+        Eigen::Vector3f v_body = v_bemf;
 
-        // Create 3D velocity vector in body frame (2D motion, z=0)
-        const Eigen::Vector3f v_body(body_velocity.vx, body_velocity.vy, 0.0f);
+        LIBSTP_LOG_DEBUG(
+            "FusedOdometry::update [BEMF] dt={:.4f} v_bemf=({:.4f}, {:.4f}) wz={:.4f}",
+            dt, v_bemf.x(), v_bemf.y(), body_velocity_raw.wz
+        );
 
-        // Transform body velocity to world frame using current orientation
+        // ===== COMPLEMENTARY FILTER with accumulated IMU delta-v =====
+        //
+        // The LCM thread accumulates accel_delta_v_ at IMU rate (~100Hz).
+        // Here at control rate (~20Hz) we grab the accumulated delta, build
+        // the IMU velocity estimate, and blend with BEMF.
+
+        if (config_.enable_accel_fusion && fusion_initialized_) {
+            // Grab and reset accumulated velocity delta from IMU thread
+            Eigen::Vector3f delta_v;
+            {
+                std::lock_guard<std::mutex> lock(accel_mutex_);
+                delta_v = accel_delta_v_;
+                accel_delta_v_ = Eigen::Vector3f::Zero();
+            }
+
+            const Eigen::Vector3f v_imu(
+                fused_body_velocity_.x() + delta_v.x(),
+                fused_body_velocity_.y() + delta_v.y(),
+                0.0f
+            );
+
+            const float alpha = std::clamp(config_.bemf_trust, 0.0f, 1.0f);
+            v_body = alpha * v_bemf + (1.0f - alpha) * v_imu;
+
+            LIBSTP_LOG_DEBUG(
+                "FusedOdometry::update [FUSE] alpha={:.3f} v_bemf=({:.4f}, {:.4f}) "
+                "v_imu=({:.4f}, {:.4f}) v_fused=({:.4f}, {:.4f}) "
+                "delta_v=({:.4f}, {:.4f})",
+                alpha, v_bemf.x(), v_bemf.y(),
+                v_imu.x(), v_imu.y(),
+                v_body.x(), v_body.y(),
+                delta_v.x(), delta_v.y()
+            );
+        }
+
+        fused_body_velocity_ = v_body;
+        fusion_initialized_ = true;
+
+        // Transform to world frame and integrate position
         const Eigen::Vector3f v_world = orientation_ * v_body;
+        position_ += v_world * dt_f;
 
-        // Integrate position in world frame
-        position_ += v_world * static_cast<float>(dt);
-
-        LIBSTP_LOG_TRACE(
-            "FusedOdometry::update dt={} body_vel=({:.3f}, {:.3f}) world_vel=({:.3f}, {:.3f}) pos=({:.3f}, {:.3f}) heading={:.3f}",
-            dt,
-            body_velocity.vx, body_velocity.vy,
+        LIBSTP_LOG_DEBUG(
+            "FusedOdometry::update [RESULT] v_body=({:.4f}, {:.4f}) v_world=({:.4f}, {:.4f}) "
+            "pos=({:.4f}, {:.4f}) heading={:.4f}",
+            v_body.x(), v_body.y(),
             v_world.x(), v_world.y(),
             position_.x(), position_.y(),
             getHeading()
@@ -164,6 +251,16 @@ namespace libstp::odometry::fused
         // Re-initialize IMU to current reading
         imu_initialized_ = false;
 
+        // Reset complementary filter state
+        fused_body_velocity_ = Eigen::Vector3f::Zero();
+        fusion_initialized_ = false;
+        {
+            std::lock_guard<std::mutex> lock(accel_mutex_);
+            accel_delta_v_ = Eigen::Vector3f::Zero();
+            filtered_imu_accel_ = Eigen::Vector3f::Zero();
+            accel_callback_active_ = false;
+        }
+
         LIBSTP_LOG_TRACE(
             "FusedOdometry::reset to pose pos=({:.3f}, {:.3f}, {:.3f}) quat=({:.3f}, {:.3f}, {:.3f}, {:.3f})",
             pose.position.x(), pose.position.y(), pose.position.z(),
@@ -194,6 +291,16 @@ namespace libstp::odometry::fused
 
         // Re-initialize IMU to current reading
         imu_initialized_ = false;
+
+        // Reset complementary filter state
+        fused_body_velocity_ = Eigen::Vector3f::Zero();
+        fusion_initialized_ = false;
+        {
+            std::lock_guard<std::mutex> lock(accel_mutex_);
+            accel_delta_v_ = Eigen::Vector3f::Zero();
+            filtered_imu_accel_ = Eigen::Vector3f::Zero();
+            accel_callback_active_ = false;
+        }
 
         LIBSTP_LOG_TRACE("FusedOdometry::reset to origin");
     }

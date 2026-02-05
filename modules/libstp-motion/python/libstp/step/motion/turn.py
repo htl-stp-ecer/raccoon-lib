@@ -42,7 +42,7 @@ class Turn(Step):
         motion = TurnMotion(robot.drive, robot.odometry, UnifiedMotionPidConfig(), self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 
-        update_rate = 1 / 10  # 10 Hz
+        update_rate = 1 / 20  # 20 Hz
         last_time = asyncio.get_event_loop().time() - update_rate  # seed so first dt ~= update_rate
         while not motion.is_finished():
             current_time = asyncio.get_event_loop().time()

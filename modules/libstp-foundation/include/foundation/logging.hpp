@@ -42,12 +42,31 @@ namespace logging {
         constexpr int level_value(Level level) {
             return static_cast<int>(level);
         }
+
+        // Extract basename from full path (e.g., "/path/to/file.cpp" -> "file.cpp")
+        constexpr const char* basename(const char* path) {
+            const char* file = path;
+            while (*path) {
+                if (*path == '/' || *path == '\\') {
+                    file = path + 1;
+                }
+                ++path;
+            }
+            return file;
+        }
     }
 
     void initialize_timer();
     void init();
 
+    // Runtime log level filtering API
+    void set_global_level(Level level);
+    void set_file_level(const std::string& filename, Level level);
+    void clear_file_level(const std::string& filename);
+    void clear_filters();
+
     bool is_enabled(Level level);
+    bool is_enabled_for(Level level, const char* file);
     void log(Level level, std::string_view message);
 
     // Format-aware logging helper that keeps formatting outside of the logging backend.
@@ -70,13 +89,34 @@ namespace logging {
         }
     }
 
+    // Format-aware logging helper with file-based filtering
+    template <typename... Args>
+    inline void logf_file(Level level, const char* file, std::string_view fmt_str, Args&&... args) {
+        if (!is_enabled_for(level, file)) {
+            return;
+        }
+        if constexpr (sizeof...(Args) == 0) {
+            log(level, fmt_str);
+        } else {
+            auto args_tuple = std::make_tuple(std::forward<Args>(args)...);
+            auto message = std::apply(
+                [&](auto&... unpacked) {
+                    return fmt::vformat(fmt::string_view(fmt_str.data(), fmt_str.size()),
+                                        fmt::make_format_args(unpacked...));
+                },
+                args_tuple);
+            log(level, message);
+        }
+    }
+
     std::shared_ptr<spdlog::logger> core();
 }
 
 #define LIBSTP_LOG_CALL(level_enum, fmt, ...)                                                      \
     do {                                                                                           \
         if constexpr (::logging::detail::level_value(level_enum) >= FOUNDATION_LOG_ACTIVE_LEVEL) { \
-            ::logging::logf(level_enum, fmt __VA_OPT__(, __VA_ARGS__));                            \
+            ::logging::logf_file(level_enum, ::logging::detail::basename(__FILE__),                \
+                                 fmt __VA_OPT__(, __VA_ARGS__));                                   \
         }                                                                                          \
     } while (0)
 

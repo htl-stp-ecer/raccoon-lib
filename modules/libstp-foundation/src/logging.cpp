@@ -2,8 +2,11 @@
 // Created by tobias on 11/27/25.
 //
 #include <chrono>
+#include <cstring>
 #include <filesystem>
+#include <mutex>
 #include <optional>
+#include <unordered_map>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -11,11 +14,18 @@
 #include <spdlog/pattern_formatter.h>
 #include "foundation/logging.hpp"
 
+#include <iostream>
+
 namespace logging {
 
     namespace {
         std::optional<std::chrono::steady_clock::time_point> start_time;
         bool logger_initialized = false;
+
+        // Runtime filtering state
+        std::mutex filter_mutex_;
+        std::unordered_map<std::string, Level> file_filters_;
+        Level global_runtime_level_ = Level::info;
     }
 
     /// Call this if you ever want to reset the relative timer at runtime.
@@ -61,15 +71,16 @@ namespace logging {
         }
 
         // Create console + file sinks.
+        // Set to trace level to allow all messages; filtering is done at runtime
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        console_sink->set_level(spdlog::level::debug);
+        console_sink->set_level(spdlog::level::trace);
 
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
             (log_dir / "libstp.log").string(),
             5 * 1024 * 1024,  // 5MB max file size
             3                 // keep 3 rotated files
         );
-        file_sink->set_level(spdlog::level::debug);
+        file_sink->set_level(spdlog::level::trace);
 
         // Pattern formatter with custom elapsed-time flag '%E'.
         auto pattern_formatter = std::make_unique<spdlog::pattern_formatter>();
@@ -86,7 +97,7 @@ namespace logging {
             "core", spdlog::sinks_init_list{console_sink, file_sink}
         );
 
-        logger->set_level(spdlog::level::debug);
+        logger->set_level(spdlog::level::trace);
         logger->flush_on(spdlog::level::warn);
 
         spdlog::set_default_logger(logger); // SPDLOG_* macros use this
@@ -128,6 +139,55 @@ namespace logging {
             return false;
         }
         return logger->should_log(to_spdlog_level(level));
+    }
+
+    bool is_enabled_for(Level level, const char* file) {
+        // Auto-initialize if not done yet
+        if (!logger_initialized) {
+            init();
+        }
+
+        // First check spdlog's level (still useful as a baseline)
+        auto logger = spdlog::default_logger_raw();
+        if (!logger) {
+            return false;
+        }
+        // Determine effective level for this file
+        Level effective_level;
+        bool found_filter = false;
+        {
+            std::lock_guard<std::mutex> lock(filter_mutex_);
+            auto it = file_filters_.find(file);
+            if (it != file_filters_.end()) {
+                effective_level = it->second;
+                found_filter = true;
+            } else {
+                effective_level = global_runtime_level_;
+            }
+        }
+
+        return static_cast<int>(level) >= static_cast<int>(effective_level);
+    }
+
+    void set_global_level(Level level) {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        global_runtime_level_ = level;
+    }
+
+    void set_file_level(const std::string& filename, Level level) {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        file_filters_[filename] = level;
+    }
+
+    void clear_file_level(const std::string& filename) {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        file_filters_.erase(filename);
+    }
+
+    void clear_filters() {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        file_filters_.clear();
+        global_runtime_level_ = Level::info;
     }
 
     void log(Level level, std::string_view message) {

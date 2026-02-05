@@ -33,6 +33,7 @@ LcmReader::LcmReader() {
     // Subscribe to IMU topics
     lcm_.subscribe("libstp/gyro/value", &LcmReader::handleGyro, this);
     lcm_.subscribe("libstp/accel/value", &LcmReader::handleAccel, this);
+    lcm_.subscribe("libstp/linear_accel/value", &LcmReader::handleLinearAccel, this);
     lcm_.subscribe("libstp/mag/value", &LcmReader::handleMag, this);
     lcm_.subscribe("libstp/imu/quaternion", &LcmReader::handleOrientation, this);
 
@@ -65,6 +66,10 @@ LcmReader::LcmReader() {
     accel_cache_.x = 0.0f;
     accel_cache_.y = 0.0f;
     accel_cache_.z = 0.0f;
+
+    linear_accel_cache_.x = 0.0f;
+    linear_accel_cache_.y = 0.0f;
+    linear_accel_cache_.z = 0.0f;
 
     mag_cache_.x = 0.0f;
     mag_cache_.y = 0.0f;
@@ -171,6 +176,22 @@ void LcmReader::handleAccel(const lcm::ReceiveBuffer*, const std::string&, const
     accel_cache_ = *msg;
 }
 
+void LcmReader::handleLinearAccel(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        linear_accel_cache_ = *msg;
+    }
+    // Fire callback outside cache lock to avoid deadlock
+    std::function<void(float, float, float)> cb;
+    {
+        std::lock_guard<std::mutex> lock(callback_mutex_);
+        cb = linear_accel_callback_;
+    }
+    if (cb) {
+        cb(msg->x, msg->y, msg->z);
+    }
+}
+
 void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     mag_cache_ = *msg;
@@ -259,6 +280,11 @@ exlcm::vector3f_t LcmReader::readAccel() {
     return accel_cache_;
 }
 
+exlcm::vector3f_t LcmReader::readLinearAccel() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    return linear_accel_cache_;
+}
+
 exlcm::vector3f_t LcmReader::readMag() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return mag_cache_;
@@ -295,6 +321,11 @@ exlcm::scalar_i32_t LcmReader::readDigital(const int port) {
 exlcm::scalar_f_t LcmReader::readTemp() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return temp_cache_;
+}
+
+void LcmReader::setLinearAccelCallback(std::function<void(float, float, float)> callback) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    linear_accel_callback_ = std::move(callback);
 }
 
 bool LcmReader::waitForImuReady(int timeout_ms) {

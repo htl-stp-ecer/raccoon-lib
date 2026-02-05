@@ -76,6 +76,26 @@ bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)
     return platform::wombat::core::LcmReader::instance().waitForImuReady(timeout_ms);
 }
 
+void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (linear_accel == nullptr)
+    {
+        throw std::runtime_error("IMU getLinearAcceleration failed! Output pointer is null.");
+    }
+#endif
+
+    const exlcm::vector3f_t linearAccelValue = platform::wombat::core::LcmReader::instance().readLinearAccel();
+    linear_accel[0] = linearAccelValue.x;
+    linear_accel[1] = linearAccelValue.y;
+    linear_accel[2] = linearAccelValue.z;
+}
+
+void libstp::hal::imu::IMU::setLinearAccelCallback(std::function<void(float, float, float)> callback)
+{
+    platform::wombat::core::LcmReader::instance().setLinearAccelCallback(std::move(callback));
+}
+
 void libstp::hal::imu::IMU::calibrate()
 {
     /*namespace libstp::sensors

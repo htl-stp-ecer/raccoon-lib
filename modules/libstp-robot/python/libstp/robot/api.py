@@ -6,6 +6,7 @@ from libstp.class_name_logger import ClassNameLogger
 from libstp.hal import AnalogSensor, DigitalSensor
 from libstp.timing import Synchronizer
 from libstp.foundation import initialize_timer
+from .geometry import RobotGeometry
 
 if TYPE_CHECKING:
     from libstp.drive import Drive
@@ -31,7 +32,7 @@ class RobotDefinitionsProtocol(Protocol):
     analog_sensors: List[AnalogSensor]
     button: DigitalSensor
 
-class GenericRobot(ABC, ClassNameLogger):
+class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     """
     Abstract base class for all robots.
 

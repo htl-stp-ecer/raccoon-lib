@@ -16,9 +16,46 @@ namespace py = pybind11;
 
 void init_logger(py::module_& m)
 {
+    // Expose the Level enum (don't export_values to avoid conflict with debug/info/warn/error functions)
+    py::enum_<logging::Level>(m, "Level")
+        .value("trace", logging::Level::trace)
+        .value("debug", logging::Level::debug)
+        .value("info", logging::Level::info)
+        .value("warn", logging::Level::warn)
+        .value("error", logging::Level::error)
+        .value("critical", logging::Level::critical)
+        .value("off", logging::Level::off);
+
     m.def("initialize_logging", &logging::init, "Initialize and enable the logging system");
     m.def("initialize_timer", &logging::initialize_timer, "Initialize the timer for elapsed time logging");
-    
+
+    // Runtime log level filtering API
+    m.def("set_global_level", &logging::set_global_level, R"pbdoc(
+        Set the global runtime log level. Messages below this level are filtered.
+
+        Args:
+            level: The minimum log level to display (e.g., Level.trace, Level.debug, Level.info)
+    )pbdoc", py::arg("level"));
+
+    m.def("set_file_level", &logging::set_file_level, R"pbdoc(
+        Set the log level for a specific source file (by basename).
+
+        Args:
+            filename: The source file basename (e.g., "fused_odometry.cpp")
+            level: The minimum log level for this file
+    )pbdoc", py::arg("filename"), py::arg("level"));
+
+    m.def("clear_file_level", &logging::clear_file_level, R"pbdoc(
+        Remove the log level filter for a specific source file.
+
+        Args:
+            filename: The source file basename to clear
+    )pbdoc", py::arg("filename"));
+
+    m.def("clear_filters", &logging::clear_filters, R"pbdoc(
+        Clear all file-specific filters and reset global level to INFO.
+    )pbdoc");
+
     m.def("debug", [](const char* message) { logging::core()->debug(message); }, R"pbdoc(
         Log a message with severity level debug
     )pbdoc", py::arg("message"));

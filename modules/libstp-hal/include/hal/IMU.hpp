@@ -22,6 +22,8 @@ namespace libstp::hal::imu
         void read(float* accel, float* gyro, float* magneto) override;
         void calibrate() override;
         [[nodiscard]] Eigen::Quaternionf getOrientation() override;
+        void getLinearAcceleration(float* linear_accel) override;
+        void setLinearAccelCallback(std::function<void(float, float, float)> callback) override;
 
         // Wait for IMU to receive initial orientation data
         // Returns true if data received within timeout_ms, false otherwise
