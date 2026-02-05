@@ -20,7 +20,8 @@ from libstp import foundation
 from libstp.step import *
 from libstp.step import __all__ as _step_all
 from libstp.ui import __all__ as _ui_all
-from libstp.robot.api import GenericRobot, RobotDefinitionsProtocol
+from libstp.robot import __all__ as _robot_all
+from libstp.robot import *
 from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
 # UI library (replaces legacy RenderScreen)
@@ -43,8 +44,6 @@ __all__ = [
     "hal",
     "foundation",
     # Robot API
-    "GenericRobot",
-    "RobotDefinitionsProtocol",
     "MissionProtocol",
     # Mission API
     "Mission",
@@ -76,6 +75,7 @@ __all__ = [
     "PidGains",
     "IMU",
     # All step exports
+    *_robot_all,
     *_step_all,
     *_ui_all,
 ]
