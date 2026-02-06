@@ -185,12 +185,8 @@ class UIStep(Step, ABC):
 
         try:
             await super().run_step(robot)
-        except Exception:
-            # Close UI before re-raising to avoid dangling screens
-            await self._force_close_ui()
-            raise
         finally:
-            # Always close UI on normal exit
+            # Always close UI on exit (normal or exception)
             await self._force_close_ui()
 
     async def _force_close_ui(self) -> None:

@@ -21,7 +21,7 @@ from libstp.ui.screens.distance import (
     DistanceMeasureScreen,
     DistanceConfirmScreen,
 )
-from libstp.foundation import warn
+from libstp.log import warn
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot

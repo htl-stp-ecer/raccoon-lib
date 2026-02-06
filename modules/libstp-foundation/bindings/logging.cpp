@@ -71,4 +71,20 @@ void init_logger(py::module_& m)
     m.def("error", [](const char* message) { logging::core()->error(message); }, R"pbdoc(
         Log a message with severity level error
     )pbdoc", py::arg("message"));
+
+    m.def("_log_filtered", [](logging::Level level, const char* filename, const char* message) {
+        if (logging::is_enabled_for(level, filename)) {
+            logging::log(level, message);
+        }
+    }, R"pbdoc(
+        Log a message with file-based filtering (internal use).
+
+        Checks is_enabled_for(level, filename) before logging, enabling
+        per-file filtering for Python sources via set_file_level().
+
+        Args:
+            level: The log level
+            filename: The source file basename (e.g., "lineup.py")
+            message: The log message
+    )pbdoc", py::arg("level"), py::arg("filename"), py::arg("message"));
 }

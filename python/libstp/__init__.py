@@ -7,7 +7,8 @@ from typing import Dict
 
 from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger
-from libstp.foundation import error, info, debug, warn, initialize_logging
+from libstp.foundation import initialize_logging
+from libstp.log import error, info, debug, warn
 from libstp.sensor_ir import IRSensor, IRSensorCalibration
 # Core hardware
 Motor = _hal.Motor
@@ -29,10 +30,11 @@ from libstp.ui import *
 from libstp.drive import Drive, MotionLimits
 from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
-from libstp.odometry_fused import FusedOdometry
+from libstp.odometry_fused import FusedOdometry, FusedOdometryConfig
 from libstp.foundation import Feedforward, MotorCalibration, PidGains
 from libstp.hal import IMU
 from libstp.kinematics_differential import DifferentialKinematics
+from libstp.kmeans import KMeans, KMeansResult
 
 __all__ = [
     # Core hardware
@@ -65,10 +67,13 @@ __all__ = [
     # Drive & Kinematics
     "Drive",
     "FusedOdometry",
+    "FusedOdometryConfig",
     "MecanumKinematics",
     "DifferentialKinematics",
     "MotionLimits",
     "UnifiedMotionPidConfig",
+    "KMeans",
+    "KMeansResult",
     # Calibration
     "Feedforward",
     "MotorCalibration",

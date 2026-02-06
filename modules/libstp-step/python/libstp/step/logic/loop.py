@@ -27,11 +27,8 @@ class LoopForeverStep(Step):
         Run the step indefinitely.
 
         Args:
-            device: The device to run on.
-            definitions: Additional definitions needed for execution.
+            robot: The robot to run on.
         """
-        await super().run_step(robot)
-
         while True:
             await self.step.run_step(robot)
 
@@ -67,8 +64,6 @@ class LoopForStep(Step):
         Args:
             robot: The robot to run on.
         """
-        await super().run_step(robot)
-
         for _ in range(self.iterations):
             await self.step.run_step(robot)
 

@@ -123,7 +123,7 @@ class MoveUntil(Step):
 # Drive (forward/backward) until sensor
 # =============================================================================
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def drive_until_black(
         sensor: Union[IRSensor, list[IRSensor]],
         forward_speed: float,
@@ -145,7 +145,7 @@ def drive_until_black(
     ))
 
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def drive_until_white(
         sensor: Union[IRSensor, list[IRSensor]],
         forward_speed: float,
@@ -167,11 +167,99 @@ def drive_until_white(
     ))
 
 
+@dsl(tags=["motion", "sensor"])
+def drive_forward_until_black(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Drive forward until any sensor detects black.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Forward speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.BLACK,
+        forward_speed=abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def drive_forward_until_white(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Drive forward until any sensor detects white.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Forward speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.WHITE,
+        forward_speed=abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def drive_backward_until_black(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Drive backward until any sensor detects black.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Backward speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.BLACK,
+        forward_speed=-abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def drive_backward_until_white(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Drive backward until any sensor detects white.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Backward speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.WHITE,
+        forward_speed=-abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
 # =============================================================================
 # Turn until sensor
 # =============================================================================
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def turn_until_black(
         sensor: Union[IRSensor, list[IRSensor]],
         angular_speed: float,
@@ -193,7 +281,7 @@ def turn_until_black(
     ))
 
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def turn_until_white(
         sensor: Union[IRSensor, list[IRSensor]],
         angular_speed: float,
@@ -215,11 +303,99 @@ def turn_until_white(
     ))
 
 
+@dsl(tags=["motion", "sensor"])
+def turn_left_until_black(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Turn left (CCW) until any sensor detects black.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Angular speed in rad/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.BLACK,
+        angular_speed=abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def turn_left_until_white(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Turn left (CCW) until any sensor detects white.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Angular speed in rad/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.WHITE,
+        angular_speed=abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def turn_right_until_black(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Turn right (CW) until any sensor detects black.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Angular speed in rad/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.BLACK,
+        angular_speed=-abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def turn_right_until_white(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 1.0,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Turn right (CW) until any sensor detects white.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Angular speed in rad/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.WHITE,
+        angular_speed=-abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
 # =============================================================================
 # Strafe until sensor
 # =============================================================================
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def strafe_until_black(
         sensor: Union[IRSensor, list[IRSensor]],
         strafe_speed: float,
@@ -241,7 +417,7 @@ def strafe_until_black(
     ))
 
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def strafe_until_white(
         sensor: Union[IRSensor, list[IRSensor]],
         strafe_speed: float,
@@ -263,11 +439,99 @@ def strafe_until_white(
     ))
 
 
+@dsl(tags=["motion", "sensor"])
+def strafe_left_until_black(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Strafe left until any sensor detects black.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Strafe speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.BLACK,
+        strafe_speed=abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def strafe_left_until_white(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Strafe left until any sensor detects white.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Strafe speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.WHITE,
+        strafe_speed=abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def strafe_right_until_black(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Strafe right until any sensor detects black.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Strafe speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.BLACK,
+        strafe_speed=-abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
+@dsl(tags=["motion", "sensor"])
+def strafe_right_until_white(
+        sensor: Union[IRSensor, list[IRSensor]],
+        speed: float = 0.3,
+        confidence_threshold: float = 0.7,
+) -> MoveUntil:
+    """
+    Strafe right until any sensor detects white.
+
+    Args:
+        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
+        speed: Strafe speed in m/s (positive value)
+        confidence_threshold: Probability threshold for detection (0-1)
+    """
+    return MoveUntil(MoveUntilConfig(
+        sensor=sensor,
+        target=SurfaceColor.WHITE,
+        strafe_speed=-abs(speed),
+        confidence_threshold=confidence_threshold,
+    ))
+
+
 # =============================================================================
 # Generic move_until for custom combinations
 # =============================================================================
 
-@dsl(tags=["motion", "sensor"])
+@dsl(hidden=True)
 def move_until(
         sensor: Union[IRSensor, list[IRSensor]],
         target: SurfaceColor,
