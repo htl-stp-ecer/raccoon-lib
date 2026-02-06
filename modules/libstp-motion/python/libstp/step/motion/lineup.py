@@ -8,7 +8,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from libstp.foundation import ChassisVelocity, PIDController
-from libstp.foundation import info
+from libstp.log import info
 from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq
 from typing import TYPE_CHECKING
@@ -72,7 +72,7 @@ class TimingBasedLineUp(Step):
             # Use get_distance_from_origin() - avoids Pose.position crash
             distance_info = robot.odometry.get_distance_from_origin()
             current_distance = distance_info.forward
-            #info(f"Left conf: {left_conf:.3f}, Right conf: {right_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}")
+            self.info(f"Left conf: {left_conf:.3f}, Right conf: {right_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}")
 
             if not left_triggered and left_conf >= self.threshold:
                 left_triggered = True
@@ -80,11 +80,11 @@ class TimingBasedLineUp(Step):
                     t_first = now
                     first_sensor = "left"
                     first_hit_distance = current_distance
-                    #info("Left sensor hit line at t = 0.000s")
+                    self.info("Left sensor hit line at t = 0.000s")
                 else:
                     dt = now - t_first
                     self.distance_between_hits_m = abs(current_distance - first_hit_distance)
-                    #info(f"Left sensor hit line at t = {dt:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
+                    self.info(f"Left sensor hit line at t = {dt:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
                     robot.drive.hard_stop()
                     break
 
@@ -94,18 +94,18 @@ class TimingBasedLineUp(Step):
                     t_first = now
                     first_sensor = "right"
                     first_hit_distance = current_distance
-                    #info("Right sensor hit line at t = 0.000s")
+                    self.info("Right sensor hit line at t = 0.000s")
                 else:
                     dt = now - t_first
                     self.distance_between_hits_m = abs(current_distance - first_hit_distance)
-                    #info(f"Right sensor hit line at t = {dt:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
+                    self.info(f"Right sensor hit line at t = {dt:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
                     robot.drive.hard_stop()
                     break
 
             await asyncio.sleep(update_rate)
 
         robot.drive.hard_stop()
-        #info(f"Distance between sensor hits: {self.distance_between_hits_m * 100:.2f}cm")
+        self.info(f"Distance between sensor hits: {self.distance_between_hits_m * 100:.2f}cm")
         self.results = (first_sensor, self.distance_between_hits_m)
 
 @dsl(hidden=True)
@@ -122,15 +122,22 @@ class ComputeTimingBasedAngle(Turn):
             self.step.left_sensor,
             self.step.right_sensor
         ) / 100
+        self.info(f"Distance between sensors: {distance_between_sensors_m}m")
         distance_driven = self.step.results[1] * 1.025 # Todo: Configurable?
         self.config.target_angle_rad = math.atan(distance_driven / distance_between_sensors_m)
         if self.step.results[0] == "right":
             self.config.target_angle_rad = -self.config.target_angle_rad
+        self.info(f"Computed turn angle: {math.degrees(self.config.target_angle_rad):.2f}° sensor that hit first: {self.step.results[0]}")
         await super()._execute_step(robot)
 
 @dsl(hidden=True)
-def lineup(left_sensor: IRSensor, right_sensor: IRSensor, target: SurfaceColor = SurfaceColor.BLACK) -> Sequential:
-    step = TimingBasedLineUp(left_sensor, right_sensor, target)
+def lineup(
+        left_sensor: IRSensor,
+        right_sensor: IRSensor,
+        target: SurfaceColor = SurfaceColor.BLACK,
+        detection_threshold: float = 0.7
+) -> Sequential:
+    step = TimingBasedLineUp(left_sensor, right_sensor, target, detection_threshold=detection_threshold)
 
     return seq([
         step,
@@ -141,12 +148,14 @@ def lineup(left_sensor: IRSensor, right_sensor: IRSensor, target: SurfaceColor =
 def forward_lineup_on_black(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
+        detection_threshold: float = 0.7
 ) -> Sequential:
     return seq([
         lineup(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
             target=SurfaceColor.BLACK,
+            detection_threshold=detection_threshold
         ),
         drive_until_white(
             [left_sensor, right_sensor],
@@ -159,6 +168,7 @@ def forward_lineup_on_black(
 def forward_lineup_on_white(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
+        detection_threshold: float = 0.7
 ) -> Sequential:
     """
     Drive forward past black, then line up on white.
@@ -180,6 +190,7 @@ def forward_lineup_on_white(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
             target=SurfaceColor.WHITE,
+            detection_threshold=detection_threshold
         ),
         drive_until_black(
             [left_sensor, right_sensor],
@@ -192,6 +203,7 @@ def forward_lineup_on_white(
 def backward_lineup_on_black(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
+        detection_threshold: float = 0.7
 ) -> Sequential:
     """
     Drive backward past white, then line up on black.
@@ -210,6 +222,7 @@ def backward_lineup_on_black(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
             target=SurfaceColor.BLACK,
+            detection_threshold=detection_threshold
         ),
         drive_until_white(
             [left_sensor, right_sensor],
@@ -222,6 +235,7 @@ def backward_lineup_on_black(
 def backward_lineup_on_white(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
+        detection_threshold: float = 0.7
 ) -> Sequential:
     """
     Drive backward past black, then line up on white.
@@ -240,6 +254,7 @@ def backward_lineup_on_white(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
             target=SurfaceColor.WHITE,
+            detection_threshold=detection_threshold
         ),
         drive_until_black(
             [left_sensor, right_sensor],

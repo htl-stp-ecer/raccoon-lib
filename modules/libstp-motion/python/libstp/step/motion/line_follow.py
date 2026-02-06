@@ -8,7 +8,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from libstp.foundation import ChassisVelocity, PIDController, info
+from libstp.foundation import ChassisVelocity, PIDController
+from libstp.log import info
 from libstp.sensor_ir import IRSensor
 
 from .. import Step, SimulationStep, SimulationStepDelta, dsl

@@ -1,6 +1,7 @@
 import asyncio
 
-from libstp.foundation import error, info, debug, warn, initialize_logging
+from libstp.foundation import initialize_logging
+from libstp.log import error, info, debug, warn
 
 
 class Synchronizer:

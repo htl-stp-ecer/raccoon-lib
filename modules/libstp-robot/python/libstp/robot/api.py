@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Protocol, TYPE_CHECKING, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, Type, TypeVar, TYPE_CHECKING, runtime_checkable
 import asyncio
 
 from libstp.class_name_logger import ClassNameLogger
@@ -7,6 +7,10 @@ from libstp.hal import AnalogSensor, DigitalSensor
 from libstp.timing import Synchronizer
 from libstp.foundation import initialize_timer
 from .geometry import RobotGeometry
+
+from .service import RobotService
+
+_S = TypeVar("_S", bound=RobotService)
 
 if TYPE_CHECKING:
     from libstp.drive import Drive
@@ -89,6 +93,8 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
     def __init__(self) -> None:
         """Initialize the robot and log configuration status."""
+        self._services: Dict[Type[RobotService], RobotService] = {}
+
         # Clear STM32 shutdown flag to enable motors and servos
         from libstp.hal import Motor
         Motor.enable_all()
@@ -105,6 +111,18 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
         if self.shutdown_mission is not None:
             self.info("Shutdown mission found")
+
+    def get_service(self, cls: Type[_S]) -> _S:
+        """Get or create a cached service instance.
+
+        Services are lazily instantiated on first access and reused for
+        subsequent calls with the same class.
+        """
+        service = self._services.get(cls)
+        if service is None:
+            service = cls(self)
+            self._services[cls] = service
+        return service  # type: ignore[return-value]
 
     def start(self) -> None:
         """
