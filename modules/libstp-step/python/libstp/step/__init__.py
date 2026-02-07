@@ -2,6 +2,7 @@ from .base import Step
 from .annotation import dsl, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .sequential import Sequential, seq
+from .parallel import parallel
 from .calibration import *
 from .calibration import __all__ as _calibration_all
 from .logic import *
@@ -22,6 +23,7 @@ __all__ = [
     "SimulationStep",
     "Sequential",
     "seq",
+    "parallel",
     "WaitForSeconds",
     "wait",
     "WaitForButton",
