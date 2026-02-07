@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 import asyncio
 import json
 
+import time
 import lcm
 from libstp.step.base import Step
 from libstp.button import is_pressed
@@ -99,6 +100,7 @@ class UIStep(Step, ABC):
     async def _render_screen(self, screen: UIScreen) -> None:
         """Send screen to Flutter via LCM."""
         msg = screen_render_t()
+        msg.timestamp = int(time.time() * 1_000_000)
         msg.screen_name = self._SCREEN_NAME
         msg.entries = json.dumps(screen._to_dict())
         self.debug(f"[LCM TX] screen_render -> {screen.__class__.__name__}: {screen.title}")
@@ -168,6 +170,7 @@ class UIStep(Step, ABC):
         if not self._ui_active:
             return
         msg = screen_render_t()
+        msg.timestamp = int(time.time() * 1_000_000)
         msg.screen_name = self._SCREEN_NAME
         msg.entries = json.dumps({"screen": "close"})
         self.debug("[LCM TX] screen_render -> close")

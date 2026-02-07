@@ -5,6 +5,7 @@
 #include "hal/ScreenRender.hpp"
 #include <stdexcept>
 #include <string>
+#include <chrono>
 #include <exlcm/screen_render_t.hpp>
 #include "lcm/lcm-cpp.hpp"
 
@@ -25,6 +26,8 @@ libstp::hal::screen_render::ScreenRender::ScreenRender() {
 void libstp::hal::screen_render::ScreenRender::sendState(const std::string &jsonData) {
     if (current_screen != "") {
         exlcm::screen_render_t msg{};
+        msg.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
         msg.screen_name = current_screen;
         msg.entries = jsonData;
         lcm.publish("libstp/screen_render", &msg);

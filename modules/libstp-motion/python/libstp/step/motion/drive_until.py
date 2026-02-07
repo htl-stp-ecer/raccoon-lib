@@ -456,7 +456,7 @@ def strafe_left_until_black(
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
         target=SurfaceColor.BLACK,
-        strafe_speed=abs(speed),
+        strafe_speed=-abs(speed),
         confidence_threshold=confidence_threshold,
     ))
 
@@ -478,7 +478,7 @@ def strafe_left_until_white(
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
         target=SurfaceColor.WHITE,
-        strafe_speed=abs(speed),
+        strafe_speed=-abs(speed),
         confidence_threshold=confidence_threshold,
     ))
 
@@ -500,7 +500,7 @@ def strafe_right_until_black(
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
         target=SurfaceColor.BLACK,
-        strafe_speed=-abs(speed),
+        strafe_speed=abs(speed),
         confidence_threshold=confidence_threshold,
     ))
 
@@ -522,7 +522,7 @@ def strafe_right_until_white(
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
         target=SurfaceColor.WHITE,
-        strafe_speed=-abs(speed),
+        strafe_speed=abs(speed),
         confidence_threshold=confidence_threshold,
     ))
 
