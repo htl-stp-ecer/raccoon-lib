@@ -79,20 +79,11 @@ class Parallel(Step):
         if not self.steps:
             return
 
-        completed_count = 0
-        total_steps = len(self.steps)
         completed_steps = []
 
         async def step_callback(step):
-            nonlocal completed_count
-
             await step.run_step(robot)
-
             completed_steps.append(step)
-            completed_count += 1
-
-            if completed_count < total_steps:
-                step.call_on_exit(next_step=None)
 
         tasks = [asyncio.create_task(step_callback(step)) for step in self.steps]
 
