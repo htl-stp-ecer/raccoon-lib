@@ -31,6 +31,10 @@ from .lineup import (
     forward_lineup_on_white,
     backward_lineup_on_black,
     backward_lineup_on_white,
+    strafe_right_lineup_on_black,
+    strafe_right_lineup_on_white,
+    strafe_left_lineup_on_black,
+    strafe_left_lineup_on_white,
 )
 from .line_follow import (
     LineFollow,
@@ -83,6 +87,10 @@ __all__ = [
     "forward_lineup_on_white",
     "backward_lineup_on_black",
     "backward_lineup_on_white",
+    "strafe_right_lineup_on_black",
+    "strafe_right_lineup_on_white",
+    "strafe_left_lineup_on_black",
+    "strafe_left_lineup_on_white",
     # Line follow
     "LineFollow",
     "LineFollowConfig",
