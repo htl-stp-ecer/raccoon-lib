@@ -38,6 +38,8 @@ namespace platform::wombat::core {
         exlcm::vector3f_t readMag();
         exlcm::quaternion_t readOrientation();
         exlcm::scalar_i32_t readBemf(int idx);
+        int32_t readMotorPosition(int port);
+        bool readMotorDone(int port);
 
         exlcm::scalar_i32_t readAnalog(int port);
         exlcm::scalar_i32_t readDigital(int port);
@@ -65,6 +67,8 @@ namespace platform::wombat::core {
         std::unordered_map<int, int8_t> servo_mode_cache_;
         std::unordered_map<int, int32_t> servo_value_cache_;
         std::unordered_map<int, int32_t> bemf_cache_;
+        std::unordered_map<int, int32_t> motor_position_cache_;
+        std::unordered_map<int, int32_t> motor_done_cache_;
         std::unordered_map<int, int32_t> analog_cache_;
         std::unordered_map<int, int32_t> digital_cache_;
 
@@ -96,6 +100,8 @@ namespace platform::wombat::core {
         void handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleOrientation(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::quaternion_t* msg);
         void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleMotorPosition(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
+        void handleMotorDone(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
         void handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
         void handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
         void handleTemp(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_f_t* msg);

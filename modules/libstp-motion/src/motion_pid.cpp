@@ -48,6 +48,11 @@ namespace libstp::motion
 
     double MotionPidController::update(double error, double dt)
     {
+        return update(error, dt, error);
+    }
+
+    double MotionPidController::update(double error, double dt, double deriv_signal)
+    {
         if (dt <= 0.0)
         {
             return 0.0;
@@ -66,10 +71,12 @@ namespace libstp::motion
         const double i_term = cfg_.ki * integral_;
 
         // Derivative term with low-pass filtering
+        // Uses deriv_signal (which may differ from error, e.g. unclamped error)
+        // so the D term can see the true rate of change even when error is clamped.
         double derivative = 0.0;
         if (!first_update_)
         {
-            const double raw_derivative = (error - prev_error_) / dt;
+            const double raw_derivative = (deriv_signal - prev_error_) / dt;
             // Low-pass filter: d_filt_new = alpha * d_raw + (1-alpha) * d_filt_old
             filtered_derivative_ = cfg_.derivative_lpf_alpha * raw_derivative +
                                   (1.0 - cfg_.derivative_lpf_alpha) * filtered_derivative_;
@@ -87,8 +94,8 @@ namespace libstp::motion
         // Apply output saturation
         output = std::clamp(output, cfg_.output_min, cfg_.output_max);
 
-        // Store error for next iteration
-        prev_error_ = error;
+        // Store deriv_signal for next derivative calculation
+        prev_error_ = deriv_signal;
 
         return output;
     }

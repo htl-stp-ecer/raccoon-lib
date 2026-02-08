@@ -18,7 +18,14 @@ namespace libstp::hal::motor
         virtual ~IMotor() = default;
 
         virtual void setSpeed(int percent) = 0;
+        // Set velocity target in BEMF units - firmware handles PID
+        virtual void setVelocity(int velocity) = 0;
+        // Move to absolute position (BEMF ticks) at given velocity (BEMF units)
+        virtual void moveToPosition(int velocity, int goalPosition) = 0;
+        // Move relative position (BEMF ticks) at given velocity (BEMF units)
+        virtual void moveRelative(int velocity, int deltaPosition) = 0;
         [[nodiscard]] virtual int getPosition() const = 0;
+        [[nodiscard]] virtual bool isDone() const = 0;
         virtual void brake() = 0;
 
         [[nodiscard]] virtual const foundation::MotorCalibration& getCalibration() const = 0;

@@ -68,6 +68,7 @@ namespace logging {
     bool is_enabled(Level level);
     bool is_enabled_for(Level level, const char* file);
     void log(Level level, std::string_view message);
+    void log(Level level, const char* source_file, std::string_view message);
 
     // Format-aware logging helper that keeps formatting outside of the logging backend.
     template <typename... Args>
@@ -91,12 +92,13 @@ namespace logging {
 
     // Format-aware logging helper with file-based filtering
     template <typename... Args>
-    inline void logf_file(Level level, const char* file, std::string_view fmt_str, Args&&... args) {
-        if (!is_enabled_for(level, file)) {
+    inline void logf_file(Level level, const char* filter_name, const char* display_path,
+                          std::string_view fmt_str, Args&&... args) {
+        if (!is_enabled_for(level, filter_name)) {
             return;
         }
         if constexpr (sizeof...(Args) == 0) {
-            log(level, fmt_str);
+            log(level, display_path, fmt_str);
         } else {
             auto args_tuple = std::make_tuple(std::forward<Args>(args)...);
             auto message = std::apply(
@@ -105,7 +107,7 @@ namespace logging {
                                         fmt::make_format_args(unpacked...));
                 },
                 args_tuple);
-            log(level, message);
+            log(level, display_path, message);
         }
     }
 
@@ -116,6 +118,7 @@ namespace logging {
     do {                                                                                           \
         if constexpr (::logging::detail::level_value(level_enum) >= FOUNDATION_LOG_ACTIVE_LEVEL) { \
             ::logging::logf_file(level_enum, ::logging::detail::basename(__FILE__),                \
+                                 __FILE__,                                                         \
                                  fmt __VA_OPT__(, __VA_ARGS__));                                   \
         }                                                                                          \
     } while (0)

@@ -25,6 +25,15 @@ namespace libstp::motion
         explicit MotionPidController(Config config);
 
         double update(double error, double dt);
+
+        /**
+         * Update with separate derivative signal (derivative-on-measurement).
+         * P and I terms use @p error, D term uses @p deriv_signal.
+         * Use this when the error fed to P/I is clamped but you want the
+         * derivative to see the full (unclamped) signal.
+         */
+        double update(double error, double dt, double deriv_signal);
+
         void reset();
         void setGains(double kp, double ki, double kd);
 

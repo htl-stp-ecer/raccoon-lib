@@ -12,7 +12,7 @@ namespace libstp::motion
     {
         double target_distance_m{0.0};        // Target strafe distance (positive = left, negative = right)
         double max_speed_mps{0.3};            // Maximum strafing speed (m/s)
-        // Note: PID gains, tolerances, and saturation parameters are now in UnifiedMotionPidConfig (accessible via MotionContext)
+        double max_acceleration_mps2{1.0};    // Maximum linear acceleration (m/s²) for trapezoidal profile
     };
 
     class StrafeMotion final : public Motion

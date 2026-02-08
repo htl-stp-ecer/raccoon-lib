@@ -12,7 +12,11 @@ namespace libstp::test
             : port_(port), inverted_(inverted) {}
 
         MOCK_METHOD(void, setSpeed, (int percent), (override));
+        MOCK_METHOD(void, setVelocity, (int velocity), (override));
+        MOCK_METHOD(void, moveToPosition, (int velocity, int goalPosition), (override));
+        MOCK_METHOD(void, moveRelative, (int velocity, int deltaPosition), (override));
         MOCK_METHOD(int, getPosition, (), (const, override));
+        MOCK_METHOD(bool, isDone, (), (const, override));
         MOCK_METHOD(void, brake, (), (override));
         MOCK_METHOD(const foundation::MotorCalibration&, getCalibration, (), (const, override));
 

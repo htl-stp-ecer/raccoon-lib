@@ -26,6 +26,9 @@ namespace logging {
         std::mutex filter_mutex_;
         std::unordered_map<std::string, Level> file_filters_;
         Level global_runtime_level_ = Level::info;
+
+        // Thread-local source filename for the custom formatter
+        thread_local const char* current_source_file_ = "";
     }
 
     /// Call this if you ever want to reset the relative timer at runtime.
@@ -43,14 +46,88 @@ namespace logging {
                 const double elapsed =
                     std::chrono::duration_cast<std::chrono::milliseconds>(now - *start_time).count()
                     / 1000.0;
-                fmt::format_to(std::back_inserter(dest), "{:.3f}s", elapsed);
+                fmt::format_to(std::back_inserter(dest), "{:>9.3f}s", elapsed);
             } else {
-                fmt::format_to(std::back_inserter(dest), "0.000s");
+                fmt::format_to(std::back_inserter(dest), "    0.000s");
             }
         }
 
         std::unique_ptr<custom_flag_formatter> clone() const override {
             return spdlog::details::make_unique<ElapsedTimeFormatter>();
+        }
+    };
+
+    class SourceFileFormatter final : public spdlog::custom_flag_formatter {
+        static void format_package(const char* path, spdlog::memory_buf_t &dest) {
+            // C++ style: .../libstp-<module>/src/<file>.cpp → m.file.cpp (Spring-style)
+            const char* p = strstr(path, "libstp-");
+            if (p) {
+                p += 7;
+                const char* slash = strchr(p, '/');
+                if (slash) {
+                    const char* base = detail::basename(path);
+                    fmt::format_to(std::back_inserter(dest), "{}.{}", *p, base);
+                    return;
+                }
+            }
+
+            // Python style: .../libstp/<pkg>/<pkg>/<file>.py → p.p.file.py (Spring-style)
+            p = strstr(path, "libstp/");
+            if (p) {
+                p += 7;
+                // Find last slash to know which component is the filename
+                const char* last_slash = nullptr;
+                for (const char* c = p; *c; ++c) {
+                    if (*c == '/') last_slash = c;
+                }
+
+                const char* start = p;
+                bool first = true;
+                for (const char* c = p; ; ++c) {
+                    if (*c == '/' || *c == '\0') {
+                        if (c > start) {
+                            if (!first) fmt::format_to(std::back_inserter(dest), ".");
+                            first = false;
+                            if (last_slash && c <= last_slash) {
+                                // Shorten intermediate components to first char
+                                fmt::format_to(std::back_inserter(dest), "{}", *start);
+                            } else {
+                                // Last component: keep full name
+                                fmt::format_to(std::back_inserter(dest), "{}",
+                                               std::string_view(start, c - start));
+                            }
+                        }
+                        if (*c == '\0') break;
+                        start = c + 1;
+                    }
+                }
+                return;
+            }
+
+            // Fallback: raw string
+            fmt::format_to(std::back_inserter(dest), "{}", path);
+        }
+
+    public:
+        void format(const spdlog::details::log_msg & /*msg*/,
+                    const std::tm & /*tm*/,
+                    spdlog::memory_buf_t &dest) override {
+            const char* file = current_source_file_;
+            auto start = dest.size();
+            if (file && *file) {
+                format_package(file, dest);
+            }
+            // Pad to fixed width (30 chars, left-aligned)
+            constexpr char spaces[] = "                              ";
+            auto written = dest.size() - start;
+            if (written < 30) {
+                auto pad = 30 - written;
+                dest.append(spaces, spaces + pad);
+            }
+        }
+
+        std::unique_ptr<custom_flag_formatter> clone() const override {
+            return spdlog::details::make_unique<SourceFileFormatter>();
         }
     };
 
@@ -82,11 +159,12 @@ namespace logging {
         );
         file_sink->set_level(spdlog::level::trace);
 
-        // Pattern formatter with custom elapsed-time flag '%E'.
+        // Pattern formatter with custom flags: '%E' for elapsed time, '%*' for source file.
         auto pattern_formatter = std::make_unique<spdlog::pattern_formatter>();
         pattern_formatter->add_flag<ElapsedTimeFormatter>('E');
+        pattern_formatter->add_flag<SourceFileFormatter>('*');
         pattern_formatter->set_pattern(
-            "[%Y-%m-%d %H:%M:%S] [+%E] [t%t/%s:%#] [%^%l%$]: %v"
+            "%Y-%m-%d %H:%M:%S | %E | %^%-8l%$ | %* | %v"
         );
 
         console_sink->set_formatter(pattern_formatter->clone());
@@ -200,6 +278,19 @@ namespace logging {
             return;
         }
         logger->log(to_spdlog_level(level), message);
+    }
+
+    void log(Level level, const char* source_file, std::string_view message) {
+        if (!logger_initialized) {
+            init();
+        }
+        auto logger = spdlog::default_logger_raw();
+        if (!logger) {
+            return;
+        }
+        current_source_file_ = source_file ? source_file : "";
+        logger->log(to_spdlog_level(level), message);
+        current_source_file_ = "";
     }
 
 } // namespace logging

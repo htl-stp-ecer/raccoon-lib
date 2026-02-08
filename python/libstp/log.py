@@ -7,7 +7,6 @@ for C++ source files.
 
 from __future__ import annotations
 
-import os
 import sys
 
 from libstp.foundation import Level, _log_filtered
@@ -15,7 +14,7 @@ from libstp.foundation import Level, _log_filtered
 
 def _caller_filename(stacklevel: int) -> str:
     frame = sys._getframe(stacklevel + 1)  # +1 to skip this helper
-    return os.path.basename(frame.f_code.co_filename)
+    return frame.f_code.co_filename
 
 
 def debug(message: str, *, _stacklevel: int = 1) -> None:

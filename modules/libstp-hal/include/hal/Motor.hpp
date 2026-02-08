@@ -27,7 +27,11 @@ namespace libstp::hal::motor
         ~Motor() override;
 
         void setSpeed(int percent) override;
+        void setVelocity(int velocity) override;
+        void moveToPosition(int velocity, int goalPosition) override;
+        void moveRelative(int velocity, int deltaPosition) override;
         [[nodiscard]] int getPosition() const override;
+        [[nodiscard]] bool isDone() const override;
 
         void brake() override;
 

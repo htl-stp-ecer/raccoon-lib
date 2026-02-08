@@ -123,7 +123,7 @@ class ComputeTimingBasedAngle(Turn):
             self.step.right_sensor
         ) / 100
         self.info(f"Distance between sensors: {distance_between_sensors_m}m")
-        distance_driven = self.step.results[1] * 1.025 # Todo: Configurable?
+        distance_driven = self.step.results[1]
         self.config.target_angle_rad = math.atan(distance_driven / distance_between_sensors_m)
         if self.step.results[0] == "right":
             self.config.target_angle_rad = -self.config.target_angle_rad
@@ -367,7 +367,7 @@ class ComputeTimingBasedStrafeAngle(Turn):
             self.step.back_sensor
         ) / 100
         self.info(f"Distance between sensors: {distance_between_sensors_m}m")
-        distance_strafed = self.step.results[1] * 1.025
+        distance_strafed = self.step.results[1]
         self.config.target_angle_rad = math.atan(distance_strafed / distance_between_sensors_m)
         # When strafing right (+), front first -> CCW (+); back first -> CW (-)
         # When strafing left (-), the correction direction flips

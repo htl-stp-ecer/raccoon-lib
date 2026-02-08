@@ -54,16 +54,47 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
     platform::wombat::core::LcmDataWriter::instance().setMotor(port_, directionPercent);
 }
 
+void libstp::hal::motor::Motor::setVelocity(const int velocity)
+{
+    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
+    const int directionVelocity = inverted_ ? -velocity : velocity;
+    LIBSTP_LOG_TRACE("Wombat Motor port={} setVelocity={} inverted={}", port_, velocity, inverted_);
+    platform::wombat::core::LcmDataWriter::instance().setMotorVelocity(port_, directionVelocity);
+}
+
+void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goalPosition)
+{
+    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
+    const int dirVel = inverted_ ? -velocity : velocity;
+    const int dirPos = inverted_ ? -goalPosition : goalPosition;
+    LIBSTP_LOG_TRACE("Wombat Motor port={} moveToPosition vel={} goal={}", port_, velocity, goalPosition);
+    platform::wombat::core::LcmDataWriter::instance().setMotorPosition(port_, dirVel, dirPos);
+}
+
+void libstp::hal::motor::Motor::moveRelative(const int velocity, const int deltaPosition)
+{
+    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
+    const int dirVel = inverted_ ? -velocity : velocity;
+    const int dirDelta = inverted_ ? -deltaPosition : deltaPosition;
+    LIBSTP_LOG_TRACE("Wombat Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
+    platform::wombat::core::LcmDataWriter::instance().setMotorRelative(port_, dirVel, dirDelta);
+}
+
 int libstp::hal::motor::Motor::getPosition() const
 {
-    const auto reading = platform::wombat::core::LcmReader::instance().readBemf(port_).value;
+    const auto reading = platform::wombat::core::LcmReader::instance().readMotorPosition(port_);
 
     // Apply inversion to position reading to match command convention
-    const int corrected = inverted_ ? reading : -reading;
+    const int corrected = inverted_ ? -reading : reading;
 
     LIBSTP_LOG_TRACE("Wombat Motor port={} getPosition raw={} corrected={} inverted={}",
                  port_, reading, corrected, inverted_);
     return corrected;
+}
+
+bool libstp::hal::motor::Motor::isDone() const
+{
+    return platform::wombat::core::LcmReader::instance().readMotorDone(port_);
 }
 
 void libstp::hal::motor::Motor::brake()

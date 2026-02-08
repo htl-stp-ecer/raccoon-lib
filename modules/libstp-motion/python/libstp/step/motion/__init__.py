@@ -27,6 +27,7 @@ from .drive_until import (
     strafe_right_until_white,
 )
 from .lineup import (
+    lineup,
     forward_lineup_on_black,
     forward_lineup_on_white,
     backward_lineup_on_black,
@@ -35,6 +36,14 @@ from .lineup import (
     strafe_right_lineup_on_white,
     strafe_left_lineup_on_black,
     strafe_left_lineup_on_white,
+)
+from .wall_align import (
+    WallAlign,
+    WallDirection,
+    wall_align_forward,
+    wall_align_backward,
+    wall_align_strafe_left,
+    wall_align_strafe_right,
 )
 from .line_follow import (
     LineFollow,
@@ -91,6 +100,13 @@ __all__ = [
     "strafe_right_lineup_on_white",
     "strafe_left_lineup_on_black",
     "strafe_left_lineup_on_white",
+    # Wall align
+    "WallAlign",
+    "WallDirection",
+    "wall_align_forward",
+    "wall_align_backward",
+    "wall_align_strafe_left",
+    "wall_align_strafe_right",
     # Line follow
     "LineFollow",
     "LineFollowConfig",
@@ -99,4 +115,5 @@ __all__ = [
     "follow_line",
     "follow_line_until_both_black",
     "follow_line_single",
+    "lineup"
 ]

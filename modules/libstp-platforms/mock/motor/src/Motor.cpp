@@ -55,11 +55,40 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
     setMotor(port_, dir, duty);
 }
 
+void libstp::hal::motor::Motor::setVelocity(const int velocity)
+{
+    const int directionVelocity = inverted_ ? -velocity : velocity;
+    LIBSTP_LOG_INFO("Mock Motor port={} setVelocity={} inverted={}", port_, velocity, inverted_);
+    // Mock: just set PWM proportional to velocity for simulation
+    const auto dir = directionVelocity >= 0
+        ? platform::mock::core::MotorDir::CW
+        : platform::mock::core::MotorDir::CCW;
+    platform::mock::core::setMotor(port_, dir, static_cast<uint32_t>(std::abs(directionVelocity)));
+}
+
+void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goalPosition)
+{
+    LIBSTP_LOG_INFO("Mock Motor port={} moveToPosition vel={} goal={}", port_, velocity, goalPosition);
+    // Mock: store goal, simulate immediate completion
+}
+
+void libstp::hal::motor::Motor::moveRelative(const int velocity, const int deltaPosition)
+{
+    LIBSTP_LOG_INFO("Mock Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
+    // Mock: store delta, simulate immediate completion
+}
+
 int libstp::hal::motor::Motor::getPosition() const
 {
     const int value = static_cast<int>(platform::mock::core::bemf(port_));
     LIBSTP_LOG_TRACE("Mock Motor port={} getPosition -> {}", port_, value);
     return value;
+}
+
+bool libstp::hal::motor::Motor::isDone() const
+{
+    LIBSTP_LOG_TRACE("Mock Motor port={} isDone -> true", port_);
+    return true;
 }
 
 void libstp::hal::motor::Motor::brake()

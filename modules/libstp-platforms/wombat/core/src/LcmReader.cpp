@@ -43,6 +43,14 @@ LcmReader::LcmReader() {
                       &LcmReader::handleBemf, this);
     }
 
+    // Subscribe to motor position and done topics
+    for (int port = 0; port < 4; ++port) {
+        lcm_.subscribe("libstp/motor/" + std::to_string(port) + "/position",
+                      &LcmReader::handleMotorPosition, this);
+        lcm_.subscribe("libstp/motor/" + std::to_string(port) + "/done",
+                      &LcmReader::handleMotorDone, this);
+    }
+
     // Subscribe to analog topics (assuming ports 0-7)
     for (int port = 0; port < 8; ++port) {
         lcm_.subscribe("libstp/analog/" + std::to_string(port) + "/value",
@@ -84,6 +92,8 @@ LcmReader::LcmReader() {
     // Initialize BEMF cache with zeros (hardware default)
     for (int idx = 0; idx < 4; ++idx) {
         bemf_cache_[idx] = 0;
+        motor_position_cache_[idx] = 0;
+        motor_done_cache_[idx] = 0;
     }
 
     // Initialize digital cache with zeros (hardware default)
@@ -212,6 +222,26 @@ void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel
     }
 }
 
+void LcmReader::handleMotorPosition(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    std::regex port_regex("libstp/motor/(\\d+)/position");
+    std::smatch match;
+    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
+        int port = std::stoi(match[1].str());
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        motor_position_cache_[port] = msg->value;
+    }
+}
+
+void LcmReader::handleMotorDone(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    std::regex port_regex("libstp/motor/(\\d+)/done");
+    std::smatch match;
+    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
+        int port = std::stoi(match[1].str());
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        motor_done_cache_[port] = msg->value;
+    }
+}
+
 void LcmReader::handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
     std::regex port_regex("libstp/analog/(\\d+)/value");
     std::smatch match;
@@ -300,6 +330,18 @@ exlcm::scalar_i32_t LcmReader::readBemf(const int idx) {
     auto it = bemf_cache_.find(idx);
     result.value = (it != bemf_cache_.end()) ? it->second : 0;
     return result;
+}
+
+int32_t LcmReader::readMotorPosition(const int port) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    auto it = motor_position_cache_.find(port);
+    return (it != motor_position_cache_.end()) ? it->second : 0;
+}
+
+bool LcmReader::readMotorDone(const int port) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    auto it = motor_done_cache_.find(port);
+    return (it != motor_done_cache_.end()) ? it->second != 0 : false;
 }
 
 exlcm::scalar_i32_t LcmReader::readAnalog(const int port) {

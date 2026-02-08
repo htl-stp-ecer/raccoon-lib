@@ -22,14 +22,13 @@ class WaitForCheckpoint(Step):
 
         self.checkpoint_seconds = float(checkpoint_seconds)
 
-    async def run_step(self, robot: 'GenericRobot') -> None:
+    async def _execute_step(self, robot: 'GenericRobot') -> None:
         """
         Wait for the specified duration before synchronizing.
 
         Args:
             robot: The robot to run on.
         """
-        await super().run_step(robot)
         await robot.synchronizer.wait_until_checkpoint(self.checkpoint_seconds)
 
 
