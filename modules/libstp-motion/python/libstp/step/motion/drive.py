@@ -1,5 +1,5 @@
 import asyncio
-from libstp.motion import DriveStraightMotion, DriveStraightConfig, UnifiedMotionPidConfig
+from libstp.motion import DriveStraightMotion, DriveStraightConfig
 from libstp.robot.api import GenericRobot
 
 from .. import Step, SimulationStep, SimulationStepDelta, dsl
@@ -41,7 +41,7 @@ class Drive(Step):
 
         :param robot: The robot instance to interact with hardware
         """
-        motion = DriveStraightMotion(robot.drive, robot.odometry, UnifiedMotionPidConfig(), self.config)
+        motion = DriveStraightMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
         motion.start()  # Explicitly start the motion to reset odometry
 
         update_rate = 1 / 20

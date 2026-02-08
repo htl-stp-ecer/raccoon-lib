@@ -4,6 +4,7 @@ import asyncio
 
 from libstp.class_name_logger import ClassNameLogger
 from libstp.hal import AnalogSensor, DigitalSensor
+from libstp.motion import UnifiedMotionPidConfig
 from libstp.timing import Synchronizer
 from libstp.foundation import initialize_timer
 from .geometry import RobotGeometry
@@ -68,6 +69,11 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     def odometry(self) -> "Odometry":
         """Odometry system for position tracking."""
         ...
+
+    @property
+    def motion_pid_config(self) -> UnifiedMotionPidConfig:
+        """Unified PID configuration for all motion primitives. Override to customize."""
+        return UnifiedMotionPidConfig()
 
     @property
     def missions(self) -> List["MissionProtocol"]:

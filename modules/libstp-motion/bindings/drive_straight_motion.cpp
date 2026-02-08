@@ -13,7 +13,8 @@ void init_drive_straight(py::module_& m)
     py::class_<DriveStraightConfig>(m, "DriveStraightConfig")
         .def(py::init<>())
         .def_readwrite("distance_m", &DriveStraightConfig::distance_m)
-        .def_readwrite("max_speed_mps", &DriveStraightConfig::max_speed_mps);
+        .def_readwrite("max_speed_mps", &DriveStraightConfig::max_speed_mps)
+        .def_readwrite("max_acceleration_mps2", &DriveStraightConfig::max_acceleration_mps2);
 
     py::class_<DriveStraightMotion, Motion, std::shared_ptr<DriveStraightMotion>>(m, "DriveStraightMotion")
         .def(py::init([](libstp::drive::Drive& drive,

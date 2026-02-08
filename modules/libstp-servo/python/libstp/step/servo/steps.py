@@ -62,11 +62,6 @@ def servo(servo: Servo, angle: float) -> SetServoPosition:
     return SetServoPosition(servo=servo, target_angle=angle, duration=None)
 
 
-@dsl(tags=["servo", "actuator"])
-def slow_servo(servo: Servo, angle: float, duration: float) -> SetServoPosition:
-    """Create a timed step to move a servo to an angle over the specified duration."""
-    return SetServoPosition(servo=servo, target_angle=angle, duration=duration)
-
 
 @dsl(hidden=True)
 class ShakeServo(Step):
@@ -131,8 +126,78 @@ def shake_servo(servo: Servo, duration: float, angle_a: float, angle_b: float) -
     return ShakeServo(servo=servo, duration=duration, angle_a=angle_a, angle_b=angle_b)
 
 
+def _ease_in_out(t: float) -> float:
+    """Smoothstep ease-in-ease-out: 3t^2 - 2t^3."""
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
+_EASE_SERVO_TICK = 1 / 10
+
+
+@dsl(hidden=True)
+class EaseServo(Step):
+    """Move a servo to a target angle with ease-in-ease-out at a given speed."""
+
+    def __init__(self, servo: Servo, target_angle: float, speed: float) -> None:
+        super().__init__()
+        self._servo_ref = servo
+        self._target_angle = float(target_angle)
+        self._speed = float(speed)
+        self._validate_inputs()
+
+    def _validate_inputs(self) -> None:
+        if not (SERVO_MIN_ANGLE <= self._target_angle <= SERVO_MAX_ANGLE):
+            raise ValueError(
+                f"Target angle must be between {SERVO_MIN_ANGLE} and {SERVO_MAX_ANGLE}, "
+                f"got {self._target_angle}"
+            )
+        if self._speed <= 0:
+            raise ValueError(f"Speed must be > 0, got {self._speed}")
+
+    def _generate_signature(self) -> str:
+        servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
+        return f"EaseServo(servo={servo_label},angle={self._target_angle},speed={self._speed})"
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        self._servo_ref.enable()
+
+        start_angle = position_to_angle(self._servo_ref.get_position())
+        delta = self._target_angle - start_angle
+
+        if abs(delta) < 0.5:
+            self._servo_ref.set_position(angle_to_position(self._target_angle))
+            return
+
+        duration = abs(delta) / self._speed
+
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
+
+        while True:
+            elapsed = loop.time() - start_time
+            t = min(elapsed / duration, 1.0)
+            eased = _ease_in_out(t)
+            current_angle = start_angle + delta * eased
+            self._servo_ref.set_position(angle_to_position(current_angle))
+
+            if t >= 1.0:
+                break
+
+            await asyncio.sleep(_EASE_SERVO_TICK)
+
+        self._servo_ref.set_position(angle_to_position(self._target_angle))
+
+
+@dsl(tags=["servo", "actuator"])
+def slow_servo(servo: Servo, angle: float, speed: float = 60.0) -> EaseServo:
+    """Move a servo to an angle with ease-in-ease-out at the given speed (degrees/second)."""
+    return EaseServo(servo=servo, target_angle=angle, speed=speed)
+
+
 __all__ = [
     "SetServoPosition",
+    "EaseServo",
     "ShakeServo",
     "servo",
     "slow_servo",

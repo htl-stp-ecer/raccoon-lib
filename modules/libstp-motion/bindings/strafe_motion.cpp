@@ -13,7 +13,8 @@ void init_strafe(py::module_& m)
     py::class_<StrafeConfig>(m, "StrafeConfig")
         .def(py::init<>())
         .def_readwrite("target_distance_m", &StrafeConfig::target_distance_m)
-        .def_readwrite("max_speed_mps", &StrafeConfig::max_speed_mps);
+        .def_readwrite("max_speed_mps", &StrafeConfig::max_speed_mps)
+        .def_readwrite("max_acceleration_mps2", &StrafeConfig::max_acceleration_mps2);
 
     py::class_<StrafeMotion, Motion, std::shared_ptr<StrafeMotion>>(m, "StrafeMotion")
         .def(py::init([](libstp::drive::Drive& drive,

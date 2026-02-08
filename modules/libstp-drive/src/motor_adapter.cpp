@@ -11,6 +11,8 @@
 
 using namespace libstp::drive;
 constexpr double u_max = 100.0;
+// BEMF sampling rate in Hz (5ms interval on firmware)
+constexpr double kBemfSampleRate = 200.0;
 
 MotorAdapter::MotorAdapter(hal::motor::IMotor* motor)
     : motor_(motor),
@@ -66,7 +68,12 @@ void MotorAdapter::updateEncoderVelocity(double dt)
 
     const long long d_ticks = pos - pos_prev_;
 
-    constexpr long long kMaxDeltaTicks = 10000;
+    // Allow up to 5 full revolutions of delta per update as plausibility bound.
+    // Scales with encoder resolution so high-tick encoders aren't falsely rejected.
+    const double ticks_to_rad = motor_->getCalibration().ticks_to_rad;
+    const long long kMaxDeltaTicks = (ticks_to_rad > 0.0)
+        ? static_cast<long long>(5.0 * 2.0 * M_PI / ticks_to_rad)
+        : 500000;
     if (std::abs(d_ticks) > kMaxDeltaTicks)
     {
         LIBSTP_LOG_WARN(
@@ -112,7 +119,7 @@ int MotorAdapter::getRawPercent() const
     return pos;
 }
 
-void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, bool* out_saturated)
+void MotorAdapter::setVelocityWithAccel(double w_ref, double /*a_ref*/, double dt, bool* out_saturated)
 {
     if (!motor_)
     {
@@ -121,39 +128,30 @@ void MotorAdapter::setVelocityWithAccel(double w_ref, double a_ref, double dt, b
         return;
     }
 
+    // Convert rad/s to BEMF units and send to firmware (PID runs on STM32)
+    const double ticks_to_rad = motor_->getCalibration().ticks_to_rad;
+    const int bemf_target = (ticks_to_rad > 0.0)
+        ? static_cast<int>(std::lround(w_ref / (ticks_to_rad * kBemfSampleRate)))
+        : 0;
+
+    motor_->setVelocity(bemf_target);
+    last_u_cmd_ = static_cast<double>(bemf_target);
+    if (out_saturated) *out_saturated = false;
+
+    // Still update encoder velocity for getVelocity() readback
     updateEncoderVelocity(dt);
-    double w_meas = getVelocity();
-
-    bool saturated = false;
-    double u = controller_.compute(w_ref, a_ref, w_meas, dt, u_max, &saturated);
-
-    u = std::clamp(u, -u_max, u_max);
-
-    motor_->setSpeed(static_cast<int>(std::lround(u)));
-    last_u_cmd_ = u;
-    if (out_saturated) *out_saturated = saturated || (std::abs(u) >= u_max - 1e-6);
 
     LIBSTP_LOG_TRACE(
-        "MotorAdapter::setVelocityWithAccel port={} w_ref={} a_ref={} dt={} w_meas={} u_cmd={} saturated={} limited_cmd={}",
+        "MotorAdapter::setVelocityWithAccel port={} w_ref={} bemf_target={} dt={}",
         motor_->getPort(),
         w_ref,
-        a_ref,
-        dt,
-        w_meas,
-        u,
-        saturated,
-        out_saturated ? *out_saturated : saturated);
+        bemf_target,
+        dt);
 }
 
 void MotorAdapter::setVelocity(double w_ref, double dt)
 {
-    bool dummy = false;
-    setVelocityWithAccel(w_ref, 0.0, dt, &dummy);
-    LIBSTP_LOG_TRACE(
-        "MotorAdapter::setVelocity port={} w_ref={} dt={}",
-        motor_ ? motor_->getPort() : -1,
-        w_ref,
-        dt);
+    setVelocityWithAccel(w_ref, 0.0, dt, nullptr);
 }
 
 void MotorAdapter::setPercent(double percent)

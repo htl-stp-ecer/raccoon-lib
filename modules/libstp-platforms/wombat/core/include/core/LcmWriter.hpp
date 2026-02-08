@@ -29,6 +29,12 @@ namespace platform::wombat::core
         // Publish motor stop latch command. Non-zero -> stop/latch; 0 -> wake/enable.
         void setMotorStop(uint8_t port, int value);
         void setMotor(uint8_t port, int valueData);
+        // PID velocity control - firmware handles PID. velocity in BEMF units.
+        void setMotorVelocity(uint8_t port, int32_t velocity);
+        // PID position control (absolute) - velocity=BEMF speed, goalPosition=BEMF ticks
+        void setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition);
+        // PID position control (relative) - velocity=BEMF speed, delta=BEMF ticks from current
+        void setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition);
         void setServo(uint8_t port, int valueData);
         void requestDataDump();
         void resetBemfCounters();

@@ -18,6 +18,31 @@ void LcmDataWriter::setMotor(uint8_t port, int valueData) {
     lcm.publish("libstp/motor/" + std::to_string(port) + "/power_cmd", &publishedValue);
 }
 
+void LcmDataWriter::setMotorVelocity(uint8_t port, int32_t velocity) {
+    exlcm::scalar_i32_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.value = velocity;
+    lcm.publish("libstp/motor/" + std::to_string(port) + "/velocity_cmd", &msg);
+}
+
+void LcmDataWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition) {
+    exlcm::vector3f_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.x = static_cast<float>(velocity);
+    msg.y = static_cast<float>(goalPosition);
+    msg.z = 0.0f;
+    lcm.publish("libstp/motor/" + std::to_string(port) + "/position_cmd", &msg);
+}
+
+void LcmDataWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition) {
+    exlcm::vector3f_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.x = static_cast<float>(velocity);
+    msg.y = static_cast<float>(deltaPosition);
+    msg.z = 0.0f;
+    lcm.publish("libstp/motor/" + std::to_string(port) + "/relative_cmd", &msg);
+}
+
 void LcmDataWriter::setServo(uint8_t port, int valueData) {
     exlcm::scalar_i32_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();

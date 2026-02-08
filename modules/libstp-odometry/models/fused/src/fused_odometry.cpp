@@ -118,9 +118,23 @@ namespace libstp::odometry::fused
             );
         }
 
+        const Eigen::Quaternionf raw_imu = imu_->getOrientation();
         const Eigen::Quaternionf relative_orientation = getRelativeOrientation();
         orientation_ = origin_orientation_ * relative_orientation;
         orientation_.normalize();
+
+        LIBSTP_LOG_TRACE(
+            "FusedOdometry::update [IMU] raw_quat=({:.4f}, {:.4f}, {:.4f}, {:.4f}), "
+            "initial_quat=({:.4f}, {:.4f}, {:.4f}, {:.4f}), "
+            "relative_yaw={:.4f} rad ({:.2f} deg), heading={:.4f} rad ({:.2f} deg)",
+            raw_imu.w(), raw_imu.x(), raw_imu.y(), raw_imu.z(),
+            initial_imu_orientation_.w(), initial_imu_orientation_.x(),
+            initial_imu_orientation_.y(), initial_imu_orientation_.z(),
+            extractYaw(relative_orientation),
+            extractYaw(relative_orientation) * 180.0 / M_PI,
+            getHeading(),
+            getHeading() * 180.0 / M_PI
+        );
 
         // ===== BEMF velocity (read at control loop rate ~20Hz) =====
 

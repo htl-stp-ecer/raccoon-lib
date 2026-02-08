@@ -16,7 +16,7 @@ namespace libstp::motion
     {
         double distance_m{0.0};
         double max_speed_mps{0.0};
-        // Note: PID gains, tolerances, and saturation parameters are now in UnifiedMotionPidConfig (accessible via MotionContext)
+        double max_acceleration_mps2{1.0};  // Maximum linear acceleration (m/s²) for trapezoidal profile
     };
 
     class DriveStraightMotion final : public Motion

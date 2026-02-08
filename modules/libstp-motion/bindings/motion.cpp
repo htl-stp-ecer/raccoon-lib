@@ -32,8 +32,6 @@ void init_motion_base(py::module_& m)
             set_if("lateral_ki", cfg.lateral_ki);
             set_if("lateral_kd", cfg.lateral_kd);
             // Trapezoidal profile parameters
-            set_if("max_linear_acceleration", cfg.max_linear_acceleration);
-            set_if("max_angular_acceleration", cfg.max_angular_acceleration);
             // Advanced PID parameters
             set_if("integral_max", cfg.integral_max);
             set_if("integral_deadband", cfg.integral_deadband);
@@ -54,9 +52,6 @@ void init_motion_base(py::module_& m)
             // Tolerances
             set_if("distance_tolerance_m", cfg.distance_tolerance_m);
             set_if("angle_tolerance_rad", cfg.angle_tolerance_rad);
-            // Rate limits
-            set_if("max_heading_rate", cfg.max_heading_rate);
-            set_if("min_angular_rate", cfg.min_angular_rate);
             // Lateral drift handling
             set_if("lateral_heading_bias_gain", cfg.lateral_heading_bias_gain);
             set_if("lateral_reorient_threshold_m", cfg.lateral_reorient_threshold_m);
@@ -80,8 +75,6 @@ void init_motion_base(py::module_& m)
         .def_readwrite("lateral_ki", &UnifiedMotionPidConfig::lateral_ki)
         .def_readwrite("lateral_kd", &UnifiedMotionPidConfig::lateral_kd)
         // Trapezoidal profile parameters
-        .def_readwrite("max_linear_acceleration", &UnifiedMotionPidConfig::max_linear_acceleration)
-        .def_readwrite("max_angular_acceleration", &UnifiedMotionPidConfig::max_angular_acceleration)
         // Advanced PID parameters
         .def_readwrite("integral_max", &UnifiedMotionPidConfig::integral_max)
         .def_readwrite("integral_deadband", &UnifiedMotionPidConfig::integral_deadband)
@@ -99,9 +92,6 @@ void init_motion_base(py::module_& m)
         // Tolerances
         .def_readwrite("distance_tolerance_m", &UnifiedMotionPidConfig::distance_tolerance_m)
         .def_readwrite("angle_tolerance_rad", &UnifiedMotionPidConfig::angle_tolerance_rad)
-        // Rate limits
-        .def_readwrite("max_heading_rate", &UnifiedMotionPidConfig::max_heading_rate)
-        .def_readwrite("min_angular_rate", &UnifiedMotionPidConfig::min_angular_rate)
         // Lateral drift handling
         .def_readwrite("lateral_heading_bias_gain", &UnifiedMotionPidConfig::lateral_heading_bias_gain)
         .def_readwrite("lateral_reorient_threshold_m", &UnifiedMotionPidConfig::lateral_reorient_threshold_m)

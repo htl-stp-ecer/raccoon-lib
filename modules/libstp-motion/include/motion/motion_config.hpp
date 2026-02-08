@@ -23,10 +23,6 @@ namespace libstp::motion
         double lateral_ki{0.0};
         double lateral_kd{0.0};
 
-        // Trapezoidal profile parameters (for smooth motion with ramped setpoints)
-        double max_linear_acceleration{1.0};    // Maximum linear acceleration (m/s²) for drive/strafe
-        double max_angular_acceleration{2.0};   // Maximum angular acceleration (rad/s²) for turns
-
         // Advanced PID parameters (shared across all controllers)
         double integral_max{10.0};              // Anti-windup limit for all PIDs
         double integral_deadband{0.01};         // Don't integrate within this error
@@ -51,10 +47,6 @@ namespace libstp::motion
         // Tolerances
         double distance_tolerance_m{0.01};       // Position completion tolerance (meters)
         double angle_tolerance_rad{0.035};       // Angular completion tolerance (radians, ~2 degrees)
-
-        // Rate limits (these are speed-related but define maximum rates, not gains)
-        double max_heading_rate{3.0};            // Maximum heading correction rate (rad/s)
-        double min_angular_rate{0.1};            // Minimum turning speed to prevent stalling
 
         // Lateral drift handling (for differential drive)
         double lateral_heading_bias_gain{0.5};          // How much to bias heading based on lateral error

@@ -53,7 +53,7 @@ namespace libstp::motion
         TrapezoidalProfile::State initial{0.0, 0.0};  // Start at position=0, velocity=0
         TrapezoidalProfile::Constraints constraints{
             .max_velocity = cfg_.max_speed_mps,
-            .max_acceleration = ctx_.pid_config.max_linear_acceleration
+            .max_acceleration = cfg_.max_acceleration_mps2
         };
         profile_ = std::make_unique<TrapezoidalProfile>(initial, target_distance_m_, constraints);
 

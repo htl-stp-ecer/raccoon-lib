@@ -1,17 +1,16 @@
 #include "motion/turn_motion.hpp"
 #include "motion/motion_pid.hpp"
 
-#include <algorithm>
 #include <cmath>
 #include <numbers>
 
 #include "foundation/types.hpp"
-
 #include "foundation/logging.hpp"
 
 namespace
 {
     constexpr double kDegToRad = std::numbers::pi / 180.0;
+    constexpr double kSettlingVelocity = 0.05; // rad/s - must be nearly stopped to declare done
 }
 
 namespace libstp::motion
@@ -35,11 +34,9 @@ namespace libstp::motion
     TurnMotion::TurnMotion(MotionContext ctx, TurnConfig config)
         : Motion(ctx), cfg_(config)
     {
-        // Validate configuration parameters
         if (cfg_.max_angular_rate <= 0.0) cfg_.max_angular_rate = 0.5;
 
-        // Create PID controller using factory (turn uses heading gains)
-        angle_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
+        pid_ = createPidController(ctx_.pid_config, PidType::Heading);
     }
 
     void TurnMotion::start()
@@ -47,30 +44,15 @@ namespace libstp::motion
         if (started_) return;
         started_ = true;
         finished_ = false;
-        angular_scale_ = 1.0;
-        elapsed_time_ = 0.0;
-        unsaturated_cycles_ = 0;
+        prev_heading_ = 0.0;
 
-        // Reset odometry to establish new origin for this motion
-        // This zeros the heading, so our initial heading is 0.0
         odometry().reset();
+        pid_->reset();
 
-        // Reset PID controller state
-        angle_pid_->reset();
-
-        // Target heading is simply the desired turn angle (since we reset to 0)
         target_heading_rad_ = cfg_.target_angle_rad;
 
-        // Create trapezoidal profile for smooth motion
-        TrapezoidalProfile::State initial{0.0, 0.0};  // Start at heading=0, velocity=0
-        TrapezoidalProfile::Constraints constraints{
-            .max_velocity = cfg_.max_angular_rate,
-            .max_acceleration = ctx_.pid_config.max_angular_acceleration
-        };
-        profile_ = std::make_unique<TrapezoidalProfile>(initial, target_heading_rad_, constraints);
-
-        LIBSTP_LOG_INFO("TurnMotion started: target_angle = {:.3f} rad ({:.1f} deg), max_angular_rate = {:.3f} rad/s, profile_time = {:.3f} s",
-                    cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate, profile_->getTotalTime());
+        LIBSTP_LOG_DEBUG("TurnMotion started: target={:.3f} rad ({:.1f} deg), max_rate={:.3f} rad/s",
+                    cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad, cfg_.max_angular_rate);
     }
 
     void TurnMotion::update(double dt)
@@ -80,108 +62,46 @@ namespace libstp::motion
         if (finished_)
         {
             drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
-            if (dt > 0.0)
-            {
-                [[maybe_unused]] const auto motor_cmd = drive().update(dt);
-            }
+            if (dt > 0.0) { [[maybe_unused]] const auto mc = drive().update(dt); }
             return;
         }
 
-        if (dt <= 0.0)
-        {
-            LIBSTP_LOG_WARN("TurnMotion::update called with invalid dt={:.6f}s (must be > 0)", dt);
-            return;
-        }
+        if (dt <= 0.0) return;
 
-        // Update elapsed time
-        elapsed_time_ += dt;
-
-        // Update odometry first
         odometry().update(dt);
 
-        // Get setpoint from trapezoidal profile
-        const auto setpoint = profile_->getSetpoint(elapsed_time_);
         const double current_heading = odometry().getHeading();
+        const double error = odometry().getHeadingError(target_heading_rad_);
+        const double error_abs = std::abs(error);
 
-        // Compute error against the ramped setpoint (not the final target!)
-        const double heading_error = odometry().getHeadingError(setpoint.position);
-        const double error_to_final_target = odometry().getHeadingError(target_heading_rad_);
+        // Measure actual angular velocity for settling check
+        const double angular_velocity = (current_heading - prev_heading_) / dt;
+        prev_heading_ = current_heading;
 
-        LIBSTP_LOG_INFO("TurnMotion update: current = {:.3f} rad ({:.1f} deg), setpoint = {:.3f} rad ({:.1f} deg), target = {:.3f} rad ({:.1f} deg), error = {:.3f} rad ({:.1f} deg)",
-                    current_heading, current_heading / kDegToRad,
-                    setpoint.position, setpoint.position / kDegToRad,
-                    target_heading_rad_, target_heading_rad_ / kDegToRad,
-                    heading_error, heading_error / kDegToRad);
+        // Normalize error by target angle so PID gains are angle-independent.
+        const double target_abs = std::abs(target_heading_rad_);
+        const double normalized_error = (target_abs > 1e-6) ? (error / target_abs) : 0.0;
 
-        // Check if we've reached the final target angle
-        const double error_abs = std::abs(error_to_final_target);
-        if (error_abs <= ctx_.pid_config.angle_tolerance_rad)
+        // Check completion: position within tolerance AND nearly stopped
+        if (error_abs <= ctx_.pid_config.angle_tolerance_rad &&
+            std::abs(angular_velocity) < kSettlingVelocity)
         {
             complete();
             drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
-            const auto motor_cmd = drive().update(dt);
-            LIBSTP_LOG_DEBUG("TurnMotion completed: final error = {:.3f} rad ({:.1f} deg)", heading_error, heading_error / kDegToRad);
+            [[maybe_unused]] const auto mc = drive().update(dt);
+            LIBSTP_LOG_DEBUG("TurnMotion completed: heading={:.3f} rad, error={:.4f} rad ({:.2f} deg)",
+                        current_heading, error, error / kDegToRad);
             return;
         }
 
-        // Compute angular velocity using PID control
-        // Positive error -> need to turn CCW (positive omega)
-        // Negative error -> need to turn CW (negative omega)
-        double omega_cmd = angle_pid_->update(heading_error, dt);
+        // PID on normalized error, scale to angular velocity
+        const double omega_cmd = pid_->update(normalized_error, dt) * cfg_.max_angular_rate;
 
-        // Apply minimum angular rate to prevent stalling
-        // Only apply minimum if error is still significant
-        if (error_abs > ctx_.pid_config.angle_tolerance_rad && std::abs(omega_cmd) < ctx_.pid_config.min_angular_rate)
-        {
-            const double direction = (heading_error >= 0.0) ? 1.0 : -1.0;
-            omega_cmd = direction * ctx_.pid_config.min_angular_rate;
-            LIBSTP_LOG_INFO("TurnMotion: Applying minimum angular rate: omega = {:.3f} rad/s", omega_cmd);
-        }
+        drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, omega_cmd});
+        [[maybe_unused]] const auto mc = drive().update(dt);
 
-        // Apply scaling from previous saturation feedback
-        const double omega_cmd_scaled = omega_cmd * angular_scale_;
-        LIBSTP_LOG_INFO("TurnMotion: omega_cmd = {:.3f} rad/s, scaled = {:.3f} rad/s (scale={:.3f})",
-                    omega_cmd, omega_cmd_scaled, angular_scale_);
-
-        // Send command: no translation, only rotation
-        foundation::ChassisVelocity cmd{0.0, 0.0, omega_cmd_scaled};
-        drive().setVelocity(cmd);
-        const auto motor_cmd = drive().update(dt);
-
-        // Adjust scaling based on saturation feedback with hysteresis to prevent oscillation
-        if (motor_cmd.saturated_any)
-        {
-            // Reset hysteresis counter on saturation
-            unsaturated_cycles_ = 0;
-
-            const double prev_scale = angular_scale_;
-            angular_scale_ = std::max(
-                ctx_.pid_config.saturation_min_scale,
-                angular_scale_ * ctx_.pid_config.saturation_derating_factor);
-
-            LIBSTP_LOG_INFO("TurnMotion: Saturation detected (mask=0x{:X}) -> angular_scale {:.3f}->{:.3f}",
-                        motor_cmd.saturation_mask, prev_scale, angular_scale_);
-        }
-        else
-        {
-            // Hysteresis: only recover after sustained period without saturation
-            ++unsaturated_cycles_;
-
-            const bool can_recover = unsaturated_cycles_ >= ctx_.pid_config.saturation_hold_cycles;
-            const bool needs_recovery = angular_scale_ < ctx_.pid_config.saturation_recovery_threshold;
-
-            if (can_recover && needs_recovery)
-            {
-                const double prev_scale = angular_scale_;
-                angular_scale_ = std::min(1.0, angular_scale_ + ctx_.pid_config.saturation_recovery_rate);
-
-                if (prev_scale != angular_scale_)
-                {
-                    LIBSTP_LOG_INFO("TurnMotion: Recovery (after {} cycles) -> angular_scale {:.3f}->{:.3f}",
-                                unsaturated_cycles_, prev_scale, angular_scale_);
-                }
-            }
-        }
+        LIBSTP_LOG_DEBUG("TurnMotion: heading={:.3f}, error={:.3f}, norm_err={:.3f}, omega={:.3f}, ang_vel={:.3f}",
+                    current_heading, error, normalized_error, omega_cmd, angular_velocity);
     }
 
     bool TurnMotion::isFinished() const
