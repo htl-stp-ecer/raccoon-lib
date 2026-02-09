@@ -146,5 +146,6 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp/"
 
 # Add test directory after modules are defined
 if(LIBSTP_BUILD_TESTS)
+    enable_testing()
     add_subdirectory(tests/cpp)
 endif()
