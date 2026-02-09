@@ -11,6 +11,8 @@ namespace libstp::test
         MOCK_METHOD(void, read, (float* accel, float* gyro, float* magneto), (override));
         MOCK_METHOD(void, getAngularVelocity, (float* gyro), (override));
         MOCK_METHOD(void, calibrate, (), (override));
+        MOCK_METHOD(Eigen::Quaternionf, getOrientation, (), (override));
+        MOCK_METHOD(void, getLinearAcceleration, (float* linear_accel), (override));
         MOCK_METHOD(float, getHeading, (), (override));
         MOCK_METHOD(void, getLinearAcceleration, (float*), (override));
         MOCK_METHOD(void, getIntegratedVelocity, (float*), (override));
