@@ -1,0 +1,9 @@
+register_libstp_test(test_kmeans
+        SOURCES
+        test_kmeans.cpp
+        LIBS
+        hal
+        sensor_ir
+        calibration_store
+        kmeans
+)
