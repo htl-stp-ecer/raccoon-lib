@@ -27,7 +27,7 @@ from libstp.mission.api import Mission, MissionProtocol
 from libstp.timing import StepTimingTracker
 # UI library (replaces legacy RenderScreen)
 from libstp.ui import *
-from libstp.drive import Drive, MotionLimits
+from libstp.drive import Drive, MotionLimits, AxisVelocityControlConfig, ChassisVelocityControlConfig
 from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
 from libstp.odometry_fused import FusedOdometry, FusedOdometryConfig
@@ -71,6 +71,8 @@ __all__ = [
     "MecanumKinematics",
     "DifferentialKinematics",
     "MotionLimits",
+    "AxisVelocityControlConfig",
+    "ChassisVelocityControlConfig",
     "UnifiedMotionPidConfig",
     "KMeans",
     "KMeansResult",

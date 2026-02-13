@@ -1,5 +1,5 @@
 import asyncio
-from libstp.motion import DriveStraightMotion, DriveStraightConfig
+from libstp.motion import LinearMotion, LinearMotionConfig, LinearAxis
 from libstp.robot.api import GenericRobot
 
 from .. import Step, SimulationStep, SimulationStepDelta, dsl
@@ -7,51 +7,44 @@ from .. import Step, SimulationStep, SimulationStepDelta, dsl
 
 @dsl(hidden=True)
 class Drive(Step):
-    def __init__(self,
-                 config: DriveStraightConfig,
-                 ):
-        """
-        Initialize the Drive step.
-
-        Args:
-            distance_cm: The distance to drive in centimeters.
-            speed: The speed at which to drive in percent (0 - 1).
-        """
+    def __init__(self, config: LinearMotionConfig):
         super().__init__()
         self.config = config
 
     def _generate_signature(self) -> str:
+        axis = "Forward" if self.config.axis == LinearAxis.Forward else "Lateral"
         return (
-            f"Drive(distance_m={self.config.distance_m:.3f}, "
+            f"Drive(axis={axis}, distance_m={self.config.distance_m:.3f}, "
             f"speed={self.config.max_speed_mps:.3f})"
         )
 
     def to_simulation_step(self) -> SimulationStep:
         base = super().to_simulation_step()
-        base.delta = SimulationStepDelta(
-            forward=self.config.distance_m,
-            strafe=0.0,
-            angular=0.0,
-        )
+        if self.config.axis == LinearAxis.Forward:
+            base.delta = SimulationStepDelta(
+                forward=self.config.distance_m,
+                strafe=0.0,
+                angular=0.0,
+            )
+        else:
+            base.delta = SimulationStepDelta(
+                forward=0.0,
+                strafe=self.config.distance_m,
+                angular=0.0,
+            )
         return base
 
     async def _execute_step(self, robot: GenericRobot) -> None:
-        """
-        Run the Drive step.
-
-        :param robot: The robot instance to interact with hardware
-        """
-        motion = DriveStraightMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
-        motion.start()  # Explicitly start the motion to reset odometry
+        motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
+        motion.start()
 
         update_rate = 1 / 20
-        last_time = asyncio.get_event_loop().time() - update_rate  # seed so first dt ~= update_rate
+        last_time = asyncio.get_event_loop().time() - update_rate
         while not motion.is_finished():
             current_time = asyncio.get_event_loop().time()
             delta_time = max(current_time - last_time, 0.0)
             last_time = current_time
 
-            # Avoid near-zero dt on the very first iteration (causes huge accel FF)
             if delta_time < 1e-4:
                 await asyncio.sleep(update_rate)
                 continue
@@ -62,6 +55,10 @@ class Drive(Step):
         robot.drive.hard_stop()
 
 
+# Keep Strafe as an alias for backward compatibility
+Strafe = Drive
+
+
 @dsl(hidden=True)
 def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
     """
@@ -70,7 +67,8 @@ def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
     Used by calibrate_distance() to perform the calibration drive.
     Do not use directly - use drive_forward() instead.
     """
-    config = DriveStraightConfig()
+    config = LinearMotionConfig()
+    config.axis = LinearAxis.Forward
     config.distance_m = cm / 100.0
     config.max_speed_mps = speed
     return Drive(config)
@@ -84,10 +82,6 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     Requires distance calibration to be performed first via calibrate_distance().
     Raises CalibrationRequiredError if not calibrated.
 
-    Note: Calibration is now applied via per-wheel ticks_to_rad adjustment,
-    so no runtime scaling is needed here. The calibration affects odometry
-    directly through the motor's ticks_to_rad value.
-
     Args:
         cm: Distance to drive in centimeters
         speed: Speed (0-1, default 1.0)
@@ -100,7 +94,8 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     """
     from libstp.step.calibration import check_distance_calibration
     check_distance_calibration()
-    config = DriveStraightConfig()
+    config = LinearMotionConfig()
+    config.axis = LinearAxis.Forward
     config.distance_m = cm / 100.0
     config.max_speed_mps = speed
     return Drive(config)
@@ -114,10 +109,6 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     Requires distance calibration to be performed first via calibrate_distance().
     Raises CalibrationRequiredError if not calibrated.
 
-    Note: Calibration is now applied via per-wheel ticks_to_rad adjustment,
-    so no runtime scaling is needed here. The calibration affects odometry
-    directly through the motor's ticks_to_rad value.
-
     Args:
         cm: Distance to drive in centimeters
         speed: Speed (0-1, default 1.0)
@@ -130,7 +121,46 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     """
     from libstp.step.calibration import check_distance_calibration
     check_distance_calibration()
-    config = DriveStraightConfig()
-    config.distance_m = -cm / 100.0  # Negative distance for backwards
+    config = LinearMotionConfig()
+    config.axis = LinearAxis.Forward
+    config.distance_m = -cm / 100.0
+    config.max_speed_mps = speed
+    return Drive(config)
+
+
+@dsl(tags=["motion", "strafe"])
+def strafe_left(cm: float, speed: float = 0.3) -> Drive:
+    """
+    Strafe left by specified distance at a given speed.
+
+    Args:
+        cm: The distance to strafe in centimeters (positive values move left)
+        speed: Maximum lateral speed in m/s (default 0.3 m/s)
+
+    Returns:
+        Drive step configured for leftward motion
+    """
+    config = LinearMotionConfig()
+    config.axis = LinearAxis.Lateral
+    config.distance_m = -cm / 100.0  # Negative for left (odometry convention: negative lateral = left)
+    config.max_speed_mps = speed
+    return Drive(config)
+
+
+@dsl(tags=["motion", "strafe"])
+def strafe_right(cm: float, speed: float = 0.3) -> Drive:
+    """
+    Strafe right by specified distance at a given speed.
+
+    Args:
+        cm: The distance to strafe in centimeters (positive values move right)
+        speed: Maximum lateral speed in m/s (default 0.3 m/s)
+
+    Returns:
+        Drive step configured for rightward motion
+    """
+    config = LinearMotionConfig()
+    config.axis = LinearAxis.Lateral
+    config.distance_m = cm / 100.0  # Positive for right (odometry convention: positive lateral = right)
     config.max_speed_mps = speed
     return Drive(config)

@@ -1,6 +1,5 @@
-from .drive import Drive, drive_forward, drive_backward
+from .drive import Drive, Strafe, drive_forward, drive_backward, strafe_left, strafe_right
 from .stop import Stop, stop
-from .strafe import Strafe, strafe_left, strafe_right
 from .turn import Turn, turn_left, turn_right
 from .drive_until import (
     SurfaceColor,
@@ -54,6 +53,15 @@ from .line_follow import (
     follow_line_until_both_black,
     follow_line_single,
 )
+from .max_angular_velocity import (
+    MeasureMaxAngularVelocity,
+    measure_max_angular_velocity,
+)
+from .auto_tune_turn import (
+    AutoTuneTurn,
+    auto_tune_turn,
+)
+from .motor_response_test import motor_response_test
 
 __all__ = [
     # Basic motion
@@ -115,5 +123,13 @@ __all__ = [
     "follow_line",
     "follow_line_until_both_black",
     "follow_line_single",
-    "lineup"
+    "lineup",
+    # Max angular velocity measurement
+    "MeasureMaxAngularVelocity",
+    "measure_max_angular_velocity",
+    # Auto-tune
+    "AutoTuneTurn",
+    "auto_tune_turn",
+    # Motor diagnostics
+    "motor_response_test",
 ]

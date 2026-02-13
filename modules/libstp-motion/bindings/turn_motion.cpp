@@ -2,7 +2,6 @@
 #include <pybind11/stl.h>
 
 #include "motion/turn_motion.hpp"
-#include "motion/motion_pid.hpp"
 
 namespace py = pybind11;
 
@@ -13,7 +12,9 @@ void init_turn(py::module_& m)
     py::class_<TurnConfig>(m, "TurnConfig")
         .def(py::init<>())
         .def_readwrite("target_angle_rad", &TurnConfig::target_angle_rad)
-        .def_readwrite("max_angular_rate", &TurnConfig::max_angular_rate);
+        .def_readwrite("max_angular_rate", &TurnConfig::max_angular_rate)
+        .def_readwrite("max_angular_acceleration", &TurnConfig::max_angular_acceleration)
+        .def_readwrite("kS", &TurnConfig::kS);
 
     py::class_<TurnMotion, Motion, std::shared_ptr<TurnMotion>>(m, "TurnMotion")
         .def(py::init([](libstp::drive::Drive& drive,

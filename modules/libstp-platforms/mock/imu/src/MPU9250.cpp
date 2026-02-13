@@ -47,6 +47,19 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
     magneto[2] = platform::mock::core::magZ();
 }
 
+void libstp::hal::imu::IMU::getAngularVelocity(float* gyro)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (gyro == nullptr)
+    {
+        throw std::runtime_error("IMU getAngularVelocity failed! Output pointer is null.");
+    }
+#endif
+    gyro[0] = platform::mock::core::gyroX();
+    gyro[1] = platform::mock::core::gyroY();
+    gyro[2] = platform::mock::core::gyroZ();
+}
+
 void libstp::hal::imu::IMU::calibrate()
 {
     // Mock calibration - in a real implementation this would collect samples

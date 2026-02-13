@@ -4,6 +4,7 @@
 #include "drive/drive.hpp"
 #include "foundation/types.hpp"
 #include "kinematics/kinematics.hpp"
+#include "hal/IMU.hpp"
 #include "hal/Motor.hpp"
 
 #include <sstream>
@@ -11,12 +12,31 @@ namespace py = pybind11;
 
 void init_drive(const py::module& m)
 {
+    py::class_<libstp::drive::AxisVelocityControlConfig>(m, "AxisVelocityControlConfig")
+        .def(py::init<>())
+        .def(py::init<libstp::foundation::PidGains, libstp::foundation::Feedforward>(),
+             py::arg("pid"), py::arg("ff"))
+        .def_readwrite("pid", &libstp::drive::AxisVelocityControlConfig::pid)
+        .def_readwrite("ff", &libstp::drive::AxisVelocityControlConfig::ff);
+
+    py::class_<libstp::drive::ChassisVelocityControlConfig>(m, "ChassisVelocityControlConfig")
+        .def(py::init<>())
+        .def_readwrite("vx", &libstp::drive::ChassisVelocityControlConfig::vx)
+        .def_readwrite("vy", &libstp::drive::ChassisVelocityControlConfig::vy)
+        .def_readwrite("wz", &libstp::drive::ChassisVelocityControlConfig::wz);
+
     py::class_<libstp::drive::Drive>(m, "Drive")
-        .def(py::init([](libstp::kinematics::IKinematics* kinematics, const libstp::drive::MotionLimits& chassis_lim)
+        .def(py::init([](libstp::kinematics::IKinematics* kinematics,
+                         const libstp::drive::MotionLimits& chassis_lim,
+                         const libstp::drive::ChassisVelocityControlConfig& vel_config,
+                         libstp::hal::imu::IMU& imu)
         {
-            return std::make_unique<libstp::drive::Drive>(std::unique_ptr<libstp::kinematics::IKinematics>(kinematics),
-                                                          chassis_lim);
-        }), py::arg("kinematics"), py::arg("chassis_lim"), py::keep_alive<1, 2>())
+            return std::make_unique<libstp::drive::Drive>(
+                std::unique_ptr<libstp::kinematics::IKinematics>(kinematics),
+                chassis_lim, vel_config, imu);
+        }), py::arg("kinematics"), py::arg("chassis_lim"), py::arg("vel_config"),
+            py::arg("imu"),
+            py::keep_alive<1, 2>(), py::keep_alive<1, 5>())
         .def("set_velocity", &libstp::drive::Drive::setVelocity, py::arg("v_body"))
         .def("update", [](libstp::drive::Drive& self, double dt) {
             self.update(dt);  // Ignore MotorCommands return value
@@ -25,6 +45,8 @@ void init_drive(const py::module& m)
         .def("wheel_count", &libstp::drive::Drive::wheelCount)
         .def("soft_stop", &libstp::drive::Drive::softStop)
         .def("hard_stop", &libstp::drive::Drive::hardStop)
+        .def("set_velocity_control_config", &libstp::drive::Drive::setVelocityControlConfig, py::arg("config"))
+        .def("reset_velocity_controllers", &libstp::drive::Drive::resetVelocityControllers)
         .def("get_wheel_radius", &libstp::drive::Drive::getWheelRadius,
              "Get the wheel radius from kinematics in meters")
         .def("get_motors", [](libstp::drive::Drive& self) {

@@ -6,6 +6,7 @@
 #include "foundation/config.hpp"
 
 #include <stdexcept>
+#include <chrono>
 
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
@@ -43,14 +44,15 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
     if (percent < MIN_SPEED || percent > MAX_SPEED) throw std::out_of_range("speed -100 - 100");
 #endif
 
+    const auto ts = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    LIBSTP_LOG_INFO(
+        "[TIMING] setSpeed port={} percent={} epoch_us={}",
+        port_, percent, ts);
+
     // Wake motor latch before sending a power command to avoid stop latch blocking.
     platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
     const int directionPercent = inverted_ ? -percent : percent;
-    LIBSTP_LOG_TRACE(
-        "Wombat Motor port={} setSpeed percent={} inverted={}",
-        port_,
-        percent,
-        inverted_);
     platform::wombat::core::LcmDataWriter::instance().setMotor(port_, directionPercent);
 }
 
@@ -89,6 +91,14 @@ int libstp::hal::motor::Motor::getPosition() const
 
     LIBSTP_LOG_TRACE("Wombat Motor port={} getPosition raw={} corrected={} inverted={}",
                  port_, reading, corrected, inverted_);
+    return corrected;
+}
+
+int libstp::hal::motor::Motor::getBemf() const
+{
+    const auto reading = platform::wombat::core::LcmReader::instance().readBemf(port_);
+    const int corrected = inverted_ ? -reading.value : reading.value;
+    LIBSTP_LOG_TRACE("Wombat Motor port={} getBemf raw={} corrected={}", port_, reading.value, corrected);
     return corrected;
 }
 

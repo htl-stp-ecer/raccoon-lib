@@ -25,6 +25,7 @@ namespace libstp::hal::motor
         // Move relative position (BEMF ticks) at given velocity (BEMF units)
         virtual void moveRelative(int velocity, int deltaPosition) = 0;
         [[nodiscard]] virtual int getPosition() const = 0;
+        [[nodiscard]] virtual int getBemf() const = 0;
         [[nodiscard]] virtual bool isDone() const = 0;
         virtual void brake() = 0;
 

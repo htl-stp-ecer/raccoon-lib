@@ -9,6 +9,7 @@ namespace libstp::test
     {
     public:
         MOCK_METHOD(void, read, (float* accel, float* gyro, float* magneto), (override));
+        MOCK_METHOD(void, getAngularVelocity, (float* gyro), (override));
         MOCK_METHOD(void, calibrate, (), (override));
         MOCK_METHOD(Eigen::Quaternionf, getOrientation, (), (override));
         MOCK_METHOD(bool, waitForReady, (int timeout_ms), (override));

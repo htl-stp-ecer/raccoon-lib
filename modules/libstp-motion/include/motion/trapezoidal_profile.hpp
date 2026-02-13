@@ -91,6 +91,100 @@ namespace libstp::motion
         }
 
         /**
+         * Compute the next setpoint along a trapezoidal trajectory from current toward goal.
+         *
+         * Analytical approach (ported from FRC WPILib TrapezoidProfile::Calculate):
+         * each call recomputes the full trapezoidal profile from current state to
+         * goal, then evaluates it at exactly t=dt.  This is analytically exact --
+         * no discretisation overshoot regardless of timestep.
+         *
+         * @param dt Time step (seconds)
+         * @param current Current profiled state (position, velocity)
+         * @param goal Desired goal state (position, velocity)
+         * @param constraints Velocity and acceleration limits
+         * @return The exact setpoint state after dt
+         */
+        static State calculate(double dt, const State& current, const State& goal,
+                               const Constraints& constraints)
+        {
+            const double max_v = constraints.max_velocity;
+            const double max_a = constraints.max_acceleration;
+
+            // Direction: flip so goal is always "ahead" of current
+            const int dir = (current.position > goal.position) ? -1 : 1;
+
+            // Work in directed frame
+            double c_pos = current.position * dir;
+            double c_vel = current.velocity * dir;
+            const double g_pos = goal.position * dir;
+            const double g_vel = goal.velocity * dir;
+
+            // Clamp current velocity to constraints
+            if (std::abs(c_vel) > max_v)
+                c_vel = std::copysign(max_v, c_vel);
+
+            // Treat as a full zero-to-zero profile, then trim the portions
+            // before current velocity and after goal velocity.
+            const double cutoff_begin = c_vel / max_a;
+            const double cutoff_dist_begin = cutoff_begin * cutoff_begin * max_a * 0.5;
+
+            const double cutoff_end = g_vel / max_a;
+            const double cutoff_dist_end = cutoff_end * cutoff_end * max_a * 0.5;
+
+            const double full_trapezoid_dist =
+                cutoff_dist_begin + (g_pos - c_pos) + cutoff_dist_end;
+
+            double accel_time = max_v / max_a;
+            double full_speed_dist =
+                full_trapezoid_dist - accel_time * accel_time * max_a;
+
+            // Triangular profile if we can't reach full speed
+            if (full_speed_dist < 0.0)
+            {
+                accel_time = std::sqrt(std::max(0.0, full_trapezoid_dist / max_a));
+                full_speed_dist = 0.0;
+            }
+
+            const double end_accel = accel_time - cutoff_begin;
+            const double end_full_speed =
+                end_accel + (max_v > 1e-10 ? full_speed_dist / max_v : 0.0);
+            const double end_decel = end_full_speed + accel_time - cutoff_end;
+
+            double r_pos, r_vel;
+
+            if (dt < end_accel)
+            {
+                // Acceleration phase
+                r_vel = c_vel + dt * max_a;
+                r_pos = c_pos + (c_vel + dt * max_a * 0.5) * dt;
+            }
+            else if (dt < end_full_speed)
+            {
+                // Cruise phase
+                r_vel = max_v;
+                r_pos = c_pos
+                      + (c_vel + end_accel * max_a * 0.5) * end_accel
+                      + max_v * (dt - end_accel);
+            }
+            else if (dt <= end_decel)
+            {
+                // Deceleration phase (computed backwards from goal -- exact)
+                const double time_left = end_decel - dt;
+                r_vel = g_vel + time_left * max_a;
+                r_pos = g_pos - (g_vel + time_left * max_a * 0.5) * time_left;
+            }
+            else
+            {
+                // Profile complete within this timestep
+                r_pos = g_pos;
+                r_vel = g_vel;
+            }
+
+            // Convert back from directed frame
+            return State{r_pos * dir, r_vel * dir};
+        }
+
+        /**
          * Check if the profile is complete.
          */
         bool isComplete(double elapsed_time) const
