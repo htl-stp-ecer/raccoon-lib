@@ -85,6 +85,13 @@ int libstp::hal::motor::Motor::getPosition() const
     return value;
 }
 
+int libstp::hal::motor::Motor::getBemf() const
+{
+    const int value = static_cast<int>(platform::mock::core::bemf(port_));
+    LIBSTP_LOG_TRACE("Mock Motor port={} getBemf -> {}", port_, value);
+    return value;
+}
+
 bool libstp::hal::motor::Motor::isDone() const
 {
     LIBSTP_LOG_TRACE("Mock Motor port={} isDone -> true", port_);

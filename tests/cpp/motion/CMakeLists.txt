@@ -2,9 +2,8 @@ register_libstp_test(test_motion
     SOURCES
         test_motion_pid.cpp
         test_trapezoidal_profile.cpp
-        test_drive_straight_motion.cpp
+        test_linear_motion.cpp
         test_turn_motion.cpp
-        test_strafe_motion.cpp
     LIBS
         motion
         drive

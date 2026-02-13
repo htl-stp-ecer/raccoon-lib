@@ -27,6 +27,14 @@ void init_imu(const py::module& m)
 
             return result;
         }, "Read acceleration, gyroscope, and magnetometer data")
+    .def("get_angular_velocity", [](libstp::hal::imu::IMU& self)
+    {
+        float gyro[3] = {0.0f, 0.0f, 0.0f};
+        self.getAngularVelocity(gyro);
+        return py::make_tuple(gyro[0], gyro[1], gyro[2]);
+    }, "Get angular velocity (gyroscope) as (x, y, z) in rad/s")
+    .def("get_yaw_rate", &libstp::hal::imu::IMU::getYawRate,
+         "Get orientation-corrected angular rate around world z-axis (yaw) in rad/s")
     .def("calibrate", &libstp::hal::imu::IMU::calibrate, "Calibrate the IMU sensor")
     .def("get_orientation", [](libstp::hal::imu::IMU& self)
     {

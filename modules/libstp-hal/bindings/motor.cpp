@@ -20,6 +20,8 @@ void init_motor(const py::module& m)
              py::arg("velocity"), py::arg("delta_position"),
              "Move relative position at given velocity")
         .def("get_position", &libstp::hal::motor::IMotor::getPosition)
+        .def("get_bemf", &libstp::hal::motor::IMotor::getBemf,
+             "Read current BEMF velocity value from firmware")
         .def("is_done", &libstp::hal::motor::IMotor::isDone,
              "Check if position move is complete")
         .def("brake", &libstp::hal::motor::IMotor::brake)
@@ -40,6 +42,7 @@ void init_motor(const py::module& m)
         .def("move_relative", &libstp::hal::motor::Motor::moveRelative,
              py::arg("velocity"), py::arg("delta_position"))
         .def("get_position", &libstp::hal::motor::Motor::getPosition)
+        .def("get_bemf", &libstp::hal::motor::Motor::getBemf)
         .def("is_done", &libstp::hal::motor::Motor::isDone)
         .def("brake", &libstp::hal::motor::Motor::brake)
         .def_property_readonly("port", &libstp::hal::motor::Motor::getPort)

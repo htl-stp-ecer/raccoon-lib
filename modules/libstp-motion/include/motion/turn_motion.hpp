@@ -1,20 +1,26 @@
 #pragma once
 
 #include "motion/motion.hpp"
-#include "motion/motion_pid.hpp"
 #include "foundation/types.hpp"
-#include <memory>
 
 namespace libstp::motion
 {
-    class MotionPidController;
-
     struct TurnConfig
     {
         double target_angle_rad{0.0};        // Target turn angle (positive = CCW, negative = CW)
-        double max_angular_rate{1.0};        // Maximum turning speed (rad/s)
+        double max_angular_rate{2.0};        // Maximum turning speed (rad/s)
+        double max_angular_acceleration{2.0}; // rad/s² (reserved for future use)
+        double kS{0.0};                      // Static friction compensation (rad/s)
     };
 
+    /**
+     * PID turn controller with output-clamped velocity command.
+     *
+     * Uses a simple PID on heading error.  The proportional term saturated by
+     * max_angular_rate naturally produces a trapezoidal-like velocity profile:
+     * full speed while far from goal, proportional deceleration near it.
+     * The derivative term damps momentum to prevent overshoot.
+     */
     class TurnMotion final : public Motion
     {
     public:
@@ -35,11 +41,22 @@ namespace libstp::motion
         void complete();
 
         TurnConfig cfg_{};
-        std::unique_ptr<MotionPidController> pid_;
-        double target_heading_rad_{0.0};
         bool finished_{false};
 
-        // Velocity tracking for settling check
+        // PID gains (from pid_config heading gains)
+        double kP_{0.0};
+        double kI_{0.0};
+        double kD_{0.0};
+
+        // PID state
+        double prev_error_{0.0};
+        double total_error_{0.0};
+        double filtered_derivative_{0.0};
+        int last_error_sign_{0};
+
+        // Velocity tracking for settling detection
         double prev_heading_{0.0};
+        double filtered_velocity_{0.0};
+        static constexpr double kVelocityFilterAlpha{0.3};
     };
 }

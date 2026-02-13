@@ -23,6 +23,31 @@ namespace libstp::hal::imu
         [[nodiscard]] virtual Eigen::Quaternionf getOrientation() = 0;
 
         /**
+         * Get angular velocity (gyroscope) in body frame
+         * @param gyro Output array [x, y, z] for angular velocity in rad/s
+         */
+        virtual void getAngularVelocity(float* gyro)
+        {
+            float accel[3], g[3], magneto[3];
+            read(accel, g, magneto);
+            gyro[0] = g[0]; gyro[1] = g[1]; gyro[2] = g[2];
+        }
+
+        /**
+         * Get the angular rate around the world z-axis (heading/yaw rate).
+         * Rotates the body-frame gyro vector to world frame using the orientation
+         * quaternion, so the result is correct regardless of IMU mounting orientation.
+         * @return Yaw rate in rad/s
+         */
+        float getYawRate()
+        {
+            float g[3];
+            getAngularVelocity(g);
+            const Eigen::Vector3f gyro_world = getOrientation() * Eigen::Vector3f(g[0], g[1], g[2]);
+            return gyro_world.z();
+        }
+
+        /**
          * Get gravity-compensated linear acceleration in body frame
          * @param linear_accel Output array [x, y, z] for linear acceleration in m/s²
          */

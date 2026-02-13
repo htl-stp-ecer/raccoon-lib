@@ -56,6 +56,22 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
     magneto[2] = magValue.z;
 }
 
+void libstp::hal::imu::IMU::getAngularVelocity(float* gyro)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (gyro == nullptr)
+    {
+        throw std::runtime_error("IMU getAngularVelocity failed! Output pointer is null.");
+    }
+#endif
+
+    constexpr float deg_to_rad = static_cast<float>(M_PI / 180.0);
+    const exlcm::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
+    gyro[0] = gyroValue.x * deg_to_rad;
+    gyro[1] = gyroValue.y * deg_to_rad;
+    gyro[2] = gyroValue.z * deg_to_rad;
+}
+
 Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
 {
     const auto orientationMsg = platform::wombat::core::LcmReader::instance().readOrientation();

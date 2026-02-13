@@ -20,6 +20,7 @@ namespace libstp::hal::imu
         ~IMU() override;
 
         void read(float* accel, float* gyro, float* magneto) override;
+        void getAngularVelocity(float* gyro) override;
         void calibrate() override;
         [[nodiscard]] Eigen::Quaternionf getOrientation() override;
         void getLinearAcceleration(float* linear_accel) override;
