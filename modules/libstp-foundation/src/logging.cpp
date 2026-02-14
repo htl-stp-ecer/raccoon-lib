@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <unordered_map>
 
 #include <spdlog/spdlog.h>
@@ -58,37 +59,121 @@ namespace logging {
     };
 
     class SourceFileFormatter final : public spdlog::custom_flag_formatter {
-        static void format_package(const char* path, spdlog::memory_buf_t &dest) {
-            // C++ style: .../libstp-<module>/src/<file>.cpp → m.file.cpp (Spring-style)
-            const char* p = strstr(path, "libstp-");
-            if (p) {
-                p += 7;
-                const char* slash = strchr(p, '/');
-                if (slash) {
-                    const char* base = detail::basename(path);
-                    fmt::format_to(std::back_inserter(dest), "{}.{}", *p, base);
-                    return;
+        static std::string normalize_separators(std::string path) {
+            for (char& c : path) {
+                if (c == '\\') {
+                    c = '/';
+                }
+            }
+            return path;
+        }
+
+        static std::optional<std::string> detect_repo_root() {
+            namespace fs = std::filesystem;
+            std::error_code ec;
+            auto current = fs::current_path(ec);
+            if (ec) {
+                return std::nullopt;
+            }
+
+            current = current.lexically_normal();
+            for (auto dir = current; !dir.empty(); dir = dir.parent_path()) {
+                if (fs::exists(dir / ".git", ec)) {
+                    return normalize_separators(dir.string());
+                }
+                if (dir == dir.root_path()) {
+                    break;
                 }
             }
 
+            return std::nullopt;
+        }
+
+        static std::string repo_relative_path(const char* path) {
+            std::string normalized = normalize_separators(path ? path : "");
+            if (normalized.empty() || normalized[0] != '/') {
+                return normalized;
+            }
+
+            static const std::optional<std::string> repo_root = detect_repo_root();
+            if (!repo_root || repo_root->empty()) {
+                return normalized;
+            }
+
+            const std::string prefix = *repo_root + "/";
+            if (normalized.rfind(prefix, 0) == 0) {
+                return normalized.substr(prefix.size());
+            }
+
+            if (normalized == *repo_root) {
+                return ".";
+            }
+
+            return normalized;
+        }
+
+        static bool is_sep(char c) {
+            return c == '/' || c == '\\';
+        }
+
+        static void format_abbreviated_path(const char* path, spdlog::memory_buf_t &dest) {
+            const char* last_sep = nullptr;
+            for (const char* c = path; *c; ++c) {
+                if (is_sep(*c)) {
+                    last_sep = c;
+                }
+            }
+
+            if (!last_sep) {
+                fmt::format_to(std::back_inserter(dest), "{}", path);
+                return;
+            }
+
+            const char* file = last_sep + 1;
+            const char* start = path;
+            for (const char* c = path; c < file; ++c) {
+                if (is_sep(*c)) {
+                    if (c > start && !(c - start == 1 && start[0] == '.')) {
+                        fmt::format_to(std::back_inserter(dest), "{}.", *start);
+                    }
+                    start = c + 1;
+                }
+            }
+
+            if (*file) {
+                fmt::format_to(std::back_inserter(dest), "{}", file);
+            } else {
+                fmt::format_to(std::back_inserter(dest), "{}", detail::basename(path));
+            }
+        }
+
+        static void format_package(const char* path, spdlog::memory_buf_t &dest) {
+            const std::string display_path = repo_relative_path(path);
+            const char* display = display_path.c_str();
+
             // Python style: .../libstp/<pkg>/<pkg>/<file>.py → p.p.file.py (Spring-style)
-            p = strstr(path, "libstp/");
+            const char* p = strstr(display, "libstp/");
+            if (!p) {
+                p = strstr(display, "libstp\\");
+            }
             if (p) {
                 p += 7;
-                // Find last slash to know which component is the filename
-                const char* last_slash = nullptr;
+                // Find last separator to know which component is the filename.
+                const char* last_sep = nullptr;
                 for (const char* c = p; *c; ++c) {
-                    if (*c == '/') last_slash = c;
+                    if (is_sep(*c)) {
+                        last_sep = c;
+                    }
                 }
 
                 const char* start = p;
                 bool first = true;
                 for (const char* c = p; ; ++c) {
-                    if (*c == '/' || *c == '\0') {
+                    if (is_sep(*c) || *c == '\0') {
                         if (c > start) {
                             if (!first) fmt::format_to(std::back_inserter(dest), ".");
                             first = false;
-                            if (last_slash && c <= last_slash) {
+                            if (last_sep && c <= last_sep) {
                                 // Shorten intermediate components to first char
                                 fmt::format_to(std::back_inserter(dest), "{}", *start);
                             } else {
@@ -104,8 +189,17 @@ namespace logging {
                 return;
             }
 
-            // Fallback: raw string
-            fmt::format_to(std::back_inserter(dest), "{}", path);
+            // C++ style: .../libstp-<module>/src/<file>.cpp → m.file.cpp (Spring-style)
+            p = strstr(display, "libstp-");
+            if (p && p[7] && !is_sep(p[7])) {
+                const char* base = detail::basename(display);
+                fmt::format_to(std::back_inserter(dest), "{}.{}", p[7], base);
+                return;
+            }
+
+            // Generic fallback: abbreviate all directories and keep full filename
+            // (e.g., /a/b/c/file.py -> a.b.c.file.py).
+            format_abbreviated_path(display, dest);
         }
 
     public:

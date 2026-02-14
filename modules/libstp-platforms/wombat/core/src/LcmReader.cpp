@@ -3,6 +3,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <unistd.h>
 #include "foundation/logging.hpp"
 
 using namespace platform::wombat::core;
@@ -161,8 +162,8 @@ void LcmReader::listenLoop() {
     int msgs_since_log = 0;
 
     while (running_) {
-        // Wait up to 10ms for first message
-        int result = lcm_.handleTimeout(10);
+        // Non-blocking poll for messages
+        int result = lcm_.handleTimeout(0);
         if (result < 0) {
             LIBSTP_LOG_ERROR("[LcmReader] Error in LCM handleTimeout");
             continue;
@@ -173,6 +174,9 @@ void LcmReader::listenLoop() {
             while (running_ && lcm_.handleTimeout(0) > 0) {
                 ++msgs_since_log;
             }
+        } else {
+            // No messages available — brief sleep to avoid busy-spinning
+            usleep(100);
         }
 
         // Log throughput every 5 seconds

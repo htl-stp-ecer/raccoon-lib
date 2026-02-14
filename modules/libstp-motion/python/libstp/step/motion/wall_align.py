@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 
 from libstp.foundation import ChassisVelocity
 
-from .. import Step, dsl
+from .. import dsl
+from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -25,7 +26,7 @@ class WallDirection(Enum):
 
 
 @dsl(hidden=True)
-class WallAlign(Step):
+class WallAlign(MotionStep):
     """
     Drive into a wall at constant velocity without heading correction.
 
@@ -38,6 +39,7 @@ class WallAlign(Step):
         self.direction = direction
         self.speed = speed
         self.duration = duration
+        self._deadline: float = 0.0
 
     def _generate_signature(self) -> str:
         return (
@@ -55,26 +57,13 @@ class WallAlign(Step):
         else:  # STRAFE_RIGHT
             return ChassisVelocity(0.0, self.speed, 0.0)
 
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        update_rate = 1 / 100
-        last_time = asyncio.get_event_loop().time() - update_rate
-        start_time = asyncio.get_event_loop().time()
-
+    def on_start(self, robot: "GenericRobot") -> None:
         robot.drive.set_velocity(self._get_velocity())
+        self._deadline = asyncio.get_event_loop().time() + self.duration
 
-        while (asyncio.get_event_loop().time() - start_time) < self.duration:
-            current_time = asyncio.get_event_loop().time()
-            delta_time = max(current_time - last_time, 0.0)
-            last_time = current_time
-
-            if delta_time < 1e-4:
-                await asyncio.sleep(update_rate)
-                continue
-
-            robot.drive.update(delta_time)
-            await asyncio.sleep(update_rate)
-
-        robot.drive.hard_stop()
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        robot.drive.update(dt)
+        return asyncio.get_event_loop().time() >= self._deadline
 
 
 @dsl(tags=["motion", "wall"])

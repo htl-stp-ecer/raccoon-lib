@@ -1,15 +1,19 @@
-import asyncio
 from libstp.motion import LinearMotion, LinearMotionConfig, LinearAxis
-from libstp.robot.api import GenericRobot
+from typing import TYPE_CHECKING
 
-from .. import Step, SimulationStep, SimulationStepDelta, dsl
+from .. import SimulationStep, SimulationStepDelta, dsl
+from .motion_step import MotionStep
+
+if TYPE_CHECKING:
+    from libstp.robot.api import GenericRobot
 
 
 @dsl(hidden=True)
-class Drive(Step):
+class Drive(MotionStep):
     def __init__(self, config: LinearMotionConfig):
         super().__init__()
         self.config = config
+        self._motion: LinearMotion | None = None
 
     def _generate_signature(self) -> str:
         axis = "Forward" if self.config.axis == LinearAxis.Forward else "Lateral"
@@ -34,25 +38,13 @@ class Drive(Step):
             )
         return base
 
-    async def _execute_step(self, robot: GenericRobot) -> None:
-        motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
-        motion.start()
+    def on_start(self, robot: "GenericRobot") -> None:
+        self._motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
+        self._motion.start()
 
-        update_rate = 1 / 100
-        last_time = asyncio.get_event_loop().time() - update_rate
-        while not motion.is_finished():
-            current_time = asyncio.get_event_loop().time()
-            delta_time = max(current_time - last_time, 0.0)
-            last_time = current_time
-
-            if delta_time < 1e-4:
-                await asyncio.sleep(update_rate)
-                continue
-
-            motion.update(delta_time)
-            await asyncio.sleep(update_rate)
-
-        robot.drive.hard_stop()
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        self._motion.update(dt)
+        return self._motion.is_finished()
 
 
 # Keep Strafe as an alias for backward compatibility

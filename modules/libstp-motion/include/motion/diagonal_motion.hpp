@@ -12,28 +12,26 @@ namespace libstp::motion
 {
     class MotionPidController;
 
-    enum class LinearAxis { Forward, Lateral };
-
-    struct LinearMotionConfig
+    struct DiagonalMotionConfig
     {
-        LinearAxis axis{LinearAxis::Forward};
-        double distance_m{0.0};
-        double max_speed_mps{0.0};
+        double angle_rad{0.0};               // Travel angle: 0 = forward, pi/2 = right, -pi/2 = left
+        double distance_m{0.0};              // Distance along the travel direction
+        double max_speed_mps{0.0};           // Max speed along travel direction
         double max_acceleration_mps2{0.0};   // m/s² (0 = use default from pid_config)
         double max_deceleration_mps2{0.0};   // m/s² (0 = use acceleration, or default)
     };
 
-    struct LinearMotionTelemetry
+    struct DiagonalMotionTelemetry
     {
         double time_s{0.0};             // elapsed since start
         double dt{0.0};                 // this cycle's dt
         // Position
-        double target_m{0.0};           // target distance
-        double position_m{0.0};         // actual primary axis position
+        double target_m{0.0};           // target distance along travel direction
+        double position_m{0.0};         // actual position along travel direction
         double predicted_m{0.0};        // profile setpoint position
-        double cross_track_m{0.0};      // cross-track drift
+        double cross_track_m{0.0};      // cross-track drift (perpendicular to travel)
         // Errors
-        double distance_error_m{0.0};   // target - actual
+        double distance_error_m{0.0};   // target - actual along travel
         double actual_error_m{0.0};     // target - actual
         double yaw_error_rad{0.0};      // heading error
         // Velocity
@@ -56,21 +54,23 @@ namespace libstp::motion
         bool saturated{false};
     };
 
-    class LinearMotion final : public Motion
+    class DiagonalMotion final : public Motion
     {
     public:
-        LinearMotion(MotionContext ctx, LinearMotionConfig config);
+        DiagonalMotion(MotionContext ctx, DiagonalMotionConfig config);
 
         void start() override;
         void update(double dt) override;
         [[nodiscard]] bool isFinished() const override;
 
-        [[nodiscard]] const std::vector<LinearMotionTelemetry>& getTelemetry() const { return telemetry_; }
+        [[nodiscard]] const std::vector<DiagonalMotionTelemetry>& getTelemetry() const { return telemetry_; }
 
     private:
         void complete();
 
-        LinearMotionConfig cfg_{};
+        DiagonalMotionConfig cfg_{};
+        double cos_angle_{1.0};  // precomputed cos(angle_rad)
+        double sin_angle_{0.0};  // precomputed sin(angle_rad)
         std::unique_ptr<MotionPidController> heading_pid_;       // PID controller for heading
         std::unique_ptr<MotionPidController> cross_track_pid_;   // PID controller for cross-track drift
         ProfiledPIDController profiled_pid_;                     // Profiled PID for primary axis
@@ -78,7 +78,6 @@ namespace libstp::motion
         bool finished_{false};
         double speed_scale_{1.0};
         double heading_scale_{1.0};
-        bool reorienting_{false};
         int unsaturated_cycles_{0};
 
         // Velocity tracking for settling detection
@@ -89,6 +88,6 @@ namespace libstp::motion
 
         // Telemetry
         double elapsed_time_{0.0};
-        std::vector<LinearMotionTelemetry> telemetry_;
+        std::vector<DiagonalMotionTelemetry> telemetry_;
     };
 }

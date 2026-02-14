@@ -14,6 +14,7 @@ void init_turn(py::module_& m)
         .def_readwrite("target_angle_rad", &TurnConfig::target_angle_rad)
         .def_readwrite("max_angular_rate", &TurnConfig::max_angular_rate)
         .def_readwrite("max_angular_acceleration", &TurnConfig::max_angular_acceleration)
+        .def_readwrite("max_angular_deceleration", &TurnConfig::max_angular_deceleration)
         .def_readwrite("kS", &TurnConfig::kS);
 
     py::class_<TurnMotion, Motion, std::shared_ptr<TurnMotion>>(m, "TurnMotion")
