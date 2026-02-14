@@ -439,9 +439,6 @@ class CalibrateDistance(UIStep):
                         if motor.port == result.motor_port:
                             old_cal = motor.get_calibration()
                             new_cal = MotorCalibration()
-                            new_cal.ff = old_cal.ff
-                            new_cal.pid = old_cal.pid
-                            # Apply EMA-filtered value for this run
                             new_cal.ticks_to_rad = result.ema_baseline
                             new_cal.vel_lpf_alpha = old_cal.vel_lpf_alpha
                             motor.set_calibration(new_cal)

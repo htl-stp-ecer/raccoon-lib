@@ -1,12 +1,44 @@
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
 #include <iostream>
-#include <regex>
 #include <chrono>
 #include <thread>
 #include "foundation/logging.hpp"
 
 using namespace platform::wombat::core;
+
+namespace {
+// Age tracking — all accessed from LCM listener thread only, no sync needed
+double age_max_ms = 0.0;
+double age_sum_ms = 0.0;
+int    age_count  = 0;
+
+void logAge(const std::string& channel, int64_t msg_timestamp) {
+    auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    double age_ms = (now_us - msg_timestamp) / 1000.0;
+    if (age_ms > age_max_ms) age_max_ms = age_ms;
+    age_sum_ms += age_ms;
+    ++age_count;
+    LIBSTP_LOG_TRACE("[LcmReader] {} age: {:.1f}ms", channel, age_ms);
+}
+
+// Parse port/index number from channel string like "libstp/motor/2/value"
+// Returns the integer between the 2nd and 3rd '/' (i.e. the port number)
+int parsePort(const std::string& channel) {
+    // Skip past "libstp/" (7 chars), then find next '/'
+    size_t start = channel.find('/', 7);
+    if (start == std::string::npos) return -1;
+    ++start;
+    size_t end = channel.find('/', start);
+    if (end == std::string::npos) end = channel.size();
+    int port = 0;
+    for (size_t i = start; i < end; ++i) {
+        port = port * 10 + (channel[i] - '0');
+    }
+    return port;
+}
+}
 
 LcmReader::LcmReader() {
     if (!lcm_.good()) {
@@ -125,11 +157,38 @@ LcmReader::~LcmReader() {
 
 void LcmReader::listenLoop() {
     LIBSTP_LOG_DEBUG("[LcmReader] Listen loop started");
+    auto stats_start = std::chrono::steady_clock::now();
+    int msgs_since_log = 0;
+
     while (running_) {
-        // Use handleTimeout with a short timeout to allow checking running_ flag
-        int result = lcm_.handleTimeout(100);
+        // Wait up to 10ms for first message
+        int result = lcm_.handleTimeout(10);
         if (result < 0) {
             LIBSTP_LOG_ERROR("[LcmReader] Error in LCM handleTimeout");
+            continue;
+        }
+        if (result > 0) {
+            ++msgs_since_log;
+            // Drain all pending messages without blocking
+            while (running_ && lcm_.handleTimeout(0) > 0) {
+                ++msgs_since_log;
+            }
+        }
+
+        // Log throughput every 5 seconds
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - stats_start).count();
+        if (elapsed >= 5000) {
+            double avg_ms = (age_count > 0) ? (age_sum_ms / age_count) : 0.0;
+            LIBSTP_LOG_DEBUG("[LcmReader] {} msgs in {:.1f}s ({:.0f}/s) | age avg={:.1f}ms max={:.1f}ms",
+                msgs_since_log, elapsed / 1000.0,
+                msgs_since_log * 1000.0 / elapsed,
+                avg_ms, age_max_ms);
+            msgs_since_log = 0;
+            age_max_ms = 0.0;
+            age_sum_ms = 0.0;
+            age_count = 0;
+            stats_start = now;
         }
     }
     LIBSTP_LOG_DEBUG("[LcmReader] Listen loop exiting");
@@ -137,56 +196,55 @@ void LcmReader::listenLoop() {
 
 // Message handlers with channel parsing
 void LcmReader::handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex port_regex("libstp/motor/(\\d+)/value");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         motor_value_cache_[port] = msg->value;
     }
 }
 
 void LcmReader::handleMotorDir(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
-    std::regex port_regex("libstp/motor/(\\d+)/direction");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         motor_dir_cache_[port] = msg->dir;
     }
 }
 
 void LcmReader::handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
-    std::regex port_regex("libstp/servo/(\\d+)/mode");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         servo_mode_cache_[port] = msg->dir;
     }
 }
 
 void LcmReader::handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex port_regex("libstp/servo/(\\d+)/position");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         servo_value_cache_[port] = msg->value;
     }
 }
 
-void LcmReader::handleGyro(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+void LcmReader::handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
+    logAge(channel, msg->timestamp);
     std::lock_guard<std::mutex> lock(cache_mutex_);
     gyro_cache_ = *msg;
 }
 
-void LcmReader::handleAccel(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+void LcmReader::handleAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
+    logAge(channel, msg->timestamp);
     std::lock_guard<std::mutex> lock(cache_mutex_);
     accel_cache_ = *msg;
 }
 
-void LcmReader::handleLinearAccel(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+void LcmReader::handleLinearAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
+    logAge(channel, msg->timestamp);
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         linear_accel_cache_ = *msg;
@@ -202,67 +260,65 @@ void LcmReader::handleLinearAccel(const lcm::ReceiveBuffer*, const std::string&,
     }
 }
 
-void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
+    logAge(channel, msg->timestamp);
     std::lock_guard<std::mutex> lock(cache_mutex_);
     mag_cache_ = *msg;
 }
 
-void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string&, const exlcm::quaternion_t* msg) {
+void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::quaternion_t* msg) {
+    logAge(channel, msg->timestamp);
     std::lock_guard<std::mutex> lock(cache_mutex_);
     orientation_cache_ = *msg;
     imu_orientation_received_ = true;
 }
 void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex idx_regex("libstp/bemf/(\\d+)/value");
-    std::smatch match;
-    if (std::regex_match(channel, match, idx_regex) && match.size() > 1) {
-        int idx = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int idx = parsePort(channel);
+    if (idx >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         bemf_cache_[idx] = msg->value;
     }
 }
 
 void LcmReader::handleMotorPosition(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex port_regex("libstp/motor/(\\d+)/position");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         motor_position_cache_[port] = msg->value;
     }
 }
 
 void LcmReader::handleMotorDone(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex port_regex("libstp/motor/(\\d+)/done");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         motor_done_cache_[port] = msg->value;
     }
 }
 
 void LcmReader::handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex port_regex("libstp/analog/(\\d+)/value");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         analog_cache_[port] = msg->value;
     }
 }
 
 void LcmReader::handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    std::regex port_regex("libstp/digital/(\\d+)/value");
-    std::smatch match;
-    if (std::regex_match(channel, match, port_regex) && match.size() > 1) {
-        int port = std::stoi(match[1].str());
+    logAge(channel, msg->timestamp);
+    int port = parsePort(channel);
+    if (port >= 0) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         digital_cache_[port] = msg->value;
     }
 }
 
-void LcmReader::handleTemp(const lcm::ReceiveBuffer*, const std::string&, const exlcm::scalar_f_t* msg) {
+void LcmReader::handleTemp(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_f_t* msg) {
+    logAge(channel, msg->timestamp);
     std::lock_guard<std::mutex> lock(cache_mutex_);
     temp_cache_ = *msg;
 }
