@@ -29,8 +29,12 @@ namespace libstp::motion
         speed_scale_ = 1.0;
         heading_scale_ = 1.0;
         reorienting_ = false;
-        elapsed_time_ = 0.0;
         unsaturated_cycles_ = 0;
+
+        prev_primary_position_ = 0.0;
+        filtered_velocity_ = 0.0;
+        elapsed_time_ = 0.0;
+        telemetry_.clear();
 
         odometry().reset();
 
@@ -40,16 +44,9 @@ namespace libstp::motion
 
         initial_heading_rad_ = odometry().getHeading();
 
-        TrapezoidalProfile::State initial{0.0, 0.0};
-        TrapezoidalProfile::Constraints constraints{
-            .max_velocity = cfg_.max_speed_mps,
-            .max_acceleration = cfg_.max_acceleration_mps2
-        };
-        profile_ = std::make_unique<TrapezoidalProfile>(initial, cfg_.distance_m, constraints);
-
-        LIBSTP_LOG_TRACE("LinearMotion started: axis={}, target={:.3f} m, max_speed={:.3f} m/s, profile_time={:.3f} s",
+        LIBSTP_LOG_TRACE("LinearMotion started: axis={}, target={:.3f} m, max_speed={:.3f} m/s",
                     (cfg_.axis == LinearAxis::Forward ? "Forward" : "Lateral"),
-                    cfg_.distance_m, cfg_.max_speed_mps, profile_->getTotalTime());
+                    cfg_.distance_m, cfg_.max_speed_mps);
     }
 
     void LinearMotion::update(double dt)
@@ -73,9 +70,9 @@ namespace libstp::motion
         }
 
         elapsed_time_ += dt;
+
         odometry().update(dt);
 
-        const auto setpoint = profile_->getSetpoint(elapsed_time_);
         const auto distance_info = odometry().getDistanceFromOrigin();
         const double current_heading = odometry().getHeading();
         const double yaw_error = odometry().getHeadingError(initial_heading_rad_);
@@ -85,18 +82,27 @@ namespace libstp::motion
         const double primary_position = is_forward ? distance_info.forward : distance_info.lateral;
         const double cross_track_position = is_forward ? distance_info.lateral : distance_info.forward;
 
-        const double distance_error = setpoint.position - primary_position;
-        const double error_to_final_target = cfg_.distance_m - primary_position;
+        // Filtered velocity for settling detection
+        const double raw_velocity = (primary_position - prev_primary_position_) / dt;
+        filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
+        prev_primary_position_ = primary_position;
 
-        LIBSTP_LOG_TRACE("LinearMotion update: primary={:.3f} m, setpoint={:.3f} m, target={:.3f} m, cross_track={:.3f} m, heading={:.3f} rad, yaw_error={:.3f} rad",
-                    primary_position, setpoint.position, cfg_.distance_m, cross_track_position, current_heading, yaw_error);
+        // Predict where the robot will be when the current command takes effect (Smith predictor).
+        // This shifts the deceleration point earlier by exactly the lag amount.
+        const double predicted_position = primary_position + filtered_velocity_ * ctx_.pid_config.response_lag_s;
+        const double distance_error = cfg_.distance_m - predicted_position;
+        const double actual_error = cfg_.distance_m - primary_position;
 
-        // Check if we've reached the final target distance
-        const double remaining = error_to_final_target;
-        const double remaining_abs = std::abs(remaining);
+        LIBSTP_LOG_TRACE("LinearMotion update: primary={:.3f} m, predicted={:.3f} m, target={:.3f} m, error={:.3f} m, cross_track={:.3f} m, heading={:.3f} rad, yaw_error={:.3f} rad, filt_vel={:.3f} m/s",
+                    primary_position, predicted_position, cfg_.distance_m, distance_error, cross_track_position, current_heading, yaw_error, filtered_velocity_);
 
-        if (remaining_abs <= ctx_.pid_config.distance_tolerance_m)
+        // Check if we've reached the final target distance AND are nearly stopped
+        // Use actual position for completion (not predicted), so we don't stop short
+        if (std::abs(actual_error) <= ctx_.pid_config.distance_tolerance_m &&
+            std::abs(filtered_velocity_) < kSettlingVelocity)
         {
+            LIBSTP_LOG_TRACE("LinearMotion completed: primary={:.3f} m, error={:.4f} m, filt_vel={:.4f} m/s",
+                        primary_position, actual_error, filtered_velocity_);
             complete();
             drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             const auto motor_cmd = drive().update(dt);
@@ -107,17 +113,15 @@ namespace libstp::motion
         const double cross_track_error = cross_track_position;
         const bool supports_lateral = drive().getKinematics().supportsLateralMotion();
 
-        double cross_cmd = 0.0;
-        double omega_cmd = 0.0;
+        double cross_cmd_raw = 0.0;
+        double omega_cmd_raw = 0.0;
 
         if (supports_lateral)
         {
             // MECANUM: direct cross-track correction
-            // Cross-track error sign: positive cross_track_position means drifted in positive direction
-            // We want negative correction to push back
-            cross_cmd = -cross_track_pid_->update(cross_track_error, dt);
-            cross_cmd = std::clamp(cross_cmd, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
-            omega_cmd = heading_pid_->update(yaw_error, dt);
+            cross_cmd_raw = -cross_track_pid_->update(cross_track_error, dt);
+            cross_cmd_raw = std::clamp(cross_cmd_raw, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
+            omega_cmd_raw = heading_pid_->update(yaw_error, dt);
         }
         else
         {
@@ -136,7 +140,7 @@ namespace libstp::motion
                 const double target_heading = initial_heading_rad_ + desired_heading_bias;
                 const double yaw_to_target = odometry().getHeadingError(target_heading);
 
-                omega_cmd = heading_pid_->update(yaw_to_target, dt);
+                omega_cmd_raw = heading_pid_->update(yaw_to_target, dt);
 
                 if (std::abs(yaw_to_target) < 0.1 && cross_track_error_abs < ctx_.pid_config.lateral_reorient_threshold_m * 0.7)
                 {
@@ -148,16 +152,17 @@ namespace libstp::motion
             {
                 const double heading_bias = std::atan(ctx_.pid_config.lateral_heading_bias_gain * cross_track_error);
                 const double biased_yaw_error = yaw_error + heading_bias;
-                omega_cmd = heading_pid_->update(biased_yaw_error, dt);
+                omega_cmd_raw = heading_pid_->update(biased_yaw_error, dt);
             }
         }
 
-        // Primary axis velocity control
-        double primary_cmd = distance_pid_->update(distance_error, dt);
+        // Primary axis velocity control: PID on error to target, clamped to max speed.
+        double primary_cmd_raw = distance_pid_->update(distance_error, dt);
+        double primary_cmd = std::clamp(primary_cmd_raw, -cfg_.max_speed_mps, cfg_.max_speed_mps);
 
         if (std::abs(primary_cmd) < 1e-4)
         {
-            const double direction = (remaining >= 0.0) ? 1.0 : -1.0;
+            const double direction = (distance_error >= 0.0) ? 1.0 : -1.0;
             primary_cmd = direction * std::min(cfg_.max_speed_mps, ctx_.pid_config.min_speed_mps);
         }
 
@@ -169,8 +174,8 @@ namespace libstp::motion
 
         // Apply scaling from previous saturation feedback
         primary_cmd *= speed_scale_;
-        cross_cmd *= speed_scale_;
-        const double omega_cmd_scaled = omega_cmd * heading_scale_;
+        double cross_cmd = cross_cmd_raw * speed_scale_;
+        const double omega_cmd_scaled = omega_cmd_raw * heading_scale_;
 
         LIBSTP_LOG_TRACE("LinearMotion scaled cmd: primary={:.3f}, cross={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
                     primary_cmd, cross_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);
@@ -191,6 +196,30 @@ namespace libstp::motion
 
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
+
+        // Record telemetry
+        telemetry_.push_back(LinearMotionTelemetry{
+            .time_s = elapsed_time_,
+            .dt = dt,
+            .target_m = cfg_.distance_m,
+            .position_m = primary_position,
+            .predicted_m = predicted_position,
+            .cross_track_m = cross_track_position,
+            .distance_error_m = distance_error,
+            .actual_error_m = actual_error,
+            .yaw_error_rad = yaw_error,
+            .filtered_velocity_mps = filtered_velocity_,
+            .cmd_vx_mps = cmd.vx,
+            .cmd_vy_mps = cmd.vy,
+            .cmd_wz_radps = cmd.wz,
+            .pid_primary_raw = primary_cmd_raw,
+            .pid_cross_raw = cross_cmd_raw,
+            .pid_heading_raw = omega_cmd_raw,
+            .heading_rad = current_heading,
+            .speed_scale = speed_scale_,
+            .heading_scale = heading_scale_,
+            .saturated = motor_cmd.saturated_any,
+        });
 
         // Adjust scaling based on saturation feedback with hysteresis
         const double yaw_error_abs = std::abs(yaw_error);
@@ -256,5 +285,6 @@ namespace libstp::motion
     void LinearMotion::complete()
     {
         finished_ = true;
+        drive().hardStop();
     }
 }

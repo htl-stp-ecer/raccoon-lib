@@ -59,6 +59,8 @@ void init_motion_base(py::module_& m)
             set_if("heading_recovery_error_rad", cfg.heading_recovery_error_rad);
             // Minimum speeds
             set_if("min_speed_mps", cfg.min_speed_mps);
+            // Response lag compensation
+            set_if("response_lag_s", cfg.response_lag_s);
 
             return cfg;
         }))
@@ -98,7 +100,9 @@ void init_motion_base(py::module_& m)
         .def_readwrite("heading_saturation_error_rad", &UnifiedMotionPidConfig::heading_saturation_error_rad)
         .def_readwrite("heading_recovery_error_rad", &UnifiedMotionPidConfig::heading_recovery_error_rad)
         // Minimum speeds
-        .def_readwrite("min_speed_mps", &UnifiedMotionPidConfig::min_speed_mps);
+        .def_readwrite("min_speed_mps", &UnifiedMotionPidConfig::min_speed_mps)
+        // Response lag compensation
+        .def_readwrite("response_lag_s", &UnifiedMotionPidConfig::response_lag_s);
 
     py::class_<libstp::motion::Motion, std::shared_ptr<libstp::motion::Motion>>(m, "Motion")
         .def("start", &libstp::motion::Motion::start)

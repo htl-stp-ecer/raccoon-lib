@@ -59,6 +59,11 @@ namespace libstp::motion
 
         // Reorientation behavior (differential drive)
         double reorientation_speed_factor{0.3};  // Reduce forward speed to this fraction during reorientation
+
+        // Response lag compensation (Smith predictor)
+        double response_lag_s{0.3};              // Actuator response lag (seconds). PID controls predicted
+                                                 // position (current + velocity × lag) instead of current
+                                                 // position, so deceleration starts earlier.
     };
 
     /**

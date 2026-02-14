@@ -62,6 +62,7 @@ from .auto_tune_turn import (
     auto_tune_turn,
 )
 from .motor_response_test import motor_response_test
+from .tune_drive import TuneDrive, tune_drive
 
 __all__ = [
     # Basic motion
@@ -132,4 +133,7 @@ __all__ = [
     "auto_tune_turn",
     # Motor diagnostics
     "motor_response_test",
+    # Drive telemetry
+    "TuneDrive",
+    "tune_drive",
 ]
