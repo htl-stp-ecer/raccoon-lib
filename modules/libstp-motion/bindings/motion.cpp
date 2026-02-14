@@ -10,60 +10,69 @@ void init_motion_base(py::module_& m)
 
     // Unified Motion PID Configuration
     py::class_<UnifiedMotionPidConfig>(m, "UnifiedMotionPidConfig")
-        .def(py::init<>())
-        .def(py::init([](py::kwargs kwargs) {
-            UnifiedMotionPidConfig cfg;
-            auto set_if = [&](const char* name, auto& field) {
-                if (kwargs.contains(name)) {
-                    field = kwargs[name].cast<std::decay_t<decltype(field)>>();
-                }
-            };
-
-            // Distance PID gains
-            set_if("distance_kp", cfg.distance_kp);
-            set_if("distance_ki", cfg.distance_ki);
-            set_if("distance_kd", cfg.distance_kd);
-            // Heading PID gains
-            set_if("heading_kp", cfg.heading_kp);
-            set_if("heading_ki", cfg.heading_ki);
-            set_if("heading_kd", cfg.heading_kd);
-            // Lateral PID gains
-            set_if("lateral_kp", cfg.lateral_kp);
-            set_if("lateral_ki", cfg.lateral_ki);
-            set_if("lateral_kd", cfg.lateral_kd);
-            // Trapezoidal profile parameters
-            // Advanced PID parameters
-            set_if("integral_max", cfg.integral_max);
-            set_if("integral_deadband", cfg.integral_deadband);
-            set_if("derivative_lpf_alpha", cfg.derivative_lpf_alpha);
-            set_if("output_min", cfg.output_min);
-            set_if("output_max", cfg.output_max);
-            // Saturation handling
-            set_if("saturation_derating_factor", cfg.saturation_derating_factor);
-            set_if("saturation_min_scale", cfg.saturation_min_scale);
-            set_if("saturation_recovery_rate", cfg.saturation_recovery_rate);
-            // Heading-specific saturation
-            set_if("heading_saturation_derating_factor", cfg.heading_saturation_derating_factor);
-            set_if("heading_min_scale", cfg.heading_min_scale);
-            set_if("heading_recovery_rate", cfg.heading_recovery_rate);
-            // Hysteresis parameters
-            set_if("saturation_hold_cycles", cfg.saturation_hold_cycles);
-            set_if("saturation_recovery_threshold", cfg.saturation_recovery_threshold);
-            // Tolerances
-            set_if("distance_tolerance_m", cfg.distance_tolerance_m);
-            set_if("angle_tolerance_rad", cfg.angle_tolerance_rad);
-            // Lateral drift handling
-            set_if("lateral_heading_bias_gain", cfg.lateral_heading_bias_gain);
-            set_if("lateral_reorient_threshold_m", cfg.lateral_reorient_threshold_m);
-            set_if("heading_saturation_error_rad", cfg.heading_saturation_error_rad);
-            set_if("heading_recovery_error_rad", cfg.heading_recovery_error_rad);
-            // Minimum speeds
-            set_if("min_speed_mps", cfg.min_speed_mps);
-            // Response lag compensation
-            set_if("response_lag_s", cfg.response_lag_s);
-
-            return cfg;
-        }))
+        .def(py::init<
+                 double, double, double,
+                 double, double, double,
+                 double, double, double,
+                 double, double, double, double, double,
+                 double, double, double,
+                 double, double, double,
+                 int, double,
+                 double, double,
+                 double, double, double, double,
+                 double,
+                 double,
+                 double,
+                 double, double, double
+             >(),
+             // Distance PID gains
+             py::arg("distance_kp") = 2.0,
+             py::arg("distance_ki") = 0.0,
+             py::arg("distance_kd") = 0.5,
+             // Heading PID gains
+             py::arg("heading_kp") = 2.0,
+             py::arg("heading_ki") = 0.0,
+             py::arg("heading_kd") = 0.3,
+             // Lateral PID gains
+             py::arg("lateral_kp") = 2.0,
+             py::arg("lateral_ki") = 0.0,
+             py::arg("lateral_kd") = 0.0,
+             // Advanced PID parameters
+             py::arg("integral_max") = 10.0,
+             py::arg("integral_deadband") = 0.01,
+             py::arg("derivative_lpf_alpha") = 0.3,
+             py::arg("output_min") = -10.0,
+             py::arg("output_max") = 10.0,
+             // Saturation handling
+             py::arg("saturation_derating_factor") = 0.9,
+             py::arg("saturation_min_scale") = 0.2,
+             py::arg("saturation_recovery_rate") = 0.03,
+             // Heading-specific saturation
+             py::arg("heading_saturation_derating_factor") = 0.85,
+             py::arg("heading_min_scale") = 0.25,
+             py::arg("heading_recovery_rate") = 0.05,
+             // Hysteresis parameters
+             py::arg("saturation_hold_cycles") = 5,
+             py::arg("saturation_recovery_threshold") = 0.95,
+             // Tolerances
+             py::arg("distance_tolerance_m") = 0.01,
+             py::arg("angle_tolerance_rad") = 0.035,
+             // Lateral drift handling
+             py::arg("lateral_heading_bias_gain") = 0.5,
+             py::arg("lateral_reorient_threshold_m") = 0.15,
+             py::arg("heading_saturation_error_rad") = 0.01,
+             py::arg("heading_recovery_error_rad") = 0.005,
+             // Minimum speeds
+             py::arg("min_speed_mps") = 0.05,
+             // Reorientation behavior
+             py::arg("reorientation_speed_factor") = 0.3,
+             // Response lag compensation
+             py::arg("response_lag_s") = 0.3,
+             // Braking-distance motion profile
+             py::arg("decel_mps2") = 0.10,
+             py::arg("rest_horizon_s") = 0.7,
+             py::arg("horizon_blend_speed_mps") = 0.1
+        )
         // Distance PID gains
         .def_readwrite("distance_kp", &UnifiedMotionPidConfig::distance_kp)
         .def_readwrite("distance_ki", &UnifiedMotionPidConfig::distance_ki)
@@ -91,6 +100,9 @@ void init_motion_base(py::module_& m)
         .def_readwrite("heading_saturation_derating_factor", &UnifiedMotionPidConfig::heading_saturation_derating_factor)
         .def_readwrite("heading_min_scale", &UnifiedMotionPidConfig::heading_min_scale)
         .def_readwrite("heading_recovery_rate", &UnifiedMotionPidConfig::heading_recovery_rate)
+        // Hysteresis parameters
+        .def_readwrite("saturation_hold_cycles", &UnifiedMotionPidConfig::saturation_hold_cycles)
+        .def_readwrite("saturation_recovery_threshold", &UnifiedMotionPidConfig::saturation_recovery_threshold)
         // Tolerances
         .def_readwrite("distance_tolerance_m", &UnifiedMotionPidConfig::distance_tolerance_m)
         .def_readwrite("angle_tolerance_rad", &UnifiedMotionPidConfig::angle_tolerance_rad)
@@ -101,8 +113,14 @@ void init_motion_base(py::module_& m)
         .def_readwrite("heading_recovery_error_rad", &UnifiedMotionPidConfig::heading_recovery_error_rad)
         // Minimum speeds
         .def_readwrite("min_speed_mps", &UnifiedMotionPidConfig::min_speed_mps)
+        // Reorientation behavior
+        .def_readwrite("reorientation_speed_factor", &UnifiedMotionPidConfig::reorientation_speed_factor)
         // Response lag compensation
-        .def_readwrite("response_lag_s", &UnifiedMotionPidConfig::response_lag_s);
+        .def_readwrite("response_lag_s", &UnifiedMotionPidConfig::response_lag_s)
+        // Braking-distance motion profile
+        .def_readwrite("decel_mps2", &UnifiedMotionPidConfig::decel_mps2)
+        .def_readwrite("rest_horizon_s", &UnifiedMotionPidConfig::rest_horizon_s)
+        .def_readwrite("horizon_blend_speed_mps", &UnifiedMotionPidConfig::horizon_blend_speed_mps);
 
     py::class_<libstp::motion::Motion, std::shared_ptr<libstp::motion::Motion>>(m, "Motion")
         .def("start", &libstp::motion::Motion::start)

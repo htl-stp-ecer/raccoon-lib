@@ -38,7 +38,7 @@ class Drive(Step):
         motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
         motion.start()
 
-        update_rate = 1 / 20
+        update_rate = 1 / 100
         last_time = asyncio.get_event_loop().time() - update_rate
         while not motion.is_finished():
             current_time = asyncio.get_event_loop().time()

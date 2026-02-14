@@ -5,16 +5,14 @@
 #include "hal/IIMU.hpp"
 #include "foundation/config.hpp"
 #include <stdexcept>
-#include <algorithm>
+#include <limits>
 
 using namespace libstp::drive;
 
 Drive::Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
-             const MotionLimits& chassis_lim,
              const ChassisVelocityControlConfig& vel_config,
              hal::imu::IIMU& imu)
     : kinematics_(std::move(kinematics)),
-      chassis_lim_(chassis_lim),
       vel_ctrl_config_(vel_config),
       imu_(imu),
       ctrl_vx_(vel_config.vx.pid, vel_config.vx.ff),
@@ -34,24 +32,10 @@ void Drive::initControllers()
 
 void Drive::setVelocity(const foundation::ChassisVelocity& v_body)
 {
-    LIBSTP_LOG_TRACE("Drive::setVelocity request vx={}, vy={}, wz={}", v_body.vx, v_body.vy, v_body.wz);
+    desired_ = v_body;
 
-    const double clamped_vx = std::clamp(v_body.vx, -chassis_lim_.max_v, chassis_lim_.max_v);
-    const double clamped_vy = std::clamp(v_body.vy, -chassis_lim_.max_v, chassis_lim_.max_v);
-    const double clamped_wz = std::clamp(v_body.wz, -chassis_lim_.max_omega, chassis_lim_.max_omega);
-
-    const bool limited = (clamped_vx != v_body.vx) || (clamped_vy != v_body.vy) || (clamped_wz != v_body.wz);
-
-    desired_.vx = clamped_vx;
-    desired_.vy = clamped_vy;
-    desired_.wz = clamped_wz;
-
-    LIBSTP_LOG_TRACE(
-        "Drive::setVelocity stored vx={}, vy={}, wz={} (limited={})",
-        desired_.vx,
-        desired_.vy,
-        desired_.wz,
-        limited);
+    LIBSTP_LOG_TRACE("Drive::setVelocity vx={}, vy={}, wz={}",
+        desired_.vx, desired_.vy, desired_.wz);
 }
 
 libstp::kinematics::MotorCommands Drive::update(const double dt)
@@ -60,9 +44,10 @@ libstp::kinematics::MotorCommands Drive::update(const double dt)
 
     last_gyro_wz_ = imu_.getYawRate();
 
-    const double corrected_vx = ctrl_vx_.compute(desired_.vx, 0.0, measured_enc.vx, dt, chassis_lim_.max_v);
-    const double corrected_vy = ctrl_vy_.compute(desired_.vy, 0.0, measured_enc.vy, dt, chassis_lim_.max_v);
-    const double corrected_wz = ctrl_wz_.compute(desired_.wz, 0.0, static_cast<double>(last_gyro_wz_), dt, chassis_lim_.max_omega);
+    constexpr double kNoLimit = std::numeric_limits<double>::infinity();
+    const double corrected_vx = ctrl_vx_.compute(desired_.vx, 0.0, measured_enc.vx, dt, kNoLimit);
+    const double corrected_vy = ctrl_vy_.compute(desired_.vy, 0.0, measured_enc.vy, dt, kNoLimit);
+    const double corrected_wz = ctrl_wz_.compute(desired_.wz, 0.0, static_cast<double>(last_gyro_wz_), dt, kNoLimit);
 
     const foundation::ChassisVelocity corrected{corrected_vx, corrected_vy, corrected_wz};
 

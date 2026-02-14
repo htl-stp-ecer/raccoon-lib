@@ -87,7 +87,7 @@ class LineFollow(Step):
         # Reset odometry to track distance
         robot.odometry.reset()
 
-        update_rate = 1 / 20  # 20 Hz
+        update_rate = 1 / 100  # 100 Hz
         last_time = asyncio.get_event_loop().time() - update_rate
 
         while True:
@@ -177,7 +177,7 @@ class SingleSensorLineFollow(Step):
         # Reset odometry to track distance
         robot.odometry.reset()
 
-        update_rate = 1 / 20  # 20 Hz
+        update_rate = 1 / 100  # 100 Hz
         last_time = asyncio.get_event_loop().time() - update_rate
 
         while True:

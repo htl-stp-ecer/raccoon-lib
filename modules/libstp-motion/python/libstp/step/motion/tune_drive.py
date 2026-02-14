@@ -220,7 +220,7 @@ def tune_drive(
 
     Args:
         distances_cm: Distances to test (default [10, 25, 50, 100])
-        speeds: Speeds to test in m/s (default [0.3, 0.5, 1.0])
+        speeds: Speeds to test in m/s (default [0.10, 0.20, 0.30])
         csv_dir: Directory for CSV output (default /tmp/drive_telemetry)
         axis: "forward" or "lateral"
         settle_time: Wait between runs in seconds (default 1.5)
@@ -232,7 +232,7 @@ def tune_drive(
     if distances_cm is None:
         distances_cm = [10, 25, 50, 100]
     if speeds is None:
-        speeds = [0.3, 0.5, 1.0]
+        speeds = [0.10, 0.20, 0.30]
 
     lin_axis = LinearAxis.Lateral if axis.lower().startswith("l") else LinearAxis.Forward
 

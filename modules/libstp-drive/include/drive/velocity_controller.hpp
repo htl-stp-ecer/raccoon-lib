@@ -35,7 +35,7 @@ namespace libstp::drive
         double w_meas_prev_{0.0};
         double d_filt_{0.0};
 
-        double d_alpha_{0.15};
+        double d_alpha_{0.3};
         double k_aw_{0.4};
     };
 }

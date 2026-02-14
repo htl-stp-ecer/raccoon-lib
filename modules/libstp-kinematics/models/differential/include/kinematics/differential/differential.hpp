@@ -5,7 +5,6 @@
 #pragma once
 #include "kinematics/kinematics.hpp"
 #include "drive/motor_adapter.hpp"
-#include "drive/rate_limiter.hpp"
 #include "hal/IMotor.hpp"
 #include <vector>
 
@@ -22,29 +21,15 @@ namespace libstp::kinematics::differential
         double m_wheelbase;
         double m_wheelRadius;
 
-        struct MotorControl
-        {
-            drive::MotorAdapter adapter;
-            drive::RateLimiter limiter{0.0};
-            double target_w{0.0};
-        };
-
-        MotorControl left_motor_;
-        MotorControl right_motor_;
-
-        double max_wheel_velocity_{0.0};
-        double max_wheel_acceleration_{0.0};
+        drive::MotorAdapter left_motor_;
+        drive::MotorAdapter right_motor_;
 
     public:
         DifferentialKinematics(hal::motor::IMotor* left_motor,
                                hal::motor::IMotor* right_motor,
                                double wheelbase,
-                               double wheelRadius,
-                               double max_velocity,
-                               double max_acceleration);
+                               double wheelRadius);
         ~DifferentialKinematics() override = default;
-
-        void setWheelLimits(double max_velocity, double max_acceleration);
 
         [[nodiscard]] std::size_t wheelCount() const override;
         MotorCommands applyCommand(const foundation::ChassisVelocity& cmd, double dt) override;

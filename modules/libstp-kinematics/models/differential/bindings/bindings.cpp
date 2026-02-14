@@ -23,13 +23,11 @@ PYBIND11_MODULE(kinematics_differential, m)
     py::class_<libstp::kinematics::differential::DifferentialKinematics, libstp::kinematics::IKinematics,
                 std::shared_ptr<libstp::kinematics::differential::DifferentialKinematics>>(
             m, "DifferentialKinematics")
-        .def(py::init<libstp::hal::motor::Motor*, libstp::hal::motor::Motor*, double, double, double, double>(),
+        .def(py::init<libstp::hal::motor::Motor*, libstp::hal::motor::Motor*, double, double>(),
              py::arg("left_motor"),
              py::arg("right_motor"),
              py::arg("wheelbase"),
              py::arg("wheel_radius"),
-             py::arg("max_velocity"),
-             py::arg("max_acceleration"),
              py::keep_alive<1, 2>())
         .def("wheel_count", &libstp::kinematics::differential::DifferentialKinematics::wheelCount)
         .def("apply_command", &libstp::kinematics::differential::DifferentialKinematics::applyCommand,
