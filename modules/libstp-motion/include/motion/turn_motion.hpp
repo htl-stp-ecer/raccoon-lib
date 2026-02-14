@@ -1,6 +1,7 @@
 #pragma once
 
 #include "motion/motion.hpp"
+#include "motion/profiled_pid_controller.hpp"
 #include "foundation/types.hpp"
 
 namespace libstp::motion
@@ -9,17 +10,17 @@ namespace libstp::motion
     {
         double target_angle_rad{0.0};        // Target turn angle (positive = CCW, negative = CW)
         double max_angular_rate{2.0};        // Maximum turning speed (rad/s)
-        double max_angular_acceleration{2.0}; // rad/s² (reserved for future use)
+        double max_angular_acceleration{2.0}; // rad/s² (acceleration rate for profile)
+        double max_angular_deceleration{0.0}; // rad/s² (deceleration rate, 0 = use acceleration)
         double kS{0.0};                      // Static friction compensation (rad/s)
     };
 
     /**
-     * PID turn controller with output-clamped velocity command.
+     * Profiled PID turn controller.
      *
-     * Uses a simple PID on heading error.  The proportional term saturated by
-     * max_angular_rate naturally produces a trapezoidal-like velocity profile:
-     * full speed while far from goal, proportional deceleration near it.
-     * The derivative term damps momentum to prevent overshoot.
+     * Uses a TrapezoidalProfile to generate smooth angular setpoints,
+     * then PID tracks those setpoints with velocity feedforward.
+     * Supports asymmetric acceleration/deceleration rates.
      */
     class TurnMotion final : public Motion
     {
@@ -43,16 +44,8 @@ namespace libstp::motion
         TurnConfig cfg_{};
         bool finished_{false};
 
-        // PID gains (from pid_config heading gains)
-        double kP_{0.0};
-        double kI_{0.0};
-        double kD_{0.0};
-
-        // PID state
-        double prev_error_{0.0};
-        double total_error_{0.0};
-        double filtered_derivative_{0.0};
-        int last_error_sign_{0};
+        // Profiled PID controller (replaces manual PID)
+        ProfiledPIDController profiled_pid_;
 
         // Velocity tracking for settling detection
         double prev_heading_{0.0};

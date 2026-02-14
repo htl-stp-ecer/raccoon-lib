@@ -1,7 +1,9 @@
+from .motion_step import MotionStep
 from .drive import Drive, Strafe, drive_forward, drive_backward, strafe_left, strafe_right
+from .drive_angle import DriveAngle, drive_angle
 from .stop import Stop, stop
 from .turn import Turn, turn_left, turn_right
-from .drive_until import (
+from .move_until import (
     SurfaceColor,
     MoveUntil,
     MoveUntilConfig,
@@ -24,6 +26,8 @@ from .drive_until import (
     strafe_left_until_white,
     strafe_right_until_black,
     strafe_right_until_white,
+    drive_angle_until_black,
+    drive_angle_until_white,
 )
 from .lineup import (
     lineup,
@@ -53,18 +57,12 @@ from .line_follow import (
     follow_line_until_both_black,
     follow_line_single,
 )
-from .max_angular_velocity import (
-    MeasureMaxAngularVelocity,
-    measure_max_angular_velocity,
-)
-from .auto_tune_turn import (
-    AutoTuneTurn,
-    auto_tune_turn,
-)
-from .motor_response_test import motor_response_test
 from .tune_drive import TuneDrive, tune_drive
+from .characterize_drive import CharacterizeDrive, characterize_drive
 
 __all__ = [
+    # Base
+    "MotionStep",
     # Basic motion
     "Drive",
     "drive_forward",
@@ -74,6 +72,8 @@ __all__ = [
     "Strafe",
     "strafe_left",
     "strafe_right",
+    "DriveAngle",
+    "drive_angle",
     "Turn",
     "turn_left",
     "turn_right",
@@ -100,6 +100,8 @@ __all__ = [
     "strafe_left_until_white",
     "strafe_right_until_black",
     "strafe_right_until_white",
+    "drive_angle_until_black",
+    "drive_angle_until_white",
     # Lineup
     "forward_lineup_on_black",
     "forward_lineup_on_white",
@@ -125,15 +127,10 @@ __all__ = [
     "follow_line_until_both_black",
     "follow_line_single",
     "lineup",
-    # Max angular velocity measurement
-    "MeasureMaxAngularVelocity",
-    "measure_max_angular_velocity",
-    # Auto-tune
-    "AutoTuneTurn",
-    "auto_tune_turn",
-    # Motor diagnostics
-    "motor_response_test",
     # Drive telemetry
     "TuneDrive",
     "tune_drive",
+    # Drive characterization
+    "CharacterizeDrive",
+    "characterize_drive",
 ]

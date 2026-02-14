@@ -15,6 +15,26 @@ namespace
 
 namespace libstp::motion
 {
+    static ProfiledPIDController makeProfiledPID(const UnifiedMotionPidConfig& pid_config,
+                                                  const TurnConfig& turn_config)
+    {
+        ProfiledPIDController::Config cfg;
+        cfg.kp = pid_config.heading_kp;
+        cfg.ki = pid_config.heading_ki;
+        cfg.kd = pid_config.heading_kd;
+        cfg.velocity_ff = pid_config.velocity_ff;
+        cfg.derivative_lpf_alpha = pid_config.derivative_lpf_alpha;
+        cfg.integral_max = pid_config.integral_max;
+        cfg.integral_deadband = pid_config.integral_deadband;
+
+        TrapezoidalProfile::Constraints constraints;
+        constraints.max_velocity = turn_config.max_angular_rate;
+        constraints.max_acceleration = turn_config.max_angular_acceleration;
+        constraints.max_deceleration = turn_config.max_angular_deceleration;
+
+        return ProfiledPIDController(cfg, constraints);
+    }
+
     TurnMotion::TurnMotion(MotionContext ctx, double angle_deg, double max_angular_rate_rad_per_sec)
         : TurnMotion(ctx, TurnConfig{
             .target_angle_rad = angle_deg * kDegToRad,
@@ -33,12 +53,9 @@ namespace libstp::motion
 
     TurnMotion::TurnMotion(MotionContext ctx, TurnConfig config)
         : Motion(ctx), cfg_(config)
+        , profiled_pid_(makeProfiledPID(ctx_.pid_config, config))
     {
         if (cfg_.max_angular_rate <= 0.0) cfg_.max_angular_rate = 0.5;
-
-        kP_ = ctx_.pid_config.heading_kp;
-        kI_ = ctx_.pid_config.heading_ki;
-        kD_ = ctx_.pid_config.heading_kd;
     }
 
     void TurnMotion::start()
@@ -47,19 +64,23 @@ namespace libstp::motion
         started_ = true;
         finished_ = false;
 
-        prev_error_ = 0.0;
-        total_error_ = 0.0;
-        filtered_derivative_ = 0.0;
-        last_error_sign_ = 0;
         prev_heading_ = 0.0;
         filtered_velocity_ = 0.0;
 
         odometry().reset();
 
+        // Reset profiled PID at current position (0 after odometry reset)
+        profiled_pid_.reset(0.0);
+        profiled_pid_.setGoal(cfg_.target_angle_rad);
+
         LIBSTP_LOG_DEBUG("TurnMotion started: target={:.3f} rad ({:.1f} deg), "
-                    "max_rate={:.3f} rad/s, kP={:.3f}, kI={:.3f}, kD={:.3f}, kS={:.3f}",
+                    "max_rate={:.3f} rad/s, max_accel={:.3f} rad/s², max_decel={:.3f} rad/s², "
+                    "kP={:.3f}, kI={:.3f}, kD={:.3f}, vel_ff={:.3f}, kS={:.3f}",
                     cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad,
-                    cfg_.max_angular_rate, kP_, kI_, kD_, cfg_.kS);
+                    cfg_.max_angular_rate, cfg_.max_angular_acceleration,
+                    cfg_.max_angular_deceleration,
+                    ctx_.pid_config.heading_kp, ctx_.pid_config.heading_ki,
+                    ctx_.pid_config.heading_kd, ctx_.pid_config.velocity_ff, cfg_.kS);
     }
 
     void TurnMotion::update(double dt)
@@ -84,7 +105,7 @@ namespace libstp::motion
         filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
         prev_heading_ = current_heading;
 
-        // Heading error to goal (shortest path, handles wrapping)
+        // Heading error to goal for settling check
         const double error = odometry().getHeadingError(cfg_.target_angle_rad);
 
         // Settling: within tolerance AND nearly stopped
@@ -99,38 +120,10 @@ namespace libstp::motion
             return;
         }
 
-        // --- PID on heading error ---
-        // P * error saturated by max_angular_rate naturally creates a
-        // trapezoidal-like velocity profile: full speed while far, proportional
-        // deceleration as we approach.  D damps momentum to prevent overshoot.
+        // Profiled PID: profile advances setpoint, PID tracks it
+        double omega_cmd = profiled_pid_.calculate(current_heading, dt);
 
-        // Filtered derivative (EMA low-pass to reduce sensor noise)
-        const double raw_derivative = (error - prev_error_) / dt;
-        const double alpha = ctx_.pid_config.derivative_lpf_alpha;
-        filtered_derivative_ = alpha * raw_derivative + (1.0 - alpha) * filtered_derivative_;
-
-        // Integral with deadband and zero-crossing decay
-        const int error_sign = (error > 0.0) ? 1 : ((error < 0.0) ? -1 : 0);
-        if (last_error_sign_ != 0 && error_sign != 0 && error_sign != last_error_sign_)
-        {
-            total_error_ *= 0.5;  // Decay accumulated integral on sign change
-        }
-        if (error_sign != 0) last_error_sign_ = error_sign;
-
-        if (std::abs(error) > ctx_.pid_config.integral_deadband)
-        {
-            total_error_ += error * dt;
-        }
-        const double integral_max = ctx_.pid_config.integral_max;
-        total_error_ = std::clamp(total_error_, -integral_max, integral_max);
-
-        prev_error_ = error;
-
-        double omega_cmd = kP_ * error;
-        omega_cmd += kI_ * total_error_;
-        omega_cmd += kD_ * filtered_derivative_;
-
-        // Smooth static friction compensation (linear ramp inside tolerance zone)
+        // Static friction compensation (smooth linear ramp inside tolerance zone)
         if (cfg_.kS > 0.0)
         {
             const double smooth_zone = ctx_.pid_config.angle_tolerance_rad;
@@ -144,8 +137,9 @@ namespace libstp::motion
         drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, omega_cmd});
         [[maybe_unused]] const auto mc = drive().update(dt);
 
-        LIBSTP_LOG_DEBUG("TurnMotion: heading={:.3f}, error={:.4f}, omega={:.3f}, filt_vel={:.3f}",
-                    current_heading, error, omega_cmd, filtered_velocity_);
+        const auto sp = profiled_pid_.getSetpoint();
+        LIBSTP_LOG_DEBUG("TurnMotion: heading={:.3f}, error={:.4f}, setpoint={:.3f}, sp_vel={:.3f}, omega={:.3f}, filt_vel={:.3f}",
+                    current_heading, error, sp.position, sp.velocity, omega_cmd, filtered_velocity_);
     }
 
     bool TurnMotion::isFinished() const
