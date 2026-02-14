@@ -26,7 +26,7 @@ PYBIND11_MODULE(kinematics_mecanum, m)
                       libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,
-                      double, double, double, double, double>(),
+                      double, double, double>(),
              py::arg("front_left_motor"),
              py::arg("front_right_motor"),
              py::arg("back_left_motor"),
@@ -34,8 +34,6 @@ PYBIND11_MODULE(kinematics_mecanum, m)
              py::arg("wheelbase"),
              py::arg("track_width"),
              py::arg("wheel_radius"),
-             py::arg("max_velocity"),
-             py::arg("max_acceleration"),
              py::keep_alive<1, 2>())
         .def("wheel_count", &libstp::kinematics::mecanum::MecanumKinematics::wheelCount)
         .def("apply_command", &libstp::kinematics::mecanum::MecanumKinematics::applyCommand,

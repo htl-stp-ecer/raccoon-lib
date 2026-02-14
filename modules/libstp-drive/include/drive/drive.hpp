@@ -8,7 +8,6 @@
 
 #include "kinematics/kinematics.hpp"
 #include "foundation/types.hpp"
-#include "drive/limits.hpp"
 #include "drive/velocity_controller.hpp"
 #include "foundation/config.hpp"
 #include "hal/IMotor.hpp"
@@ -32,7 +31,6 @@ namespace libstp::drive
     {
     public:
         Drive(std::unique_ptr<kinematics::IKinematics> kinematics,
-              const MotionLimits& chassis_lim,
               const ChassisVelocityControlConfig& vel_config,
               hal::imu::IIMU& imu);
 
@@ -59,8 +57,6 @@ namespace libstp::drive
         void initControllers();
 
         std::unique_ptr<kinematics::IKinematics> kinematics_;
-
-        MotionLimits chassis_lim_{};
 
         foundation::ChassisVelocity desired_{};
 

@@ -20,10 +20,7 @@ namespace libstp::foundation
 
     struct MotorCalibration
     {
-        Feedforward ff{};
-        PidGains pid{1.0, 0.0, 0.0};
-
         double ticks_to_rad{2.0 * 3.14159265359 / 1440.0};
-        double vel_lpf_alpha{0.2};
+        double vel_lpf_alpha{0.5};
     };
 }

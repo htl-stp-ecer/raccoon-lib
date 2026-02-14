@@ -22,9 +22,7 @@ std::string feedforward_to_string(const libstp::foundation::Feedforward& ff)
 std::string motor_calibration_to_string(const libstp::foundation::MotorCalibration& calibration)
 {
     std::ostringstream oss;
-    oss << "MotorCalibration(ff=" << feedforward_to_string(calibration.ff)
-        << ", pid=" << pid_gains_to_string(calibration.pid)
-        << ", ticks_to_rad=" << calibration.ticks_to_rad
+    oss << "MotorCalibration(ticks_to_rad=" << calibration.ticks_to_rad
         << ", vel_lpf_alpha=" << calibration.vel_lpf_alpha << ")";
     return oss.str();
 }
@@ -59,14 +57,9 @@ void init_motor(const py::module_& m)
     py::class_<libstp::foundation::MotorCalibration>(m, "MotorCalibration")
         .def(py::init<>())
         .def(
-            py::init<
-                const libstp::foundation::Feedforward&,
-                const libstp::foundation::PidGains&,
-                double, double>(),
-            py::arg("ff"), py::arg("pid"), py::arg("ticks_to_rad"), py::arg("vel_lpf_alpha")
+            py::init<double, double>(),
+            py::arg("ticks_to_rad"), py::arg("vel_lpf_alpha")
         )
-        .def_readwrite("ff", &libstp::foundation::MotorCalibration::ff)
-        .def_readwrite("pid", &libstp::foundation::MotorCalibration::pid)
         .def_readwrite("ticks_to_rad", &libstp::foundation::MotorCalibration::ticks_to_rad)
         .def_readwrite("vel_lpf_alpha", &libstp::foundation::MotorCalibration::vel_lpf_alpha)
         .def("__repr__", &motor_calibration_to_string)

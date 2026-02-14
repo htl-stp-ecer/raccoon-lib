@@ -4,7 +4,6 @@
 
 #pragma once
 #include "hal/IMotor.hpp"
-#include "velocity_controller.hpp"
 #include "calibration/motor/calibration_result.hpp"
 
 namespace libstp::calibration
@@ -19,17 +18,10 @@ namespace libstp::drive
     public:
         explicit MotorAdapter(hal::motor::IMotor* motor);
 
-        void setVelocityWithAccel(double w_ref, double a_ref, double dt, bool* out_saturated);
-
-        void setVelocity(double w_ref, double dt);
-
-        void setPercent(double percent);
+        void setVelocity(double w_ref, double dt, bool* out_saturated = nullptr);
 
         [[nodiscard]] double getVelocity() const;
 
-        [[nodiscard]] int getRawPercent() const;
-
-        void resetController();
         void brake();
 
         /**
@@ -48,20 +40,12 @@ namespace libstp::drive
         // Calibration methods
         calibration::CalibrationResult calibrate(const calibration::CalibrationConfig& config);
         calibration::CalibrationResult calibrate(); // Overload with default config
-        void updateCalibration(const foundation::MotorCalibration& cal);
-
-        // Direct access to controller for calibration
-        VelocityController& getController() { return controller_; }
-        [[nodiscard]] const VelocityController& getController() const { return controller_; }
 
     private:
         hal::motor::IMotor* motor_{nullptr};
-        VelocityController controller_;
 
         mutable double w_meas_filt_{0.0};
         long long pos_prev_{0};
         bool pos_prev_init_{false};
-
-        double last_u_cmd_{0.0};
     };
 }

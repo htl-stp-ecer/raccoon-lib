@@ -36,10 +36,10 @@ class MeasureMaxAngularVelocity(Step):
         return f"MeasureMaxAngularVelocity(duration={self.duration:.1f}, dir={direction})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        # Use a very large omega so Drive clamps to its max_omega limit,
-        # which pushes the kinematics to request maximum wheel speeds.
+        # Use a large omega to push kinematics to request maximum wheel speeds.
+        # Firmware PID will naturally saturate at 100% duty.
         sign = -1.0 if self.clockwise else 1.0
-        max_wz = sign * 999.0  # will be clamped to chassis max_omega
+        max_wz = sign * 999.0
 
         robot.odometry.reset()
         robot.drive.set_velocity(ChassisVelocity(0.0, 0.0, max_wz))

@@ -27,16 +27,15 @@ void init_drive(const py::module& m)
 
     py::class_<libstp::drive::Drive>(m, "Drive")
         .def(py::init([](libstp::kinematics::IKinematics* kinematics,
-                         const libstp::drive::MotionLimits& chassis_lim,
                          const libstp::drive::ChassisVelocityControlConfig& vel_config,
                          libstp::hal::imu::IMU& imu)
         {
             return std::make_unique<libstp::drive::Drive>(
                 std::unique_ptr<libstp::kinematics::IKinematics>(kinematics),
-                chassis_lim, vel_config, imu);
-        }), py::arg("kinematics"), py::arg("chassis_lim"), py::arg("vel_config"),
+                vel_config, imu);
+        }), py::arg("kinematics"), py::arg("vel_config"),
             py::arg("imu"),
-            py::keep_alive<1, 2>(), py::keep_alive<1, 5>())
+            py::keep_alive<1, 2>(), py::keep_alive<1, 4>())
         .def("set_velocity", &libstp::drive::Drive::setVelocity, py::arg("v_body"))
         .def("update", [](libstp::drive::Drive& self, double dt) {
             self.update(dt);  // Ignore MotorCommands return value

@@ -164,9 +164,6 @@ foundation::Feedforward MotorCalibrator::calibrateFeedforward()
 
 foundation::PidGains MotorCalibrator::calibratePID(const foundation::Feedforward& ff)
 {
-    // Apply feedforward to the controller for PID tuning
-    motor_control_->getAdapter().getController().setFF(ff);
-
     if (config_.use_relay_feedback) {
         LIBSTP_LOG_INFO("Using relay feedback tuning (aggressive mode)");
         double Ku, Tu;

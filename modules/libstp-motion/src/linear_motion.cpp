@@ -16,7 +16,6 @@ namespace libstp::motion
         cfg_.max_speed_mps = std::abs(cfg_.max_speed_mps);
         if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.05;
 
-        distance_pid_ = createPidController(ctx_.pid_config, PidType::Distance);
         heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
         cross_track_pid_ = createPidController(ctx_.pid_config, PidType::Lateral);
     }
@@ -38,7 +37,6 @@ namespace libstp::motion
 
         odometry().reset();
 
-        distance_pid_->reset();
         heading_pid_->reset();
         cross_track_pid_->reset();
 
@@ -87,14 +85,15 @@ namespace libstp::motion
         filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
         prev_primary_position_ = primary_position;
 
-        // Predict where the robot will be when the current command takes effect (Smith predictor).
-        // This shifts the deceleration point earlier by exactly the lag amount.
-        const double predicted_position = primary_position + filtered_velocity_ * ctx_.pid_config.response_lag_s;
-        const double distance_error = cfg_.distance_m - predicted_position;
-        const double actual_error = cfg_.distance_m - primary_position;
+        // Use actual position for distance error (no Smith predictor).
+        // Prediction-based control causes oscillation with the ~300ms response lag:
+        // noisy velocity estimate → noisy prediction → premature braking → oscillation.
+        // Instead, velocity damping (distance_kd) compensates for lag directly.
+        const double distance_error = cfg_.distance_m - primary_position;
+        const double actual_error = distance_error;
 
-        LIBSTP_LOG_TRACE("LinearMotion update: primary={:.3f} m, predicted={:.3f} m, target={:.3f} m, error={:.3f} m, cross_track={:.3f} m, heading={:.3f} rad, yaw_error={:.3f} rad, filt_vel={:.3f} m/s",
-                    primary_position, predicted_position, cfg_.distance_m, distance_error, cross_track_position, current_heading, yaw_error, filtered_velocity_);
+        LIBSTP_LOG_TRACE("LinearMotion update: primary={:.3f} m, target={:.3f} m, error={:.3f} m, cross_track={:.3f} m, heading={:.3f} rad, yaw_error={:.3f} rad, filt_vel={:.3f} m/s",
+                    primary_position, cfg_.distance_m, distance_error, cross_track_position, current_heading, yaw_error, filtered_velocity_);
 
         // Check if we've reached the final target distance AND are nearly stopped
         // Use actual position for completion (not predicted), so we don't stop short
@@ -156,15 +155,30 @@ namespace libstp::motion
             }
         }
 
-        // Primary axis velocity control: PID on error to target, clamped to max speed.
-        double primary_cmd_raw = distance_pid_->update(distance_error, dt);
+        // Primary axis velocity control: PD on position error + output clamp.
+        //
+        // Same approach that works for turn motion: kP * error provides natural
+        // deceleration near the target, while max_speed clamp creates an implicit
+        // trapezoidal velocity profile. Velocity damping (kD) compensates for the
+        // ~300ms response lag by providing braking force proportional to speed.
+        //
+        // The previous braking-distance formula v_brake = sqrt(2*decel*d) was too
+        // conservative (0.245 m/s for 30cm), and the min_speed floor overrode the
+        // D-term's braking commands, causing late surges and massive overshoot.
+        const double sign_d = (distance_error >= 0.0) ? 1.0 : -1.0;
+        double primary_cmd_raw = ctx_.pid_config.distance_kp * distance_error;
         double primary_cmd = std::clamp(primary_cmd_raw, -cfg_.max_speed_mps, cfg_.max_speed_mps);
 
-        if (std::abs(primary_cmd) < 1e-4)
-        {
-            const double direction = (distance_error >= 0.0) ? 1.0 : -1.0;
-            primary_cmd = direction * std::min(cfg_.max_speed_mps, ctx_.pid_config.min_speed_mps);
-        }
+        // Velocity damping: D-term on distance error (d/dt(target - pos) = -velocity).
+        // Damps approach velocity to prevent overshoot through the response lag.
+        primary_cmd -= ctx_.pid_config.distance_kd * filtered_velocity_;
+
+        // Clamp after damping to stay within speed limits
+        primary_cmd = std::clamp(primary_cmd, -cfg_.max_speed_mps, cfg_.max_speed_mps);
+
+        // No min_speed floor — it fights the D-term braking and causes overshoot.
+        // With PD control the proportional term naturally provides enough force
+        // to overcome static friction when far from target.
 
         // Reduce primary speed during reorientation (differential only)
         if (reorienting_)
@@ -203,7 +217,7 @@ namespace libstp::motion
             .dt = dt,
             .target_m = cfg_.distance_m,
             .position_m = primary_position,
-            .predicted_m = predicted_position,
+            .predicted_m = primary_position,  // No prediction; kept for telemetry compat
             .cross_track_m = cross_track_position,
             .distance_error_m = distance_error,
             .actual_error_m = actual_error,

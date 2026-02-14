@@ -22,15 +22,9 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted,
 #endif
     platform::mock::core::MockPlatform::instance().init();
     LIBSTP_LOG_INFO(
-        "Mock Motor ctor port={} inverted={} pid(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
+        "Mock Motor ctor port={} inverted={}",
         port_,
-        inverted_,
-        calibration_.pid.kp,
-        calibration_.pid.ki,
-        calibration_.pid.kd,
-        calibration_.ff.kS,
-        calibration_.ff.kV,
-        calibration_.ff.kA);
+        inverted_);
 }
 
 void libstp::hal::motor::Motor::setSpeed(const int percent)

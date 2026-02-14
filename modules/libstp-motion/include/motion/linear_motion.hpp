@@ -65,7 +65,6 @@ namespace libstp::motion
         void complete();
 
         LinearMotionConfig cfg_{};
-        std::unique_ptr<MotionPidController> distance_pid_;   // PID controller for primary axis distance
         std::unique_ptr<MotionPidController> heading_pid_;    // PID controller for heading
         std::unique_ptr<MotionPidController> cross_track_pid_;  // PID controller for cross-track drift
         double initial_heading_rad_{0.0};

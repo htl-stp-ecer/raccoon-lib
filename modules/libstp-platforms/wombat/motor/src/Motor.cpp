@@ -27,15 +27,9 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted, const foun
     registerMotorPort(port);
 #endif
     LIBSTP_LOG_TRACE(
-        "Wombat Motor ctor port={} inverted={} pid(kp={}, ki={}, kd={}) ff(kS={}, kV={}, kA={})",
+        "Wombat Motor ctor port={} inverted={}",
         port_,
-        inverted_,
-        calibration_.pid.kp,
-        calibration_.pid.ki,
-        calibration_.pid.kd,
-        calibration_.ff.kS,
-        calibration_.ff.kV,
-        calibration_.ff.kA);
+        inverted_);
 }
 
 void libstp::hal::motor::Motor::setSpeed(const int percent)
@@ -50,15 +44,12 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
         "[TIMING] setSpeed port={} percent={} epoch_us={}",
         port_, percent, ts);
 
-    // Wake motor latch before sending a power command to avoid stop latch blocking.
-    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
     const int directionPercent = inverted_ ? -percent : percent;
     platform::wombat::core::LcmDataWriter::instance().setMotor(port_, directionPercent);
 }
 
 void libstp::hal::motor::Motor::setVelocity(const int velocity)
 {
-    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
     const int directionVelocity = inverted_ ? -velocity : velocity;
     LIBSTP_LOG_TRACE("Wombat Motor port={} setVelocity={} inverted={}", port_, velocity, inverted_);
     platform::wombat::core::LcmDataWriter::instance().setMotorVelocity(port_, directionVelocity);
@@ -66,7 +57,6 @@ void libstp::hal::motor::Motor::setVelocity(const int velocity)
 
 void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goalPosition)
 {
-    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
     const int dirVel = inverted_ ? -velocity : velocity;
     const int dirPos = inverted_ ? -goalPosition : goalPosition;
     LIBSTP_LOG_TRACE("Wombat Motor port={} moveToPosition vel={} goal={}", port_, velocity, goalPosition);
@@ -75,7 +65,6 @@ void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goa
 
 void libstp::hal::motor::Motor::moveRelative(const int velocity, const int deltaPosition)
 {
-    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
     const int dirVel = inverted_ ? -velocity : velocity;
     const int dirDelta = inverted_ ? -deltaPosition : deltaPosition;
     LIBSTP_LOG_TRACE("Wombat Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
