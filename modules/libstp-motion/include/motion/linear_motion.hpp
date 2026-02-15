@@ -10,8 +10,6 @@
 
 namespace libstp::motion
 {
-    class MotionPidController;
-
     enum class LinearAxis { Forward, Lateral };
 
     struct LinearMotionConfig
@@ -71,14 +69,12 @@ namespace libstp::motion
         void complete();
 
         LinearMotionConfig cfg_{};
-        std::unique_ptr<MotionPidController> heading_pid_;       // PID controller for heading
-        std::unique_ptr<MotionPidController> cross_track_pid_;   // PID controller for cross-track drift
-        ProfiledPIDController profiled_pid_;                     // Profiled PID for primary axis
+        std::unique_ptr<foundation::PidController> heading_pid_;
+        ProfiledPIDController profiled_pid_;
         double initial_heading_rad_{0.0};
         bool finished_{false};
         double speed_scale_{1.0};
         double heading_scale_{1.0};
-        bool reorienting_{false};
         int unsaturated_cycles_{0};
 
         // Velocity tracking for settling detection

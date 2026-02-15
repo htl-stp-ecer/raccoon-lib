@@ -15,24 +15,23 @@ namespace libstp::motion
         const LinearMotionConfig& linear_config)
     {
         ProfiledPIDController::Config cfg;
-        cfg.kp = pid_config.distance_kp;
-        cfg.ki = pid_config.distance_ki;
-        cfg.kd = pid_config.distance_kd;
+        cfg.pid = pid_config.distance;
         cfg.velocity_ff = pid_config.velocity_ff;
-        cfg.derivative_lpf_alpha = pid_config.derivative_lpf_alpha;
-        cfg.integral_max = pid_config.integral_max;
-        cfg.integral_deadband = pid_config.integral_deadband;
+
+        // Select axis-appropriate defaults (strafe has different dynamics than forward)
+        const auto& axis_defaults = (linear_config.axis == LinearAxis::Lateral)
+            ? pid_config.lateral : pid_config.linear;
 
         TrapezoidalProfile::Constraints constraints;
         constraints.max_velocity = std::abs(linear_config.max_speed_mps);
 
-        // Use per-motion config if set, otherwise fall back to pid_config defaults
+        // Use per-motion config if set, otherwise fall back to axis defaults
         constraints.max_acceleration = (linear_config.max_acceleration_mps2 > 0.0)
             ? linear_config.max_acceleration_mps2
-            : pid_config.linear.acceleration;
+            : axis_defaults.acceleration;
         constraints.max_deceleration = (linear_config.max_deceleration_mps2 > 0.0)
             ? linear_config.max_deceleration_mps2
-            : pid_config.linear.deceleration;
+            : axis_defaults.deceleration;
 
         return ProfiledPIDController(cfg, constraints);
     }
@@ -45,7 +44,6 @@ namespace libstp::motion
         if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.05;
 
         heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
-        cross_track_pid_ = createPidController(ctx_.pid_config, PidType::Lateral);
     }
 
     void LinearMotion::start()
@@ -55,7 +53,6 @@ namespace libstp::motion
         finished_ = false;
         speed_scale_ = 1.0;
         heading_scale_ = 1.0;
-        reorienting_ = false;
         unsaturated_cycles_ = 0;
 
         prev_primary_position_ = 0.0;
@@ -66,7 +63,6 @@ namespace libstp::motion
         odometry().reset();
 
         heading_pid_->reset();
-        cross_track_pid_->reset();
 
         // Reset profiled PID at origin, goal = target distance
         profiled_pid_.reset(0.0);
@@ -137,82 +133,31 @@ namespace libstp::motion
             return;
         }
 
-        // Cross-track correction
-        const double cross_track_error = cross_track_position;
-        const bool supports_lateral = drive().getKinematics().supportsLateralMotion();
-
-        double cross_cmd_raw = 0.0;
-        double omega_cmd_raw = 0.0;
-
-        if (supports_lateral)
-        {
-            // MECANUM: direct cross-track correction
-            cross_cmd_raw = -cross_track_pid_->update(cross_track_error, dt);
-            cross_cmd_raw = std::clamp(cross_cmd_raw, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
-            omega_cmd_raw = heading_pid_->update(yaw_error, dt);
-        }
-        else
-        {
-            // DIFFERENTIAL: heading bias + stop-and-reorient (only valid for forward axis)
-            const double cross_track_error_abs = std::abs(cross_track_error);
-
-            if (cross_track_error_abs > ctx_.pid_config.lateral_reorient_threshold_m && !reorienting_)
-            {
-                reorienting_ = true;
-                LIBSTP_LOG_TRACE("LinearMotion [DIFFERENTIAL] Large cross-track error ({:.3f} m), entering reorientation mode", cross_track_error_abs);
-            }
-
-            if (reorienting_)
-            {
-                const double desired_heading_bias = std::atan2(-cross_track_error, std::max(0.1, ctx_.pid_config.lateral_reorient_threshold_m));
-                const double target_heading = initial_heading_rad_ + desired_heading_bias;
-                const double yaw_to_target = odometry().getHeadingError(target_heading);
-
-                omega_cmd_raw = heading_pid_->update(yaw_to_target, dt);
-
-                if (std::abs(yaw_to_target) < 0.1 && cross_track_error_abs < ctx_.pid_config.lateral_reorient_threshold_m * 0.7)
-                {
-                    reorienting_ = false;
-                    LIBSTP_LOG_TRACE("LinearMotion [DIFFERENTIAL] Exiting reorientation mode");
-                }
-            }
-            else
-            {
-                const double heading_bias = std::atan(ctx_.pid_config.lateral_heading_bias_gain * cross_track_error);
-                const double biased_yaw_error = yaw_error + heading_bias;
-                omega_cmd_raw = heading_pid_->update(biased_yaw_error, dt);
-            }
-        }
+        // Heading correction only — no cross-track correction.
+        // Heading PID keeps the robot pointed straight; cross-track PID was removed
+        // because odometry noise in the perpendicular axis caused phantom corrections.
+        const double omega_cmd_raw = heading_pid_->update(yaw_error, dt);
 
         // Primary axis: Profiled PID generates velocity command
         double primary_cmd_raw = profiled_pid_.calculate(primary_position, dt);
         double primary_cmd = std::clamp(primary_cmd_raw, -cfg_.max_speed_mps, cfg_.max_speed_mps);
 
-        // Reduce primary speed during reorientation (differential only)
-        if (reorienting_)
-        {
-            primary_cmd *= ctx_.pid_config.reorientation_speed_factor;
-        }
-
         // Apply scaling from previous saturation feedback
         primary_cmd *= speed_scale_;
-        double cross_cmd = cross_cmd_raw * speed_scale_;
         const double omega_cmd_scaled = omega_cmd_raw * heading_scale_;
 
-        LIBSTP_LOG_TRACE("LinearMotion scaled cmd: primary={:.3f}, cross={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
-                    primary_cmd, cross_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);
+        LIBSTP_LOG_TRACE("LinearMotion scaled cmd: primary={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
+                    primary_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);
 
         // Place commands into correct velocity slots based on axis
         foundation::ChassisVelocity cmd{};
         if (is_forward)
         {
             cmd.vx = primary_cmd;
-            cmd.vy = cross_cmd;
         }
         else
         {
             cmd.vy = primary_cmd;
-            cmd.vx = cross_cmd;
         }
         cmd.wz = omega_cmd_scaled;
 
@@ -236,7 +181,7 @@ namespace libstp::motion
             .cmd_vy_mps = cmd.vy,
             .cmd_wz_radps = cmd.wz,
             .pid_primary_raw = primary_cmd_raw,
-            .pid_cross_raw = cross_cmd_raw,
+            .pid_cross_raw = 0.0,
             .pid_heading_raw = omega_cmd_raw,
             .setpoint_position_m = sp.position,
             .setpoint_velocity_mps = sp.velocity,

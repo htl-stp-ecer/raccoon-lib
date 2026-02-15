@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "foundation/pid.hpp"
 #include "motion/trapezoidal_profile.hpp"
 
 namespace libstp::motion
@@ -10,15 +11,10 @@ namespace libstp::motion
     /**
      * PID controller whose setpoint is constrained by a trapezoidal motion profile.
      *
-     * Ported from FRC WPILib's ProfiledPIDController. Each update cycle:
+     * Each update cycle:
      * 1. The profile advances the setpoint toward the goal
      * 2. PID computes tracking error (setpoint - measurement)
      * 3. Output = velocity_ff * setpoint.velocity + PID(tracking_error)
-     *
-     * The velocity feedforward provides the baseline command from the profile,
-     * while the PID corrects tracking errors. This is essential for velocity-
-     * commanding systems (like ours) where the PID output is a velocity, not
-     * a motor voltage.
      */
     class ProfiledPIDController
     {
@@ -28,18 +24,14 @@ namespace libstp::motion
 
         struct Config
         {
-            double kp{2.0};
-            double ki{0.0};
-            double kd{0.3};
-            double velocity_ff{1.0};           // Feedforward gain on profile velocity (1.0 = full FF)
-            double derivative_lpf_alpha{0.3};  // Low-pass filter on derivative
-            double integral_max{10.0};         // Anti-windup clamp
-            double integral_deadband{0.01};    // Don't integrate below this error
+            foundation::PidConfig pid{};
+            double velocity_ff{1.0};
         };
 
-        ProfiledPIDController(Config pid_config, Constraints profile_constraints)
-            : cfg_(pid_config)
+        ProfiledPIDController(Config config, Constraints profile_constraints)
+            : cfg_(config)
             , constraints_(profile_constraints)
+            , pid_(config.pid)
         {
         }
 
@@ -63,10 +55,7 @@ namespace libstp::motion
         void reset(double position, double velocity = 0.0)
         {
             setpoint_ = {position, velocity};
-            integral_ = 0.0;
-            prev_error_ = 0.0;
-            filtered_derivative_ = 0.0;
-            first_update_ = true;
+            pid_.reset();
         }
 
         void reset(State state) { reset(state.position, state.velocity); }
@@ -108,29 +97,7 @@ namespace libstp::motion
                 error = inputModulus(error, -error_bound, error_bound);
             }
 
-            // Derivative (filtered)
-            double d_term = 0.0;
-            if (!first_update_)
-            {
-                const double raw_deriv = (error - prev_error_) / dt;
-                filtered_derivative_ = cfg_.derivative_lpf_alpha * raw_deriv
-                    + (1.0 - cfg_.derivative_lpf_alpha) * filtered_derivative_;
-                d_term = cfg_.kd * filtered_derivative_;
-            }
-            else
-            {
-                first_update_ = false;
-            }
-
-            // Integral with anti-windup
-            if (std::abs(error) > cfg_.integral_deadband)
-            {
-                integral_ += error * dt;
-                integral_ = std::clamp(integral_, -cfg_.integral_max, cfg_.integral_max);
-            }
-
-            const double pid_output = cfg_.kp * error + cfg_.ki * integral_ + d_term;
-            prev_error_ = error;
+            const double pid_output = pid_.update(error, dt);
 
             // Feedforward from profile velocity + PID correction
             return cfg_.velocity_ff * setpoint_.velocity + pid_output;
@@ -138,8 +105,6 @@ namespace libstp::motion
 
         /**
          * Check if the profile's setpoint has reached the goal.
-         * Note: this does NOT mean the robot has reached the goal —
-         * use separate settling detection for that.
          */
         [[nodiscard]] bool profileComplete() const
         {
@@ -158,17 +123,12 @@ namespace libstp::motion
 
         Config cfg_;
         Constraints constraints_;
+        foundation::PidController pid_;
         State goal_{};
         State setpoint_{};
 
         bool continuous_input_{false};
         double min_input_{0.0};
         double max_input_{0.0};
-
-        // PID state
-        double integral_{0.0};
-        double prev_error_{0.0};
-        double filtered_derivative_{0.0};
-        bool first_update_{true};
     };
 }

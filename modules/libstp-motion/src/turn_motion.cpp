@@ -19,13 +19,8 @@ namespace libstp::motion
                                                   const TurnConfig& turn_config)
     {
         ProfiledPIDController::Config cfg;
-        cfg.kp = pid_config.heading_kp;
-        cfg.ki = pid_config.heading_ki;
-        cfg.kd = pid_config.heading_kd;
+        cfg.pid = pid_config.heading;
         cfg.velocity_ff = pid_config.velocity_ff;
-        cfg.derivative_lpf_alpha = pid_config.derivative_lpf_alpha;
-        cfg.integral_max = pid_config.integral_max;
-        cfg.integral_deadband = pid_config.integral_deadband;
 
         TrapezoidalProfile::Constraints constraints;
         constraints.max_velocity = turn_config.max_angular_rate;
@@ -79,8 +74,8 @@ namespace libstp::motion
                     cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad,
                     cfg_.max_angular_rate, cfg_.max_angular_acceleration,
                     cfg_.max_angular_deceleration,
-                    ctx_.pid_config.heading_kp, ctx_.pid_config.heading_ki,
-                    ctx_.pid_config.heading_kd, ctx_.pid_config.velocity_ff, cfg_.kS);
+                    ctx_.pid_config.heading.kp, ctx_.pid_config.heading.ki,
+                    ctx_.pid_config.heading.kd, ctx_.pid_config.velocity_ff, cfg_.kS);
     }
 
     void TurnMotion::update(double dt)

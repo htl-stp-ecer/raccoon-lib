@@ -67,6 +67,7 @@ LcmReader::LcmReader() {
     lcm_.subscribe("libstp/gyro/value", &LcmReader::handleGyro, this);
     lcm_.subscribe("libstp/accel/value", &LcmReader::handleAccel, this);
     lcm_.subscribe("libstp/linear_accel/value", &LcmReader::handleLinearAccel, this);
+    lcm_.subscribe("libstp/accel_velocity/value", &LcmReader::handleAccelVelocity, this);
     lcm_.subscribe("libstp/mag/value", &LcmReader::handleMag, this);
     lcm_.subscribe("libstp/imu/quaternion", &LcmReader::handleOrientation, this);
 
@@ -249,19 +250,14 @@ void LcmReader::handleAccel(const lcm::ReceiveBuffer*, const std::string& channe
 
 void LcmReader::handleLinearAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
     logAge(channel, msg->timestamp);
-    {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        linear_accel_cache_ = *msg;
-    }
-    // Fire callback outside cache lock to avoid deadlock
-    std::function<void(float, float, float)> cb;
-    {
-        std::lock_guard<std::mutex> lock(callback_mutex_);
-        cb = linear_accel_callback_;
-    }
-    if (cb) {
-        cb(msg->x, msg->y, msg->z);
-    }
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    linear_accel_cache_ = *msg;
+}
+
+void LcmReader::handleAccelVelocity(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
+    logAge(channel, msg->timestamp);
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    accel_velocity_cache_ = *msg;
 }
 
 void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
@@ -425,9 +421,18 @@ exlcm::scalar_f_t LcmReader::readTemp() {
     return temp_cache_;
 }
 
-void LcmReader::setLinearAccelCallback(std::function<void(float, float, float)> callback) {
-    std::lock_guard<std::mutex> lock(callback_mutex_);
-    linear_accel_callback_ = std::move(callback);
+exlcm::vector3f_t LcmReader::readAccelVelocity() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    exlcm::vector3f_t result;
+    result.x = accel_velocity_cache_.x - accel_velocity_offset_.x;
+    result.y = accel_velocity_cache_.y - accel_velocity_offset_.y;
+    result.z = accel_velocity_cache_.z - accel_velocity_offset_.z;
+    return result;
+}
+
+void LcmReader::resetAccelVelocity() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    accel_velocity_offset_ = accel_velocity_cache_;
 }
 
 bool LcmReader::waitForImuReady(int timeout_ms) {

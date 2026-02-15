@@ -7,7 +7,7 @@ with PID-based steering control.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from libstp.foundation import ChassisVelocity, PIDController
+from libstp.foundation import ChassisVelocity, PidConfig, PidController
 from libstp.sensor_ir import IRSensor
 
 from .. import SimulationStep, SimulationStepDelta, dsl
@@ -57,7 +57,7 @@ class LineFollow(MotionStep):
     def __init__(self, config: LineFollowConfig):
         super().__init__()
         self.config = config
-        self._pid: PIDController | None = None
+        self._pid: PidController | None = None
         self._target_distance_m: float | None = None
 
     def _generate_signature(self) -> str:
@@ -78,7 +78,7 @@ class LineFollow(MotionStep):
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
-        self._pid = PIDController(self.config.kp, self.config.ki, self.config.kd)
+        self._pid = PidController(PidConfig(kp=self.config.kp, ki=self.config.ki, kd=self.config.kd))
         self._target_distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else None
         robot.odometry.reset()
 
@@ -102,7 +102,7 @@ class LineFollow(MotionStep):
         error = left_conf - right_conf
 
         # PID output for steering
-        pid_output = self._pid.calculate(error)
+        pid_output = self._pid.update(error, dt)
 
         # Dynamic forward speed reduction based on error magnitude
         reduction = min(abs(pid_output) * self.config.forward_reduction, 1.0)

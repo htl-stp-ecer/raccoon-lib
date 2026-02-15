@@ -1,28 +1,28 @@
 #include <gtest/gtest.h>
-#include "motion/motion_pid.hpp"
+#include "foundation/pid.hpp"
 #include "test_support/test_fixtures.hpp"
 
-using namespace libstp::motion;
+using namespace libstp::foundation;
 using namespace libstp::test;
 
 class MotionPidTest : public AlgorithmTestFixture {};
 
 TEST_F(MotionPidTest, ProportionalOnly) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 2.0,
         .ki = 0.0,
         .kd = 0.0,
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     double output = pid.update(1.0, kDefaultDt);
     EXPECT_NEAR(output, 2.0, kTolerance);  // kp * error
 }
 
 TEST_F(MotionPidTest, IntegralAccumulates) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 0.0,
         .ki = 1.0,
         .kd = 0.0,
@@ -31,7 +31,7 @@ TEST_F(MotionPidTest, IntegralAccumulates) {
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // First update starts integrating
     pid.update(1.0, 0.1);  // integral = 1.0 * 0.1 = 0.1
@@ -42,7 +42,7 @@ TEST_F(MotionPidTest, IntegralAccumulates) {
 }
 
 TEST_F(MotionPidTest, IntegralAntiWindup) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 0.0,
         .ki = 1.0,
         .kd = 0.0,
@@ -51,7 +51,7 @@ TEST_F(MotionPidTest, IntegralAntiWindup) {
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Apply large error for many iterations
     for (int i = 0; i < 100; ++i) {
@@ -62,7 +62,7 @@ TEST_F(MotionPidTest, IntegralAntiWindup) {
 }
 
 TEST_F(MotionPidTest, IntegralDeadband) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 0.0,
         .ki = 1.0,
         .kd = 0.0,
@@ -71,7 +71,7 @@ TEST_F(MotionPidTest, IntegralDeadband) {
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Error within deadband - should not integrate
     for (int i = 0; i < 10; ++i) {
@@ -86,7 +86,7 @@ TEST_F(MotionPidTest, IntegralDeadband) {
 }
 
 TEST_F(MotionPidTest, DerivativeFiltering) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 0.0,
         .ki = 0.0,
         .kd = 1.0,
@@ -94,7 +94,7 @@ TEST_F(MotionPidTest, DerivativeFiltering) {
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // First update establishes baseline
     pid.update(0.0, 0.1);
@@ -109,14 +109,14 @@ TEST_F(MotionPidTest, DerivativeFiltering) {
 }
 
 TEST_F(MotionPidTest, OutputSaturation) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 100.0,  // Very high gain
         .ki = 0.0,
         .kd = 0.0,
         .output_min = -5.0,
         .output_max = 5.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Large positive error
     double output = pid.update(1.0, kDefaultDt);
@@ -128,14 +128,14 @@ TEST_F(MotionPidTest, OutputSaturation) {
 }
 
 TEST_F(MotionPidTest, Reset) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 1.0,
         .ki = 1.0,
         .kd = 1.0,
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Build up some state
     for (int i = 0; i < 10; ++i) {
@@ -152,14 +152,14 @@ TEST_F(MotionPidTest, Reset) {
 }
 
 TEST_F(MotionPidTest, ZeroDtReturnsZero) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 1.0,
         .ki = 1.0,
         .kd = 1.0,
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Zero dt should return 0 to avoid division issues
     double output = pid.update(1.0, 0.0);
@@ -167,14 +167,14 @@ TEST_F(MotionPidTest, ZeroDtReturnsZero) {
 }
 
 TEST_F(MotionPidTest, NegativeDtReturnsZero) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 1.0,
         .ki = 1.0,
         .kd = 1.0,
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Negative dt should return 0
     double output = pid.update(1.0, -0.1);
@@ -182,14 +182,14 @@ TEST_F(MotionPidTest, NegativeDtReturnsZero) {
 }
 
 TEST_F(MotionPidTest, SetGains) {
-    MotionPidController::Config cfg{
+    PidConfig cfg{
         .kp = 1.0,
         .ki = 0.0,
         .kd = 0.0,
         .output_min = -100.0,
         .output_max = 100.0
     };
-    MotionPidController pid(cfg);
+    PidController pid(cfg);
 
     // Original gain
     double output1 = pid.update(1.0, kDefaultDt);

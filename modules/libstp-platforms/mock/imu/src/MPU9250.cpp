@@ -90,3 +90,22 @@ void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
     linear_accel[1] = 0.0f;
     linear_accel[2] = 0.0f;
 }
+
+void libstp::hal::imu::IMU::getIntegratedVelocity(float* vel)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (vel == nullptr)
+    {
+        throw std::runtime_error("IMU getIntegratedVelocity failed! Output pointer is null.");
+    }
+#endif
+    // Mock returns zero velocity (robot stationary)
+    vel[0] = 0.0f;
+    vel[1] = 0.0f;
+    vel[2] = 0.0f;
+}
+
+void libstp::hal::imu::IMU::resetIntegratedVelocity()
+{
+    // Mock: no-op
+}
