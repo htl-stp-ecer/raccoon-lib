@@ -107,9 +107,24 @@ void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
     linear_accel[2] = linearAccelValue.z;
 }
 
-void libstp::hal::imu::IMU::setLinearAccelCallback(std::function<void(float, float, float)> callback)
+void libstp::hal::imu::IMU::getIntegratedVelocity(float* vel)
 {
-    platform::wombat::core::LcmReader::instance().setLinearAccelCallback(std::move(callback));
+#ifdef SAFETY_CHECKS_ENABLED
+    if (vel == nullptr)
+    {
+        throw std::runtime_error("IMU getIntegratedVelocity failed! Output pointer is null.");
+    }
+#endif
+
+    auto v = platform::wombat::core::LcmReader::instance().readAccelVelocity();
+    vel[0] = v.x;
+    vel[1] = v.y;
+    vel[2] = v.z;
+}
+
+void libstp::hal::imu::IMU::resetIntegratedVelocity()
+{
+    platform::wombat::core::LcmReader::instance().resetAccelVelocity();
 }
 
 void libstp::hal::imu::IMU::calibrate()

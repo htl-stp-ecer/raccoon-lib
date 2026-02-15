@@ -15,13 +15,8 @@ namespace libstp::motion
         const DiagonalMotionConfig& diag_config)
     {
         ProfiledPIDController::Config cfg;
-        cfg.kp = pid_config.distance_kp;
-        cfg.ki = pid_config.distance_ki;
-        cfg.kd = pid_config.distance_kd;
+        cfg.pid = pid_config.distance;
         cfg.velocity_ff = pid_config.velocity_ff;
-        cfg.derivative_lpf_alpha = pid_config.derivative_lpf_alpha;
-        cfg.integral_max = pid_config.integral_max;
-        cfg.integral_deadband = pid_config.integral_deadband;
 
         TrapezoidalProfile::Constraints constraints;
         constraints.max_velocity = std::abs(diag_config.max_speed_mps);
@@ -49,7 +44,6 @@ namespace libstp::motion
         sin_angle_ = std::sin(cfg_.angle_rad);
 
         heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
-        cross_track_pid_ = createPidController(ctx_.pid_config, PidType::Lateral);
     }
 
     void DiagonalMotion::start()
@@ -69,7 +63,6 @@ namespace libstp::motion
         odometry().reset();
 
         heading_pid_->reset();
-        cross_track_pid_->reset();
 
         // Reset profiled PID at origin, goal = target distance
         profiled_pid_.reset(0.0);
@@ -139,13 +132,8 @@ namespace libstp::motion
             return;
         }
 
-        // Cross-track correction (mecanum only — no differential reorientation needed)
-        const double cross_track_error = cross_track_position;
-        double cross_cmd_raw = -cross_track_pid_->update(cross_track_error, dt);
-        cross_cmd_raw = std::clamp(cross_cmd_raw, -cfg_.max_speed_mps * 0.5, cfg_.max_speed_mps * 0.5);
-
-        // Heading correction
-        double omega_cmd_raw = heading_pid_->update(yaw_error, dt);
+        // Heading correction only — no cross-track correction.
+        const double omega_cmd_raw = heading_pid_->update(yaw_error, dt);
 
         // Primary axis: Profiled PID generates velocity command
         double primary_cmd_raw = profiled_pid_.calculate(primary_position, dt);
@@ -153,19 +141,15 @@ namespace libstp::motion
 
         // Apply scaling from previous saturation feedback
         primary_cmd *= speed_scale_;
-        double cross_cmd = cross_cmd_raw * speed_scale_;
         const double omega_cmd_scaled = omega_cmd_raw * heading_scale_;
 
-        LIBSTP_LOG_TRACE("DiagonalMotion scaled cmd: primary={:.3f}, cross={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
-                    primary_cmd, cross_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);
+        LIBSTP_LOG_TRACE("DiagonalMotion scaled cmd: primary={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
+                    primary_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);
 
         // Rotate velocity from travel frame back to robot frame
-        // primary is along travel direction, cross is perpendicular
-        // vx = primary * cos(angle) - cross * sin(angle)
-        // vy = primary * sin(angle) + cross * cos(angle)
         foundation::ChassisVelocity cmd{};
-        cmd.vx = primary_cmd * cos_angle_ - cross_cmd * sin_angle_;
-        cmd.vy = primary_cmd * sin_angle_ + cross_cmd * cos_angle_;
+        cmd.vx = primary_cmd * cos_angle_;
+        cmd.vy = primary_cmd * sin_angle_;
         cmd.wz = omega_cmd_scaled;
 
         drive().setVelocity(cmd);
@@ -188,7 +172,7 @@ namespace libstp::motion
             .cmd_vy_mps = cmd.vy,
             .cmd_wz_radps = cmd.wz,
             .pid_primary_raw = primary_cmd_raw,
-            .pid_cross_raw = cross_cmd_raw,
+            .pid_cross_raw = 0.0,
             .pid_heading_raw = omega_cmd_raw,
             .setpoint_position_m = sp.position,
             .setpoint_velocity_mps = sp.velocity,

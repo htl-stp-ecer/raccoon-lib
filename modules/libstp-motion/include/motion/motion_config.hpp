@@ -1,5 +1,7 @@
 #pragma once
 
+#include "foundation/pid.hpp"
+
 namespace libstp::motion
 {
     /**
@@ -26,69 +28,47 @@ namespace libstp::motion
      */
     struct UnifiedMotionPidConfig
     {
-        // Distance/Position PID gains (used for forward/backward distance in drive, lateral distance in strafe)
-        double distance_kp{2.0};
-        double distance_ki{0.0};
-        double distance_kd{0.5};            // Velocity damping for lag compensation in LinearMotion
+        // Distance/Position PID (used for forward/backward distance, lateral distance)
+        foundation::PidConfig distance{2.0, 0.0, 0.5, 10.0, 0.01, 0.3};
 
-        // Heading/Angular PID gains (used for maintaining heading in drive/strafe, and for turning)
-        double heading_kp{2.0};
-        double heading_ki{0.0};
-        double heading_kd{0.3};
-
-        // Lateral drift correction PID gains (used for correcting lateral drift during drive)
-        double lateral_kp{2.0};
-        double lateral_ki{0.0};
-        double lateral_kd{0.0};
+        // Heading/Angular PID (used for maintaining heading in drive/strafe, and for turning)
+        foundation::PidConfig heading{2.0, 0.0, 0.3, 10.0, 0.01, 0.3};
 
         // Profiled PID velocity feedforward gain.
         // 1.0 = full feedforward from profile velocity (recommended for velocity-commanding systems).
         // 0.0 = pure PID on position error (WPILib-style, needs larger kP).
         double velocity_ff{1.0};
 
-        // Advanced PID parameters (shared across all controllers)
-        double integral_max{10.0};              // Anti-windup limit for all PIDs
-        double integral_deadband{0.01};         // Don't integrate within this error
-        double derivative_lpf_alpha{0.3};       // Low-pass filter coefficient for derivative term
-        double output_min{-10.0};               // Minimum PID output
-        double output_max{10.0};                // Maximum PID output
-
         // Saturation handling (speed-independent derating factors)
-        double saturation_derating_factor{0.9};     // Multiply speed scale on saturation
-        double saturation_min_scale{0.2};           // Never reduce speed scale below this
-        double saturation_recovery_rate{0.03};      // How quickly speed scale recovers per cycle
+        double saturation_derating_factor{0.9};
+        double saturation_min_scale{0.2};
+        double saturation_recovery_rate{0.03};
 
         // Heading-specific saturation handling
-        double heading_saturation_derating_factor{0.85};  // Multiply heading scale when still saturated
-        double heading_min_scale{0.25};                   // Minimum heading scale
-        double heading_recovery_rate{0.05};               // Recovery rate for heading scale
+        double heading_saturation_derating_factor{0.85};
+        double heading_min_scale{0.25};
+        double heading_recovery_rate{0.05};
 
         // Hysteresis parameters to prevent oscillation
-        int saturation_hold_cycles{5};              // Cycles to hold before starting recovery
-        double saturation_recovery_threshold{0.95}; // Only recover when scale is below this
+        int saturation_hold_cycles{5};
+        double saturation_recovery_threshold{0.95};
 
         // Tolerances
-        double distance_tolerance_m{0.01};       // Position completion tolerance (meters)
-        double angle_tolerance_rad{0.035};       // Angular completion tolerance (radians, ~2 degrees)
+        double distance_tolerance_m{0.01};
+        double angle_tolerance_rad{0.035};
 
-        // Lateral drift handling (for differential drive)
-        double lateral_heading_bias_gain{0.5};          // How much to bias heading based on lateral error
-        double lateral_reorient_threshold_m{0.15};      // Stop and reorient if lateral error exceeds this
-        double heading_saturation_error_rad{0.01};      // Only derate when heading error exceeds this
-        double heading_recovery_error_rad{0.005};       // Allow recovery once heading error is below this
-
-        // Reorientation behavior (differential drive)
-        double reorientation_speed_factor{0.3};  // Reduce forward speed to this fraction during reorientation
+        // Saturation heading thresholds
+        double heading_saturation_error_rad{0.01};
+        double heading_recovery_error_rad{0.005};
 
         // Per-axis motion profile constraints
-        AxisConstraints linear{0.0, 0.25, 0.037};
+        AxisConstraints linear{};
         AxisConstraints lateral{};
         AxisConstraints angular{};
     };
 
     /**
      * Default unified PID configuration.
-     * These values are tuned to work well across different robot types and speeds.
      */
     inline UnifiedMotionPidConfig defaultUnifiedMotionPidConfig()
     {

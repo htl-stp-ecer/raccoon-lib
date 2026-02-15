@@ -10,8 +10,6 @@
 
 namespace libstp::motion
 {
-    class MotionPidController;
-
     struct DiagonalMotionConfig
     {
         double angle_rad{0.0};               // Travel angle: 0 = forward, pi/2 = right, -pi/2 = left
@@ -71,9 +69,8 @@ namespace libstp::motion
         DiagonalMotionConfig cfg_{};
         double cos_angle_{1.0};  // precomputed cos(angle_rad)
         double sin_angle_{0.0};  // precomputed sin(angle_rad)
-        std::unique_ptr<MotionPidController> heading_pid_;       // PID controller for heading
-        std::unique_ptr<MotionPidController> cross_track_pid_;   // PID controller for cross-track drift
-        ProfiledPIDController profiled_pid_;                     // Profiled PID for primary axis
+        std::unique_ptr<foundation::PidController> heading_pid_;
+        ProfiledPIDController profiled_pid_;
         double initial_heading_rad_{0.0};
         bool finished_{false};
         double speed_scale_{1.0};

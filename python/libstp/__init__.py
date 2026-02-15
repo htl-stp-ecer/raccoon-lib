@@ -31,7 +31,8 @@ from libstp.drive import Drive, AxisVelocityControlConfig, ChassisVelocityContro
 from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
 from libstp.odometry_fused import FusedOdometry, FusedOdometryConfig
-from libstp.foundation import Feedforward, MotorCalibration, PidGains
+from libstp.foundation import Feedforward, FeedforwardController, MotorCalibration, PidConfig, PidController, PidGains
+from libstp.motion import AxisConstraints
 from libstp.hal import IMU
 from libstp.kinematics_differential import DifferentialKinematics
 from libstp.kmeans import KMeans, KMeansResult
@@ -77,9 +78,14 @@ __all__ = [
     "KMeansResult",
     # Calibration
     "Feedforward",
+    "FeedforwardController",
     "MotorCalibration",
+    "PidConfig",
+    "PidController",
     "PidGains",
     "IMU",
+    # Motion
+    "AxisConstraints",
     # All step exports
     *_robot_all,
     *_step_all,

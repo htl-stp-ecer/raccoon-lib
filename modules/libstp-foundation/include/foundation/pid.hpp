@@ -1,81 +1,60 @@
-//
-// Created by tobias on 12/26/24.
-//
-
 #pragma once
 
-#include <chrono>
+#include "foundation/motor.hpp"
 
-namespace libstp::utility
+namespace libstp::foundation
 {
-    struct PidParameters
+    struct PidConfig
     {
-        float Kp;
-        float Ki;
-        float Kd;
+        double kp{1.0};
+        double ki{0.0};
+        double kd{0.0};
+        double integral_max{10.0};
+        double integral_deadband{0.01};
+        double derivative_lpf_alpha{0.1};
+        double output_min{-10.0};
+        double output_max{10.0};
 
+        PidConfig() = default;
 
-        PidParameters() : PidParameters(0.0f, 0.0f, 0.0f)
-        {
-        }
+        PidConfig(double kp, double ki, double kd,
+                  double integral_max = 10.0, double integral_deadband = 0.01,
+                  double derivative_lpf_alpha = 0.1,
+                  double output_min = -10.0, double output_max = 10.0)
+            : kp(kp), ki(ki), kd(kd)
+            , integral_max(integral_max), integral_deadband(integral_deadband)
+            , derivative_lpf_alpha(derivative_lpf_alpha)
+            , output_min(output_min), output_max(output_max)
+        {}
 
-        PidParameters(const float kp, const float ki, const float kd)
-            : Kp(kp),
-              Ki(ki),
-              Kd(kd)
-        {
-        }
+        // Convenience: construct from simple PidGains (advanced params get defaults)
+        PidConfig(const PidGains& g) : kp(g.kp), ki(g.ki), kd(g.kd) {}
     };
 
-    class PIDController
+    class PidController
     {
     public:
-        PIDController() : PIDController(0.0f, 0.0f, 0.0f)
-        {
-        }
+        explicit PidController(PidConfig config = {});
 
-        PIDController(const float Kp, const float Ki, const float Kd) : PIDController(PidParameters(Kp, Ki, Kd))
-        {
-        }
+        double update(double error, double dt);
 
-        explicit PIDController(const PidParameters& parameters)
-            : parameters(parameters), integral(0.0),
-              previous_error(0.0),
-              last_time(std::chrono::steady_clock::now())
-        {
-        }
+        /**
+         * Update with separate derivative signal (derivative-on-measurement).
+         * P and I terms use @p error, D term uses @p deriv_signal.
+         */
+        double update(double error, double dt, double deriv_signal);
 
-        void setParameters(const PidParameters parameters)
-        {
-            this->parameters = parameters;
-            reset();
-        }
+        void reset();
+        void setGains(double kp, double ki, double kd);
 
-        void reset()
-        {
-            integral = 0.0;
-            previous_error = 0.0;
-            last_time = std::chrono::steady_clock::now();
-        }
-
-        float calculate(const float error)
-        {
-            const auto current_time = std::chrono::steady_clock::now();
-            const std::chrono::duration<double> time_diff = current_time - last_time;
-            last_time = current_time;
-
-            integral += error * time_diff.count();
-            const double derivative = (error - previous_error) / time_diff.count();
-            previous_error = error;
-
-            return static_cast<float>(error * parameters.Kp + parameters.Ki * integral + parameters.Kd * derivative);
-        }
+        [[nodiscard]] double getIntegral() const { return integral_; }
+        [[nodiscard]] double getDerivative() const { return filtered_derivative_; }
 
     private:
-        PidParameters parameters;
-
-        double integral;
-        double previous_error;
-        std::chrono::steady_clock::time_point last_time;
+        PidConfig cfg_;
+        double integral_{0.0};
+        double prev_error_{0.0};
+        double filtered_derivative_{0.0};
+        bool first_update_{true};
     };
 }

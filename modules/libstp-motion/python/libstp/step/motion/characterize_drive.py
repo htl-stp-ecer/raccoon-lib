@@ -400,29 +400,11 @@ class CharacterizeDrive(Step):
         return final
 
     # Mapping from axis name to the AxisConstraints attribute name on
-    # UnifiedMotionPidConfig (for in-memory), and the flat YAML key names
-    # (for persistence, matching the code generator's expected format).
+    # UnifiedMotionPidConfig (for in-memory and YAML persistence).
     _AXIS_ATTR = {
         "forward": "linear",
         "lateral": "lateral",
         "angular": "angular",
-    }
-    _AXIS_YAML_FIELDS = {
-        "forward": (
-            "default_linear_acceleration_mps2",
-            "default_linear_deceleration_mps2",
-            "default_linear_max_velocity_mps",
-        ),
-        "lateral": (
-            "default_lateral_acceleration_mps2",
-            "default_lateral_deceleration_mps2",
-            "default_lateral_max_velocity_mps",
-        ),
-        "angular": (
-            "default_angular_acceleration_radps2",
-            "default_angular_deceleration_radps2",
-            "default_angular_max_rate_radps",
-        ),
     }
 
     def _persist_to_yaml(self) -> bool:
@@ -455,18 +437,20 @@ class CharacterizeDrive(Step):
         updated = False
 
         for axis, result in self.results.items():
-            fields = self._AXIS_YAML_FIELDS.get(axis)
-            if fields is None:
+            attr = self._AXIS_ATTR.get(axis)
+            if attr is None:
                 continue
-            accel_key, decel_key, max_vel_key = fields
+            axis_cfg = motion_pid.setdefault(attr, {})
+            if not isinstance(axis_cfg, dict):
+                continue
             if result.acceleration > 0:
-                motion_pid[accel_key] = round(result.acceleration, 4)
+                axis_cfg["acceleration"] = round(result.acceleration, 4)
                 updated = True
             if result.deceleration > 0:
-                motion_pid[decel_key] = round(result.deceleration, 4)
+                axis_cfg["deceleration"] = round(result.deceleration, 4)
                 updated = True
             if result.max_velocity > 0:
-                motion_pid[max_vel_key] = round(result.max_velocity, 4)
+                axis_cfg["max_velocity"] = round(result.max_velocity, 4)
                 updated = True
 
         if not updated:

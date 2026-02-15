@@ -35,6 +35,8 @@ namespace platform::wombat::core {
         exlcm::vector3f_t readGyro();
         exlcm::vector3f_t readAccel();
         exlcm::vector3f_t readLinearAccel();
+        exlcm::vector3f_t readAccelVelocity();
+        void resetAccelVelocity();
         exlcm::vector3f_t readMag();
         exlcm::quaternion_t readOrientation();
         exlcm::scalar_i32_t readBemf(int idx);
@@ -50,8 +52,8 @@ namespace platform::wombat::core {
         // Returns true if data was received within timeout_ms, false otherwise
         bool waitForImuReady(int timeout_ms = 1000);
 
-        // Register callback for linear accel data arrival (called from LCM thread)
-        void setLinearAccelCallback(std::function<void(float, float, float)> callback);
+        // Deprecated: callback mechanism removed, use getIntegratedVelocity via IIMU instead
+        void setLinearAccelCallback(std::function<void(float, float, float)> /*callback*/) {}
 
     private:
         lcm::LCM lcm_;
@@ -75,16 +77,14 @@ namespace platform::wombat::core {
         exlcm::vector3f_t gyro_cache_{};
         exlcm::vector3f_t accel_cache_{};
         exlcm::vector3f_t linear_accel_cache_{};
+        exlcm::vector3f_t accel_velocity_cache_{};
+        exlcm::vector3f_t accel_velocity_offset_{};
         exlcm::vector3f_t mag_cache_{};
         exlcm::quaternion_t orientation_cache_{};
         exlcm::scalar_f_t temp_cache_{};
 
         // Track whether real IMU orientation data has been received
         std::atomic<bool> imu_orientation_received_{false};
-
-        // External callback for linear accel arrival (called outside cache_mutex_)
-        std::function<void(float, float, float)> linear_accel_callback_;
-        std::mutex callback_mutex_;
 
         // Background listening function
         void listenLoop();
@@ -97,6 +97,7 @@ namespace platform::wombat::core {
         void handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleLinearAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
+        void handleAccelVelocity(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
         void handleOrientation(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::quaternion_t* msg);
         void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);

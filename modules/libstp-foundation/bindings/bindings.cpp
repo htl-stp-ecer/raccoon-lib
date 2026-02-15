@@ -6,7 +6,6 @@
 #include <pybind11/chrono.h>
 
 #include "foundation/config.hpp"
-#include "foundation/pid.hpp"
 
 namespace py = pybind11;
 

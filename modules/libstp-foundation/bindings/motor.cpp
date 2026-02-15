@@ -64,4 +64,11 @@ void init_motor(const py::module_& m)
         .def_readwrite("vel_lpf_alpha", &libstp::foundation::MotorCalibration::vel_lpf_alpha)
         .def("__repr__", &motor_calibration_to_string)
         .def("__str__", &motor_calibration_to_string);
+
+    py::class_<libstp::foundation::FeedforwardController>(m, "FeedforwardController")
+        .def(py::init<libstp::foundation::Feedforward>(),
+             py::arg("config") = libstp::foundation::Feedforward{})
+        .def_readwrite("config", &libstp::foundation::FeedforwardController::config)
+        .def("calculate", &libstp::foundation::FeedforwardController::calculate,
+             py::arg("velocity"), py::arg("acceleration") = 0.0);
 }

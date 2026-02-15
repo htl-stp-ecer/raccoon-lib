@@ -4,7 +4,6 @@
 #pragma once
 
 #include <Eigen/Geometry>
-#include <functional>
 
 namespace libstp::hal::imu
 {
@@ -54,10 +53,15 @@ namespace libstp::hal::imu
         virtual void getLinearAcceleration(float* linear_accel) = 0;
 
         /**
-         * Register a callback invoked from the sensor thread when new accel data arrives.
-         * Pass nullptr to deregister. Default implementation is a no-op.
+         * Get firmware-integrated velocity from accelerometer in body frame (m/s)
+         * @param vel Output array [x, y, z] for velocity
          */
-        virtual void setLinearAccelCallback(std::function<void(float, float, float)> callback) { (void)callback; }
+        virtual void getIntegratedVelocity(float* vel) { vel[0] = vel[1] = vel[2] = 0; }
+
+        /**
+         * Reset the firmware-integrated velocity offset (next read returns zero)
+         */
+        virtual void resetIntegratedVelocity() {}
 
         // Wait for IMU to receive initial orientation data
         // Returns true if data received within timeout_ms, false otherwise
