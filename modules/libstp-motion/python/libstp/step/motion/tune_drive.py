@@ -131,7 +131,7 @@ class TuneDrive(Step):
 
                 self.info(
                     f"\n--- Run {run_idx}/{total}: "
-                    f"{dist_cm:.0f} cm @ {speed:.2f} m/s ({axis_name}) ---"
+                    f"{dist_cm:.0f} cm @ scale={speed:.2f} ({axis_name}) ---"
                 )
 
                 # Run the drive
@@ -139,7 +139,7 @@ class TuneDrive(Step):
 
                 # Save CSV
                 sign = "pos" if dist_cm >= 0 else "neg"
-                fname = f"{axis_name}_{sign}_{abs(dist_cm):.0f}cm_{speed:.2f}mps.csv"
+                fname = f"{axis_name}_{sign}_{abs(dist_cm):.0f}cm_{speed:.2f}scale.csv"
                 csv_path = os.path.join(self.csv_dir, fname)
                 _write_csv(csv_path, telemetry)
 
@@ -172,7 +172,7 @@ class TuneDrive(Step):
         config = LinearMotionConfig()
         config.axis = self.axis
         config.distance_m = distance_m
-        config.max_speed_mps = max_speed
+        config.speed_scale = max_speed
 
         motion = LinearMotion(
             robot.drive, robot.odometry, robot.motion_pid_config, config
@@ -220,7 +220,7 @@ def tune_drive(
 
     Args:
         distances_cm: Distances to test (default [10, 25, 50, 100])
-        speeds: Speeds to test in m/s (default [0.10, 0.20, 0.30])
+        speeds: Speed scales to test, 0-1 (default [0.3, 0.6, 1.0])
         csv_dir: Directory for CSV output (default /tmp/drive_telemetry)
         axis: "forward" or "lateral"
         settle_time: Wait between runs in seconds (default 1.5)
@@ -232,7 +232,7 @@ def tune_drive(
     if distances_cm is None:
         distances_cm = [10, 25, 50, 100]
     if speeds is None:
-        speeds = [0.10, 0.20, 0.30]
+        speeds = [0.3, 0.6, 1.0]
 
     lin_axis = LinearAxis.Lateral if axis.lower().startswith("l") else LinearAxis.Forward
 

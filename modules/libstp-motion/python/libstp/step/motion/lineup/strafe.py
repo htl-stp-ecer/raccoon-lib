@@ -105,7 +105,7 @@ class ComputeTimingBasedStrafeAngle(Turn):
 
     def __init__(self, step: TimingBasedStrafeLineUp):
         config = TurnConfig()
-        config.max_angular_rate = 1.0
+        config.speed_scale = 1.0
         super().__init__(config)
         self.step = step
 

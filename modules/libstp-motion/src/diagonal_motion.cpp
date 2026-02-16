@@ -10,35 +10,34 @@
 
 namespace libstp::motion
 {
+    static double computeDiagonalMaxVelocity(const UnifiedMotionPidConfig& pid_config,
+                                              const DiagonalMotionConfig& config)
+    {
+        double scale = std::clamp(config.speed_scale, 0.01, 1.0);
+        return scale * pid_config.linear.max_velocity;
+    }
+
     static ProfiledPIDController makeDiagonalProfiledPID(
         const UnifiedMotionPidConfig& pid_config,
-        const DiagonalMotionConfig& diag_config)
+        double max_velocity)
     {
         ProfiledPIDController::Config cfg;
         cfg.pid = pid_config.distance;
         cfg.velocity_ff = pid_config.velocity_ff;
 
         TrapezoidalProfile::Constraints constraints;
-        constraints.max_velocity = std::abs(diag_config.max_speed_mps);
-
-        // Use per-motion config if set, otherwise fall back to pid_config defaults
-        constraints.max_acceleration = (diag_config.max_acceleration_mps2 > 0.0)
-            ? diag_config.max_acceleration_mps2
-            : pid_config.linear.acceleration;
-        constraints.max_deceleration = (diag_config.max_deceleration_mps2 > 0.0)
-            ? diag_config.max_deceleration_mps2
-            : pid_config.linear.deceleration;
+        constraints.max_velocity = max_velocity;
+        constraints.max_acceleration = pid_config.linear.acceleration;
+        constraints.max_deceleration = pid_config.linear.deceleration;
 
         return ProfiledPIDController(cfg, constraints);
     }
 
     DiagonalMotion::DiagonalMotion(MotionContext ctx, DiagonalMotionConfig config)
         : Motion(ctx), cfg_(config)
-        , profiled_pid_(makeDiagonalProfiledPID(ctx_.pid_config, config))
+        , max_velocity_(computeDiagonalMaxVelocity(ctx_.pid_config, config))
+        , profiled_pid_(makeDiagonalProfiledPID(ctx_.pid_config, max_velocity_))
     {
-        cfg_.max_speed_mps = std::abs(cfg_.max_speed_mps);
-        if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.05;
-
         // Precompute trig for rotated coordinate frame
         cos_angle_ = std::cos(cfg_.angle_rad);
         sin_angle_ = std::sin(cfg_.angle_rad);
@@ -70,10 +69,8 @@ namespace libstp::motion
 
         initial_heading_rad_ = odometry().getHeading();
 
-        LIBSTP_LOG_TRACE("DiagonalMotion started: angle={:.3f} rad, target={:.3f} m, max_speed={:.3f} m/s, "
-                    "max_accel={:.3f} m/s², max_decel={:.3f} m/s²",
-                    cfg_.angle_rad, cfg_.distance_m, cfg_.max_speed_mps,
-                    cfg_.max_acceleration_mps2, cfg_.max_deceleration_mps2);
+        LIBSTP_LOG_TRACE("DiagonalMotion started: angle={:.3f} rad, target={:.3f} m, max_velocity={:.3f} m/s (scale={:.2f})",
+                    cfg_.angle_rad, cfg_.distance_m, max_velocity_, cfg_.speed_scale);
     }
 
     void DiagonalMotion::update(double dt)
@@ -137,7 +134,7 @@ namespace libstp::motion
 
         // Primary axis: Profiled PID generates velocity command
         double primary_cmd_raw = profiled_pid_.calculate(primary_position, dt);
-        double primary_cmd = std::clamp(primary_cmd_raw, -cfg_.max_speed_mps, cfg_.max_speed_mps);
+        double primary_cmd = std::clamp(primary_cmd_raw, -max_velocity_, max_velocity_);
 
         // Apply scaling from previous saturation feedback
         primary_cmd *= speed_scale_;
