@@ -19,7 +19,7 @@ class Drive(MotionStep):
         axis = "Forward" if self.config.axis == LinearAxis.Forward else "Lateral"
         return (
             f"Drive(axis={axis}, distance_m={self.config.distance_m:.3f}, "
-            f"speed={self.config.max_speed_mps:.3f})"
+            f"speed_scale={self.config.speed_scale:.2f})"
         )
 
     def to_simulation_step(self) -> SimulationStep:
@@ -62,7 +62,7 @@ def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
     config = LinearMotionConfig()
     config.axis = LinearAxis.Forward
     config.distance_m = cm / 100.0
-    config.max_speed_mps = speed
+    config.speed_scale = speed
     return Drive(config)
 
 
@@ -76,7 +76,7 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
 
     Args:
         cm: Distance to drive in centimeters
-        speed: Speed (0-1, default 1.0)
+        speed: Fraction of max speed, 0-1 (default 1.0)
 
     Returns:
         Drive step with calibrated distance
@@ -89,7 +89,7 @@ def drive_forward(cm: float, speed: float = 1.0) -> Drive:
     config = LinearMotionConfig()
     config.axis = LinearAxis.Forward
     config.distance_m = cm / 100.0
-    config.max_speed_mps = speed
+    config.speed_scale = speed
     return Drive(config)
 
 
@@ -103,7 +103,7 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
 
     Args:
         cm: Distance to drive in centimeters
-        speed: Speed (0-1, default 1.0)
+        speed: Fraction of max speed, 0-1 (default 1.0)
 
     Returns:
         Drive step with calibrated distance
@@ -116,18 +116,18 @@ def drive_backward(cm: float, speed: float = 1.0) -> Drive:
     config = LinearMotionConfig()
     config.axis = LinearAxis.Forward
     config.distance_m = -cm / 100.0
-    config.max_speed_mps = speed
+    config.speed_scale = speed
     return Drive(config)
 
 
 @dsl(tags=["motion", "strafe"])
-def strafe_left(cm: float, speed: float = 0.3) -> Drive:
+def strafe_left(cm: float, speed: float = 1.0) -> Drive:
     """
     Strafe left by specified distance at a given speed.
 
     Args:
         cm: The distance to strafe in centimeters (positive values move left)
-        speed: Maximum lateral speed in m/s (default 0.3 m/s)
+        speed: Fraction of max speed, 0-1 (default 1.0)
 
     Returns:
         Drive step configured for leftward motion
@@ -135,18 +135,18 @@ def strafe_left(cm: float, speed: float = 0.3) -> Drive:
     config = LinearMotionConfig()
     config.axis = LinearAxis.Lateral
     config.distance_m = -cm / 100.0  # Negative for left (odometry convention: negative lateral = left)
-    config.max_speed_mps = speed
+    config.speed_scale = speed
     return Drive(config)
 
 
 @dsl(tags=["motion", "strafe"])
-def strafe_right(cm: float, speed: float = 0.3) -> Drive:
+def strafe_right(cm: float, speed: float = 1.0) -> Drive:
     """
     Strafe right by specified distance at a given speed.
 
     Args:
         cm: The distance to strafe in centimeters (positive values move right)
-        speed: Maximum lateral speed in m/s (default 0.3 m/s)
+        speed: Fraction of max speed, 0-1 (default 1.0)
 
     Returns:
         Drive step configured for rightward motion
@@ -154,5 +154,5 @@ def strafe_right(cm: float, speed: float = 0.3) -> Drive:
     config = LinearMotionConfig()
     config.axis = LinearAxis.Lateral
     config.distance_m = cm / 100.0  # Positive for right (odometry convention: positive lateral = right)
-    config.max_speed_mps = speed
+    config.speed_scale = speed
     return Drive(config)

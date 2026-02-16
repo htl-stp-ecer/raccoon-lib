@@ -21,7 +21,7 @@ class DriveAngle(MotionStep):
         angle_deg = math.degrees(self.config.angle_rad)
         return (
             f"DriveAngle(angle={angle_deg:.1f}°, distance_m={self.config.distance_m:.3f}, "
-            f"speed={self.config.max_speed_mps:.3f})"
+            f"speed_scale={self.config.speed_scale:.2f})"
         )
 
     def to_simulation_step(self) -> SimulationStep:
@@ -43,7 +43,7 @@ class DriveAngle(MotionStep):
 
 
 @dsl(tags=["motion", "drive"])
-def drive_angle(angle_deg: float, cm: float, speed: float = 0.3) -> DriveAngle:
+def drive_angle(angle_deg: float, cm: float, speed: float = 1.0) -> DriveAngle:
     """
     Drive at an arbitrary angle for a specified distance.
 
@@ -55,7 +55,7 @@ def drive_angle(angle_deg: float, cm: float, speed: float = 0.3) -> DriveAngle:
     Args:
         angle_deg: Travel angle in degrees (0=forward, 90=right, -90=left)
         cm: Distance to travel in centimeters
-        speed: Maximum speed in m/s (default 0.3)
+        speed: Fraction of max speed, 0-1 (default 1.0)
 
     Returns:
         DriveAngle step
@@ -63,5 +63,5 @@ def drive_angle(angle_deg: float, cm: float, speed: float = 0.3) -> DriveAngle:
     config = DiagonalMotionConfig()
     config.angle_rad = math.radians(angle_deg)
     config.distance_m = cm / 100.0
-    config.max_speed_mps = speed
+    config.speed_scale = speed
     return DriveAngle(config)

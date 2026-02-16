@@ -18,9 +18,7 @@ void init_linear_motion(py::module_& m)
         .def(py::init<>())
         .def_readwrite("axis", &LinearMotionConfig::axis)
         .def_readwrite("distance_m", &LinearMotionConfig::distance_m)
-        .def_readwrite("max_speed_mps", &LinearMotionConfig::max_speed_mps)
-        .def_readwrite("max_acceleration_mps2", &LinearMotionConfig::max_acceleration_mps2)
-        .def_readwrite("max_deceleration_mps2", &LinearMotionConfig::max_deceleration_mps2);
+        .def_readwrite("speed_scale", &LinearMotionConfig::speed_scale);
 
     py::class_<LinearMotionTelemetry>(m, "LinearMotionTelemetry")
         .def_readonly("time_s", &LinearMotionTelemetry::time_s)

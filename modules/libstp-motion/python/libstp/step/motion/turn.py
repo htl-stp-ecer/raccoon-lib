@@ -19,7 +19,7 @@ class Turn(MotionStep):
     def _generate_signature(self) -> str:
         return (
             f"Turn(angle_deg={math.degrees(self.config.target_angle_rad):.1f}, "
-            f"speed={self.config.max_angular_rate:.3f})"
+            f"speed_scale={self.config.speed_scale:.2f})"
         )
 
     def to_simulation_step(self) -> SimulationStep:
@@ -47,14 +47,14 @@ def turn_left(degrees: float, speed: float = 1.0) -> Turn:
 
     Args:
         degrees: The angle to turn in degrees (positive values turn CCW)
-        speed: Maximum angular speed in rad/s (default 1.0 rad/s)
+        speed: Fraction of max angular speed, 0-1 (default 1.0)
 
     Returns:
         Turn step configured for counter-clockwise rotation
     """
     config = TurnConfig()
     config.target_angle_rad = math.radians(degrees)  # Positive for CCW
-    config.max_angular_rate = speed
+    config.speed_scale = speed
     return Turn(config)
 
 
@@ -65,12 +65,12 @@ def turn_right(degrees: float, speed: float = 1.0) -> Turn:
 
     Args:
         degrees: The angle to turn in degrees (positive values turn CW)
-        speed: Maximum angular speed in rad/s (default 1.0 rad/s)
+        speed: Fraction of max angular speed, 0-1 (default 1.0)
 
     Returns:
         Turn step configured for clockwise rotation
     """
     config = TurnConfig()
     config.target_angle_rad = -math.radians(degrees)  # Negative for CW
-    config.max_angular_rate = speed
+    config.speed_scale = speed
     return Turn(config)

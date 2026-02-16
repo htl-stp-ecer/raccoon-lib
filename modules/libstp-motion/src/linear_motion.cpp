@@ -12,7 +12,8 @@ namespace libstp::motion
 {
     static ProfiledPIDController makeLinearProfiledPID(
         const UnifiedMotionPidConfig& pid_config,
-        const LinearMotionConfig& linear_config)
+        const LinearMotionConfig& linear_config,
+        double max_velocity)
     {
         ProfiledPIDController::Config cfg;
         cfg.pid = pid_config.distance;
@@ -23,26 +24,27 @@ namespace libstp::motion
             ? pid_config.lateral : pid_config.linear;
 
         TrapezoidalProfile::Constraints constraints;
-        constraints.max_velocity = std::abs(linear_config.max_speed_mps);
-
-        // Use per-motion config if set, otherwise fall back to axis defaults
-        constraints.max_acceleration = (linear_config.max_acceleration_mps2 > 0.0)
-            ? linear_config.max_acceleration_mps2
-            : axis_defaults.acceleration;
-        constraints.max_deceleration = (linear_config.max_deceleration_mps2 > 0.0)
-            ? linear_config.max_deceleration_mps2
-            : axis_defaults.deceleration;
+        constraints.max_velocity = max_velocity;
+        constraints.max_acceleration = axis_defaults.acceleration;
+        constraints.max_deceleration = axis_defaults.deceleration;
 
         return ProfiledPIDController(cfg, constraints);
     }
 
+    static double computeMaxVelocity(const UnifiedMotionPidConfig& pid_config,
+                                      const LinearMotionConfig& config)
+    {
+        const auto& axis = (config.axis == LinearAxis::Lateral)
+            ? pid_config.lateral : pid_config.linear;
+        double scale = std::clamp(config.speed_scale, 0.01, 1.0);
+        return scale * axis.max_velocity;
+    }
+
     LinearMotion::LinearMotion(MotionContext ctx, LinearMotionConfig config)
         : Motion(ctx), cfg_(config)
-        , profiled_pid_(makeLinearProfiledPID(ctx_.pid_config, config))
+        , max_velocity_(computeMaxVelocity(ctx_.pid_config, config))
+        , profiled_pid_(makeLinearProfiledPID(ctx_.pid_config, config, max_velocity_))
     {
-        cfg_.max_speed_mps = std::abs(cfg_.max_speed_mps);
-        if (cfg_.max_speed_mps <= 0.0) cfg_.max_speed_mps = 0.05;
-
         heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
     }
 
@@ -70,11 +72,9 @@ namespace libstp::motion
 
         initial_heading_rad_ = odometry().getHeading();
 
-        LIBSTP_LOG_TRACE("LinearMotion started: axis={}, target={:.3f} m, max_speed={:.3f} m/s, "
-                    "max_accel={:.3f} m/s², max_decel={:.3f} m/s²",
+        LIBSTP_LOG_TRACE("LinearMotion started: axis={}, target={:.3f} m, max_velocity={:.3f} m/s (scale={:.2f})",
                     (cfg_.axis == LinearAxis::Forward ? "Forward" : "Lateral"),
-                    cfg_.distance_m, cfg_.max_speed_mps,
-                    cfg_.max_acceleration_mps2, cfg_.max_deceleration_mps2);
+                    cfg_.distance_m, max_velocity_, cfg_.speed_scale);
     }
 
     void LinearMotion::update(double dt)
@@ -140,7 +140,7 @@ namespace libstp::motion
 
         // Primary axis: Profiled PID generates velocity command
         double primary_cmd_raw = profiled_pid_.calculate(primary_position, dt);
-        double primary_cmd = std::clamp(primary_cmd_raw, -cfg_.max_speed_mps, cfg_.max_speed_mps);
+        double primary_cmd = std::clamp(primary_cmd_raw, -max_velocity_, max_velocity_);
 
         // Apply scaling from previous saturation feedback
         primary_cmd *= speed_scale_;

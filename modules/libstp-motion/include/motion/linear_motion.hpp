@@ -16,9 +16,7 @@ namespace libstp::motion
     {
         LinearAxis axis{LinearAxis::Forward};
         double distance_m{0.0};
-        double max_speed_mps{0.0};
-        double max_acceleration_mps2{0.0};   // m/s² (0 = use default from pid_config)
-        double max_deceleration_mps2{0.0};   // m/s² (0 = use acceleration, or default)
+        double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.max_velocity
     };
 
     struct LinearMotionTelemetry
@@ -69,6 +67,7 @@ namespace libstp::motion
         void complete();
 
         LinearMotionConfig cfg_{};
+        double max_velocity_{0.0};  // computed from speed_scale * AxisConstraints
         std::unique_ptr<foundation::PidController> heading_pid_;
         ProfiledPIDController profiled_pid_;
         double initial_heading_rad_{0.0};

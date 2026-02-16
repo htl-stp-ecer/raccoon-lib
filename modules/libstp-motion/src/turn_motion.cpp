@@ -15,42 +15,33 @@ namespace
 
 namespace libstp::motion
 {
+    static double computeAngularMaxVelocity(const UnifiedMotionPidConfig& pid_config,
+                                              const TurnConfig& config)
+    {
+        double scale = std::clamp(config.speed_scale, 0.01, 1.0);
+        return scale * pid_config.angular.max_velocity;
+    }
+
     static ProfiledPIDController makeProfiledPID(const UnifiedMotionPidConfig& pid_config,
-                                                  const TurnConfig& turn_config)
+                                                  double max_velocity)
     {
         ProfiledPIDController::Config cfg;
         cfg.pid = pid_config.heading;
         cfg.velocity_ff = pid_config.velocity_ff;
 
         TrapezoidalProfile::Constraints constraints;
-        constraints.max_velocity = turn_config.max_angular_rate;
-        constraints.max_acceleration = turn_config.max_angular_acceleration;
-        constraints.max_deceleration = turn_config.max_angular_deceleration;
+        constraints.max_velocity = max_velocity;
+        constraints.max_acceleration = pid_config.angular.acceleration;
+        constraints.max_deceleration = pid_config.angular.deceleration;
 
         return ProfiledPIDController(cfg, constraints);
     }
 
-    TurnMotion::TurnMotion(MotionContext ctx, double angle_deg, double max_angular_rate_rad_per_sec)
-        : TurnMotion(ctx, TurnConfig{
-            .target_angle_rad = angle_deg * kDegToRad,
-            .max_angular_rate = max_angular_rate_rad_per_sec
-        })
-    {
-    }
-
-    TurnMotion::TurnMotion(MotionContext ctx, foundation::Radians angle, foundation::RadiansPerSecond max_angular_rate)
-        : TurnMotion(ctx, TurnConfig{
-            .target_angle_rad = angle.value,
-            .max_angular_rate = max_angular_rate.value
-        })
-    {
-    }
-
     TurnMotion::TurnMotion(MotionContext ctx, TurnConfig config)
         : Motion(ctx), cfg_(config)
-        , profiled_pid_(makeProfiledPID(ctx_.pid_config, config))
+        , max_velocity_(computeAngularMaxVelocity(ctx_.pid_config, config))
+        , profiled_pid_(makeProfiledPID(ctx_.pid_config, max_velocity_))
     {
-        if (cfg_.max_angular_rate <= 0.0) cfg_.max_angular_rate = 0.5;
     }
 
     void TurnMotion::start()
@@ -69,11 +60,10 @@ namespace libstp::motion
         profiled_pid_.setGoal(cfg_.target_angle_rad);
 
         LIBSTP_LOG_DEBUG("TurnMotion started: target={:.3f} rad ({:.1f} deg), "
-                    "max_rate={:.3f} rad/s, max_accel={:.3f} rad/s², max_decel={:.3f} rad/s², "
+                    "max_velocity={:.3f} rad/s (scale={:.2f}), "
                     "kP={:.3f}, kI={:.3f}, kD={:.3f}, vel_ff={:.3f}, kS={:.3f}",
                     cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad,
-                    cfg_.max_angular_rate, cfg_.max_angular_acceleration,
-                    cfg_.max_angular_deceleration,
+                    max_velocity_, cfg_.speed_scale,
                     ctx_.pid_config.heading.kp, ctx_.pid_config.heading.ki,
                     ctx_.pid_config.heading.kd, ctx_.pid_config.velocity_ff, cfg_.kS);
     }
@@ -127,7 +117,7 @@ namespace libstp::motion
         }
 
         // Clamp to what the robot can actually achieve
-        omega_cmd = std::clamp(omega_cmd, -cfg_.max_angular_rate, cfg_.max_angular_rate);
+        omega_cmd = std::clamp(omega_cmd, -max_velocity_, max_velocity_);
 
         drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, omega_cmd});
         [[maybe_unused]] const auto mc = drive().update(dt);
