@@ -336,7 +336,7 @@ class CalibrateDistance(UIStep):
             await self._render_screen(driving_screen)
 
             # Execute the drive (with concurrent sensor sampling if enabled)
-            drive_step = _drive_forward_uncalibrated(self.calibration_distance_cm, speed=0.5)
+            drive_step = _drive_forward_uncalibrated(self.calibration_distance_cm)
             sensor_samples: Dict[int, List[float]] = {}
 
             if ir_sensors:

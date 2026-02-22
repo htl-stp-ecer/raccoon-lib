@@ -26,9 +26,6 @@ namespace platform::wombat::core {
             return impl;
         }
 
-        exlcm::scalar_i32_t readMotorValue(int port);
-        exlcm::scalar_i8_t readMotorDir(int port);
-
         exlcm::scalar_i8_t readServoMode(int port);
         exlcm::scalar_i32_t readServoValue(int port);
 
@@ -64,8 +61,6 @@ namespace platform::wombat::core {
 
         // Caches for all sensors values
         std::mutex cache_mutex_;
-        std::unordered_map<int, int32_t> motor_value_cache_;
-        std::unordered_map<int, int8_t> motor_dir_cache_;
         std::unordered_map<int, int8_t> servo_mode_cache_;
         std::unordered_map<int, int32_t> servo_value_cache_;
         std::unordered_map<int, int32_t> bemf_cache_;
@@ -90,8 +85,6 @@ namespace platform::wombat::core {
         void listenLoop();
 
         // Message handlers
-        void handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleMotorDir(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg);
         void handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg);
         void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
         void handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);

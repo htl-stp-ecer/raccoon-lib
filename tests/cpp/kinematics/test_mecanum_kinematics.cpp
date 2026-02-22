@@ -12,8 +12,6 @@ TEST_F(MecanumKinematicsTest, GetWheelRadiusReturnsConstructorValue) {
     constexpr double wheelbase = 0.2;    // 200mm front-to-back
     constexpr double trackWidth = 0.15;  // 150mm side-to-side
     constexpr double wheelRadius = 0.05; // 50mm
-    constexpr double maxVel = 1.0;
-    constexpr double maxAccel = 2.0;
 
     libstp::kinematics::mecanum::MecanumKinematics kinematics(
         motors_[0].get(),  // front_left
@@ -22,9 +20,7 @@ TEST_F(MecanumKinematicsTest, GetWheelRadiusReturnsConstructorValue) {
         motors_[3].get(),  // back_right
         wheelbase,
         trackWidth,
-        wheelRadius,
-        maxVel,
-        maxAccel
+        wheelRadius
     );
 
     // Act
@@ -39,8 +35,6 @@ TEST_F(MecanumKinematicsTest, GetWheelRadiusWithDifferentValue) {
     constexpr double wheelbase = 0.25;
     constexpr double trackWidth = 0.20;
     constexpr double wheelRadius = 0.0375;  // 37.5mm - different wheel size
-    constexpr double maxVel = 0.8;
-    constexpr double maxAccel = 1.5;
 
     libstp::kinematics::mecanum::MecanumKinematics kinematics(
         motors_[0].get(),
@@ -49,9 +43,7 @@ TEST_F(MecanumKinematicsTest, GetWheelRadiusWithDifferentValue) {
         motors_[3].get(),
         wheelbase,
         trackWidth,
-        wheelRadius,
-        maxVel,
-        maxAccel
+        wheelRadius
     );
 
     // Act
@@ -70,9 +62,7 @@ TEST_F(MecanumKinematicsTest, WheelCountIsFour) {
         motors_[3].get(),
         0.2,   // wheelbase
         0.15,  // trackWidth
-        0.05,  // wheelRadius
-        1.0,   // maxVel
-        2.0    // maxAccel
+        0.05   // wheelRadius
     );
 
     // Act & Assert
@@ -88,9 +78,7 @@ TEST_F(MecanumKinematicsTest, SupportsLateralMotionIsTrue) {
         motors_[3].get(),
         0.2,
         0.15,
-        0.05,
-        1.0,
-        2.0
+        0.05
     );
 
     // Act & Assert

@@ -8,13 +8,12 @@ using namespace libstp::test;
 class MotionPidTest : public AlgorithmTestFixture {};
 
 TEST_F(MotionPidTest, ProportionalOnly) {
-    PidConfig cfg{
-        .kp = 2.0,
-        .ki = 0.0,
-        .kd = 0.0,
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 2.0;
+    cfg.ki = 0.0;
+    cfg.kd = 0.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     double output = pid.update(1.0, kDefaultDt);
@@ -22,15 +21,14 @@ TEST_F(MotionPidTest, ProportionalOnly) {
 }
 
 TEST_F(MotionPidTest, IntegralAccumulates) {
-    PidConfig cfg{
-        .kp = 0.0,
-        .ki = 1.0,
-        .kd = 0.0,
-        .integral_max = 100.0,
-        .integral_deadband = 0.0,  // No deadband
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 0.0;
+    cfg.ki = 1.0;
+    cfg.kd = 0.0;
+    cfg.integral_max = 100.0;
+    cfg.integral_deadband = 0.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // First update starts integrating
@@ -42,15 +40,14 @@ TEST_F(MotionPidTest, IntegralAccumulates) {
 }
 
 TEST_F(MotionPidTest, IntegralAntiWindup) {
-    PidConfig cfg{
-        .kp = 0.0,
-        .ki = 1.0,
-        .kd = 0.0,
-        .integral_max = 0.5,  // Clamp at 0.5
-        .integral_deadband = 0.0,
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 0.0;
+    cfg.ki = 1.0;
+    cfg.kd = 0.0;
+    cfg.integral_max = 0.5;
+    cfg.integral_deadband = 0.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // Apply large error for many iterations
@@ -62,15 +59,14 @@ TEST_F(MotionPidTest, IntegralAntiWindup) {
 }
 
 TEST_F(MotionPidTest, IntegralDeadband) {
-    PidConfig cfg{
-        .kp = 0.0,
-        .ki = 1.0,
-        .kd = 0.0,
-        .integral_max = 100.0,
-        .integral_deadband = 0.1,  // Don't integrate if |error| < 0.1
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 0.0;
+    cfg.ki = 1.0;
+    cfg.kd = 0.0;
+    cfg.integral_max = 100.0;
+    cfg.integral_deadband = 0.1;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // Error within deadband - should not integrate
@@ -86,14 +82,13 @@ TEST_F(MotionPidTest, IntegralDeadband) {
 }
 
 TEST_F(MotionPidTest, DerivativeFiltering) {
-    PidConfig cfg{
-        .kp = 0.0,
-        .ki = 0.0,
-        .kd = 1.0,
-        .derivative_lpf_alpha = 0.5,  // 50% filtering
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 0.0;
+    cfg.ki = 0.0;
+    cfg.kd = 1.0;
+    cfg.derivative_lpf_alpha = 0.5;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // First update establishes baseline
@@ -109,13 +104,12 @@ TEST_F(MotionPidTest, DerivativeFiltering) {
 }
 
 TEST_F(MotionPidTest, OutputSaturation) {
-    PidConfig cfg{
-        .kp = 100.0,  // Very high gain
-        .ki = 0.0,
-        .kd = 0.0,
-        .output_min = -5.0,
-        .output_max = 5.0
-    };
+    PidConfig cfg;
+    cfg.kp = 100.0;
+    cfg.ki = 0.0;
+    cfg.kd = 0.0;
+    cfg.output_min = -5.0;
+    cfg.output_max = 5.0;
     PidController pid(cfg);
 
     // Large positive error
@@ -128,13 +122,12 @@ TEST_F(MotionPidTest, OutputSaturation) {
 }
 
 TEST_F(MotionPidTest, Reset) {
-    PidConfig cfg{
-        .kp = 1.0,
-        .ki = 1.0,
-        .kd = 1.0,
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 1.0;
+    cfg.ki = 1.0;
+    cfg.kd = 1.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // Build up some state
@@ -152,13 +145,12 @@ TEST_F(MotionPidTest, Reset) {
 }
 
 TEST_F(MotionPidTest, ZeroDtReturnsZero) {
-    PidConfig cfg{
-        .kp = 1.0,
-        .ki = 1.0,
-        .kd = 1.0,
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 1.0;
+    cfg.ki = 1.0;
+    cfg.kd = 1.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // Zero dt should return 0 to avoid division issues
@@ -167,13 +159,12 @@ TEST_F(MotionPidTest, ZeroDtReturnsZero) {
 }
 
 TEST_F(MotionPidTest, NegativeDtReturnsZero) {
-    PidConfig cfg{
-        .kp = 1.0,
-        .ki = 1.0,
-        .kd = 1.0,
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 1.0;
+    cfg.ki = 1.0;
+    cfg.kd = 1.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // Negative dt should return 0
@@ -182,13 +173,12 @@ TEST_F(MotionPidTest, NegativeDtReturnsZero) {
 }
 
 TEST_F(MotionPidTest, SetGains) {
-    PidConfig cfg{
-        .kp = 1.0,
-        .ki = 0.0,
-        .kd = 0.0,
-        .output_min = -100.0,
-        .output_max = 100.0
-    };
+    PidConfig cfg;
+    cfg.kp = 1.0;
+    cfg.ki = 0.0;
+    cfg.kd = 0.0;
+    cfg.output_min = -100.0;
+    cfg.output_max = 100.0;
     PidController pid(cfg);
 
     // Original gain
