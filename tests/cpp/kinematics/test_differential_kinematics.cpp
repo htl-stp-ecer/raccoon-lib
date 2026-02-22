@@ -11,16 +11,12 @@ TEST_F(DifferentialKinematicsTest, GetWheelRadiusReturnsConstructorValue) {
     // Arrange
     constexpr double wheelbase = 0.2;  // 200mm
     constexpr double wheelRadius = 0.05;  // 50mm
-    constexpr double maxVel = 1.0;
-    constexpr double maxAccel = 2.0;
 
     libstp::kinematics::differential::DifferentialKinematics kinematics(
         motors_[0].get(),
         motors_[1].get(),
         wheelbase,
-        wheelRadius,
-        maxVel,
-        maxAccel
+        wheelRadius
     );
 
     // Act
@@ -34,16 +30,12 @@ TEST_F(DifferentialKinematicsTest, GetWheelRadiusWithDifferentValue) {
     // Arrange
     constexpr double wheelbase = 0.15;
     constexpr double wheelRadius = 0.0325;  // 32.5mm - typical small wheel
-    constexpr double maxVel = 0.5;
-    constexpr double maxAccel = 1.0;
 
     libstp::kinematics::differential::DifferentialKinematics kinematics(
         motors_[0].get(),
         motors_[1].get(),
         wheelbase,
-        wheelRadius,
-        maxVel,
-        maxAccel
+        wheelRadius
     );
 
     // Act
@@ -59,9 +51,7 @@ TEST_F(DifferentialKinematicsTest, WheelCountIsTwo) {
         motors_[0].get(),
         motors_[1].get(),
         0.2,  // wheelbase
-        0.05, // wheelRadius
-        1.0,  // maxVel
-        2.0   // maxAccel
+        0.05  // wheelRadius
     );
 
     // Act & Assert
@@ -74,9 +64,7 @@ TEST_F(DifferentialKinematicsTest, SupportsLateralMotionIsFalse) {
         motors_[0].get(),
         motors_[1].get(),
         0.2,
-        0.05,
-        1.0,
-        2.0
+        0.05
     );
 
     // Act & Assert

@@ -46,15 +46,6 @@ LcmReader::LcmReader() {
         throw std::runtime_error("[LCM-Reader] Failed to initialize LCM");
     }
 
-    // Note: Motor value and direction are echoed back from the hardware
-    // These subscriptions allow us to read what was actually set
-    for (int port = 0; port < 4; ++port) {
-        lcm_.subscribe("libstp/motor/" + std::to_string(port) + "/value",
-                      &LcmReader::handleMotorValue, this);
-        lcm_.subscribe("libstp/motor/" + std::to_string(port) + "/direction",
-                      &LcmReader::handleMotorDir, this);
-    }
-
     // Subscribe to all servo topics (assuming ports 0-3)
     for (int port = 0; port < 4; ++port) {
         lcm_.subscribe("libstp/servo/" + std::to_string(port) + "/mode",
@@ -200,24 +191,6 @@ void LcmReader::listenLoop() {
 }
 
 // Message handlers with channel parsing
-void LcmReader::handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        motor_value_cache_[port] = msg->value;
-    }
-}
-
-void LcmReader::handleMotorDir(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        motor_dir_cache_[port] = msg->dir;
-    }
-}
-
 void LcmReader::handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
     logAge(channel, msg->timestamp);
     int port = parsePort(channel);
@@ -324,22 +297,6 @@ void LcmReader::handleTemp(const lcm::ReceiveBuffer*, const std::string& channel
 }
 
 // Read methods - return cached values
-exlcm::scalar_i32_t LcmReader::readMotorValue(int port) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i32_t result;
-    auto it = motor_value_cache_.find(port);
-    result.value = (it != motor_value_cache_.end()) ? it->second : 0;
-    return result;
-}
-
-exlcm::scalar_i8_t LcmReader::readMotorDir(int port) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i8_t result;
-    auto it = motor_dir_cache_.find(port);
-    result.dir = (it != motor_dir_cache_.end()) ? it->second : 0;
-    return result;
-}
-
 exlcm::scalar_i8_t LcmReader::readServoMode(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     exlcm::scalar_i8_t result;

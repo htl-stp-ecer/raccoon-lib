@@ -39,6 +39,11 @@ from .lineup import (
     strafe_right_lineup_on_white,
     strafe_left_lineup_on_black,
     strafe_left_lineup_on_white,
+    CorrectionSide,
+    SingleSensorCrossing,
+    SingleSensorLineupConfig,
+    forward_single_lineup,
+    backward_single_lineup,
 )
 from .wall_align import (
     WallAlign,
@@ -51,14 +56,24 @@ from .wall_align import (
 from .line_follow import (
     LineFollow,
     LineFollowConfig,
+    LineSide,
     SingleSensorLineFollow,
     SingleLineFollowConfig,
     follow_line,
     follow_line_until_both_black,
     follow_line_single,
 )
+from .at_distance import WaitUntilDistance, wait_until_distance
 from .tune_drive import TuneDrive, tune_drive
 from .characterize_drive import CharacterizeDrive, characterize_drive
+from .auto_tune import (
+    AutoTune,
+    AutoTuneVelocity,
+    AutoTuneMotion,
+    auto_tune,
+    auto_tune_velocity,
+    auto_tune_motion,
+)
 
 __all__ = [
     # Base
@@ -111,6 +126,11 @@ __all__ = [
     "strafe_right_lineup_on_white",
     "strafe_left_lineup_on_black",
     "strafe_left_lineup_on_white",
+    "CorrectionSide",
+    "SingleSensorCrossing",
+    "SingleSensorLineupConfig",
+    "forward_single_lineup",
+    "backward_single_lineup",
     # Wall align
     "WallAlign",
     "WallDirection",
@@ -121,16 +141,27 @@ __all__ = [
     # Line follow
     "LineFollow",
     "LineFollowConfig",
+    "LineSide",
     "SingleSensorLineFollow",
     "SingleLineFollowConfig",
     "follow_line",
     "follow_line_until_both_black",
     "follow_line_single",
     "lineup",
+    # Distance wait
+    "WaitUntilDistance",
+    "wait_until_distance",
     # Drive telemetry
     "TuneDrive",
     "tune_drive",
     # Drive characterization
     "CharacterizeDrive",
     "characterize_drive",
+    # Auto-tune PID
+    "AutoTune",
+    "AutoTuneVelocity",
+    "AutoTuneMotion",
+    "auto_tune",
+    "auto_tune_velocity",
+    "auto_tune_motion",
 ]

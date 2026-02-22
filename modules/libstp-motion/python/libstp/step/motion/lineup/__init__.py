@@ -11,6 +11,13 @@ from .strafe import (
     strafe_left_lineup_on_black,
     strafe_left_lineup_on_white,
 )
+from .single import (
+    CorrectionSide,
+    SingleSensorCrossing,
+    SingleSensorLineupConfig,
+    forward_single_lineup,
+    backward_single_lineup,
+)
 
 __all__ = [
     "lineup",
@@ -22,4 +29,9 @@ __all__ = [
     "strafe_right_lineup_on_white",
     "strafe_left_lineup_on_black",
     "strafe_left_lineup_on_white",
+    "CorrectionSide",
+    "SingleSensorCrossing",
+    "SingleSensorLineupConfig",
+    "forward_single_lineup",
+    "backward_single_lineup",
 ]

@@ -5,6 +5,7 @@ This module provides steps for following lines using one or two IR sensors
 with PID-based steering control.
 """
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from libstp.foundation import ChassisVelocity, PidConfig, PidController
@@ -33,15 +34,29 @@ class LineFollowConfig:
     both_black_threshold: float = 0.7  # threshold for "both black" stop condition
 
 
+class LineSide(Enum):
+    """Which edge of the line to track with a single sensor."""
+    LEFT = "left"
+    RIGHT = "right"
+
+
 @dataclass
 class SingleLineFollowConfig:
-    """Configuration for single-sensor line following."""
+    """Configuration for single-sensor line following.
+
+    The sensor tracks the edge of a line using PID control.
+    ``side`` selects which edge: LEFT means the sensor approaches
+    from the left (steers right when it sees black), RIGHT is the
+    opposite.
+    """
     sensor: IRSensor
     forward_speed: float  # m/s
-    distance_cm: float
-    threshold: float = 0.5  # black confidence above this = on line
-    rotation_gain: float = 0.25  # how much to rotate based on error
-    strafe_gain: float = 0.05  # how much to strafe based on error
+    distance_cm: float  # distance to follow
+    side: LineSide = LineSide.LEFT
+    kp: float = 1.0
+    ki: float = 0.0
+    kd: float = 0.3
+    forward_reduction: float = 0.5  # slow down proportional to |steering|
 
 
 @dsl(hidden=True)
@@ -123,54 +138,70 @@ class LineFollow(MotionStep):
 @dsl(hidden=True)
 class SingleSensorLineFollow(MotionStep):
     """
-    Follow a line using a single IR sensor.
+    Follow a line using a single IR sensor with PID edge-tracking.
 
-    Uses the sensor's black confidence relative to a threshold to determine
-    steering direction. Simpler than two-sensor following but less accurate.
+    The sensor targets the edge of the line (probabilityOfBlack ≈ 0.5).
+    PID drives angular velocity to keep the sensor on that edge.
+    ``side`` determines which edge is tracked (flips the error sign).
+
+    Terminates after traveling ``distance_cm``.
     """
 
     def __init__(self, config: SingleLineFollowConfig):
         super().__init__()
         self.config = config
+        self._pid: PidController | None = None
         self._target_distance_m: float = 0.0
 
     def _generate_signature(self) -> str:
         return (
             f"SingleSensorLineFollow(distance={self.config.distance_cm:.1f}cm, "
-            f"speed={self.config.forward_speed:.2f})"
+            f"side={self.config.side.value}, speed={self.config.forward_speed:.2f})"
         )
 
     def to_simulation_step(self) -> SimulationStep:
         base = super().to_simulation_step()
-        distance_m = self.config.distance_cm / 100.0
         base.delta = SimulationStepDelta(
-            forward=distance_m,
+            forward=self.config.distance_cm / 100.0,
             strafe=0.0,
             angular=0.0,
         )
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
-        self._target_distance_m = self.config.distance_cm / 100.0
+        cfg = self.config
+        self._pid = PidController(PidConfig(kp=cfg.kp, ki=cfg.ki, kd=cfg.kd))
+        self._target_distance_m = cfg.distance_cm / 100.0
         robot.odometry.reset()
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
-        # Check distance
+        cfg = self.config
+
+        # --- stop condition: distance traveled ---
         current_pose = robot.odometry.get_pose()
-        traveled = abs(current_pose.position[0])  # x is forward
+        traveled = abs(current_pose.position[0])
         if traveled >= self._target_distance_m:
             return True
 
-        # Calculate error relative to threshold
-        confidence = self.config.sensor.probabilityOfBlack()
-        error = confidence - self.config.threshold
+        # --- edge-tracking error ---
+        # 0.5 = edge of line; positive error = too far onto the black
+        error = cfg.sensor.probabilityOfBlack() - 0.5
+        if cfg.side == LineSide.RIGHT:
+            error = -error
 
-        # Apply gains
-        rotation = self.config.rotation_gain * error
-        strafe = -self.config.strafe_gain * error
+        # --- PID steering ---
+        wz = self._pid.update(error, dt)
 
-        velocity = ChassisVelocity(self.config.forward_speed, strafe, rotation)
-        robot.drive.set_velocity(velocity)
+        # reduce forward speed when steering hard
+        speed_factor = 1.0 - min(abs(wz) * cfg.forward_reduction, 0.8)
+        vx = cfg.forward_speed * speed_factor
+
+        self.debug(
+            f"LineFollow1: black={cfg.sensor.probabilityOfBlack():.2f} "
+            f"err={error:.2f} wz={wz:.2f} vx={vx:.2f}"
+        )
+
+        robot.drive.set_velocity(ChassisVelocity(vx, 0.0, wz))
         robot.drive.update(dt)
         return False
 
@@ -258,21 +289,26 @@ def follow_line_until_both_black(
 def follow_line_single(
     sensor: IRSensor,
     distance_cm: float,
-    forward_speed: float,
-    threshold: float = 0.5,
-    rotation_gain: float = 0.25,
-    strafe_gain: float = 0.05,
+    forward_speed: float = 0.5,
+    side: LineSide = LineSide.LEFT,
+    kp: float = 1.0,
+    ki: float = 0.0,
+    kd: float = 0.3,
+    forward_reduction: float = 0.5,
 ) -> SingleSensorLineFollow:
     """
     Follow a line using a single sensor for a specified distance.
+
+    The sensor tracks the edge of the line (where probabilityOfBlack ≈ 0.5).
+    ``side`` selects which edge to follow.
 
     Args:
         sensor: The IR sensor instance
         distance_cm: Distance to follow in centimeters
         forward_speed: Forward speed in m/s
-        threshold: Black confidence above this = on line
-        rotation_gain: How much to rotate based on error
-        strafe_gain: How much to strafe based on error
+        side: Which edge to track (LEFT or RIGHT)
+        kp, ki, kd: PID gains for steering
+        forward_reduction: Slow down by this fraction of |steering| on curves
 
     Returns:
         SingleSensorLineFollow step
@@ -280,9 +316,9 @@ def follow_line_single(
     config = SingleLineFollowConfig(
         sensor=sensor,
         forward_speed=forward_speed,
+        side=side,
         distance_cm=distance_cm,
-        threshold=threshold,
-        rotation_gain=rotation_gain,
-        strafe_gain=strafe_gain,
+        kp=kp, ki=ki, kd=kd,
+        forward_reduction=forward_reduction,
     )
     return SingleSensorLineFollow(config)
