@@ -42,5 +42,8 @@ namespace libstp::motion
         double prev_heading_{0.0};
         double filtered_velocity_{0.0};
         static constexpr double kVelocityFilterAlpha{0.3};
+
+        // Diagnostic counter
+        int cycle_{0};
     };
 }

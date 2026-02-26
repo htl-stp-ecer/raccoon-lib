@@ -14,8 +14,6 @@ namespace libstp::test
         MOCK_METHOD(odometry::DistanceFromOrigin, getDistanceFromOrigin, (), (const, override));
         MOCK_METHOD(double, getHeading, (), (const, override));
         MOCK_METHOD(double, getHeadingError, (double target_heading_rad), (const, override));
-        MOCK_METHOD(Eigen::Vector3f, transformToBodyFrame, (const Eigen::Vector3f& world_vec), (const, override));
-        MOCK_METHOD(Eigen::Vector3f, transformToWorldFrame, (const Eigen::Vector3f& body_vec), (const, override));
         MOCK_METHOD(void, reset, (const foundation::Pose& pose), (override));
         MOCK_METHOD(void, reset, (), (override));
 
@@ -48,12 +46,6 @@ namespace libstp::test
             setHeading(0.0);
             setHeadingError(0.0);
             setPose(foundation::Pose{});
-
-            // Identity transforms by default
-            ON_CALL(*this, transformToBodyFrame(testing::_))
-                .WillByDefault(testing::ReturnArg<0>());
-            ON_CALL(*this, transformToWorldFrame(testing::_))
-                .WillByDefault(testing::ReturnArg<0>());
         }
 
     private:

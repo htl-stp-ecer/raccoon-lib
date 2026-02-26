@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "motion/motion.hpp"
@@ -63,6 +64,11 @@ namespace libstp::motion
 
         [[nodiscard]] const std::vector<LinearMotionTelemetry>& getTelemetry() const { return telemetry_; }
 
+        /// Override the internal heading PID with an external omega value.
+        /// Set each cycle before calling update(). Persists until cleared.
+        void setOmegaOverride(double omega) { omega_override_ = omega; }
+        void clearOmegaOverride() { omega_override_.reset(); }
+
     private:
         void complete();
 
@@ -81,6 +87,9 @@ namespace libstp::motion
         double filtered_velocity_{0.0};
         static constexpr double kVelocityFilterAlpha{0.3};
         static constexpr double kSettlingVelocity{0.02}; // m/s - must be nearly stopped to declare done
+
+        // External omega override (replaces heading PID when set)
+        std::optional<double> omega_override_{};
 
         // Telemetry
         double elapsed_time_{0.0};

@@ -82,6 +82,27 @@ void LcmDataWriter::setShutdown(bool enabled) {
     lcm.publish("libstp/system/shutdown_cmd", &shutdownCmd);
 }
 
+void LcmDataWriter::setImuGyroOrientation(const int8_t matrix[9]) {
+    exlcm::orientation_matrix_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    for (int i = 0; i < 9; ++i) msg.m[i] = matrix[i];
+    lcm.publish("libstp/imu/gyro_orientation_cmd", &msg);
+}
+
+void LcmDataWriter::setImuCompassOrientation(const int8_t matrix[9]) {
+    exlcm::orientation_matrix_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    for (int i = 0; i < 9; ++i) msg.m[i] = matrix[i];
+    lcm.publish("libstp/imu/compass_orientation_cmd", &msg);
+}
+
+void LcmDataWriter::setAxisRemap(const int8_t matrix[9]) {
+    exlcm::orientation_matrix_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    for (int i = 0; i < 9; ++i) msg.m[i] = matrix[i];
+    lcm.publish("libstp/imu/axis_remap_cmd", &msg);
+}
+
 LcmDataWriter::LcmDataWriter() {
     if (!lcm.good()) {
         throw std::runtime_error("[LCM-Writer] Failed to initialize LCM");

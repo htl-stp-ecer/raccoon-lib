@@ -83,20 +83,6 @@ namespace libstp::odometry
         [[nodiscard]] virtual double getHeadingError(double target_heading_rad) const = 0;
 
         /**
-         * Transform a vector from world frame to body frame
-         * @param world_vec Vector in world coordinates
-         * @return Vector in body coordinates (forward=x, left=y, up=z)
-         */
-        [[nodiscard]] virtual Eigen::Vector3f transformToBodyFrame(const Eigen::Vector3f& world_vec) const = 0;
-
-        /**
-         * Transform a vector from body frame to world frame
-         * @param body_vec Vector in body coordinates (forward=x, left=y, up=z)
-         * @return Vector in world coordinates
-         */
-        [[nodiscard]] virtual Eigen::Vector3f transformToWorldFrame(const Eigen::Vector3f& body_vec) const = 0;
-
-        /**
          * Reset the odometry to a given pose
          * @param pose Initial pose to reset to
          */

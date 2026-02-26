@@ -5,6 +5,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <memory>
+#include <string>
 
 #include "odometry/fused/fused_odometry.hpp"
 #include "hal/IMU.hpp"
@@ -39,16 +40,20 @@ PYBIND11_MODULE(odometry_fused, m)
     // FusedOdometryConfig struct
     py::class_<libstp::odometry::fused::FusedOdometryConfig>(m, "FusedOdometryConfig",
             "Configuration for FusedOdometry.")
-        .def(py::init<int, bool, float>(),
+        .def(py::init<int, bool, float, std::string>(),
              py::arg("imu_ready_timeout_ms") = 1000,
              py::arg("enable_accel_fusion") = true,
-             py::arg("bemf_trust") = 0.95f)
+             py::arg("bemf_trust") = 0.95f,
+             py::arg("turn_axis") = "world_z")
         .def_readwrite("imu_ready_timeout_ms", &libstp::odometry::fused::FusedOdometryConfig::imu_ready_timeout_ms,
                       "Timeout waiting for IMU to be ready (milliseconds, default: 1000)")
         .def_readwrite("enable_accel_fusion", &libstp::odometry::fused::FusedOdometryConfig::enable_accel_fusion,
                       "Enable complementary filter fusing BEMF + IMU accel (default: true)")
         .def_readwrite("bemf_trust", &libstp::odometry::fused::FusedOdometryConfig::bemf_trust,
-                      "Complementary filter alpha: 1.0 = pure BEMF, 0.0 = pure IMU (default: 0.95)");
+                      "Complementary filter alpha: 1.0 = pure BEMF, 0.0 = pure IMU (default: 0.95)")
+        .def_readwrite("turn_axis", &libstp::odometry::fused::FusedOdometryConfig::turn_axis,
+                      "Yaw rate axis: 'world_z' (default), 'body_x', 'body_y', or 'body_z'. "
+                      "Use a body axis when the robot's up-axis is not body Z.");
 
     py::class_<libstp::odometry::fused::FusedOdometry, libstp::odometry::IOdometry,
                 std::shared_ptr<libstp::odometry::fused::FusedOdometry>>(
@@ -99,20 +104,6 @@ PYBIND11_MODULE(odometry_fused, m)
              "Returns:\n"
              "    Signed angular error in radians [-π, π].\n"
              "    Positive = turn CCW, negative = turn CW")
-        .def("transform_to_body_frame", &libstp::odometry::fused::FusedOdometry::transformToBodyFrame,
-             py::arg("world_vec"),
-             "Transform vector from world frame to body frame.\n\n"
-             "Args:\n"
-             "    world_vec: 3D vector in world coordinates\n\n"
-             "Returns:\n"
-             "    Vector in body coordinates (forward=x, left=y, up=z)")
-        .def("transform_to_world_frame", &libstp::odometry::fused::FusedOdometry::transformToWorldFrame,
-             py::arg("body_vec"),
-             "Transform vector from body frame to world frame.\n\n"
-             "Args:\n"
-             "    body_vec: 3D vector in body coordinates\n\n"
-             "Returns:\n"
-             "    Vector in world coordinates")
         .def("reset", py::overload_cast<const libstp::foundation::Pose&>(&libstp::odometry::fused::FusedOdometry::reset),
              py::arg("pose"),
              "Reset odometry to a specific pose.\n\n"

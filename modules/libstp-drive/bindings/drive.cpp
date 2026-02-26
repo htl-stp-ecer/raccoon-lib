@@ -45,6 +45,9 @@ void init_drive(const py::module& m)
         .def("soft_stop", &libstp::drive::Drive::softStop)
         .def("hard_stop", &libstp::drive::Drive::hardStop)
         .def("set_velocity_control_config", &libstp::drive::Drive::setVelocityControlConfig, py::arg("config"))
+        .def("get_velocity_control_config", &libstp::drive::Drive::getVelocityControlConfig,
+             py::return_value_policy::copy,
+             "Get the current velocity control config (copy)")
         .def("reset_velocity_controllers", &libstp::drive::Drive::resetVelocityControllers)
         .def("get_wheel_radius", &libstp::drive::Drive::getWheelRadius,
              "Get the wheel radius from kinematics in meters")

@@ -245,6 +245,7 @@ void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string& 
     orientation_cache_ = *msg;
     imu_orientation_received_ = true;
 }
+
 void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
     logAge(channel, msg->timestamp);
     int idx = parsePort(channel);
@@ -337,6 +338,7 @@ exlcm::quaternion_t LcmReader::readOrientation() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return orientation_cache_;
 }
+
 exlcm::scalar_i32_t LcmReader::readBemf(const int idx) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     exlcm::scalar_i32_t result;

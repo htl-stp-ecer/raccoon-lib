@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 #include "odometry/odometry.hpp"
 #include "hal/IIMU.hpp"
@@ -20,12 +21,22 @@ namespace libstp::odometry::fused
         bool enable_accel_fusion;
         float bemf_trust;
 
-        FusedOdometryConfig(int imu_ready_timeout_ms = 1000,
-                            bool enable_accel_fusion = true,
-                            float bemf_trust = 0.95f)
+        /// Which axis to use for yaw rate extraction.
+        /// "world_z" (default) rotates body gyro to world frame via quaternion.
+        /// "body_x", "body_y", "body_z" use the raw body-frame gyro component directly,
+        /// useful when the robot is mounted with a non-Z axis pointing up (e.g. body_y
+        /// for a robot standing on its side) since this avoids dependence on DMP
+        /// quaternion convergence.
+        std::string turn_axis;
+
+        FusedOdometryConfig(const int imu_ready_timeout_ms = 1000,
+                            const bool enable_accel_fusion = true,
+                            const float bemf_trust = 0.95f,
+                            std::string turn_axis = "world_z")
             : imu_ready_timeout_ms(imu_ready_timeout_ms)
             , enable_accel_fusion(enable_accel_fusion)
             , bemf_trust(bemf_trust)
+            , turn_axis(std::move(turn_axis))
         {}
     };
 
@@ -63,6 +74,7 @@ namespace libstp::odometry::fused
 
         // IMU initialization
         Eigen::Quaternionf initial_imu_orientation_; // Raw IMU orientation at first update
+        Eigen::Quaternionf last_raw_imu_orientation_; // Latest raw IMU orientation (for heading)
         bool imu_initialized_;
 
         // Complementary filter state
@@ -88,8 +100,6 @@ namespace libstp::odometry::fused
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override;
         [[nodiscard]] double getHeading() const override;
         [[nodiscard]] double getHeadingError(double target_heading_rad) const override;
-        [[nodiscard]] Eigen::Vector3f transformToBodyFrame(const Eigen::Vector3f& world_vec) const override;
-        [[nodiscard]] Eigen::Vector3f transformToWorldFrame(const Eigen::Vector3f& body_vec) const override;
         void reset(const foundation::Pose& pose) override;
         void reset() override;
     };
