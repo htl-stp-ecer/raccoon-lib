@@ -40,22 +40,41 @@ namespace libstp::hal::imu
         return mode;
     }
 
-    inline TurnAxisMode parseTurnAxisMode(const std::string& mode)
+    struct TurnAxisConfig
     {
-        const std::string normalized = normalizeTurnAxisMode(mode);
+        TurnAxisMode mode{TurnAxisMode::WorldZ};
+        float sign{1.0f}; // +1 or -1
+    };
+
+    inline TurnAxisConfig parseTurnAxisConfig(const std::string& mode)
+    {
+        // Check for leading '-' to negate the axis
+        float sign = 1.0f;
+        std::string rest = mode;
+        if (!rest.empty() && rest[0] == '-') {
+            sign = -1.0f;
+            rest = rest.substr(1);
+        }
+
+        const std::string normalized = normalizeTurnAxisMode(rest);
 
         if (normalized.empty() || normalized == "world_z" || normalized == "yaw" || normalized == "heading")
-            return TurnAxisMode::WorldZ;
+            return {TurnAxisMode::WorldZ, sign};
         if (normalized == "body_x" || normalized == "x")
-            return TurnAxisMode::BodyX;
+            return {TurnAxisMode::BodyX, sign};
         if (normalized == "body_y" || normalized == "y")
-            return TurnAxisMode::BodyY;
+            return {TurnAxisMode::BodyY, sign};
         if (normalized == "body_z" || normalized == "z")
-            return TurnAxisMode::BodyZ;
+            return {TurnAxisMode::BodyZ, sign};
 
         throw std::invalid_argument(
             "Invalid turn axis mode '" + mode +
-            "'. Expected one of: world_z, body_x, body_y, body_z");
+            "'. Expected one of: [-]world_z, [-]body_x, [-]body_y, [-]body_z");
+    }
+
+    inline TurnAxisMode parseTurnAxisMode(const std::string& mode)
+    {
+        return parseTurnAxisConfig(mode).mode;
     }
 
     inline TurnAxisMode parseBodyAxisMode(const std::string& mode)
@@ -97,11 +116,14 @@ namespace libstp::hal::imu
         void setYawRateAxisMode(const TurnAxisMode mode)
         {
             yaw_rate_axis_mode_ = mode;
+            yaw_rate_sign_ = 1.0f;
         }
 
         void setYawRateAxisMode(const std::string& mode)
         {
-            yaw_rate_axis_mode_ = parseTurnAxisMode(mode);
+            const auto cfg = parseTurnAxisConfig(mode);
+            yaw_rate_axis_mode_ = cfg.mode;
+            yaw_rate_sign_ = cfg.sign;
         }
 
         [[nodiscard]] TurnAxisMode getYawRateAxisMode() const
@@ -127,21 +149,23 @@ namespace libstp::hal::imu
             getAngularVelocity(g);
             const Eigen::Vector3f gyro_body(g[0], g[1], g[2]);
 
+            float rate = 0.0f;
             switch (yaw_rate_axis_mode_)
             {
                 case TurnAxisMode::BodyX:
-                    return gyro_body.x();
+                    rate = gyro_body.x(); break;
                 case TurnAxisMode::BodyY:
-                    return gyro_body.y();
+                    rate = gyro_body.y(); break;
                 case TurnAxisMode::BodyZ:
-                    return gyro_body.z();
+                    rate = gyro_body.z(); break;
                 case TurnAxisMode::WorldZ:
                 default:
                 {
                     const Eigen::Vector3f gyro_world = getOrientation() * gyro_body;
-                    return gyro_world.z();
+                    rate = gyro_world.z(); break;
                 }
             }
+            return yaw_rate_sign_ * rate;
         }
 
         /**
@@ -167,5 +191,6 @@ namespace libstp::hal::imu
 
     private:
         TurnAxisMode yaw_rate_axis_mode_{TurnAxisMode::WorldZ};
+        float yaw_rate_sign_{1.0f};
     };
 }
