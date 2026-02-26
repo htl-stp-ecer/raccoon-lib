@@ -7,12 +7,10 @@
 #include <exlcm/scalar_i8_t.hpp>
 #include <exlcm/scalar_i32_t.hpp>
 #include <exlcm/scalar_f_t.hpp>
+#include <exlcm/orientation_matrix_t.hpp>
 #include "lcm/lcm-cpp.hpp"
 
-#include <unordered_map>
-#include <vector>
 #include <string>
-#include <cstring>
 
 namespace platform::wombat::core
 {
@@ -43,29 +41,17 @@ namespace platform::wombat::core
         // This is the safest way to ensure motors stop on program exit/crash.
         void setShutdown(bool enabled);
 
+        // IMU orientation matrix commands
+        void setImuGyroOrientation(const int8_t matrix[9]);
+        void setImuCompassOrientation(const int8_t matrix[9]);
+
+        // Body-to-world axis remap (applied in data-reader before LCM publish)
+        void setAxisRemap(const int8_t matrix[9]);
+
     private:
         explicit LcmDataWriter();
         ~LcmDataWriter() = default;
 
         lcm::LCM lcm;
-
-        std::unordered_map<std::string, std::vector<uint8_t>> lastMsgs;
-
-        template <typename Msg>
-        bool publishIfChanged(const std::string& channel, const Msg& msg)
-        {
-            const auto* bytes = reinterpret_cast<const uint8_t*>(&msg);
-            const size_t size = sizeof(Msg);
-
-            auto& cached = lastMsgs[channel];
-            if (cached.size() == size && std::memcmp(cached.data(), bytes, size) == 0)
-            {
-                return false;
-            }
-
-            cached.assign(bytes, bytes + size);
-            lcm.publish(channel, &msg);
-            return true;
-        }
     };
 }

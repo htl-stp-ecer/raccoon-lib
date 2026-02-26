@@ -21,10 +21,16 @@ namespace libstp::odometry::fused
         , origin_position_(Eigen::Vector3f::Zero())
         , origin_orientation_(Eigen::Quaternionf::Identity())
         , initial_imu_orientation_(Eigen::Quaternionf::Identity())
+        , last_raw_imu_orientation_(Eigen::Quaternionf::Identity())
         , imu_initialized_(false)
     {
         if (!imu_) throw std::invalid_argument("imu cannot be null");
         if (!kinematics_) throw std::invalid_argument("kinematics cannot be null");
+
+        // Configure which axis to use for yaw rate extraction.
+        // "world_z" rotates body gyro via quaternion (requires converged DMP tilt).
+        // "body_x/y/z" uses raw body-frame gyro component directly (no quaternion needed).
+        imu_->setYawRateAxisMode(config_.turn_axis);
 
         // Wait for IMU to receive initial data from coprocessor
         if (!imu_->waitForReady(config_.imu_ready_timeout_ms)) {
@@ -72,63 +78,67 @@ namespace libstp::odometry::fused
         }
 
         const Eigen::Quaternionf raw_imu = imu_->getOrientation();
+        last_raw_imu_orientation_ = raw_imu;
         const Eigen::Quaternionf relative_orientation = getRelativeOrientation();
         orientation_ = origin_orientation_ * relative_orientation;
         orientation_.normalize();
 
-        LIBSTP_LOG_TRACE(
-            "FusedOdometry::update [IMU] raw_quat=({:.4f}, {:.4f}, {:.4f}, {:.4f}), "
-            "initial_quat=({:.4f}, {:.4f}, {:.4f}, {:.4f}), "
-            "relative_yaw={:.4f} rad ({:.2f} deg), heading={:.4f} rad ({:.2f} deg)",
+        LIBSTP_LOG_DEBUG(
+            "ODOM [IMU] q=({:.4f},{:.4f},{:.4f},{:.4f}) q0=({:.4f},{:.4f},{:.4f},{:.4f}) "
+            "hdg={:.2f}deg hdg0={:.2f}deg delta={:.2f}deg final={:.2f}deg",
             raw_imu.w(), raw_imu.x(), raw_imu.y(), raw_imu.z(),
             initial_imu_orientation_.w(), initial_imu_orientation_.x(),
             initial_imu_orientation_.y(), initial_imu_orientation_.z(),
-            extractYaw(relative_orientation),
-            extractYaw(relative_orientation) * 180.0 / M_PI,
-            getHeading(),
+            extractHeading(raw_imu) * 180.0 / M_PI,
+            extractHeading(initial_imu_orientation_) * 180.0 / M_PI,
+            wrapAngle(extractHeading(raw_imu) - extractHeading(initial_imu_orientation_)) * 180.0 / M_PI,
             getHeading() * 180.0 / M_PI
         );
 
-        // ===== BEMF velocity (read at control loop rate ~20Hz) =====
+        // ===== BEMF velocity (body frame, read at control loop rate ~20Hz) =====
 
         const foundation::ChassisVelocity body_velocity_raw = kinematics_->estimateState();
-        const Eigen::Vector3f v_bemf(body_velocity_raw.vx, body_velocity_raw.vy, 0.0f);
-        Eigen::Vector3f v_body = v_bemf;
+        const Eigen::Vector3f v_bemf_body(body_velocity_raw.vx, body_velocity_raw.vy, 0.0f);
 
         LIBSTP_LOG_DEBUG(
             "FusedOdometry::update [BEMF] dt={:.4f} v_bemf=({:.4f}, {:.4f}) wz={:.4f}",
-            dt, v_bemf.x(), v_bemf.y(), body_velocity_raw.wz
+            dt, v_bemf_body.x(), v_bemf_body.y(), body_velocity_raw.wz
         );
 
+        // Rotate BEMF to world frame
+        const Eigen::Vector3f v_bemf_world = orientation_ * v_bemf_body;
+
         // ===== COMPLEMENTARY FILTER with firmware-integrated accel velocity =====
+        // Accel velocity from firmware is already in world frame
+
+        Eigen::Vector3f v_world = v_bemf_world;
 
         if (config_.enable_accel_fusion && fusion_initialized_) {
             float vel[3];
             imu_->getIntegratedVelocity(vel);
-            const Eigen::Vector3f v_accel(vel[0], vel[1], 0.0f);
+            const Eigen::Vector3f v_accel_world(vel[0], vel[1], 0.0f);
 
             const float alpha = std::clamp(config_.bemf_trust, 0.0f, 1.0f);
-            v_body = alpha * v_bemf + (1.0f - alpha) * v_accel;
+            v_world = alpha * v_bemf_world + (1.0f - alpha) * v_accel_world;
 
             LIBSTP_LOG_DEBUG(
-                "FusedOdometry::update [FUSE] alpha={:.3f} v_bemf=({:.4f}, {:.4f}) "
-                "v_accel=({:.4f}, {:.4f}) v_fused=({:.4f}, {:.4f})",
-                alpha, v_bemf.x(), v_bemf.y(),
-                v_accel.x(), v_accel.y(),
-                v_body.x(), v_body.y()
+                "FusedOdometry::update [FUSE] alpha={:.3f} v_bemf_world=({:.4f}, {:.4f}) "
+                "v_accel_world=({:.4f}, {:.4f}) v_fused=({:.4f}, {:.4f})",
+                alpha, v_bemf_world.x(), v_bemf_world.y(),
+                v_accel_world.x(), v_accel_world.y(),
+                v_world.x(), v_world.y()
             );
         }
 
         fusion_initialized_ = true;
 
-        // Transform to world frame and integrate position
-        const Eigen::Vector3f v_world = orientation_ * v_body;
+        // Integrate world-frame velocity into position
         position_ += v_world * dt_f;
 
         LIBSTP_LOG_DEBUG(
-            "FusedOdometry::update [RESULT] v_body=({:.4f}, {:.4f}) v_world=({:.4f}, {:.4f}) "
+            "FusedOdometry::update [RESULT] v_bemf_body=({:.4f}, {:.4f}) v_world=({:.4f}, {:.4f}) "
             "pos=({:.4f}, {:.4f}) heading={:.4f}",
-            v_body.x(), v_body.y(),
+            v_bemf_body.x(), v_bemf_body.y(),
             v_world.x(), v_world.y(),
             position_.x(), position_.y(),
             getHeading()
@@ -167,25 +177,23 @@ namespace libstp::odometry::fused
 
     double FusedOdometry::getHeading() const
     {
-        // Compute heading relative to origin orientation
-        const Eigen::Quaternionf relative_to_origin = origin_orientation_.inverse() * orientation_;
-        return extractYaw(relative_to_origin);
+        // Use extractHeading (forward-vector projection) instead of extractYaw
+        // (ZYX Euler decomposition). extractYaw has gimbal lock at pitch = ±90°,
+        // causing massive heading noise when the body is tilted (e.g. body Y up).
+        // extractHeading projects body X onto the world XY plane — no gimbal lock.
+        if (!imu_initialized_) {
+            return extractHeading(origin_orientation_);
+        }
+
+        const double imu_heading_delta = wrapAngle(
+            extractHeading(last_raw_imu_orientation_) - extractHeading(initial_imu_orientation_));
+        return wrapAngle(extractHeading(origin_orientation_) + imu_heading_delta);
     }
 
     double FusedOdometry::getHeadingError(double target_heading_rad) const
     {
         const double current_heading = getHeading();
         return angularError(current_heading, target_heading_rad);
-    }
-
-    Eigen::Vector3f FusedOdometry::transformToBodyFrame(const Eigen::Vector3f& world_vec) const
-    {
-        return orientation_.inverse() * world_vec;
-    }
-
-    Eigen::Vector3f FusedOdometry::transformToWorldFrame(const Eigen::Vector3f& body_vec) const
-    {
-        return orientation_ * body_vec;
     }
 
     void FusedOdometry::reset(const foundation::Pose& pose)
@@ -218,6 +226,10 @@ namespace libstp::odometry::fused
         if (imu_ && !imu_->waitForReady(config_.imu_ready_timeout_ms)) {
             LIBSTP_LOG_WARN("FusedOdometry::reset - IMU not ready after {}ms timeout, proceeding anyway",
                           config_.imu_ready_timeout_ms);
+        }
+
+        if (imu_) {
+            imu_->setYawRateAxisMode(config_.turn_axis);
         }
 
         // Reset encoder tracking to prevent stale position deltas

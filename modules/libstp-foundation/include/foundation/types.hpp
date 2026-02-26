@@ -12,6 +12,7 @@ namespace libstp::foundation {
     using Quaternionf = Eigen::Quaternionf;
 
     struct Pose {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         Vector3f position;
         Quaternionf orientation;
     };

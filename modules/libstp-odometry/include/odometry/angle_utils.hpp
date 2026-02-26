@@ -108,28 +108,49 @@ inline double quaternionAngularError(const Eigen::Quaternionf& current,
 }
 
 /**
- * @brief Extract yaw angle from a quaternion
+ * @brief Extract heading (horizontal-plane direction) from a quaternion
  *
- * Extracts the yaw (rotation around z-axis) component from a quaternion.
+ * Projects the body X-axis (forward) through the quaternion into world frame,
+ * then measures the angle of this vector on the world XY plane.
+ *
+ * This method is IMMUNE to gimbal lock because it uses vector projection
+ * rather than Euler angle decomposition. It works correctly regardless of
+ * body tilt (flat robot, robot on its side, etc.).
+ *
+ * @param orientation Body-to-world orientation quaternion (should be normalized)
+ * @return Heading angle in radians, range [-π, π]
+ *         0 = forward along +X, π/2 = forward along +Y (CCW from above)
+ *
+ * Note: Degenerates only when body X is exactly vertical (pointing straight
+ * up/down), which never happens for a ground robot.
+ */
+inline double extractHeading(const Eigen::Quaternionf& orientation) {
+    // Rotate body X (forward) into world frame
+    const Eigen::Vector3f forward = orientation.normalized() * Eigen::Vector3f::UnitX();
+
+    // Measure direction on world XY plane
+    return std::atan2(static_cast<double>(forward.y()),
+                      static_cast<double>(forward.x()));
+}
+
+/**
+ * @brief Extract yaw angle from a quaternion using ZYX Euler decomposition
+ *
+ * WARNING: This function has gimbal lock at pitch = ±90°. If the robot body
+ * is tilted (e.g., body Y pointing up), use extractHeading() instead.
  *
  * @param orientation Orientation quaternion (should be normalized)
  * @return Yaw angle in radians, range [-π, π]
- *
- * Note: This assumes a right-handed coordinate system with z-axis pointing up.
- * For ground robots with small pitch/roll, this gives accurate heading.
  */
 inline double extractYaw(const Eigen::Quaternionf& orientation) {
     const Eigen::Quaternionf q = orientation.normalized();
 
-    // Yaw extraction using atan2 for proper quadrant handling
     const double siny_cosp = 2.0 * (static_cast<double>(q.w() * q.z()) +
                                      static_cast<double>(q.x() * q.y()));
     const double cosy_cosp = 1.0 - 2.0 * (static_cast<double>(q.y() * q.y()) +
                                            static_cast<double>(q.z() * q.z()));
 
-    // Negate to match robotics convention: positive yaw = CCW when viewed from above
-    // The IMU/coprocessor uses aviation convention (NED) where positive yaw = CW
-    return -std::atan2(siny_cosp, cosy_cosp);
+    return std::atan2(siny_cosp, cosy_cosp);
 }
 
 } // namespace odometry

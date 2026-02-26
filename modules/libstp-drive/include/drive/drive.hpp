@@ -44,6 +44,7 @@ namespace libstp::drive
         void hardStop();
 
         void setVelocityControlConfig(const ChassisVelocityControlConfig& config);
+        [[nodiscard]] const ChassisVelocityControlConfig& getVelocityControlConfig() const { return vel_ctrl_config_; }
         void resetVelocityControllers();
 
         [[nodiscard]] kinematics::IKinematics& getKinematics() { return *kinematics_; }

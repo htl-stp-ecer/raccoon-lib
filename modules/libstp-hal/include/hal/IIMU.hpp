@@ -4,9 +4,71 @@
 #pragma once
 
 #include <Eigen/Geometry>
+#include <algorithm>
+#include <cctype>
+#include <stdexcept>
+#include <string>
 
 namespace libstp::hal::imu
 {
+    enum class TurnAxisMode
+    {
+        WorldZ,
+        BodyX,
+        BodyY,
+        BodyZ,
+    };
+
+    inline const char* toString(const TurnAxisMode mode)
+    {
+        switch (mode)
+        {
+            case TurnAxisMode::WorldZ: return "world_z";
+            case TurnAxisMode::BodyX: return "body_x";
+            case TurnAxisMode::BodyY: return "body_y";
+            case TurnAxisMode::BodyZ: return "body_z";
+        }
+        return "world_z";
+    }
+
+    inline std::string normalizeTurnAxisMode(std::string mode)
+    {
+        std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char c) {
+            if (c == '-' || c == ' ') return static_cast<char>('_');
+            return static_cast<char>(std::tolower(c));
+        });
+        return mode;
+    }
+
+    inline TurnAxisMode parseTurnAxisMode(const std::string& mode)
+    {
+        const std::string normalized = normalizeTurnAxisMode(mode);
+
+        if (normalized.empty() || normalized == "world_z" || normalized == "yaw" || normalized == "heading")
+            return TurnAxisMode::WorldZ;
+        if (normalized == "body_x" || normalized == "x")
+            return TurnAxisMode::BodyX;
+        if (normalized == "body_y" || normalized == "y")
+            return TurnAxisMode::BodyY;
+        if (normalized == "body_z" || normalized == "z")
+            return TurnAxisMode::BodyZ;
+
+        throw std::invalid_argument(
+            "Invalid turn axis mode '" + mode +
+            "'. Expected one of: world_z, body_x, body_y, body_z");
+    }
+
+    inline TurnAxisMode parseBodyAxisMode(const std::string& mode)
+    {
+        const TurnAxisMode parsed = parseTurnAxisMode(mode);
+        if (parsed == TurnAxisMode::WorldZ)
+        {
+            throw std::invalid_argument(
+                "Invalid body axis '" + mode + "'. Expected one of: body_x, body_y, body_z");
+        }
+        return parsed;
+    }
+
     /**
      * @brief Interface for IMU abstraction
      *
@@ -32,18 +94,54 @@ namespace libstp::hal::imu
             gyro[0] = g[0]; gyro[1] = g[1]; gyro[2] = g[2];
         }
 
+        void setYawRateAxisMode(const TurnAxisMode mode)
+        {
+            yaw_rate_axis_mode_ = mode;
+        }
+
+        void setYawRateAxisMode(const std::string& mode)
+        {
+            yaw_rate_axis_mode_ = parseTurnAxisMode(mode);
+        }
+
+        [[nodiscard]] TurnAxisMode getYawRateAxisMode() const
+        {
+            return yaw_rate_axis_mode_;
+        }
+
+        [[nodiscard]] std::string getYawRateAxisModeName() const
+        {
+            return toString(yaw_rate_axis_mode_);
+        }
+
         /**
-         * Get the angular rate around the world z-axis (heading/yaw rate).
-         * Rotates the body-frame gyro vector to world frame using the orientation
-         * quaternion, so the result is correct regardless of IMU mounting orientation.
-         * @return Yaw rate in rad/s
+         * Get the angular rate around the configured turn axis.
+         * Default is world z-axis ("world_z"), which matches the original yaw-rate behavior.
+         * Body-axis modes ("body_x", "body_y", "body_z") return the raw body-frame gyro
+         * component and are useful when the robot rotates while tilted/upright.
+         * @return Angular rate in rad/s along the configured turn axis
          */
         float getYawRate()
         {
             float g[3];
             getAngularVelocity(g);
-            const Eigen::Vector3f gyro_world = getOrientation() * Eigen::Vector3f(g[0], g[1], g[2]);
-            return gyro_world.z();
+            const Eigen::Vector3f gyro_body(g[0], g[1], g[2]);
+
+            switch (yaw_rate_axis_mode_)
+            {
+                case TurnAxisMode::BodyX:
+                    return gyro_body.x();
+                case TurnAxisMode::BodyY:
+                    return gyro_body.y();
+                case TurnAxisMode::BodyZ:
+                    return gyro_body.z();
+                case TurnAxisMode::WorldZ:
+                default:
+                {
+                    const Eigen::Vector3f gyro_world = getOrientation() * gyro_body;
+                    return gyro_world.z();
+                }
+            }
         }
 
         /**
@@ -66,5 +164,8 @@ namespace libstp::hal::imu
         // Wait for IMU to receive initial orientation data
         // Returns true if data received within timeout_ms, false otherwise
         virtual bool waitForReady(int timeout_ms = 1000) = 0;
+
+    private:
+        TurnAxisMode yaw_rate_axis_mode_{TurnAxisMode::WorldZ};
     };
 }

@@ -1,21 +1,30 @@
 """
 Auto-tune PID controllers via system identification and iterative optimization.
 
-Phase 1 - Velocity controller tuning:
+Three-phase sequential pipeline:
+
+Phase 1 - Drive characterization:
+    Measure physical limits (max velocity, acceleration, deceleration) per axis
+    by commanding raw velocities and observing response. Uses the existing
+    CharacterizeDrive step. Results are applied in-memory and persisted so that
+    subsequent phases have accurate constraints.
+
+Phase 2 - Velocity controller tuning:
     Step-response identification using inflection tangent method (ported from
     Torsten Brischalle's ControlTheory, MIT license). Extracts plant parameters
     (gain Ks, dead time Tu, time constant Tg), then computes PID gains via CHR
-    no-overshoot formulas. Validates by comparing ISE before/after.
+    set-point-follow formulas (kp, ki, kd). Validates by comparing ISE
+    before/after.
 
-Phase 2 - Motion controller tuning:
+Phase 3 - Motion controller tuning:
     Coordinate descent (Hooke-Jeeves) optimizer that runs real test motions,
     scores settling time + overshoot + final error, and iteratively adjusts
     distance.kp/kd and heading.kp/kd.
 
 Factory functions:
-    auto_tune()          - full pipeline (velocity then motion)
-    auto_tune_velocity() - phase 1 only
-    auto_tune_motion()   - phase 2 only
+    auto_tune()          - full pipeline (characterize, velocity, motion)
+    auto_tune_velocity() - phase 2 only
+    auto_tune_motion()   - phase 3 only
 """
 import asyncio
 import csv
@@ -45,6 +54,7 @@ from libstp.motion import (
 )
 
 from .. import Step, dsl
+from .characterize_drive import CharacterizeDrive
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -64,8 +74,9 @@ _STEP_COMMAND_FRAC = 0.50  # fraction of max velocity
 # Inflection tangent: local regression window (half-width in samples)
 _REGRESSION_HALF_WINDOW = 3
 
-# CHR no-overshoot scaling (reduced because kV=1.0 FF handles steady-state)
+# CHR set-point-follow scaling (reduced because kV=1.0 FF handles steady-state)
 _CHR_KP_SCALE = 0.3
+_CHR_KI_SCALE = 0.6   # ki = scale * kp / Tg  (slow integral to remove steady-state error)
 _CHR_KD_SCALE = 0.15
 
 # Coordinate descent
@@ -79,12 +90,29 @@ _SCORE_SETTLE_WEIGHT = 1.0
 _SCORE_OVERSHOOT_WEIGHT = 10.0
 _SCORE_ERROR_WEIGHT = 5.0
 _SCORE_TIMEOUT_PENALTY = 50.0
+_SCORE_CONSTRAINT_BREACH_BASE = 25.0
+
+# Constraint-aware scoring thresholds (fastest is the goal, but only after
+# endpoint behavior is kept within reasonable bounds).
+_LINEAR_OVERSHOOT_SOFT_M = 0.010
+_LINEAR_FINAL_ERROR_SOFT_M = 0.010
+_TURN_OVERSHOOT_SOFT_RAD = math.radians(3.0)
+_TURN_FINAL_ERROR_SOFT_RAD = math.radians(2.0)
+
+# Penalty slopes for breaching soft limits (large enough to dominate settle time)
+_SCORE_LINEAR_OVERSHOOT_BREACH_PER_M = 2000.0
+_SCORE_LINEAR_ERROR_BREACH_PER_M = 1000.0
+_SCORE_TURN_OVERSHOOT_BREACH_PER_RAD = 400.0
+_SCORE_TURN_ERROR_BREACH_PER_RAD = 250.0
 
 # Motion trial parameters
 _LINEAR_TEST_DISTANCE_M = 0.50
 _TURN_TEST_ANGLE_RAD = math.radians(90)
 _MOTION_TIMEOUT_S = 10.0
 _MOTION_SETTLE_S = 1.0
+# Optimize for fastest command speed; lower speeds are monitored separately.
+_MOTION_PRIMARY_SPEED_SCALE = 1.0
+_MOTION_WATCH_SPEED_SCALES = (0.5, 0.3)
 
 
 # ---------------------------------------------------------------------------
@@ -331,15 +359,17 @@ def _identify_plant_rise_time(
 
 def _compute_chr_gains(plant: PlantParams) -> PidGains:
     """
-    CHR no-overshoot PD gains, scaled down since kV=1.0 feedforward
-    handles the steady-state. ki=0 to avoid integral windup.
+    CHR set-point-follow PID gains, scaled down since kV=1.0 feedforward
+    handles most of the steady-state. A small ki removes residual error
+    from friction / load changes without aggressive windup.
     """
     if plant.Tu <= 0 or plant.Ks <= 0 or plant.Tg <= 0:
         return PidGains(0.0, 0.0, 0.0)
 
     kp = _CHR_KP_SCALE * plant.Tg / (plant.Ks * plant.Tu)
+    ki = _CHR_KI_SCALE * kp / plant.Tg
     kd = _CHR_KD_SCALE * plant.Tg / plant.Ks
-    return PidGains(kp, 0.0, kd)
+    return PidGains(kp, ki, kd)
 
 
 def _compute_ise(
@@ -464,7 +494,7 @@ def _find_project_root() -> Optional[Path]:
 def _persist_velocity_config(
     results: dict[str, VelocityTuneResult],
 ) -> bool:
-    """Write velocity control gains to raccoon.project.yml."""
+    """Write velocity control gains to robot.drive.vel_config in raccoon.project.yml."""
     project_root = _find_project_root()
     if project_root is None:
         return False
@@ -485,18 +515,18 @@ def _persist_velocity_config(
     robot_cfg = config.setdefault("robot", {})
     if not isinstance(robot_cfg, dict):
         return False
-    motion_pid = robot_cfg.setdefault("motion_pid", {})
-    if not isinstance(motion_pid, dict):
+    drive_cfg = robot_cfg.setdefault("drive", {})
+    if not isinstance(drive_cfg, dict):
         return False
-    vel_ctrl = motion_pid.setdefault("velocity_control", {})
-    if not isinstance(vel_ctrl, dict):
+    vel_cfg = drive_cfg.setdefault("vel_config", {})
+    if not isinstance(vel_cfg, dict):
         return False
 
     updated = False
     for axis_name, result in results.items():
         if not result.accepted:
             continue
-        axis_cfg = vel_ctrl.setdefault(axis_name, {})
+        axis_cfg = vel_cfg.setdefault(axis_name, {})
         if not isinstance(axis_cfg, dict):
             continue
         axis_cfg["pid"] = {
@@ -574,15 +604,14 @@ def _persist_motion_config(
 # Apply gains in-memory
 # ---------------------------------------------------------------------------
 
-_AXIS_TO_VEL_ATTR = {"vx": "vx", "wz": "wz"}
-
-
 def _apply_velocity_gains(
     robot: "GenericRobot", results: dict[str, VelocityTuneResult]
 ) -> None:
-    """Apply tuned velocity controller gains to the drive system."""
-    cfg = ChassisVelocityControlConfig()
-    # Start from defaults (kV=1.0 passthrough)
+    """Apply tuned velocity controller gains to the drive system.
+
+    Reads the current config first so non-tuned axes keep their gains.
+    """
+    cfg = robot.drive.get_velocity_control_config()
     for axis_name, result in results.items():
         if not result.accepted:
             continue
@@ -682,10 +711,11 @@ async def _tune_velocity_axis(
     ff = Feedforward(0.0, 1.0, 0.0)
     result.pid = pid
     result.ff = ff
-    log_fn(f"  [{axis}] CHR gains: kp={pid.kp:.4f}, kd={pid.kd:.4f}")
+    log_fn(f"  [{axis}] CHR gains: kp={pid.kp:.4f}, ki={pid.ki:.4f}, kd={pid.kd:.4f}")
 
     # 4. Validate: apply gains and re-run step response
-    test_cfg = ChassisVelocityControlConfig()
+    saved_cfg = robot.drive.get_velocity_control_config()
+    test_cfg = robot.drive.get_velocity_control_config()
     axis_cfg = AxisVelocityControlConfig(pid, ff)
     if axis == "vx":
         test_cfg.vx = axis_cfg
@@ -715,9 +745,8 @@ async def _tune_velocity_axis(
                f"{(1 - result.tuned_ise / result.baseline_ise) * 100:.1f}%)")
     else:
         result.accepted = False
-        # Revert to passthrough
-        revert_cfg = ChassisVelocityControlConfig()
-        robot.drive.set_velocity_control_config(revert_cfg)
+        # Revert to config before this axis test
+        robot.drive.set_velocity_control_config(saved_cfg)
         robot.drive.reset_velocity_controllers()
         log_fn(f"  [{axis}] REVERTED (ISE worse, keeping baseline)")
 
@@ -729,7 +758,9 @@ async def _tune_velocity_axis(
 # ---------------------------------------------------------------------------
 
 async def _run_linear_trial(
-    robot: "GenericRobot", distance_m: float, speed_scale: float = 0.5
+    robot: "GenericRobot",
+    distance_m: float,
+    speed_scale: float = _MOTION_PRIMARY_SPEED_SCALE,
 ) -> tuple[float, float, float]:
     """
     Run a linear drive trial. Returns (settling_time, overshoot, final_error).
@@ -786,7 +817,9 @@ async def _run_linear_trial(
 
 
 async def _run_turn_trial(
-    robot: "GenericRobot", angle_rad: float, speed_scale: float = 0.5
+    robot: "GenericRobot",
+    angle_rad: float,
+    speed_scale: float = _MOTION_PRIMARY_SPEED_SCALE,
 ) -> tuple[float, float, float]:
     """
     Run a turn trial. Returns (settling_time, overshoot, final_error).
@@ -859,12 +892,51 @@ def _score_trial(
     )
 
 
+def _score_motion_trial(
+    param_name: str,
+    settle_time: float,
+    overshoot: float,
+    final_error: float,
+) -> float:
+    """
+    Constraint-aware motion score.
+
+    Primary goal is still fast completion, but we heavily penalize candidates
+    that exceed soft overshoot/final-error bounds so the optimizer doesn't pick
+    "fast but sloppy" gains at 100% speed.
+    """
+    score = _score_trial(settle_time, overshoot, final_error)
+
+    if param_name == "distance":
+        overshoot_soft = _LINEAR_OVERSHOOT_SOFT_M
+        error_soft = _LINEAR_FINAL_ERROR_SOFT_M
+        overshoot_penalty_per_unit = _SCORE_LINEAR_OVERSHOOT_BREACH_PER_M
+        error_penalty_per_unit = _SCORE_LINEAR_ERROR_BREACH_PER_M
+    else:
+        overshoot_soft = _TURN_OVERSHOOT_SOFT_RAD
+        error_soft = _TURN_FINAL_ERROR_SOFT_RAD
+        overshoot_penalty_per_unit = _SCORE_TURN_OVERSHOOT_BREACH_PER_RAD
+        error_penalty_per_unit = _SCORE_TURN_ERROR_BREACH_PER_RAD
+
+    overshoot_breach = max(0.0, overshoot - overshoot_soft)
+    if overshoot_breach > 0.0:
+        score += _SCORE_CONSTRAINT_BREACH_BASE + overshoot_penalty_per_unit * overshoot_breach
+
+    error_breach = max(0.0, final_error - error_soft)
+    if error_breach > 0.0:
+        score += _SCORE_CONSTRAINT_BREACH_BASE + error_penalty_per_unit * error_breach
+
+    return score
+
+
 async def _evaluate_gains(
     robot: "GenericRobot",
     param_name: str,
     kp: float,
     kd: float,
     trial_idx: int,
+    *,
+    speed_scale: float = _MOTION_PRIMARY_SPEED_SCALE,
 ) -> float:
     """
     Set gains, run alternating fwd/bwd or CW/CCW trials, return average score.
@@ -878,16 +950,42 @@ async def _evaluate_gains(
     if param_name == "distance":
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
         settle, overshoot, error = await _run_linear_trial(
-            robot, sign * _LINEAR_TEST_DISTANCE_M
+            robot, sign * _LINEAR_TEST_DISTANCE_M, speed_scale=speed_scale
         )
     else:  # heading
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
         settle, overshoot, error = await _run_turn_trial(
-            robot, sign * _TURN_TEST_ANGLE_RAD
+            robot, sign * _TURN_TEST_ANGLE_RAD, speed_scale=speed_scale
         )
 
     await asyncio.sleep(_MOTION_SETTLE_S)
-    return _score_trial(settle, overshoot, error)
+    return _score_motion_trial(param_name, settle, overshoot, error)
+
+
+async def _watch_motion_performance(
+    robot: "GenericRobot",
+    param_name: str,
+    kp: float,
+    kd: float,
+    speed_scales: tuple[float, ...],
+    log_fn,
+) -> None:
+    """
+    Run secondary checks at lower speeds. These do not affect optimization.
+    """
+    for speed_scale in speed_scales:
+        # Evaluate both directions so the watch is less sensitive to one-off bias.
+        score_a = await _evaluate_gains(
+            robot, param_name, kp, kd, trial_idx=0, speed_scale=speed_scale
+        )
+        score_b = await _evaluate_gains(
+            robot, param_name, kp, kd, trial_idx=1, speed_scale=speed_scale
+        )
+        avg_score = 0.5 * (score_a + score_b)
+        log_fn(
+            f"  [{param_name}] watch speed={speed_scale:.2f}: "
+            f"score≈{avg_score:.4f} (secondary, not optimized)"
+        )
 
 
 async def _coordinate_descent(
@@ -978,7 +1076,7 @@ async def _coordinate_descent(
 
 @dsl(hidden=True)
 class AutoTuneVelocity(Step):
-    """Phase 1: Tune velocity controllers via step response identification."""
+    """Phase 2: Tune velocity controllers via step response identification."""
 
     def __init__(
         self,
@@ -1002,7 +1100,7 @@ class AutoTuneVelocity(Step):
             os.makedirs(self.csv_dir, exist_ok=True)
 
         self.info("=" * 60)
-        self.info("  AUTO-TUNE: VELOCITY CONTROLLERS (Phase 1)")
+        self.info("  AUTO-TUNE: VELOCITY CONTROLLERS (Phase 2)")
         self.info(f"  Axes: {', '.join(self.axes)}")
         self.info("=" * 60)
 
@@ -1027,7 +1125,7 @@ class AutoTuneVelocity(Step):
         if self.persist and accepted:
             if _persist_velocity_config(self.results):
                 self.info("  Saved to raccoon.project.yml "
-                          "(robot.motion_pid.velocity_control)")
+                          "(robot.drive.vel_config)")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")
 
@@ -1040,7 +1138,7 @@ class AutoTuneVelocity(Step):
             self.info(
                 f"  {axis}: {status} | plant=({r.plant.Ks:.3f}, "
                 f"{r.plant.Tu:.3f}s, {r.plant.Tg:.3f}s) | "
-                f"pid=(kp={r.pid.kp:.4f}, kd={r.pid.kd:.4f}) | "
+                f"pid=(kp={r.pid.kp:.4f}, ki={r.pid.ki:.4f}, kd={r.pid.kd:.4f}) | "
                 f"ISE: {r.baseline_ise:.4f} -> {r.tuned_ise:.4f}"
             )
         self.info("=" * 60)
@@ -1048,7 +1146,7 @@ class AutoTuneVelocity(Step):
 
 @dsl(hidden=True)
 class AutoTuneMotion(Step):
-    """Phase 2: Tune motion PIDs via coordinate descent optimization."""
+    """Phase 3: Tune motion PIDs via coordinate descent optimization."""
 
     def __init__(
         self,
@@ -1069,8 +1167,13 @@ class AutoTuneMotion(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         self.info("=" * 60)
-        self.info("  AUTO-TUNE: MOTION CONTROLLERS (Phase 2)")
+        self.info("  AUTO-TUNE: MOTION CONTROLLERS (Phase 3)")
         self.info(f"  Parameters: {', '.join(self.axes)}")
+        self.info(f"  Primary objective speed_scale={_MOTION_PRIMARY_SPEED_SCALE:.2f} "
+                  "(fastest)")
+        if _MOTION_WATCH_SPEED_SCALES:
+            watch_s = ", ".join(f"{s:.2f}" for s in _MOTION_WATCH_SPEED_SCALES)
+            self.info(f"  Lower-speed watch (secondary only): {watch_s}")
         self.info("=" * 60)
 
         cfg = robot.motion_pid_config
@@ -1089,6 +1192,16 @@ class AutoTuneMotion(Step):
                 robot, param_name, pid_cfg.kp, pid_cfg.kd, self.info
             )
             self.results[param_name] = result
+
+            if _MOTION_WATCH_SPEED_SCALES:
+                await _watch_motion_performance(
+                    robot,
+                    param_name,
+                    result.final_kp,
+                    result.final_kd,
+                    _MOTION_WATCH_SPEED_SCALES,
+                    self.info,
+                )
 
             robot.drive.hard_stop()
             await asyncio.sleep(_MOTION_SETTLE_S)
@@ -1126,35 +1239,63 @@ class AutoTuneMotion(Step):
 
 @dsl(hidden=True)
 class AutoTune(Step):
-    """Full auto-tune pipeline: velocity controllers then motion controllers."""
+    """Full auto-tune pipeline: characterize -> velocity PID -> motion PID."""
 
     def __init__(
         self,
+        characterize_axes: list[str],
         vel_axes: list[str],
         motion_axes: list[str],
+        tune_characterize: bool,
         tune_velocity: bool,
         tune_motion: bool,
+        characterize_trials: int,
+        characterize_command_speed: float,
         persist: bool,
         csv_dir: Optional[str],
     ):
         super().__init__()
+        self.characterize_axes = characterize_axes
         self.vel_axes = vel_axes
         self.motion_axes = motion_axes
+        self.tune_characterize = tune_characterize
         self.tune_velocity = tune_velocity
         self.tune_motion = tune_motion
+        self.characterize_trials = characterize_trials
+        self.characterize_command_speed = characterize_command_speed
         self.persist = persist
         self.csv_dir = csv_dir
 
     def _generate_signature(self) -> str:
         return (
-            f"AutoTune(vel={self.vel_axes}, motion={self.motion_axes}, "
+            f"AutoTune(char={self.tune_characterize}, "
+            f"vel={self.vel_axes}, motion={self.motion_axes}, "
             f"persist={self.persist})"
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         self.info("=" * 60)
         self.info("  AUTO-TUNE PID CONTROLLERS")
+        phases = []
+        if self.tune_characterize:
+            phases.append("characterize")
+        if self.tune_velocity:
+            phases.append("velocity PID")
+        if self.tune_motion:
+            phases.append("motion PID")
+        self.info(f"  Phases: {' -> '.join(phases)}")
         self.info("=" * 60)
+
+        if self.tune_characterize:
+            char_step = CharacterizeDrive(
+                axes=self.characterize_axes,
+                trials=self.characterize_trials,
+                command_speed=self.characterize_command_speed,
+                accel_timeout=3.0,
+                decel_timeout=3.0,
+                persist=self.persist,
+            )
+            await char_step._execute_step(robot)
 
         if self.tune_velocity:
             vel_step = AutoTuneVelocity(
@@ -1179,41 +1320,62 @@ class AutoTune(Step):
 
 @dsl(tags=["motion", "calibration", "auto-tune"])
 def auto_tune(
-    axes: list[str] | None = None,
+    vel_axes: list[str] | None = None,
+    characterize_axes: list[str] | None = None,
+    motion_axes: list[str] | None = None,
+    tune_characterize: bool = True,
     tune_velocity: bool = True,
     tune_motion: bool = True,
+    characterize_trials: int = 3,
+    characterize_command_speed: float = 1.0,
     persist: bool = True,
     csv_dir: str = _DEFAULT_CSV_DIR,
 ) -> AutoTune:
     """
-    Auto-tune all PID controllers: velocity (inner loop) then motion (outer loop).
+    Auto-tune the full drive system in sequence:
+    characterize limits -> velocity PID -> motion PID.
 
-    Velocity tuning uses step-response system identification to find optimal
-    gains for the drive-level velocity controllers. Motion tuning uses
-    coordinate descent optimization on real test drives/turns.
+    Phase 1 (characterize): Measures max velocity, acceleration, and
+    deceleration per axis so that subsequent tuning phases have accurate
+    physical constraints.
 
-    Prerequisites:
-        - characterize_drive() should be run first for accurate max velocity
-        - Robot should be on a flat surface with room to move
+    Phase 2 (velocity PID): Step-response system identification to find
+    optimal kp/ki/kd gains for the drive-level velocity controllers.
+
+    Phase 3 (motion PID): Coordinate descent optimization on real test
+    drives/turns to find optimal kp/kd for distance and heading controllers.
 
     Args:
-        axes: Velocity axes to tune (default ["vx", "wz"]).
-              Motion always tunes ["distance", "heading"].
+        vel_axes: Velocity axes to tune (default ["vx", "wz"]).
+        characterize_axes: Characterization axes (default ["forward", "angular"]).
+        motion_axes: Motion parameters to tune (default ["distance", "heading"]).
+        tune_characterize: Run drive characterization (default True)
         tune_velocity: Run velocity controller tuning (default True)
         tune_motion: Run motion controller tuning (default True)
+        characterize_trials: Trials per axis for characterization (default 3)
+        characterize_command_speed: Raw velocity command for characterization
+                                    (default 1.0)
         persist: Save results to raccoon.project.yml (default True)
         csv_dir: Directory for CSV output (default /tmp/auto_tune)
 
     Returns:
         Step that runs the full auto-tune pipeline
     """
-    if axes is None:
-        axes = ["vx", "wz"]
+    if vel_axes is None:
+        vel_axes = ["vx", "wz"]
+    if characterize_axes is None:
+        characterize_axes = ["forward", "angular"]
+    if motion_axes is None:
+        motion_axes = ["distance", "heading"]
     return AutoTune(
-        vel_axes=axes,
-        motion_axes=["distance", "heading"],
+        characterize_axes=characterize_axes,
+        vel_axes=vel_axes,
+        motion_axes=motion_axes,
+        tune_characterize=tune_characterize,
         tune_velocity=tune_velocity,
         tune_motion=tune_motion,
+        characterize_trials=characterize_trials,
+        characterize_command_speed=characterize_command_speed,
         persist=persist,
         csv_dir=csv_dir,
     )
@@ -1226,11 +1388,12 @@ def auto_tune_velocity(
     csv_dir: str = _DEFAULT_CSV_DIR,
 ) -> AutoTuneVelocity:
     """
-    Tune velocity controllers only (Phase 1).
+    Tune velocity controllers only (Phase 2 of full pipeline).
 
     Uses step-response system identification: commands a velocity step,
     records the response, identifies plant parameters via inflection tangent
-    method, then computes PID gains via CHR no-overshoot formulas.
+    method, then computes PID gains (kp, ki, kd) via CHR set-point-follow
+    formulas.
 
     Args:
         axes: Velocity axes to tune (default ["vx", "wz"])
@@ -1252,7 +1415,7 @@ def auto_tune_motion(
     csv_dir: str = _DEFAULT_CSV_DIR,
 ) -> AutoTuneMotion:
     """
-    Tune motion controllers only (Phase 2).
+    Tune motion controllers only (Phase 3 of full pipeline).
 
     Uses coordinate descent (Hooke-Jeeves) optimization: runs alternating
     test drives/turns, scores settling time + overshoot + final error,

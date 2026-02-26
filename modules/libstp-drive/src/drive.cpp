@@ -51,13 +51,12 @@ libstp::kinematics::MotorCommands Drive::update(const double dt)
 
     const foundation::ChassisVelocity corrected{corrected_vx, corrected_vy, corrected_wz};
 
-    LIBSTP_LOG_TRACE(
-        "Drive::update dt={} desired=({},{},{}) measured_enc=({},{},{}) gyro_wz={} corrected=({},{},{})",
+    LIBSTP_LOG_DEBUG(
+        "DRIVE dt={:.4f} des_wz={:.3f} gyro_wz={:.3f} enc_wz={:.3f} corr_wz={:.3f} | "
+        "des_vx={:.3f} enc_vx={:.3f} corr_vx={:.3f}",
         dt,
-        desired_.vx, desired_.vy, desired_.wz,
-        measured_enc.vx, measured_enc.vy, measured_enc.wz,
-        last_gyro_wz_,
-        corrected.vx, corrected.vy, corrected.wz);
+        desired_.wz, last_gyro_wz_, measured_enc.wz, corrected.wz,
+        desired_.vx, measured_enc.vx, corrected.vx);
 
     return kinematics_->applyCommand(corrected, dt);
 }

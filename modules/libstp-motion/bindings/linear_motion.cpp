@@ -63,6 +63,10 @@ void init_linear_motion(py::module_& m)
         .def("start", &LinearMotion::start)
         .def("update", &LinearMotion::update, py::arg("dt"))
         .def("is_finished", &LinearMotion::isFinished)
+        .def("set_omega_override", &LinearMotion::setOmegaOverride, py::arg("omega"),
+             "Override heading PID with external omega. Set each cycle before update().")
+        .def("clear_omega_override", &LinearMotion::clearOmegaOverride,
+             "Restore internal heading PID control.")
         .def("get_telemetry", &LinearMotion::getTelemetry,
             py::return_value_policy::reference_internal);
 }

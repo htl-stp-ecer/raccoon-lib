@@ -133,10 +133,10 @@ namespace libstp::motion
             return;
         }
 
-        // Heading correction only — no cross-track correction.
-        // Heading PID keeps the robot pointed straight; cross-track PID was removed
-        // because odometry noise in the perpendicular axis caused phantom corrections.
-        const double omega_cmd_raw = heading_pid_->update(yaw_error, dt);
+        // Heading correction: use external override if set, otherwise internal heading PID.
+        const double omega_cmd_raw = omega_override_.has_value()
+            ? omega_override_.value()
+            : heading_pid_->update(yaw_error, dt);
 
         // Primary axis: Profiled PID generates velocity command
         double primary_cmd_raw = profiled_pid_.calculate(primary_position, dt);

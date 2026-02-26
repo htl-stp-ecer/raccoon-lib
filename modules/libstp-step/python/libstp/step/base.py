@@ -29,9 +29,13 @@ class Step(ClassNameLogger):
             signature = self._generate_signature()
             start_time = time.perf_counter()
 
+        step_start = time.perf_counter()
         try:
             await self._execute_step(robot)
         finally:
+            elapsed = time.perf_counter() - step_start
+            self.debug(f"Finished {self.__class__.__name__} step in {elapsed:.3f}s")
+
             if tracker and tracker.config.enabled and signature is not None and start_time is not None:
                 duration = time.perf_counter() - start_time
                 try:
