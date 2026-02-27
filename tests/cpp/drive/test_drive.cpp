@@ -9,48 +9,24 @@ using namespace libstp::foundation;
 
 class DriveTest : public ::testing::Test {
 protected:
-    MotionLimits limits_;
-
-    void SetUp() override {
-        limits_.max_v = 1.0;
-        limits_.max_omega = 1.0;
-    }
+    ChassisVelocityControlConfig config{};
+    testing::NiceMock<MockIMU> imu_;
 };
 
 TEST_F(DriveTest, ConstructsSuccessfully) {
     auto kinematics = std::make_unique<testing::NiceMock<MockKinematics>>();
     kinematics->setupAsDifferential();
-    Drive drive(std::move(kinematics), limits_);
+    Drive drive(std::move(kinematics), config, imu_);
     EXPECT_TRUE(&drive);
-}
-
-TEST_F(DriveTest, EstimateStateReturnsKinematicsState) {
-    auto kinematics = std::make_unique<testing::NiceMock<MockKinematics>>();
-    kinematics->setupAsDifferential();
-    Drive drive(std::move(kinematics), limits_);
-
-    ChassisVelocity expected{0.5, -0.5, 0.25};
-    drive.setVelocity(expected);
-
-    auto kinematics_mock = std::make_unique<testing::NiceMock<MockKinematics>>();
-    kinematics_mock->setupAsDifferential();
-    kinematics_mock->setEstimatedState(expected);
-
-    auto state = kinematics_mock->estimateState();
-    EXPECT_DOUBLE_EQ(state.vx, expected.vx);
-    EXPECT_DOUBLE_EQ(state.vy, expected.vy);
-    EXPECT_DOUBLE_EQ(state.wz, expected.wz);
 }
 
 TEST_F(DriveTest, SoftStopZeroesDesiredVelocity) {
     auto kinematics = std::make_unique<testing::NiceMock<MockKinematics>>();
     kinematics->setupAsDifferential();
-    Drive drive(std::move(kinematics), limits_);
+    Drive drive(std::move(kinematics), config, imu_);
 
     drive.setVelocity({0.8, 0.2, 0.5});
     drive.softStop();
-    ChassisVelocity zero{0.0, 0.0, 0.0};
-    drive.setVelocity(zero);
 }
 
 TEST_F(DriveTest, HardStopCallsKinematicsHardStop) {
@@ -58,6 +34,6 @@ TEST_F(DriveTest, HardStopCallsKinematicsHardStop) {
     kinematics->setupAsDifferential();
     EXPECT_CALL(*kinematics, hardStop()).Times(1);
 
-    Drive drive(std::move(kinematics), limits_);
+    Drive drive(std::move(kinematics), config, imu_);
     drive.hardStop();
 }
