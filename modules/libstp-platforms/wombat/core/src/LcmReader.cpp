@@ -7,6 +7,7 @@
 #include "foundation/logging.hpp"
 
 using namespace platform::wombat::core;
+namespace Channels = raccoon::Channels;
 
 namespace {
 // Age tracking — all accessed from LCM listener thread only, no sync needed
@@ -23,73 +24,152 @@ void logAge(const std::string& channel, int64_t msg_timestamp) {
     ++age_count;
     LIBSTP_LOG_TRACE("[LcmReader] {} age: {:.1f}ms", channel, age_ms);
 }
-
-// Parse port/index number from channel string like "libstp/motor/2/value"
-// Returns the integer between the 2nd and 3rd '/' (i.e. the port number)
-int parsePort(const std::string& channel) {
-    // Skip past "libstp/" (7 chars), then find next '/'
-    size_t start = channel.find('/', 7);
-    if (start == std::string::npos) return -1;
-    ++start;
-    size_t end = channel.find('/', start);
-    if (end == std::string::npos) end = channel.size();
-    int port = 0;
-    for (size_t i = start; i < end; ++i) {
-        port = port * 10 + (channel[i] - '0');
-    }
-    return port;
-}
 }
 
-LcmReader::LcmReader() {
-    if (!lcm_.good()) {
-        throw std::runtime_error("[LCM-Reader] Failed to initialize LCM");
-    }
+LcmReader::LcmReader()
+    : transport_(raccoon::Transport::create())
+{
+    using raccoon::SubscribeOptions;
 
-    // Subscribe to all servo topics (assuming ports 0-3)
+    // Retained subscribe options for channels that cache latest values
+    static const SubscribeOptions retainedOpts{.requestRetained = true};
+
+    // Subscribe to servo topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
-        lcm_.subscribe("libstp/servo/" + std::to_string(port) + "/mode",
-                      &LcmReader::handleServoMode, this);
-        lcm_.subscribe("libstp/servo/" + std::to_string(port) + "/position",
-                      &LcmReader::handleServoValue, this);
+        auto modeChannel = Channels::servoMode(port);
+        transport_.subscribe<exlcm::scalar_i8_t>(
+            modeChannel,
+            [this, port, ch = modeChannel](const exlcm::scalar_i8_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                servo_mode_cache_[port] = msg.dir;
+            }, retainedOpts);
+
+        auto posChannel = Channels::servoPosition(port);
+        transport_.subscribe<exlcm::scalar_i32_t>(
+            posChannel,
+            [this, port, ch = posChannel](const exlcm::scalar_i32_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                servo_value_cache_[port] = msg.value;
+            }, retainedOpts);
     }
 
-    // Subscribe to IMU topics
-    lcm_.subscribe("libstp/gyro/value", &LcmReader::handleGyro, this);
-    lcm_.subscribe("libstp/accel/value", &LcmReader::handleAccel, this);
-    lcm_.subscribe("libstp/linear_accel/value", &LcmReader::handleLinearAccel, this);
-    lcm_.subscribe("libstp/accel_velocity/value", &LcmReader::handleAccelVelocity, this);
-    lcm_.subscribe("libstp/mag/value", &LcmReader::handleMag, this);
-    lcm_.subscribe("libstp/imu/quaternion", &LcmReader::handleOrientation, this);
+    // Subscribe to IMU topics — high-frequency, no retain needed
+    transport_.subscribe<exlcm::vector3f_t>(
+        Channels::GYRO,
+        [this](const exlcm::vector3f_t& msg) {
+            logAge(Channels::GYRO, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            gyro_cache_ = msg;
+        });
 
-    // Subscribe to BEMF topics (assuming indices 0-3)
+    transport_.subscribe<exlcm::vector3f_t>(
+        Channels::ACCELEROMETER,
+        [this](const exlcm::vector3f_t& msg) {
+            logAge(Channels::ACCELEROMETER, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            accel_cache_ = msg;
+        });
+
+    transport_.subscribe<exlcm::vector3f_t>(
+        Channels::LINEAR_ACCELERATION,
+        [this](const exlcm::vector3f_t& msg) {
+            logAge(Channels::LINEAR_ACCELERATION, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            linear_accel_cache_ = msg;
+        });
+
+    transport_.subscribe<exlcm::vector3f_t>(
+        Channels::ACCEL_VELOCITY,
+        [this](const exlcm::vector3f_t& msg) {
+            logAge(Channels::ACCEL_VELOCITY, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            accel_velocity_cache_ = msg;
+        });
+
+    transport_.subscribe<exlcm::vector3f_t>(
+        Channels::MAGNETOMETER,
+        [this](const exlcm::vector3f_t& msg) {
+            logAge(Channels::MAGNETOMETER, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            mag_cache_ = msg;
+        });
+
+    transport_.subscribe<exlcm::scalar_f_t>(
+        Channels::HEADING,
+        [this](const exlcm::scalar_f_t& msg) {
+            logAge(Channels::HEADING, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            heading_cache_ = msg;
+            imu_heading_received_ = true;
+        });
+
+    // Subscribe to BEMF topics (indices 0-3) — retained
     for (int idx = 0; idx < 4; ++idx) {
-        lcm_.subscribe("libstp/bemf/" + std::to_string(idx) + "/value",
-                      &LcmReader::handleBemf, this);
+        auto ch = Channels::backEmf(idx);
+        transport_.subscribe<exlcm::scalar_i32_t>(
+            ch,
+            [this, idx, ch](const exlcm::scalar_i32_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                bemf_cache_[idx] = msg.value;
+            }, retainedOpts);
     }
 
-    // Subscribe to motor position and done topics
+    // Subscribe to motor position and done topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
-        lcm_.subscribe("libstp/motor/" + std::to_string(port) + "/position",
-                      &LcmReader::handleMotorPosition, this);
-        lcm_.subscribe("libstp/motor/" + std::to_string(port) + "/done",
-                      &LcmReader::handleMotorDone, this);
+        auto posCh = Channels::motorPosition(port);
+        transport_.subscribe<exlcm::scalar_i32_t>(
+            posCh,
+            [this, port, ch = posCh](const exlcm::scalar_i32_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                motor_position_cache_[port] = msg.value;
+            }, retainedOpts);
+
+        auto doneCh = Channels::motorDone(port);
+        transport_.subscribe<exlcm::scalar_i32_t>(
+            doneCh,
+            [this, port, ch = doneCh](const exlcm::scalar_i32_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                motor_done_cache_[port] = msg.value;
+            }, retainedOpts);
     }
 
-    // Subscribe to analog topics (assuming ports 0-7)
+    // Subscribe to analog topics (ports 0-7)
     for (int port = 0; port < 8; ++port) {
-        lcm_.subscribe("libstp/analog/" + std::to_string(port) + "/value",
-                      &LcmReader::handleAnalog, this);
+        auto ch = Channels::analog(port);
+        transport_.subscribe<exlcm::scalar_i32_t>(
+            ch,
+            [this, port, ch](const exlcm::scalar_i32_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                analog_cache_[port] = msg.value;
+            });
     }
 
-    // Subscribe to digital topics (assuming ports 0-15)
+    // Subscribe to digital topics (ports 0-15)
     for (int port = 0; port < 16; ++port) {
-        lcm_.subscribe("libstp/digital/" + std::to_string(port) + "/value",
-                      &LcmReader::handleDigital, this);
+        auto ch = Channels::digital(port);
+        transport_.subscribe<exlcm::scalar_i32_t>(
+            ch,
+            [this, port, ch](const exlcm::scalar_i32_t& msg) {
+                logAge(ch, msg.timestamp);
+                std::lock_guard<std::mutex> lock(cache_mutex_);
+                digital_cache_[port] = msg.value;
+            });
     }
 
     // Subscribe to temperature topic
-    lcm_.subscribe("libstp/temp/value", &LcmReader::handleTemp, this);
+    transport_.subscribe<exlcm::scalar_f_t>(
+        Channels::TEMPERATURE,
+        [this](const exlcm::scalar_f_t& msg) {
+            logAge(Channels::TEMPERATURE, msg.timestamp);
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            temp_cache_ = msg;
+        });
 
     // Initialize default values
     gyro_cache_.x = 0.0f;
@@ -109,10 +189,7 @@ LcmReader::LcmReader() {
     mag_cache_.z = 0.0f;
 
     temp_cache_.value = 0.0f;
-    orientation_cache_.w = 1.0f;
-    orientation_cache_.x = 0.0f;
-    orientation_cache_.y = 0.0f;
-    orientation_cache_.z = 0.0f;
+    heading_cache_.value = 0.0f;
 
     // Initialize BEMF cache with zeros (hardware default)
     for (int idx = 0; idx < 4; ++idx) {
@@ -130,11 +207,6 @@ LcmReader::LcmReader() {
     running_ = true;
     listener_thread_ = std::thread(&LcmReader::listenLoop, this);
 
-    // Request initial data dump to populate caches quickly
-    LIBSTP_LOG_DEBUG("[LcmReader] Requesting initial data dump...");
-    LcmDataWriter::instance().requestDataDump();
-    LIBSTP_LOG_DEBUG("[LcmReader] Data dump request sent");
-
     // Reset BEMF counters to prevent stale values from previous runs
     LIBSTP_LOG_DEBUG("[LcmReader] Resetting BEMF counters...");
     LcmDataWriter::instance().resetBemfCounters();
@@ -143,6 +215,7 @@ LcmReader::LcmReader() {
 
 LcmReader::~LcmReader() {
     running_ = false;
+    transport_.stop();
     if (listener_thread_.joinable()) {
         listener_thread_.join();
     }
@@ -155,15 +228,15 @@ void LcmReader::listenLoop() {
 
     while (running_) {
         // Non-blocking poll for messages
-        int result = lcm_.handleTimeout(0);
+        int result = transport_.spinOnce(0);
         if (result < 0) {
-            LIBSTP_LOG_ERROR("[LcmReader] Error in LCM handleTimeout");
+            LIBSTP_LOG_ERROR("[LcmReader] Error in transport spinOnce");
             continue;
         }
         if (result > 0) {
             ++msgs_since_log;
             // Drain all pending messages without blocking
-            while (running_ && lcm_.handleTimeout(0) > 0) {
+            while (running_ && transport_.spinOnce(0) > 0) {
                 ++msgs_since_log;
             }
         } else {
@@ -188,113 +261,6 @@ void LcmReader::listenLoop() {
         }
     }
     LIBSTP_LOG_DEBUG("[LcmReader] Listen loop exiting");
-}
-
-// Message handlers with channel parsing
-void LcmReader::handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        servo_mode_cache_[port] = msg->dir;
-    }
-}
-
-void LcmReader::handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        servo_value_cache_[port] = msg->value;
-    }
-}
-
-void LcmReader::handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    gyro_cache_ = *msg;
-}
-
-void LcmReader::handleAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    accel_cache_ = *msg;
-}
-
-void LcmReader::handleLinearAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    linear_accel_cache_ = *msg;
-}
-
-void LcmReader::handleAccelVelocity(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    accel_velocity_cache_ = *msg;
-}
-
-void LcmReader::handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    mag_cache_ = *msg;
-}
-
-void LcmReader::handleOrientation(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::quaternion_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    orientation_cache_ = *msg;
-    imu_orientation_received_ = true;
-}
-
-void LcmReader::handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int idx = parsePort(channel);
-    if (idx >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        bemf_cache_[idx] = msg->value;
-    }
-}
-
-void LcmReader::handleMotorPosition(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        motor_position_cache_[port] = msg->value;
-    }
-}
-
-void LcmReader::handleMotorDone(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        motor_done_cache_[port] = msg->value;
-    }
-}
-
-void LcmReader::handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        analog_cache_[port] = msg->value;
-    }
-}
-
-void LcmReader::handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
-    logAge(channel, msg->timestamp);
-    int port = parsePort(channel);
-    if (port >= 0) {
-        std::lock_guard<std::mutex> lock(cache_mutex_);
-        digital_cache_[port] = msg->value;
-    }
-}
-
-void LcmReader::handleTemp(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_f_t* msg) {
-    logAge(channel, msg->timestamp);
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    temp_cache_ = *msg;
 }
 
 // Read methods - return cached values
@@ -334,9 +300,9 @@ exlcm::vector3f_t LcmReader::readMag() {
     return mag_cache_;
 }
 
-exlcm::quaternion_t LcmReader::readOrientation() {
+exlcm::scalar_f_t LcmReader::readHeading() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    return orientation_cache_;
+    return heading_cache_;
 }
 
 exlcm::scalar_i32_t LcmReader::readBemf(const int idx) {
@@ -398,15 +364,15 @@ bool LcmReader::waitForImuReady(int timeout_ms) {
     const auto start = std::chrono::steady_clock::now();
     const auto timeout = std::chrono::milliseconds(timeout_ms);
 
-    while (!imu_orientation_received_) {
+    while (!imu_heading_received_) {
         const auto elapsed = std::chrono::steady_clock::now() - start;
         if (elapsed >= timeout) {
-            std::cerr << "[LcmReader] Timeout waiting for IMU orientation data" << std::endl;
+            std::cerr << "[LcmReader] Timeout waiting for IMU heading data" << std::endl;
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    LIBSTP_LOG_TRACE("[LcmReader] IMU orientation data received");
+    LIBSTP_LOG_TRACE("[LcmReader] IMU heading data received");
     return true;
 }

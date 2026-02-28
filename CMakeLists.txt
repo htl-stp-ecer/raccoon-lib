@@ -82,22 +82,12 @@ FetchContent_MakeAvailable(eigen)
 # Add include directory for Eigen
 include_directories(${eigen_SOURCE_DIR})
 
-# Add LCM - disable its testing to avoid gtest conflicts
-set(LCM_ENABLE_JAVA OFF CACHE BOOL "" FORCE)
-set(LCM_ENABLE_PYTHON OFF CACHE BOOL "" FORCE)
-set(LCM_ENABLE_DOCS OFF CACHE BOOL "" FORCE)
-set(LCM_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+# ---------- raccoon-transport (brings LCM + message types) ----------
 FetchContent_Declare(
-        lcm
-        GIT_REPOSITORY https://github.com/lcm-proj/lcm.git
-        GIT_TAG v1.5.0
+        raccoon_transport
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../raccoon-transport
 )
-FetchContent_MakeAvailable(lcm)
-
-# Include LCM cmake utilities for lcm_wrap_types and lcm_add_library
-include(${lcm_SOURCE_DIR}/lcm-cmake/lcmUtilities.cmake)
-
-add_subdirectory(lcm-messages)
+FetchContent_MakeAvailable(raccoon_transport)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)

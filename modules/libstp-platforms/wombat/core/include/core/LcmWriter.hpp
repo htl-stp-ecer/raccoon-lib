@@ -1,14 +1,12 @@
-#ifndef VERSION_LCMWRITER_HPP
-#define VERSION_LCMWRITER_HPP
+#pragma once
 
-#endif //VERSION_LCMWRITER_HPP
-
+#include <raccoon/Transport.h>
+#include <raccoon/Channels.h>
 #include <exlcm/vector3f_t.hpp>
 #include <exlcm/scalar_i8_t.hpp>
 #include <exlcm/scalar_i32_t.hpp>
 #include <exlcm/scalar_f_t.hpp>
 #include <exlcm/orientation_matrix_t.hpp>
-#include "lcm/lcm-cpp.hpp"
 
 #include <string>
 
@@ -34,7 +32,6 @@ namespace platform::wombat::core
         // PID position control (relative) - velocity=BEMF speed, delta=BEMF ticks from current
         void setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition);
         void setServo(uint8_t port, int valueData);
-        void requestDataDump();
         void resetBemfCounters();
 
         // STM32 shutdown flag - disables all motors and servos at firmware level.
@@ -52,6 +49,6 @@ namespace platform::wombat::core
         explicit LcmDataWriter();
         ~LcmDataWriter() = default;
 
-        lcm::LCM lcm;
+        raccoon::Transport transport_;
     };
 }
