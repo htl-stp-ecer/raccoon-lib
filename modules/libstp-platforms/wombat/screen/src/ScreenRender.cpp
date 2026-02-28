@@ -3,11 +3,10 @@
 //
 
 #include "hal/ScreenRender.hpp"
-#include <stdexcept>
 #include <string>
 #include <chrono>
 #include <exlcm/screen_render_t.hpp>
-#include "lcm/lcm-cpp.hpp"
+#include <raccoon/Channels.h>
 
 
 std::string current_screen = "";
@@ -16,10 +15,9 @@ void libstp::hal::screen_render::ScreenRender::setCurrentScreenSetting(std::stri
     current_screen = newScreen;
 }
 
-libstp::hal::screen_render::ScreenRender::ScreenRender() {
-    if (!lcm.good()) {
-        throw std::runtime_error("[LCM-Writer] Failed to initialize LCM");
-    }
+libstp::hal::screen_render::ScreenRender::ScreenRender()
+    : transport_(raccoon::Transport::create())
+{
 }
 
 
@@ -30,7 +28,6 @@ void libstp::hal::screen_render::ScreenRender::sendState(const std::string &json
             std::chrono::system_clock::now().time_since_epoch()).count();
         msg.screen_name = current_screen;
         msg.entries = jsonData;
-        lcm.publish("libstp/screen_render", &msg);
+        transport_.publish(raccoon::Channels::SCREEN_RENDER, msg);
     }
 }
-

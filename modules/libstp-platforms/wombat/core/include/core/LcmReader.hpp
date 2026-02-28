@@ -1,11 +1,12 @@
 #pragma once
 
-#include <lcm/lcm-cpp.hpp>
+#include <raccoon/Transport.h>
+#include <raccoon/Channels.h>
+#include <raccoon/Options.h>
 #include <exlcm/vector3f_t.hpp>
 #include <exlcm/scalar_i8_t.hpp>
 #include <exlcm/scalar_i32_t.hpp>
 #include <exlcm/scalar_f_t.hpp>
-#include <exlcm/quaternion_t.hpp>
 #include <string>
 #include <unordered_map>
 #include <mutex>
@@ -35,7 +36,7 @@ namespace platform::wombat::core {
         exlcm::vector3f_t readAccelVelocity();
         void resetAccelVelocity();
         exlcm::vector3f_t readMag();
-        exlcm::quaternion_t readOrientation();
+        exlcm::scalar_f_t readHeading();
         exlcm::scalar_i32_t readBemf(int idx);
         int32_t readMotorPosition(int port);
         bool readMotorDone(int port);
@@ -53,7 +54,7 @@ namespace platform::wombat::core {
         void setLinearAccelCallback(std::function<void(float, float, float)> /*callback*/) {}
 
     private:
-        lcm::LCM lcm_;
+        raccoon::Transport transport_;
 
         // Background thread for listening
         std::thread listener_thread_;
@@ -75,30 +76,14 @@ namespace platform::wombat::core {
         exlcm::vector3f_t accel_velocity_cache_{};
         exlcm::vector3f_t accel_velocity_offset_{};
         exlcm::vector3f_t mag_cache_{};
-        exlcm::quaternion_t orientation_cache_{};
+        exlcm::scalar_f_t heading_cache_{};
         exlcm::scalar_f_t temp_cache_{};
 
-        // Track whether real IMU orientation data has been received
-        std::atomic<bool> imu_orientation_received_{false};
+        // Track whether real IMU heading data has been received
+        std::atomic<bool> imu_heading_received_{false};
 
         // Background listening function
         void listenLoop();
-
-        // Message handlers
-        void handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg);
-        void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleGyro(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
-        void handleAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
-        void handleLinearAccel(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
-        void handleAccelVelocity(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
-        void handleMag(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::vector3f_t* msg);
-        void handleOrientation(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::quaternion_t* msg);
-        void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleMotorPosition(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleMotorDone(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg);
-        void handleTemp(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_f_t* msg);
     };
 
     enum class MotorDir : uint8_t { Off = 0b00, CCW = 0b01, CW = 0b10, ServoLike = 0b11 };

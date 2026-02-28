@@ -6,7 +6,7 @@
 #define VERSION_SCREENRENDER_HPP
 #include <string>
 
-#include "lcm/lcm-cpp.hpp"
+#include <raccoon/Transport.h>
 
 #endif //VERSION_SCREENRENDER_HPP
 
@@ -14,7 +14,7 @@
 namespace libstp::hal::screen_render {
     class ScreenRender {
         std::string screenName;
-        lcm::LCM lcm;
+        raccoon::Transport transport_;
     public:
 
         static ScreenRender& instance()

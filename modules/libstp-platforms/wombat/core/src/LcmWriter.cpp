@@ -1,9 +1,9 @@
 #include "core/LcmWriter.hpp"
 
-#include <stdexcept>
 #include <chrono>
 
 using namespace platform::wombat::core;
+namespace Channels = raccoon::Channels;
 
 static int64_t currentTimestampUsec()
 {
@@ -15,14 +15,14 @@ void LcmDataWriter::setMotor(uint8_t port, int valueData) {
     exlcm::scalar_i32_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = valueData;
-    lcm.publish("libstp/motor/" + std::to_string(port) + "/power_cmd", &publishedValue);
+    transport_.publish(Channels::motorPowerCommand(port), publishedValue);
 }
 
 void LcmDataWriter::setMotorVelocity(uint8_t port, int32_t velocity) {
     exlcm::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = velocity;
-    lcm.publish("libstp/motor/" + std::to_string(port) + "/velocity_cmd", &msg);
+    transport_.publish(Channels::motorVelocityCommand(port), msg);
 }
 
 void LcmDataWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition) {
@@ -31,7 +31,7 @@ void LcmDataWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goa
     msg.x = static_cast<float>(velocity);
     msg.y = static_cast<float>(goalPosition);
     msg.z = 0.0f;
-    lcm.publish("libstp/motor/" + std::to_string(port) + "/position_cmd", &msg);
+    transport_.publish(Channels::motorPositionCommand(port), msg);
 }
 
 void LcmDataWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition) {
@@ -40,21 +40,14 @@ void LcmDataWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t del
     msg.x = static_cast<float>(velocity);
     msg.y = static_cast<float>(deltaPosition);
     msg.z = 0.0f;
-    lcm.publish("libstp/motor/" + std::to_string(port) + "/relative_cmd", &msg);
+    transport_.publish(Channels::motorRelativeCommand(port), msg);
 }
 
 void LcmDataWriter::setServo(uint8_t port, int valueData) {
     exlcm::scalar_i32_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = valueData;
-    lcm.publish("libstp/servo/" + std::to_string(port) + "/position_cmd", &publishedValue);
-}
-
-void LcmDataWriter::requestDataDump() {
-    exlcm::scalar_i32_t dumpRequest{};
-    dumpRequest.timestamp = currentTimestampUsec();
-    dumpRequest.value = 1;
-    lcm.publish("libstp/system/dump_request", &dumpRequest);
+    transport_.publish(Channels::servoPositionCommand(port), publishedValue);
 }
 
 void LcmDataWriter::resetBemfCounters() {
@@ -64,7 +57,7 @@ void LcmDataWriter::resetBemfCounters() {
     // Reset BEMF counters for all 4 motor ports
     for (int port = 0; port < 4; ++port) {
         resetCmd.timestamp = currentTimestampUsec();
-        lcm.publish("libstp/bemf/" + std::to_string(port) + "/reset_cmd", &resetCmd);
+        transport_.publish(Channels::bemfResetCommand(port), resetCmd);
     }
 }
 
@@ -72,39 +65,38 @@ void LcmDataWriter::setMotorStop(uint8_t port, int value) {
     exlcm::scalar_i32_t stopCmd{};
     stopCmd.timestamp = currentTimestampUsec();
     stopCmd.value = value;
-    lcm.publish("libstp/motor/" + std::to_string(port) + "/stop_cmd", &stopCmd);
+    transport_.publish(Channels::motorStopCommand(port), stopCmd);
 }
 
 void LcmDataWriter::setShutdown(bool enabled) {
     exlcm::scalar_i32_t shutdownCmd{};
     shutdownCmd.timestamp = currentTimestampUsec();
     shutdownCmd.value = enabled ? 1 : 0;
-    lcm.publish("libstp/system/shutdown_cmd", &shutdownCmd);
+    transport_.publish(Channels::SHUTDOWN_CMD, shutdownCmd);
 }
 
 void LcmDataWriter::setImuGyroOrientation(const int8_t matrix[9]) {
     exlcm::orientation_matrix_t msg{};
     msg.timestamp = currentTimestampUsec();
     for (int i = 0; i < 9; ++i) msg.m[i] = matrix[i];
-    lcm.publish("libstp/imu/gyro_orientation_cmd", &msg);
+    transport_.publish(Channels::IMU_GYRO_ORIENTATION_CMD, msg);
 }
 
 void LcmDataWriter::setImuCompassOrientation(const int8_t matrix[9]) {
     exlcm::orientation_matrix_t msg{};
     msg.timestamp = currentTimestampUsec();
     for (int i = 0; i < 9; ++i) msg.m[i] = matrix[i];
-    lcm.publish("libstp/imu/compass_orientation_cmd", &msg);
+    transport_.publish(Channels::IMU_COMPASS_ORIENTATION_CMD, msg);
 }
 
 void LcmDataWriter::setAxisRemap(const int8_t matrix[9]) {
     exlcm::orientation_matrix_t msg{};
     msg.timestamp = currentTimestampUsec();
     for (int i = 0; i < 9; ++i) msg.m[i] = matrix[i];
-    lcm.publish("libstp/imu/axis_remap_cmd", &msg);
+    transport_.publish(Channels::AXIS_REMAP_CMD, msg);
 }
 
-LcmDataWriter::LcmDataWriter() {
-    if (!lcm.good()) {
-        throw std::runtime_error("[LCM-Writer] Failed to initialize LCM");
-    }
+LcmDataWriter::LcmDataWriter()
+    : transport_(raccoon::Transport::create())
+{
 }
