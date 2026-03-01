@@ -24,19 +24,22 @@ CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
 
 # -------- Version patching --------
 PYPROJECT="pyproject.toml"
+RACCOON_PYPROJECT="raccoon-transport/python/pyproject.toml"
 ORIGINAL_VERSION=""
+RACCOON_ORIGINAL_VERSION=""
 
-# Portable sed in-place (works on both GNU and BSD/macOS)
-sedi() { sed "$@" "$PYPROJECT.tmp" > "$PYPROJECT.tmp2" && mv "$PYPROJECT.tmp2" "$PYPROJECT.tmp"; }
-patch_version() {
-  cp "$PYPROJECT" "$PYPROJECT.tmp"
-  sed "s/^version = .*/version = \"$1\"/" "$PYPROJECT" > "$PYPROJECT.tmp"
-  mv "$PYPROJECT.tmp" "$PYPROJECT"
+patch_version_file() {
+  local file="$1" version="$2"
+  sed "s/^version = .*/version = \"$version\"/" "$file" > "$file.tmp"
+  mv "$file.tmp" "$file"
 }
 
 restore_version() {
   if [[ -n "$ORIGINAL_VERSION" ]]; then
-    patch_version "$ORIGINAL_VERSION"
+    patch_version_file "$PYPROJECT" "$ORIGINAL_VERSION"
+  fi
+  if [[ -n "$RACCOON_ORIGINAL_VERSION" ]]; then
+    patch_version_file "$RACCOON_PYPROJECT" "$RACCOON_ORIGINAL_VERSION"
   fi
 }
 
@@ -44,8 +47,15 @@ if [[ "$BUILD_NUMBER" != "0" ]]; then
   ORIGINAL_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$PYPROJECT")
   BASE_VERSION="${ORIGINAL_VERSION%.*}"  # e.g. "1.0"
   NEW_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
-  echo "▶ Patching version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
-  patch_version "$NEW_VERSION"
+  echo "▶ Patching libstp version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
+  patch_version_file "$PYPROJECT" "$NEW_VERSION"
+
+  RACCOON_ORIGINAL_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$RACCOON_PYPROJECT")
+  RACCOON_BASE="${RACCOON_ORIGINAL_VERSION%.*}"
+  RACCOON_NEW="${RACCOON_BASE}.${BUILD_NUMBER}"
+  echo "▶ Patching raccoon-transport version: ${RACCOON_ORIGINAL_VERSION} → ${RACCOON_NEW}"
+  patch_version_file "$RACCOON_PYPROJECT" "$RACCOON_NEW"
+
   trap restore_version EXIT
 fi
 
