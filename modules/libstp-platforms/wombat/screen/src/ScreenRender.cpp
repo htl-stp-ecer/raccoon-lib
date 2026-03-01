@@ -5,7 +5,7 @@
 #include "hal/ScreenRender.hpp"
 #include <string>
 #include <chrono>
-#include <exlcm/screen_render_t.hpp>
+#include <raccoon/screen_render_t.hpp>
 #include <raccoon/Channels.h>
 
 
@@ -23,7 +23,7 @@ libstp::hal::screen_render::ScreenRender::ScreenRender()
 
 void libstp::hal::screen_render::ScreenRender::sendState(const std::string &jsonData) {
     if (current_screen != "") {
-        exlcm::screen_render_t msg{};
+        raccoon::screen_render_t msg{};
         msg.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         msg.screen_name = current_screen;

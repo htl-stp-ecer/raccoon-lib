@@ -37,18 +37,18 @@ LcmReader::LcmReader()
     // Subscribe to servo topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
         auto modeChannel = Channels::servoMode(port);
-        transport_.subscribe<exlcm::scalar_i8_t>(
+        transport_.subscribe<raccoon::scalar_i8_t>(
             modeChannel,
-            [this, port, ch = modeChannel](const exlcm::scalar_i8_t& msg) {
+            [this, port, ch = modeChannel](const raccoon::scalar_i8_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_mode_cache_[port] = msg.dir;
             }, retainedOpts);
 
         auto posChannel = Channels::servoPosition(port);
-        transport_.subscribe<exlcm::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_i32_t>(
             posChannel,
-            [this, port, ch = posChannel](const exlcm::scalar_i32_t& msg) {
+            [this, port, ch = posChannel](const raccoon::scalar_i32_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_value_cache_[port] = msg.value;
@@ -56,49 +56,49 @@ LcmReader::LcmReader()
     }
 
     // Subscribe to IMU topics — high-frequency, no retain needed
-    transport_.subscribe<exlcm::vector3f_t>(
+    transport_.subscribe<raccoon::vector3f_t>(
         Channels::GYRO,
-        [this](const exlcm::vector3f_t& msg) {
+        [this](const raccoon::vector3f_t& msg) {
             logAge(Channels::GYRO, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             gyro_cache_ = msg;
         });
 
-    transport_.subscribe<exlcm::vector3f_t>(
+    transport_.subscribe<raccoon::vector3f_t>(
         Channels::ACCELEROMETER,
-        [this](const exlcm::vector3f_t& msg) {
+        [this](const raccoon::vector3f_t& msg) {
             logAge(Channels::ACCELEROMETER, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             accel_cache_ = msg;
         });
 
-    transport_.subscribe<exlcm::vector3f_t>(
+    transport_.subscribe<raccoon::vector3f_t>(
         Channels::LINEAR_ACCELERATION,
-        [this](const exlcm::vector3f_t& msg) {
+        [this](const raccoon::vector3f_t& msg) {
             logAge(Channels::LINEAR_ACCELERATION, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             linear_accel_cache_ = msg;
         });
 
-    transport_.subscribe<exlcm::vector3f_t>(
+    transport_.subscribe<raccoon::vector3f_t>(
         Channels::ACCEL_VELOCITY,
-        [this](const exlcm::vector3f_t& msg) {
+        [this](const raccoon::vector3f_t& msg) {
             logAge(Channels::ACCEL_VELOCITY, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             accel_velocity_cache_ = msg;
         });
 
-    transport_.subscribe<exlcm::vector3f_t>(
+    transport_.subscribe<raccoon::vector3f_t>(
         Channels::MAGNETOMETER,
-        [this](const exlcm::vector3f_t& msg) {
+        [this](const raccoon::vector3f_t& msg) {
             logAge(Channels::MAGNETOMETER, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             mag_cache_ = msg;
         });
 
-    transport_.subscribe<exlcm::scalar_f_t>(
+    transport_.subscribe<raccoon::scalar_f_t>(
         Channels::HEADING,
-        [this](const exlcm::scalar_f_t& msg) {
+        [this](const raccoon::scalar_f_t& msg) {
             logAge(Channels::HEADING, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             heading_cache_ = msg;
@@ -108,9 +108,9 @@ LcmReader::LcmReader()
     // Subscribe to BEMF topics (indices 0-3) — retained
     for (int idx = 0; idx < 4; ++idx) {
         auto ch = Channels::backEmf(idx);
-        transport_.subscribe<exlcm::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_i32_t>(
             ch,
-            [this, idx, ch](const exlcm::scalar_i32_t& msg) {
+            [this, idx, ch](const raccoon::scalar_i32_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 bemf_cache_[idx] = msg.value;
@@ -120,18 +120,18 @@ LcmReader::LcmReader()
     // Subscribe to motor position and done topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
         auto posCh = Channels::motorPosition(port);
-        transport_.subscribe<exlcm::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_i32_t>(
             posCh,
-            [this, port, ch = posCh](const exlcm::scalar_i32_t& msg) {
+            [this, port, ch = posCh](const raccoon::scalar_i32_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 motor_position_cache_[port] = msg.value;
             }, retainedOpts);
 
         auto doneCh = Channels::motorDone(port);
-        transport_.subscribe<exlcm::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_i32_t>(
             doneCh,
-            [this, port, ch = doneCh](const exlcm::scalar_i32_t& msg) {
+            [this, port, ch = doneCh](const raccoon::scalar_i32_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 motor_done_cache_[port] = msg.value;
@@ -141,9 +141,9 @@ LcmReader::LcmReader()
     // Subscribe to analog topics (ports 0-7)
     for (int port = 0; port < 8; ++port) {
         auto ch = Channels::analog(port);
-        transport_.subscribe<exlcm::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_i32_t>(
             ch,
-            [this, port, ch](const exlcm::scalar_i32_t& msg) {
+            [this, port, ch](const raccoon::scalar_i32_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 analog_cache_[port] = msg.value;
@@ -153,9 +153,9 @@ LcmReader::LcmReader()
     // Subscribe to digital topics (ports 0-15)
     for (int port = 0; port < 16; ++port) {
         auto ch = Channels::digital(port);
-        transport_.subscribe<exlcm::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_i32_t>(
             ch,
-            [this, port, ch](const exlcm::scalar_i32_t& msg) {
+            [this, port, ch](const raccoon::scalar_i32_t& msg) {
                 logAge(ch, msg.timestamp);
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 digital_cache_[port] = msg.value;
@@ -163,9 +163,9 @@ LcmReader::LcmReader()
     }
 
     // Subscribe to temperature topic
-    transport_.subscribe<exlcm::scalar_f_t>(
+    transport_.subscribe<raccoon::scalar_f_t>(
         Channels::TEMPERATURE,
-        [this](const exlcm::scalar_f_t& msg) {
+        [this](const raccoon::scalar_f_t& msg) {
             logAge(Channels::TEMPERATURE, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             temp_cache_ = msg;
@@ -264,50 +264,50 @@ void LcmReader::listenLoop() {
 }
 
 // Read methods - return cached values
-exlcm::scalar_i8_t LcmReader::readServoMode(const int port) {
+raccoon::scalar_i8_t LcmReader::readServoMode(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i8_t result;
+    raccoon::scalar_i8_t result;
     auto it = servo_mode_cache_.find(port);
     result.dir = (it != servo_mode_cache_.end()) ? it->second : 1;  // Default: Disabled
     return result;
 }
 
-exlcm::scalar_i32_t LcmReader::readServoValue(const int port) {
+raccoon::scalar_i32_t LcmReader::readServoValue(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i32_t result;
+    raccoon::scalar_i32_t result;
     auto it = servo_value_cache_.find(port);
     result.value = (it != servo_value_cache_.end()) ? it->second : 1024;  // Default: middle position
     return result;
 }
 
-exlcm::vector3f_t LcmReader::readGyro() {
+raccoon::vector3f_t LcmReader::readGyro() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return gyro_cache_;
 }
 
-exlcm::vector3f_t LcmReader::readAccel() {
+raccoon::vector3f_t LcmReader::readAccel() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return accel_cache_;
 }
 
-exlcm::vector3f_t LcmReader::readLinearAccel() {
+raccoon::vector3f_t LcmReader::readLinearAccel() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return linear_accel_cache_;
 }
 
-exlcm::vector3f_t LcmReader::readMag() {
+raccoon::vector3f_t LcmReader::readMag() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return mag_cache_;
 }
 
-exlcm::scalar_f_t LcmReader::readHeading() {
+raccoon::scalar_f_t LcmReader::readHeading() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return heading_cache_;
 }
 
-exlcm::scalar_i32_t LcmReader::readBemf(const int idx) {
+raccoon::scalar_i32_t LcmReader::readBemf(const int idx) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i32_t result;
+    raccoon::scalar_i32_t result;
     auto it = bemf_cache_.find(idx);
     result.value = (it != bemf_cache_.end()) ? it->second : 0;
     return result;
@@ -325,30 +325,30 @@ bool LcmReader::readMotorDone(const int port) {
     return (it != motor_done_cache_.end()) ? it->second != 0 : false;
 }
 
-exlcm::scalar_i32_t LcmReader::readAnalog(const int port) {
+raccoon::scalar_i32_t LcmReader::readAnalog(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i32_t result;
+    raccoon::scalar_i32_t result;
     auto it = analog_cache_.find(port);
     result.value = (it != analog_cache_.end()) ? it->second : 0;
     return result;
 }
 
-exlcm::scalar_i32_t LcmReader::readDigital(const int port) {
+raccoon::scalar_i32_t LcmReader::readDigital(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::scalar_i32_t result;
+    raccoon::scalar_i32_t result;
     auto it = digital_cache_.find(port);
     result.value = (it != digital_cache_.end()) ? it->second : 0;
     return result;
 }
 
-exlcm::scalar_f_t LcmReader::readTemp() {
+raccoon::scalar_f_t LcmReader::readTemp() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return temp_cache_;
 }
 
-exlcm::vector3f_t LcmReader::readAccelVelocity() {
+raccoon::vector3f_t LcmReader::readAccelVelocity() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    exlcm::vector3f_t result;
+    raccoon::vector3f_t result;
     result.x = accel_velocity_cache_.x - accel_velocity_offset_.x;
     result.y = accel_velocity_cache_.y - accel_velocity_offset_.y;
     result.z = accel_velocity_cache_.z - accel_velocity_offset_.z;

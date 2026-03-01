@@ -2,17 +2,16 @@
 
 #include <raccoon/Transport.h>
 #include <raccoon/Channels.h>
-#include <exlcm/vector3f_t.hpp>
-#include <exlcm/scalar_i8_t.hpp>
-#include <exlcm/scalar_i32_t.hpp>
-#include <exlcm/scalar_f_t.hpp>
-#include <exlcm/orientation_matrix_t.hpp>
+#include <raccoon/vector3f_t.hpp>
+#include <raccoon/scalar_i8_t.hpp>
+#include <raccoon/scalar_i32_t.hpp>
+#include <raccoon/scalar_f_t.hpp>
+#include <raccoon/orientation_matrix_t.hpp>
 
 #include <string>
 
 namespace platform::wombat::core
 {
-
     class LcmDataWriter
     {
     public:
@@ -37,14 +36,6 @@ namespace platform::wombat::core
         // STM32 shutdown flag - disables all motors and servos at firmware level.
         // This is the safest way to ensure motors stop on program exit/crash.
         void setShutdown(bool enabled);
-
-        // IMU orientation matrix commands
-        void setImuGyroOrientation(const int8_t matrix[9]);
-        void setImuCompassOrientation(const int8_t matrix[9]);
-
-        // Body-to-world axis remap (applied in data-reader before LCM publish)
-        void setAxisRemap(const int8_t matrix[9]);
-
     private:
         explicit LcmDataWriter();
         ~LcmDataWriter() = default;

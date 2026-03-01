@@ -3,10 +3,10 @@
 #include <raccoon/Transport.h>
 #include <raccoon/Channels.h>
 #include <raccoon/Options.h>
-#include <exlcm/vector3f_t.hpp>
-#include <exlcm/scalar_i8_t.hpp>
-#include <exlcm/scalar_i32_t.hpp>
-#include <exlcm/scalar_f_t.hpp>
+#include <raccoon/vector3f_t.hpp>
+#include <raccoon/scalar_i8_t.hpp>
+#include <raccoon/scalar_i32_t.hpp>
+#include <raccoon/scalar_f_t.hpp>
 #include <string>
 #include <unordered_map>
 #include <mutex>
@@ -27,24 +27,24 @@ namespace platform::wombat::core {
             return impl;
         }
 
-        exlcm::scalar_i8_t readServoMode(int port);
-        exlcm::scalar_i32_t readServoValue(int port);
+        raccoon::scalar_i8_t readServoMode(int port);
+        raccoon::scalar_i32_t readServoValue(int port);
 
-        exlcm::vector3f_t readGyro();
-        exlcm::vector3f_t readAccel();
-        exlcm::vector3f_t readLinearAccel();
-        exlcm::vector3f_t readAccelVelocity();
+        raccoon::vector3f_t readGyro();
+        raccoon::vector3f_t readAccel();
+        raccoon::vector3f_t readLinearAccel();
+        raccoon::vector3f_t readAccelVelocity();
         void resetAccelVelocity();
-        exlcm::vector3f_t readMag();
-        exlcm::scalar_f_t readHeading();
-        exlcm::scalar_i32_t readBemf(int idx);
+        raccoon::vector3f_t readMag();
+        raccoon::scalar_f_t readHeading();
+        raccoon::scalar_i32_t readBemf(int idx);
         int32_t readMotorPosition(int port);
         bool readMotorDone(int port);
 
-        exlcm::scalar_i32_t readAnalog(int port);
-        exlcm::scalar_i32_t readDigital(int port);
+        raccoon::scalar_i32_t readAnalog(int port);
+        raccoon::scalar_i32_t readDigital(int port);
 
-        exlcm::scalar_f_t readTemp();
+        raccoon::scalar_f_t readTemp();
 
         // Wait for IMU orientation data to be received from the coprocessor
         // Returns true if data was received within timeout_ms, false otherwise
@@ -70,14 +70,14 @@ namespace platform::wombat::core {
         std::unordered_map<int, int32_t> analog_cache_;
         std::unordered_map<int, int32_t> digital_cache_;
 
-        exlcm::vector3f_t gyro_cache_{};
-        exlcm::vector3f_t accel_cache_{};
-        exlcm::vector3f_t linear_accel_cache_{};
-        exlcm::vector3f_t accel_velocity_cache_{};
-        exlcm::vector3f_t accel_velocity_offset_{};
-        exlcm::vector3f_t mag_cache_{};
-        exlcm::scalar_f_t heading_cache_{};
-        exlcm::scalar_f_t temp_cache_{};
+        raccoon::vector3f_t gyro_cache_{};
+        raccoon::vector3f_t accel_cache_{};
+        raccoon::vector3f_t linear_accel_cache_{};
+        raccoon::vector3f_t accel_velocity_cache_{};
+        raccoon::vector3f_t accel_velocity_offset_{};
+        raccoon::vector3f_t mag_cache_{};
+        raccoon::scalar_f_t heading_cache_{};
+        raccoon::scalar_f_t temp_cache_{};
 
         // Track whether real IMU heading data has been received
         std::atomic<bool> imu_heading_received_{false};

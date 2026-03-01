@@ -10,15 +10,19 @@ BUILD_DIR="${BUILD_DIR:-build-docker}"
 echo "▶ Building wheel..."
 bash ./build.sh
 
-# Copy wheel + install.sh into build dir for self-contained deployment
+# Find the built wheel
 WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
 if [[ ! -f "$WHEEL_FILE" ]]; then
   echo "Error: No wheel found in $BUILD_DIR after build"
   exit 1
 fi
 
-cp install.sh "$BUILD_DIR/install.sh"
+# Stage wheel + install.sh in a temp dir (build dir is root-owned from Docker)
+STAGE_DIR=$(mktemp -d)
+trap 'rm -rf "$STAGE_DIR"' EXIT
+cp "$WHEEL_FILE" "$STAGE_DIR/"
+cp install.sh "$STAGE_DIR/install.sh"
 
 # Deploy
 echo "▶ Deploying to Pi..."
-bash "$BUILD_DIR/install.sh"
+bash "$STAGE_DIR/install.sh"
