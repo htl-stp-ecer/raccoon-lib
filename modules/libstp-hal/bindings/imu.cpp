@@ -13,40 +13,11 @@ namespace py = pybind11;
 void init_imu(const py::module& m)
 {
     py::class_<libstp::hal::imu::IMU, std::shared_ptr<libstp::hal::imu::IMU>>(m, "IMU")
-        .def(py::init([](std::vector<int> gyro_orientation, std::vector<int> compass_orientation,
-                         std::vector<int> axis_remap)
+        .def(py::init([]()
         {
             auto imu = std::make_shared<libstp::hal::imu::IMU>();
-            auto& writer = platform::wombat::core::LcmDataWriter::instance();
-            if (!gyro_orientation.empty())
-            {
-                if (gyro_orientation.size() != 9)
-                    throw std::invalid_argument("gyro_orientation must have exactly 9 elements");
-                int8_t m[9];
-                for (int i = 0; i < 9; ++i) m[i] = static_cast<int8_t>(gyro_orientation[i]);
-                writer.setImuGyroOrientation(m);
-            }
-            if (!compass_orientation.empty())
-            {
-                if (compass_orientation.size() != 9)
-                    throw std::invalid_argument("compass_orientation must have exactly 9 elements");
-                int8_t m[9];
-                for (int i = 0; i < 9; ++i) m[i] = static_cast<int8_t>(compass_orientation[i]);
-                writer.setImuCompassOrientation(m);
-            }
-            if (!axis_remap.empty())
-            {
-                if (axis_remap.size() != 9)
-                    throw std::invalid_argument("axis_remap must have exactly 9 elements");
-                int8_t m[9];
-                for (int i = 0; i < 9; ++i) m[i] = static_cast<int8_t>(axis_remap[i]);
-                writer.setAxisRemap(m);
-            }
             return imu;
-        }),
-             py::arg("gyro_orientation") = std::vector<int>{},
-             py::arg("compass_orientation") = std::vector<int>{},
-             py::arg("axis_remap") = std::vector<int>{})
+        }), "Create an IMU instance")
         .def("read", [](libstp::hal::imu::IMU& self)
         {
             float accel[3] = {0.0f, 0.0f, 0.0f};
@@ -80,33 +51,5 @@ void init_imu(const py::module& m)
          "Get current turn-rate axis mode string")
     .def("calibrate", &libstp::hal::imu::IMU::calibrate, "Calibrate the IMU sensor")
     .def("get_heading", &libstp::hal::imu::IMU::getHeading,
-         "Get firmware-computed heading in radians")
-    .def_static("set_gyro_orientation", [](std::vector<int> matrix)
-    {
-        if (matrix.size() != 9)
-            throw std::invalid_argument("Orientation matrix must have exactly 9 elements");
-        int8_t m[9];
-        for (int i = 0; i < 9; ++i) m[i] = static_cast<int8_t>(matrix[i]);
-        platform::wombat::core::LcmDataWriter::instance().setImuGyroOrientation(m);
-    }, py::arg("matrix"),
-       "Set IMU gyro orientation matrix (9 int8 elements, 3x3 row-major)")
-    .def_static("set_compass_orientation", [](std::vector<int> matrix)
-    {
-        if (matrix.size() != 9)
-            throw std::invalid_argument("Orientation matrix must have exactly 9 elements");
-        int8_t m[9];
-        for (int i = 0; i < 9; ++i) m[i] = static_cast<int8_t>(matrix[i]);
-        platform::wombat::core::LcmDataWriter::instance().setImuCompassOrientation(m);
-    }, py::arg("matrix"),
-       "Set IMU compass orientation matrix (9 int8 elements, 3x3 row-major)")
-    .def_static("set_axis_remap", [](std::vector<int> matrix)
-    {
-        if (matrix.size() != 9)
-            throw std::invalid_argument("Axis remap matrix must have exactly 9 elements");
-        int8_t m[9];
-        for (int i = 0; i < 9; ++i) m[i] = static_cast<int8_t>(matrix[i]);
-        platform::wombat::core::LcmDataWriter::instance().setAxisRemap(m);
-    }, py::arg("matrix"),
-       "Set body-to-world axis remap matrix (9 int8 elements, 3x3 row-major). "
-       "Applied in the data-reader to ALL sensor data before LCM publish.");
+         "Get firmware-computed heading in radians");
 }

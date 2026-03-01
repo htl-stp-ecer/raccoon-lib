@@ -15,8 +15,8 @@ import time
 import lcm
 from libstp.step.base import Step
 from libstp.button import is_pressed
-from .exlcm.screen_render_t import screen_render_t
-from .exlcm.screen_render_answer_t import screen_render_answer_t
+from .raccoon.screen_render_t import screen_render_t
+from .raccoon.screen_render_answer_t import screen_render_answer_t
 
 from .screen import UIScreen
 from .widgets import Text, Button, Center, Column, Row, Spacer

@@ -40,9 +40,9 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
     // ToDo: Check if buffers are large enough
 #endif
 
-    const exlcm::vector3f_t accelValue = platform::wombat::core::LcmReader::instance().readAccel();
-    const exlcm::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
-    const exlcm::vector3f_t magValue = platform::wombat::core::LcmReader::instance().readMag();
+    const raccoon::vector3f_t accelValue = platform::wombat::core::LcmReader::instance().readAccel();
+    const raccoon::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
+    const raccoon::vector3f_t magValue = platform::wombat::core::LcmReader::instance().readMag();
 
     accel[0] = accelValue.x;
     accel[1] = accelValue.y;
@@ -65,7 +65,7 @@ void libstp::hal::imu::IMU::getAngularVelocity(float* gyro)
 #endif
 
     constexpr float deg_to_rad = static_cast<float>(M_PI / 180.0);
-    const exlcm::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
+    const raccoon::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
     gyro[0] = gyroValue.x * deg_to_rad;
     gyro[1] = gyroValue.y * deg_to_rad;
     gyro[2] = gyroValue.z * deg_to_rad;
@@ -92,7 +92,7 @@ void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
     }
 #endif
 
-    const exlcm::vector3f_t linearAccelValue = platform::wombat::core::LcmReader::instance().readLinearAccel();
+    const raccoon::vector3f_t linearAccelValue = platform::wombat::core::LcmReader::instance().readLinearAccel();
     linear_accel[0] = linearAccelValue.x;
     linear_accel[1] = linearAccelValue.y;
     linear_accel[2] = linearAccelValue.z;
