@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <Eigen/Geometry>
 #include "hal/IIMU.hpp"
 
 namespace libstp::hal::imu
@@ -22,7 +21,7 @@ namespace libstp::hal::imu
         void read(float* accel, float* gyro, float* magneto) override;
         void getAngularVelocity(float* gyro) override;
         void calibrate() override;
-        [[nodiscard]] Eigen::Quaternionf getOrientation() override;
+        [[nodiscard]] float getHeading() override;
         void getLinearAcceleration(float* linear_accel) override;
         void getIntegratedVelocity(float* vel) override;
         void resetIntegratedVelocity() override;

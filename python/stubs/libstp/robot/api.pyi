@@ -26,11 +26,19 @@ class GenericRobot(abc.ABC, libstp.class_name_logger.ClassNameLogger):
             - shutdown_mission: Mission to run after all missions complete
         
     """
-    __abstractmethods__: typing.ClassVar[frozenset]  # value = frozenset({'odometry', 'defs', 'drive'})
+    __abstractmethods__: typing.ClassVar[frozenset]  # value = frozenset({'odometry', 'defs', 'drive', 'shutdown_in'})
     _abc_impl: typing.ClassVar[_abc._abc_data]  # value = <_abc._abc_data object>
     def __init__(self) -> None:
         """
         Initialize the robot and log configuration status.
+        """
+    def _pre_start_gate(self) -> None:
+        """
+        Wait for light or button press before starting main missions.
+        """
+    def _run_main_missions(self, missions) -> None:
+        """
+        Execute main missions sequentially.
         """
     def _run_missions(self) -> None:
         """
@@ -85,6 +93,11 @@ class GenericRobot(abc.ABC, libstp.class_name_logger.ClassNameLogger):
     def shutdown_mission(self) -> typing.Optional[libstp.robot.api.MissionProtocol]:
         """
         Optional mission to run after all missions complete.
+        """
+    @property
+    def shutdown_in(self) -> float:
+        """
+        Maximum runtime in seconds for main missions.
         """
 class MissionProtocol(typing.Protocol):
     """

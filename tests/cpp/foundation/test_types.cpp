@@ -21,13 +21,12 @@ TEST_F(TypesTest, ChassisVelocityInitialization) {
     EXPECT_NEAR(cv.wz, 3.0, kTolerance);
 }
 
-TEST_F(TypesTest, PoseExplicitInitialization) {
-    // Note: Eigen types don't default-initialize, so we test explicit initialization
-    Pose pose{Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity()};
+TEST_F(TypesTest, PoseDefaultInitialization) {
+    Pose pose{};
     EXPECT_NEAR(pose.position.x(), 0.0f, 1e-6f);
     EXPECT_NEAR(pose.position.y(), 0.0f, 1e-6f);
     EXPECT_NEAR(pose.position.z(), 0.0f, 1e-6f);
-    EXPECT_NEAR(pose.orientation.w(), 1.0f, 1e-6f);
+    EXPECT_NEAR(pose.heading, 0.0f, 1e-6f);
 }
 
 // TODO: Add more tests for Meters, Radians, etc. once their interfaces are confirmed

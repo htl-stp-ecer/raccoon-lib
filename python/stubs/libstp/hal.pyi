@@ -23,9 +23,9 @@ class IMU:
         """
         Calibrate the IMU sensor
         """
-    def get_orientation(self) -> tuple:
+    def get_heading(self) -> float:
         """
-        Get the current orientation as a quaternion (w, x, y, z)
+        Get firmware-computed heading in radians
         """
     def read(self) -> tuple:
         """

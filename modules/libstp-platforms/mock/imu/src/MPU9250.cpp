@@ -66,9 +66,9 @@ void libstp::hal::imu::IMU::calibrate()
     LIBSTP_LOG_INFO("[IMU Mock] Calibration complete (simulated).");
 }
 
-Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
+float libstp::hal::imu::IMU::getHeading()
 {
-    return Eigen::Quaternionf::Identity();
+    return 0.0f;
 }
 
 bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)

@@ -36,12 +36,10 @@ TEST_F(FusedOdometryTest, HeadingTracksYawRotation) {
     constexpr double kHalfPi = 1.5707963267948966;
     FusedOdometry odom(mock_imu_, mock_kinematics_);
 
-    odom.update(0.01); // Capture initial IMU orientation as origin
+    odom.update(0.01); // Capture initial IMU heading as origin
 
-    // Simulate a 90° CCW yaw rotation around Z axis.
-    // DMP uses ENU convention: positive rotation around Z = CCW from above.
-    mock_imu_->setOrientation(Eigen::Quaternionf(
-        Eigen::AngleAxisf(static_cast<float>(kHalfPi), Eigen::Vector3f::UnitZ())));
+    // Simulate a 90 deg CCW rotation via firmware heading
+    mock_imu_->setHeading(static_cast<float>(kHalfPi));
     odom.update(0.01);
 
     EXPECT_EQ(mock_imu_->getYawRateAxisMode(), libstp::hal::imu::TurnAxisMode::WorldZ);
@@ -49,29 +47,15 @@ TEST_F(FusedOdometryTest, HeadingTracksYawRotation) {
 }
 
 TEST_F(FusedOdometryTest, HeadingTracksTiltedBodyRotation) {
-    // This test verifies the critical fix: heading extraction works correctly
-    // when the robot body is tilted (e.g. body Y pointing up instead of Z).
-    //
-    // Bug: extractYaw(Q_initial⁻¹ * Q_current) returns ~0 for tilted bodies
-    // because the relative quaternion encodes heading change as pitch (R_y),
-    // not yaw (R_z).
-    //
-    // Fix: extract yaw from absolute quaternions independently and subtract.
+    // Heading comes directly from firmware, so tilt is irrelevant.
     constexpr double kHalfPi = 1.5707963267948966;
     FusedOdometry odom(mock_imu_, mock_kinematics_);
 
-    // Body Y points up: tilt by -90° around X axis
-    // Q_initial = R_x(-π/2): body Y → earth Z
-    const Eigen::Quaternionf q_tilt(
-        Eigen::AngleAxisf(static_cast<float>(-kHalfPi), Eigen::Vector3f::UnitX()));
-    mock_imu_->setOrientation(q_tilt);
-    odom.update(0.01); // Capture tilted initial orientation
+    mock_imu_->setHeading(0.0f);
+    odom.update(0.01); // Capture initial heading
 
-    // Simulate 90° CCW turn around world Z while body is tilted.
-    // Q_current = R_z(+π/2) * R_x(-π/2) (ENU: +π/2 for CCW)
-    const Eigen::Quaternionf q_turn(
-        Eigen::AngleAxisf(static_cast<float>(kHalfPi), Eigen::Vector3f::UnitZ()));
-    mock_imu_->setOrientation(q_turn * q_tilt);
+    // Simulate 90 deg CCW turn — firmware reports heading directly
+    mock_imu_->setHeading(static_cast<float>(kHalfPi));
     odom.update(0.01);
 
     EXPECT_NEAR(odom.getHeading(), kHalfPi, 1e-3);

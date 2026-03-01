@@ -85,7 +85,7 @@ include_directories(${eigen_SOURCE_DIR})
 # ---------- raccoon-transport (brings LCM + message types) ----------
 FetchContent_Declare(
         raccoon_transport
-        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../raccoon-transport
+        SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/raccoon-transport
 )
 FetchContent_MakeAvailable(raccoon_transport)
 

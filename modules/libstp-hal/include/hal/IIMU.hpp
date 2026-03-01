@@ -3,7 +3,6 @@
 //
 #pragma once
 
-#include <Eigen/Geometry>
 #include <algorithm>
 #include <cctype>
 #include <stdexcept>
@@ -100,7 +99,12 @@ namespace libstp::hal::imu
 
         virtual void read(float* accel, float* gyro, float* magneto) = 0;
         virtual void calibrate() = 0;
-        [[nodiscard]] virtual Eigen::Quaternionf getOrientation() = 0;
+
+        /**
+         * Get firmware-computed heading in radians
+         * @return Heading in radians (converted from firmware degrees)
+         */
+        [[nodiscard]] virtual float getHeading() = 0;
 
         /**
          * Get angular velocity (gyroscope) in body frame
@@ -147,23 +151,19 @@ namespace libstp::hal::imu
         {
             float g[3];
             getAngularVelocity(g);
-            const Eigen::Vector3f gyro_body(g[0], g[1], g[2]);
 
             float rate = 0.0f;
             switch (yaw_rate_axis_mode_)
             {
                 case TurnAxisMode::BodyX:
-                    rate = gyro_body.x(); break;
+                    rate = g[0]; break;
                 case TurnAxisMode::BodyY:
-                    rate = gyro_body.y(); break;
+                    rate = g[1]; break;
                 case TurnAxisMode::BodyZ:
-                    rate = gyro_body.z(); break;
+                    rate = g[2]; break;
                 case TurnAxisMode::WorldZ:
                 default:
-                {
-                    const Eigen::Vector3f gyro_world = getOrientation() * gyro_body;
-                    rate = gyro_world.z(); break;
-                }
+                    rate = g[2]; break;
             }
             return yaw_rate_sign_ * rate;
         }

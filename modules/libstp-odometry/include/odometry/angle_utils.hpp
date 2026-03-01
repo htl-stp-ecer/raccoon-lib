@@ -54,60 +54,6 @@ inline double angularError(double current_rad, double target_rad) {
 }
 
 /**
- * @brief Compute angular error using quaternion math (robust, no gimbal lock)
- *
- * Computes the yaw component of the rotation needed to go from current orientation
- * to target orientation. This method uses quaternion algebra and is immune to
- * gimbal lock issues.
- *
- * @param current Current orientation quaternion (should be normalized)
- * @param target Target orientation quaternion (should be normalized)
- * @return Signed yaw error in radians, range [-π, π]
- *         - Positive: turn CCW
- *         - Negative: turn CW
- *
- * This is the RECOMMENDED method for heading error computation in motion control
- * as it:
- * - Handles quaternion hemisphere ambiguity (q and -q represent same rotation)
- * - Avoids gimbal lock
- * - Works correctly for all orientations
- *
- * Use this function as input to heading PID controllers when working with
- * quaternion-based odometry.
- */
-inline double quaternionAngularError(const Eigen::Quaternionf& current,
-                                      const Eigen::Quaternionf& target) {
-    // Normalize to ensure valid quaternions
-    Eigen::Quaternionf current_norm = current.normalized();
-    Eigen::Quaternionf target_norm = target.normalized();
-
-    // Handle quaternion hemisphere: q and -q represent the same rotation
-    // Choose the hemisphere that minimizes the rotation angle
-    if (target_norm.dot(current_norm) < 0.0f) {
-        target_norm.coeffs() *= -1.0f;
-    }
-
-    // Compute relative rotation: current -> target
-    // q_error represents the rotation needed to go from current to target
-    Eigen::Quaternionf q_error = target_norm * current_norm.conjugate();
-
-    // Extract yaw angle from error quaternion
-    // For a quaternion q = [w, x, y, z], the yaw (rotation around z-axis) is:
-    // yaw = atan2(2*(w*z + x*y), 1 - 2*(y^2 + z^2))
-    //
-    // However, for small angles around z-axis, we can use the simplified form:
-    // yaw ≈ 2 * atan2(z, w)
-    //
-    // This is valid when pitch and roll are small, which is typical for
-    // ground robots. For full 3D orientation, use the complete formula.
-    const double yaw_error = 2.0 * std::atan2(static_cast<double>(q_error.z()),
-                                               static_cast<double>(q_error.w()));
-
-    // Wrap to [-π, π] to ensure consistent output
-    return wrapAngle(yaw_error);
-}
-
-/**
  * @brief Extract heading (horizontal-plane direction) from a quaternion
  *
  * Projects the body X-axis (forward) through the quaternion into world frame,
@@ -131,26 +77,6 @@ inline double extractHeading(const Eigen::Quaternionf& orientation) {
     // Measure direction on world XY plane
     return std::atan2(static_cast<double>(forward.y()),
                       static_cast<double>(forward.x()));
-}
-
-/**
- * @brief Extract yaw angle from a quaternion using ZYX Euler decomposition
- *
- * WARNING: This function has gimbal lock at pitch = ±90°. If the robot body
- * is tilted (e.g., body Y pointing up), use extractHeading() instead.
- *
- * @param orientation Orientation quaternion (should be normalized)
- * @return Yaw angle in radians, range [-π, π]
- */
-inline double extractYaw(const Eigen::Quaternionf& orientation) {
-    const Eigen::Quaternionf q = orientation.normalized();
-
-    const double siny_cosp = 2.0 * (static_cast<double>(q.w() * q.z()) +
-                                     static_cast<double>(q.x() * q.y()));
-    const double cosy_cosp = 1.0 - 2.0 * (static_cast<double>(q.y() * q.y()) +
-                                           static_cast<double>(q.z() * q.z()));
-
-    return std::atan2(siny_cosp, cosy_cosp);
 }
 
 } // namespace odometry

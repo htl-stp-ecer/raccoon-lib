@@ -11,20 +11,15 @@ namespace libstp::test
         MOCK_METHOD(void, read, (float* accel, float* gyro, float* magneto), (override));
         MOCK_METHOD(void, getAngularVelocity, (float* gyro), (override));
         MOCK_METHOD(void, calibrate, (), (override));
-        MOCK_METHOD(Eigen::Quaternionf, getOrientation, (), (override));
+        MOCK_METHOD(float, getHeading, (), (override));
         MOCK_METHOD(void, getLinearAcceleration, (float*), (override));
         MOCK_METHOD(void, getIntegratedVelocity, (float*), (override));
         MOCK_METHOD(void, resetIntegratedVelocity, (), (override));
         MOCK_METHOD(bool, waitForReady, (int timeout_ms), (override));
 
         // Simulation helpers
-        void setOrientation(const Eigen::Quaternionf& q) {
-            ON_CALL(*this, getOrientation()).WillByDefault(testing::Return(q));
-        }
-
-        void setOrientationFromYaw(double yaw_rad) {
-            Eigen::Quaternionf q(Eigen::AngleAxisf(static_cast<float>(yaw_rad), Eigen::Vector3f::UnitZ()));
-            setOrientation(q);
+        void setHeading(float heading_rad) {
+            ON_CALL(*this, getHeading()).WillByDefault(testing::Return(heading_rad));
         }
 
         void setReady(bool ready) {
@@ -34,7 +29,7 @@ namespace libstp::test
         // Default setup for common test scenarios
         void setupDefaults() {
             setReady(true);
-            setOrientationFromYaw(0.0);
+            setHeading(0.0f);
         }
     };
 }

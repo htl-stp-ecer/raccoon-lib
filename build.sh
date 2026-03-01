@@ -10,6 +10,7 @@ IMAGE_NAME="${IMAGE_NAME:-libstp-dev:arm64}"
 CCACHE_VOL="${CCACHE_VOL:-libstp-ccache}"
 PIP_CACHE_VOL="${PIP_CACHE_VOL:-libstp-pip-cache}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
+BUILD_NUMBER="${BUILD_NUMBER:-0}"
 # Portable CPU count default
 if command -v nproc >/dev/null 2>&1; then
   _cpu="$(nproc)"
@@ -20,6 +21,25 @@ BUILD_JOBS="${BUILD_JOBS:-${_cpu}}"
 FORCE_REBUILD="${FORCE_REBUILD:-0}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
 CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
+
+# -------- Version patching --------
+PYPROJECT="pyproject.toml"
+ORIGINAL_VERSION=""
+
+restore_version() {
+  if [[ -n "$ORIGINAL_VERSION" ]]; then
+    sed -i "s/^version = .*/version = \"${ORIGINAL_VERSION}\"/" "$PYPROJECT"
+  fi
+}
+
+if [[ "$BUILD_NUMBER" != "0" ]]; then
+  ORIGINAL_VERSION=$(grep -Po '(?<=^version = ")[^"]+' "$PYPROJECT")
+  BASE_VERSION="${ORIGINAL_VERSION%.*}"  # e.g. "1.0"
+  NEW_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
+  echo "▶ Patching version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
+  sed -i "s/^version = .*/version = \"${NEW_VERSION}\"/" "$PYPROJECT"
+  trap restore_version EXIT
+fi
 
 echo "▶ Building Python library $PROJECT_NAME for $PLATFORM using $IMAGE_NAME"
 mkdir -p "$BUILD_DIR"
@@ -54,9 +74,23 @@ ensure_image() {
 }
 
 docker_exec() {
+  local ccache_mount
+  if [[ -n "${CCACHE_HOST_DIR:-}" ]]; then
+    # Bind-mount host directory (enables GitHub Actions caching)
+    ccache_mount=(-v "${CCACHE_HOST_DIR}:/ccache")
+  else
+    # Use Docker volume (local dev default)
+    ccache_mount=(-v "$CCACHE_VOL:/ccache")
+  fi
+
+  local extra_env=()
+  if [[ -n "${FORCE_RECONFIGURE:-}" ]]; then
+    extra_env+=(-e "FORCE_RECONFIGURE=${FORCE_RECONFIGURE}")
+  fi
+
   docker run --rm --platform="$PLATFORM" \
     -v "$PWD":/src \
-    -v "$CCACHE_VOL":/ccache \
+    "${ccache_mount[@]}" \
     -v "$PIP_CACHE_VOL":/root/.cache/pip \
     -e CCACHE_DIR=/ccache \
     -e CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
@@ -68,6 +102,7 @@ docker_exec() {
     -e MAKEFLAGS="-j$BUILD_JOBS" \
     -e SKBUILD_BUILD_DIR=/src/_skbuild-docker \
     -e FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker \
+    "${extra_env[@]}" \
     --cpus="$(nproc)" \
     -w /src \
     "$IMAGE_NAME" \
@@ -76,7 +111,9 @@ docker_exec() {
 
 need_builder
 ensure_binfmt
-docker volume create "$CCACHE_VOL" >/dev/null
+if [[ -z "${CCACHE_HOST_DIR:-}" ]]; then
+  docker volume create "$CCACHE_VOL" >/dev/null
+fi
 docker volume create "$PIP_CACHE_VOL" >/dev/null
 ensure_image
 

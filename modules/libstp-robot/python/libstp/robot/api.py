@@ -36,6 +36,7 @@ class RobotDefinitionsProtocol(Protocol):
 
     analog_sensors: List[AnalogSensor]
     button: DigitalSensor
+    wait_for_light_sensor: Optional[AnalogSensor]
 
 class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     """
@@ -68,6 +69,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     @abstractmethod
     def odometry(self) -> "Odometry":
         """Odometry system for position tracking."""
+        ...
+
+    @property
+    @abstractmethod
+    def shutdown_in(self) -> float:
+        """Maximum runtime in seconds for main missions. MUST be specified."""
         ...
 
     @property
@@ -152,6 +159,36 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         self.info("Starting robot (async)")
         await self._run_missions()
 
+    async def _pre_start_gate(self) -> None:
+        """Wait for light or button press before starting main missions.
+
+        Override this method in a subclass to customize pre-start behavior.
+        """
+        import os
+        dev_mode = os.environ.get("LIBSTP_DEV_MODE") == "1"
+
+        if dev_mode:
+            self.info("Dev mode: waiting for button press")
+            from libstp.step import wait_for_button
+            await wait_for_button().run_step(self)
+        else:
+            sensor = getattr(self.defs, "wait_for_light_sensor", None)
+            if sensor is None:
+                self.warn("No wait_for_light_sensor configured in defs! Falling back to wait_for_button.")
+                from libstp.step import wait_for_button
+                await wait_for_button().run_step(self)
+            else:
+                self.info("Waiting for light...")
+                from libstp.step.calibration import calibrate_wait_for_light
+                await calibrate_wait_for_light(sensor).run_step(self)
+
+    async def _run_main_missions(self, missions: List["MissionProtocol"]) -> None:
+        """Execute main missions sequentially."""
+        for mission in missions:
+            self.info(f"Starting mission: {mission}")
+            await mission.run(self)
+            self.info(f"Finished mission: {mission}")
+
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
         missions = list(self.missions)
@@ -165,17 +202,28 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             self.info("Running setup mission")
             await setup_mission.run(self)
 
+        # Pre-start gate (wait for light or button)
+        await self._pre_start_gate()
+
+        # Main missions with shutdown timer
         initialize_timer() # reset clock to 0 before main missions
         self.synchronizer.start_recording()
-        for mission in missions:
-            self.info(f"Starting mission: {mission}")
-            await mission.run(self)
-            self.info(f"Finished mission: {mission}")
 
+        try:
+            await asyncio.wait_for(
+                self._run_main_missions(missions),
+                timeout=self.shutdown_in,
+            )
+        except asyncio.TimeoutError:
+            self.error(f"Shutdown timer expired after {self.shutdown_in}s! Forcing shutdown.")
+
+        # Always run shutdown mission
         initialize_timer() # reset clock to 0 before shutdown mission
         if shutdown_mission is not None:
             self.info("Running shutdown mission")
             await shutdown_mission.run(self)
+
+        self.info("Robot execution complete. Exiting.")
 
     def _preload_missions(
         self,

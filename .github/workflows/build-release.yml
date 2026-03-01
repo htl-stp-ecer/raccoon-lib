@@ -1,0 +1,84 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: buildx-${{ runner.os }}-${{ hashFiles('Dockerfile') }}
+          restore-keys: buildx-${{ runner.os }}-
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: ccache-${{ runner.os }}-
+
+      - name: Build ARM64 wheel
+        run: |
+          mkdir -p /tmp/ccache
+          SKIP_TESTS=1 \
+          BUILD_NUMBER=${{ github.run_number }} \
+          CCACHE_HOST_DIR=/tmp/ccache \
+          bash build.sh
+
+      - name: Determine version
+        id: version
+        run: |
+          WHL=$(find build-docker -name '*.whl' -type f | head -1)
+          VERSION=$(echo "$WHL" | grep -oP '(?<=libstp-)[^-]+')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
+          echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
+
+      - name: Bundle release assets
+        run: |
+          mkdir -p release-bundle
+          cp "${{ steps.version.outputs.wheel }}" release-bundle/
+          cp install.sh release-bundle/
+          cd release-bundle
+          tar czf ../libstp-${{ steps.version.outputs.version }}.tar.gz *
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: libstp ${{ steps.version.outputs.version }}
+          body: |
+            Automated release from commit ${{ github.sha }}.
+
+            **Install on Raspberry Pi:**
+            ```bash
+            tar xzf libstp-${{ steps.version.outputs.version }}.tar.gz
+            RPI_HOST=<your-pi-ip> bash install.sh
+            ```
+          files: |
+            libstp-${{ steps.version.outputs.version }}.tar.gz
+            ${{ steps.version.outputs.wheel }}
