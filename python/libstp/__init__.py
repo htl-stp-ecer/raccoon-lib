@@ -5,6 +5,15 @@ import signal
 from types import FrameType
 from typing import Dict
 
+from libstp._core import __version__ as __version__
+
+try:
+    from raccoon_transport import __version__ as _raccoon_version
+except Exception:
+    _raccoon_version = "unknown"
+
+print(f"libstp v{__version__} | raccoon-transport v{_raccoon_version}")
+
 from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger
 from libstp.foundation import initialize_logging
