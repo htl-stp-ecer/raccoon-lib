@@ -53,7 +53,7 @@ jobs:
         id: version
         run: |
           WHL=$(find build-docker -name '*.whl' -type f | head -1)
-          VERSION=$(echo "$WHL" | grep -oP '(?<=libstp-)[^-]+')
+          VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
