@@ -163,7 +163,7 @@ namespace libstp::motion
         if (std::abs(raw_velocity) > 3.0 * max_velocity_) {
             LIBSTP_LOG_WARN(
                 "TURN [c={}] HEADING JUMP: raw_vel={:.3f}rad/s (>{:.1f}x max) - "
-                "heading={:.3f} prev={:.3f} (extractYaw discontinuity?)",
+                "heading={:.3f} prev={:.3f} (heading discontinuity?)",
                 cycle_, raw_velocity, 3.0, current_heading, current_heading - raw_velocity * dt);
         }
         if (std::abs(omega_cmd) >= max_velocity_ * 0.99 && std::abs(error) > 0.1) {

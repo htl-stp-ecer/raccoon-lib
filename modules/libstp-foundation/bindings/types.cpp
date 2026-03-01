@@ -22,8 +22,7 @@ std::string pose_to_string(const libstp::foundation::Pose& pose)
 {
     std::ostringstream oss;
     oss << "Pose(position=[" << pose.position.x() << ", " << pose.position.y() << ", " << pose.position.z()
-        << "], orientation=[" << pose.orientation.w() << ", " << pose.orientation.x() << ", "
-        << pose.orientation.y() << ", " << pose.orientation.z() << "])";
+        << "], heading=" << pose.heading << ")";
     return oss.str();
 }
 
@@ -45,22 +44,7 @@ void init_types(const py::module& m)
     py::class_<libstp::foundation::Pose>(m, "Pose")
         .def(py::init<>())
         .def_readwrite("position", &libstp::foundation::Pose::position)
-        .def_property(
-            "orientation",
-            [](const libstp::foundation::Pose& pose) {
-                const auto& q = pose.orientation;
-                return py::make_tuple(q.w(), q.x(), q.y(), q.z());
-            },
-            [](libstp::foundation::Pose& pose, const py::sequence& value) {
-                if (py::len(value) != 4) {
-                    throw py::value_error("orientation expects an iterable of length 4 (w, x, y, z)");
-                }
-                pose.orientation =
-                    libstp::foundation::Quaternionf(value[0].cast<float>(),
-                                                    value[1].cast<float>(),
-                                                    value[2].cast<float>(),
-                                                    value[3].cast<float>());
-            })
+        .def_readwrite("heading", &libstp::foundation::Pose::heading)
         .def("__repr__", &pose_to_string)
         .def("__str__", &pose_to_string);
 }

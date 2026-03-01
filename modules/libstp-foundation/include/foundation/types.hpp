@@ -9,12 +9,11 @@
 namespace libstp::foundation {
 
     using Vector3f = Eigen::Vector3f;
-    using Quaternionf = Eigen::Quaternionf;
 
     struct Pose {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        Vector3f position;
-        Quaternionf orientation;
+        Vector3f position{Vector3f::Zero()};
+        float heading{0.0f}; // radians, 0 = +X, positive = CCW
     };
 
     /**

@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "libstp"
-version = "0.0.1"
+version = "1.0.0"
 description="LibStp robotics library"
 readme = "README.md"
 authors = [
@@ -50,14 +50,6 @@ filterwarnings = [
 ]
 testpaths = ["tests"]
 
-
-[tool.cibuildwheel]
-build-frontend = "build[uv]"
-test-command = "pytest {project}/tests"
-test-extras = ["test"]
-
-[tool.cibuildwheel.pyodide]
-build-frontend = {name = "build", args = ["--exports", "whole_archive"]}
 
 [tool.ruff.lint]
 extend-select = [

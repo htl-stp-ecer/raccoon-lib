@@ -79,11 +79,8 @@ void init_imu(const py::module& m)
     .def("get_yaw_rate_axis_mode", &libstp::hal::imu::IMU::getYawRateAxisModeName,
          "Get current turn-rate axis mode string")
     .def("calibrate", &libstp::hal::imu::IMU::calibrate, "Calibrate the IMU sensor")
-    .def("get_orientation", [](libstp::hal::imu::IMU& self)
-    {
-        const Eigen::Quaternionf orientation = self.getOrientation();
-        return py::make_tuple(orientation.w(), orientation.x(), orientation.y(), orientation.z());
-    }, "Get the current orientation as a quaternion (w, x, y, z)")
+    .def("get_heading", &libstp::hal::imu::IMU::getHeading,
+         "Get firmware-computed heading in radians")
     .def_static("set_gyro_orientation", [](std::vector<int> matrix)
     {
         if (matrix.size() != 9)

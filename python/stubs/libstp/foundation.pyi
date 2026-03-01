@@ -98,10 +98,10 @@ class Pose:
     def __str__(self) -> str:
         ...
     @property
-    def orientation(self) -> tuple:
+    def heading(self) -> float:
         ...
-    @orientation.setter
-    def orientation(self, arg1: typing.Sequence) -> None:
+    @heading.setter
+    def heading(self, arg1: float) -> None:
         ...
 def debug(message: str) -> None:
     """

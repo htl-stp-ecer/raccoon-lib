@@ -22,11 +22,8 @@ namespace libstp::odometry::fused
         float bemf_trust;
 
         /// Which axis to use for yaw rate extraction.
-        /// "world_z" (default) rotates body gyro to world frame via quaternion.
-        /// "body_x", "body_y", "body_z" use the raw body-frame gyro component directly,
-        /// useful when the robot is mounted with a non-Z axis pointing up (e.g. body_y
-        /// for a robot standing on its side) since this avoids dependence on DMP
-        /// quaternion convergence.
+        /// "world_z" (default) uses gyro Z (already in world frame).
+        /// "body_x", "body_y", "body_z" use the raw body-frame gyro component directly.
         std::string turn_axis;
 
         FusedOdometryConfig(const int imu_ready_timeout_ms = 1000,
@@ -66,22 +63,18 @@ namespace libstp::odometry::fused
 
         // Current state
         Eigen::Vector3f position_;           // Current position in world frame
-        Eigen::Quaternionf orientation_;     // Current orientation in world frame
 
         // Origin tracking (set by reset)
         Eigen::Vector3f origin_position_;    // Position at last reset
-        Eigen::Quaternionf origin_orientation_; // Orientation at last reset
+        double origin_heading_{0.0};         // Heading at last reset (radians)
 
-        // IMU initialization
-        Eigen::Quaternionf initial_imu_orientation_; // Raw IMU orientation at first update
-        Eigen::Quaternionf last_raw_imu_orientation_; // Latest raw IMU orientation (for heading)
-        bool imu_initialized_;
+        // IMU heading tracking
+        double initial_imu_heading_{0.0};    // Firmware heading at first update (radians)
+        double last_imu_heading_{0.0};       // Latest firmware heading (radians)
+        bool imu_initialized_{false};
 
         // Complementary filter state
         bool fusion_initialized_{false};
-
-        // Helper methods
-        [[nodiscard]] Eigen::Quaternionf getRelativeOrientation() const;
 
     public:
         /**

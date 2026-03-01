@@ -3,7 +3,6 @@
 //
 #include "foundation/logging.hpp"
 #include <cmath>
-#include <limits>
 
 #include "core/LcmReader.hpp"
 #include "hal/IMU.hpp"
@@ -72,19 +71,11 @@ void libstp::hal::imu::IMU::getAngularVelocity(float* gyro)
     gyro[2] = gyroValue.z * deg_to_rad;
 }
 
-Eigen::Quaternionf libstp::hal::imu::IMU::getOrientation()
+float libstp::hal::imu::IMU::getHeading()
 {
-    const auto orientationMsg = platform::wombat::core::LcmReader::instance().readOrientation();
-    Eigen::Quaternionf orientation(orientationMsg.w, orientationMsg.x, orientationMsg.y, orientationMsg.z);
-
-    const float norm = orientation.norm();
-    if (!std::isfinite(norm) || norm <= std::numeric_limits<float>::epsilon())
-    {
-        return Eigen::Quaternionf::Identity();
-    }
-
-    orientation.normalize();
-    return orientation;
+    constexpr float deg_to_rad = static_cast<float>(M_PI / 180.0);
+    // Negate: firmware heading uses CW-positive, we use CCW-positive (ENU)
+    return -platform::wombat::core::LcmReader::instance().readHeading().value * deg_to_rad;
 }
 
 bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)
