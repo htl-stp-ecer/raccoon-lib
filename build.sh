@@ -111,7 +111,7 @@ docker_exec() {
     -e SKBUILD_BUILD_DIR=/src/_skbuild-docker \
     -e FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker \
     "${extra_env[@]}" \
-    --cpus="$(nproc)" \
+    --cpus="$BUILD_JOBS" \
     -w /src \
     "$IMAGE_NAME" \
     bash -lc "$*"
