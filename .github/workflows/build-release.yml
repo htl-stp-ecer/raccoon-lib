@@ -47,6 +47,7 @@ jobs:
           SKIP_TESTS=1 \
           BUILD_NUMBER=${{ github.run_number }} \
           CCACHE_HOST_DIR=/tmp/ccache \
+          BUILD_JOBS=4 \
           bash build.sh
 
       - name: Determine version
