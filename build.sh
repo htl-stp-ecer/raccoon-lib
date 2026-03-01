@@ -33,7 +33,7 @@ restore_version() {
 }
 
 if [[ "$BUILD_NUMBER" != "0" ]]; then
-  ORIGINAL_VERSION=$(grep -Po '(?<=^version = ")[^"]+' "$PYPROJECT")
+  ORIGINAL_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$PYPROJECT")
   BASE_VERSION="${ORIGINAL_VERSION%.*}"  # e.g. "1.0"
   NEW_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
   echo "▶ Patching version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
