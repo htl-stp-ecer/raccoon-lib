@@ -26,9 +26,17 @@ CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
 PYPROJECT="pyproject.toml"
 ORIGINAL_VERSION=""
 
+# Portable sed in-place (works on both GNU and BSD/macOS)
+sedi() { sed "$@" "$PYPROJECT.tmp" > "$PYPROJECT.tmp2" && mv "$PYPROJECT.tmp2" "$PYPROJECT.tmp"; }
+patch_version() {
+  cp "$PYPROJECT" "$PYPROJECT.tmp"
+  sed "s/^version = .*/version = \"$1\"/" "$PYPROJECT" > "$PYPROJECT.tmp"
+  mv "$PYPROJECT.tmp" "$PYPROJECT"
+}
+
 restore_version() {
   if [[ -n "$ORIGINAL_VERSION" ]]; then
-    sed -i "s/^version = .*/version = \"${ORIGINAL_VERSION}\"/" "$PYPROJECT"
+    patch_version "$ORIGINAL_VERSION"
   fi
 }
 
@@ -37,7 +45,7 @@ if [[ "$BUILD_NUMBER" != "0" ]]; then
   BASE_VERSION="${ORIGINAL_VERSION%.*}"  # e.g. "1.0"
   NEW_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
   echo "▶ Patching version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
-  sed -i "s/^version = .*/version = \"${NEW_VERSION}\"/" "$PYPROJECT"
+  patch_version "$NEW_VERSION"
   trap restore_version EXIT
 fi
 
