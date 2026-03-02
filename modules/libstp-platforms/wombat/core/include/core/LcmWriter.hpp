@@ -31,7 +31,9 @@ namespace platform::wombat::core
         // PID position control (relative) - velocity=BEMF speed, delta=BEMF ticks from current
         void setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition);
         void setServo(uint8_t port, int valueData);
-        void resetBemfCounters();
+        void setServoMode(uint8_t port, uint8_t mode);
+        void setMotorPid(uint8_t port, float kp, float ki, float kd);
+        void resetMotorPosition(uint8_t port);
 
         // STM32 shutdown flag - disables all motors and servos at firmware level.
         // This is the safest way to ensure motors stop on program exit/crash.
