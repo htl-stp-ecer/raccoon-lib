@@ -1,6 +1,5 @@
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
-#include <iostream>
 #include <chrono>
 #include <thread>
 #include <unistd.h>
@@ -8,23 +7,6 @@
 
 using namespace platform::wombat::core;
 namespace Channels = raccoon::Channels;
-
-namespace {
-// Age tracking — all accessed from LCM listener thread only, no sync needed
-double age_max_ms = 0.0;
-double age_sum_ms = 0.0;
-int    age_count  = 0;
-
-void logAge(const std::string& channel, int64_t msg_timestamp) {
-    auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    double age_ms = (now_us - msg_timestamp) / 1000.0;
-    if (age_ms > age_max_ms) age_max_ms = age_ms;
-    age_sum_ms += age_ms;
-    ++age_count;
-    LIBSTP_LOG_TRACE("[LcmReader] {} age: {:.1f}ms", channel, age_ms);
-}
-}
 
 LcmReader::LcmReader()
     : transport_(raccoon::Transport::create())
@@ -36,20 +18,16 @@ LcmReader::LcmReader()
 
     // Subscribe to servo topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
-        auto modeChannel = Channels::servoMode(port);
         transport_.subscribe<raccoon::scalar_i8_t>(
-            modeChannel,
-            [this, port, ch = modeChannel](const raccoon::scalar_i8_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::servoMode(port),
+            [this, port](const raccoon::scalar_i8_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_mode_cache_[port] = msg.dir;
             }, retainedOpts);
 
-        auto posChannel = Channels::servoPosition(port);
         transport_.subscribe<raccoon::scalar_i32_t>(
-            posChannel,
-            [this, port, ch = posChannel](const raccoon::scalar_i32_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::servoPosition(port),
+            [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_value_cache_[port] = msg.value;
             }, retainedOpts);
@@ -59,7 +37,6 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::vector3f_t>(
         Channels::GYRO,
         [this](const raccoon::vector3f_t& msg) {
-            logAge(Channels::GYRO, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             gyro_cache_ = msg;
         });
@@ -67,7 +44,6 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::vector3f_t>(
         Channels::ACCELEROMETER,
         [this](const raccoon::vector3f_t& msg) {
-            logAge(Channels::ACCELEROMETER, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             accel_cache_ = msg;
         });
@@ -75,7 +51,6 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::vector3f_t>(
         Channels::LINEAR_ACCELERATION,
         [this](const raccoon::vector3f_t& msg) {
-            logAge(Channels::LINEAR_ACCELERATION, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             linear_accel_cache_ = msg;
         });
@@ -83,7 +58,6 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::vector3f_t>(
         Channels::ACCEL_VELOCITY,
         [this](const raccoon::vector3f_t& msg) {
-            logAge(Channels::ACCEL_VELOCITY, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             accel_velocity_cache_ = msg;
         });
@@ -91,7 +65,6 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::vector3f_t>(
         Channels::MAGNETOMETER,
         [this](const raccoon::vector3f_t& msg) {
-            logAge(Channels::MAGNETOMETER, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             mag_cache_ = msg;
         });
@@ -99,19 +72,16 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::scalar_f_t>(
         Channels::HEADING,
         [this](const raccoon::scalar_f_t& msg) {
-            logAge(Channels::HEADING, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             heading_cache_ = msg;
             imu_heading_received_ = true;
-        });
+        }, retainedOpts);
 
     // Subscribe to BEMF topics (indices 0-3) — retained
     for (int idx = 0; idx < 4; ++idx) {
-        auto ch = Channels::backEmf(idx);
         transport_.subscribe<raccoon::scalar_i32_t>(
-            ch,
-            [this, idx, ch](const raccoon::scalar_i32_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::backEmf(idx),
+            [this, idx](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 bemf_cache_[idx] = msg.value;
             }, retainedOpts);
@@ -119,20 +89,16 @@ LcmReader::LcmReader()
 
     // Subscribe to motor position and done topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
-        auto posCh = Channels::motorPosition(port);
         transport_.subscribe<raccoon::scalar_i32_t>(
-            posCh,
-            [this, port, ch = posCh](const raccoon::scalar_i32_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::motorPosition(port),
+            [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 motor_position_cache_[port] = msg.value;
             }, retainedOpts);
 
-        auto doneCh = Channels::motorDone(port);
         transport_.subscribe<raccoon::scalar_i32_t>(
-            doneCh,
-            [this, port, ch = doneCh](const raccoon::scalar_i32_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::motorDone(port),
+            [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 motor_done_cache_[port] = msg.value;
             }, retainedOpts);
@@ -140,11 +106,9 @@ LcmReader::LcmReader()
 
     // Subscribe to analog topics (ports 0-7)
     for (int port = 0; port < 8; ++port) {
-        auto ch = Channels::analog(port);
         transport_.subscribe<raccoon::scalar_i32_t>(
-            ch,
-            [this, port, ch](const raccoon::scalar_i32_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::analog(port),
+            [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 analog_cache_[port] = msg.value;
             });
@@ -152,11 +116,9 @@ LcmReader::LcmReader()
 
     // Subscribe to digital topics (ports 0-15)
     for (int port = 0; port < 16; ++port) {
-        auto ch = Channels::digital(port);
         transport_.subscribe<raccoon::scalar_i32_t>(
-            ch,
-            [this, port, ch](const raccoon::scalar_i32_t& msg) {
-                logAge(ch, msg.timestamp);
+            Channels::digital(port),
+            [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 digital_cache_[port] = msg.value;
             });
@@ -166,7 +128,6 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::scalar_f_t>(
         Channels::TEMPERATURE,
         [this](const raccoon::scalar_f_t& msg) {
-            logAge(Channels::TEMPERATURE, msg.timestamp);
             std::lock_guard<std::mutex> lock(cache_mutex_);
             temp_cache_ = msg;
         });
@@ -206,11 +167,6 @@ LcmReader::LcmReader()
     // Start background listening thread
     running_ = true;
     listener_thread_ = std::thread(&LcmReader::listenLoop, this);
-
-    // Reset BEMF counters to prevent stale values from previous runs
-    LIBSTP_LOG_DEBUG("[LcmReader] Resetting BEMF counters...");
-    LcmDataWriter::instance().resetBemfCounters();
-    LIBSTP_LOG_DEBUG("[LcmReader] BEMF counter reset sent");
 }
 
 LcmReader::~LcmReader() {
@@ -224,7 +180,6 @@ LcmReader::~LcmReader() {
 void LcmReader::listenLoop() {
     LIBSTP_LOG_DEBUG("[LcmReader] Listen loop started");
     auto stats_start = std::chrono::steady_clock::now();
-    int msgs_since_log = 0;
 
     while (running_) {
         // Non-blocking poll for messages
@@ -234,29 +189,29 @@ void LcmReader::listenLoop() {
             continue;
         }
         if (result > 0) {
-            ++msgs_since_log;
             // Drain all pending messages without blocking
-            while (running_ && transport_.spinOnce(0) > 0) {
-                ++msgs_since_log;
-            }
+            while (running_ && transport_.spinOnce(0) > 0) {}
         } else {
             // No messages available — brief sleep to avoid busy-spinning
             usleep(100);
         }
 
-        // Log throughput every 5 seconds
+        // Log transport analytics every 5 seconds
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - stats_start).count();
         if (elapsed >= 5000) {
-            double avg_ms = (age_count > 0) ? (age_sum_ms / age_count) : 0.0;
-            LIBSTP_LOG_DEBUG("[LcmReader] {} msgs in {:.1f}s ({:.0f}/s) | age avg={:.1f}ms max={:.1f}ms",
-                msgs_since_log, elapsed / 1000.0,
-                msgs_since_log * 1000.0 / elapsed,
-                avg_ms, age_max_ms);
-            msgs_since_log = 0;
-            age_max_ms = 0.0;
-            age_sum_ms = 0.0;
-            age_count = 0;
+            auto stats = transport_.getAndResetStats();
+            auto& lat = stats.latency;
+            if (lat.count > 0) {
+                LIBSTP_LOG_DEBUG("[LcmReader] {} msgs in {:.1f}s ({:.0f}/s) | "
+                    "latency avg={:.1f}ms min={:.1f}ms max={:.1f}ms",
+                    lat.count, elapsed / 1000.0,
+                    lat.count * 1000.0 / elapsed,
+                    lat.avgUs / 1000.0, lat.minUs / 1000.0, lat.maxUs / 1000.0);
+            }
+            if (stats.publishesDeduplicated > 0) {
+                LIBSTP_LOG_DEBUG("[LcmReader] {} publishes deduplicated", stats.publishesDeduplicated);
+            }
             stats_start = now;
         }
     }
@@ -367,7 +322,7 @@ bool LcmReader::waitForImuReady(int timeout_ms) {
     while (!imu_heading_received_) {
         const auto elapsed = std::chrono::steady_clock::now() - start;
         if (elapsed >= timeout) {
-            std::cerr << "[LcmReader] Timeout waiting for IMU heading data" << std::endl;
+            LIBSTP_LOG_ERROR("[LcmReader] Timeout waiting for IMU heading data");
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
