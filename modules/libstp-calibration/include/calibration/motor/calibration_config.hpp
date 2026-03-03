@@ -8,6 +8,13 @@
 
 namespace libstp::calibration
 {
+    /**
+     * Configuration for the motor calibration pipeline.
+     *
+     * Most values are expressed in seconds, meters, percent motor command,
+     * or physical units derived from encoder velocity. Update the contributor
+     * docs whenever a new field changes the public workflow.
+     */
     struct CalibrationConfig
     {
         // Step response tuning parameters

@@ -6,7 +6,6 @@ namespace py = pybind11;
 
 void init_velocity_controller(const py::module& m)
 {
-
     py::class_<libstp::drive::VelocityController>(m, "VelocityController")
         .def(py::init<libstp::foundation::PidGains, libstp::foundation::Feedforward>(),
              py::arg("g"), py::arg("ff"))
@@ -14,6 +13,7 @@ void init_velocity_controller(const py::module& m)
         .def("set_ff", &libstp::drive::VelocityController::setFF, py::arg("ff"))
         .def("gains", &libstp::drive::VelocityController::gains, py::return_value_policy::reference_internal)
         .def("ff", &libstp::drive::VelocityController::ff, py::return_value_policy::reference_internal)
+        // Python gets both the computed command and the saturation flag as a tuple.
         .def("compute", [](libstp::drive::VelocityController& self, double w_ref, double a_ref, double w_meas, double dt, double u_max) {
             bool out_saturated;
             double result = self.compute(w_ref, a_ref, w_meas, dt, u_max, &out_saturated);

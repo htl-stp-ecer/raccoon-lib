@@ -63,7 +63,8 @@ PYBIND11_MODULE(odometry_fused, m)
             "Integrates body velocities from kinematics for position estimation.\n"
             "Tracks distances from origin in forward/lateral directions.\n"
             "Provides all coordinate frame transformations.\n"
-            "Position will drift over time - use reset() with external references to correct.")
+            "Position will drift over time - use reset() to establish a fresh local origin.")
+        // Shared ownership matches the C++ constructor signature for IMU and kinematics.
         .def(py::init<std::shared_ptr<libstp::hal::imu::IMU>,
                       std::shared_ptr<libstp::kinematics::IKinematics>,
                       libstp::odometry::fused::FusedOdometryConfig>(),
@@ -104,12 +105,6 @@ PYBIND11_MODULE(odometry_fused, m)
              "Returns:\n"
              "    Signed angular error in radians [-π, π].\n"
              "    Positive = turn CCW, negative = turn CW")
-        .def("reset", py::overload_cast<const libstp::foundation::Pose&>(&libstp::odometry::fused::FusedOdometry::reset),
-             py::arg("pose"),
-             "Reset odometry to a specific pose.\n\n"
-             "Sets new origin to this pose. IMU will be re-calibrated on next update.\n\n"
-             "Args:\n"
-             "    pose: Pose to reset to")
         .def("reset", py::overload_cast<>(&libstp::odometry::fused::FusedOdometry::reset),
              "Reset odometry to origin (zero position, identity orientation).\n\n"
              "IMU will be re-calibrated on next update.");

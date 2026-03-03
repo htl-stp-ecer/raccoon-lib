@@ -15,6 +15,7 @@ PYBIND11_MODULE(kinematics, m)
 {
     m.doc() = "Python bindings for libstp-kinematics";
 
+    // Import dependent bindings before exposing the abstract base interface.
     py::module_::import("libstp.hal");
 
     py::class_<libstp::kinematics::IKinematics, std::shared_ptr<libstp::kinematics::IKinematics>>(m, "IKinematics")

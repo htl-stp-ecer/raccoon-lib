@@ -11,6 +11,7 @@ void init_velocity_controller(const py::module& m);
 PYBIND11_MODULE(drive, m) {
     m.doc() = "Python bindings for libstp-drive";
 
+    // The module is split across helper functions to keep type registration local.
     init_velocity_controller(m);
     init_motor_adapter(m);
     init_drive(m);

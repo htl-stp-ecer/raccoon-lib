@@ -49,7 +49,7 @@ def is_distance_calibrated() -> bool:
 
 
 def check_distance_calibration() -> None:
-    """Raise CalibrationRequiredError if not calibrated."""
+    """Log a warning when distance calibration has not been performed yet."""
     if not _calibrated:
         warn("Distance calibration highly suggested. Run calibrate() or calibrate_distance() first.")
 

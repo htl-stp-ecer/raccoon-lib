@@ -3,8 +3,8 @@
 namespace py = pybind11;
 
 void init_calibration_store(pybind11::module &m) {
-    m.def("store_readings", [](float whiteThreshold, float blackThreshold,
-                               const libstp::calibration_store::CalibrationType type) {
+    m.def("store_readings", [](const libstp::calibration_store::CalibrationType type,
+                               float whiteThreshold, float blackThreshold) {
         return libstp::calibration_store::CalibrationStore::instance().storeReading(blackThreshold, whiteThreshold, type);
     }, "Stores the readings in the File", py::arg("type"), py::arg("whiteThreshold"), py::arg("blackThreshold"));
 

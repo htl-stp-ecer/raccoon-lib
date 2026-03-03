@@ -12,6 +12,8 @@ namespace py = pybind11;
 
 void init_imu(const py::module& m)
 {
+    // The Python API returns tuples instead of raw pointer buffers while keeping
+    // names close to the underlying C++ methods.
     py::class_<libstp::hal::imu::IMU, std::shared_ptr<libstp::hal::imu::IMU>>(m, "IMU")
         .def(py::init([]()
         {

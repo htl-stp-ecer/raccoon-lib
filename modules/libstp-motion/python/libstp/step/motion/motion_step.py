@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class MotionLoopStats:
+    """Summary of the fixed-rate loop timing observed during one motion step."""
+
     iterations: int
     elapsed_s: float
     avg_hz: float

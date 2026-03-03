@@ -1,198 +1,119 @@
-# Calibration Module
+# libstp-calibration
 
-Comprehensive motor and motion calibration system for the libstp robotics library.
+`libstp-calibration` contains the low-level routines used to measure and tune motor and motion-control parameters. It is the calibration engine that other parts of the stack build on, not a general end-user workflow module by itself.
 
-## Quick Overview
+There are two distinct concerns in this module:
 
-This module provides **two independent calibration systems**:
+- Motor calibration: identify feedforward constants and PID gains for a single motor.
+- Heading autotune while driving straight: estimate turn-loop gains from a relay test.
 
-### 🔧 Motor Calibration (`motor/`)
-Calibrates **individual motors** for precise velocity control by measuring feedforward parameters (kS, kV, kA) and tuning PID gains.
+The current code does **not** expose a generic `MotionCalibrator` class, and the Python bindings only export result/config datatypes for motor calibration. Contributors should treat the C++ headers as the source of truth.
 
-### 🎯 Motion Calibration (`motion/`)
-Calibrates **high-level motions** (turn, drive, strafe) by tuning motion controller PID gains for smooth, accurate behavior.
+## Responsibilities
 
-## Features
+- Measure static friction, velocity constant, and acceleration constant.
+- Tune velocity PID gains with either step-response or relay-feedback methods.
+- Validate calibrated values against configurable safety and range checks.
+- Export calibration metrics for debugging and review.
+- Provide a separate relay-feedback autotuner for straight-driving heading control.
 
-### Motor Calibration
-- ✅ Automatic feedforward parameter identification
-- ✅ Two PID tuning methods (step response, relay feedback)
-- ✅ Comprehensive validation and safety monitoring
-- ✅ 20+ small, focused components (~75 lines each)
-- ✅ Easy to test and extend
+## Public C++ API
 
-### Motion Calibration
-- ✅ Turn, drive straight, and strafe calibration
-- ✅ Nelder-Mead optimization for no-overshoot tuning
-- ✅ Advanced trajectory metrics (ITAE, jerk, settling time)
-- ✅ Cross-validation across speeds and distances
-- ✅ Modular design ready for expansion
+Primary headers:
 
-## Usage
+- `include/calibration/motor/calibration.hpp`
+- `include/calibration/motor/calibration_config.hpp`
+- `include/calibration/motor/calibration_result.hpp`
+- `include/calibration/motion/drive_straight_autotune.hpp`
 
-### Motor Calibration Example
+Supporting public headers under `include/calibration/motor/` expose the internal building blocks used by `MotorCalibrator`:
 
-```cpp
-#include <calibration/motor/calibration.hpp>
+- `control/` for hardware access wrappers
+- `data/` for sampled velocity data
+- `feedforward/` for `kS`, `kV`, and `kA` estimation
+- `pid/` for tuning strategies
+- `analysis/` for signal extraction
+- `validation/` for guardrails and post-checks
+- `utils/` for shared math/time helpers
 
-// Create a motor
-hal::motor::Motor motor(0);
+## Motor Calibration Flow
 
-// Create calibrator with default config
-libstp::calibration::MotorCalibrator calibrator(motor);
+`MotorCalibrator` is the main orchestration class.
 
-// Run calibration
-auto result = calibrator.calibrate();
+Typical sequence:
 
-if (result.success) {
-    std::cout << "Motor calibrated successfully!\n";
-    std::cout << "kS: " << result.ff.kS << "\n";
-    std::cout << "kV: " << result.ff.kV << "\n";
-    std::cout << "kA: " << result.ff.kA << "\n";
-    std::cout << "PID: " << result.pid.kp << ", "
-              << result.pid.ki << ", " << result.pid.kd << "\n";
-}
-```
+1. Construct a `MotorCalibrator` with an `IMotor` and `CalibrationConfig`.
+2. Call `calibrate()`.
+3. Inspect the returned `CalibrationResult`.
+4. Persist or apply the tuned `Feedforward` and `PidGains` where your platform expects them.
 
-### Motion Calibration Example
+You can also run the stages separately:
 
-```cpp
-#include <calibration/motion_calibration.hpp>
+- `calibrateFeedforward()`
+- `calibratePID(ff)`
 
-// Assuming you have drive and odometry objects
-libstp::calibration::MotionCalibrator calibrator(drive, odometry);
+## Heading Autotune Flow
 
-// Calibrate all motions
-auto result = calibrator.calibrate();
+`DriveStraightAutotuner` is narrower in scope than the old README implied:
 
-// Or calibrate individually
-auto turn_result = calibrator.calibrateTurnMotion();
-auto drive_result = calibrator.calibrateDriveStraightMotion();
-```
-
-## Project Structure
-
-```
-calibration/
-├── motor/              # Individual motor calibration (20+ files)
-│   ├── utils/          # Math and timing utilities
-│   ├── control/        # Motor control interface
-│   ├── data/           # Data recording
-│   ├── analysis/       # Signal analysis
-│   ├── feedforward/    # kS, kV, kA calibration
-│   ├── pid/            # PID tuning methods
-│   └── validation/     # Result validation
-│
-└── motion/             # Motion primitive calibration (4+ files)
-    ├── analysis/       # Trajectory analysis
-    ├── test/           # Test execution (future)
-    ├── optimization/   # Optimization algorithms (future)
-    └── tuners/         # Motion-specific tuners (future)
-```
-
-## Documentation
-
-- **[STRUCTURE.md](STRUCTURE.md)** - Detailed structure and component overview
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design
-- **[REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md)** - Refactoring details
-
-## Key Design Principles
-
-1. **Separation**: Motor and motion calibration are completely independent
-2. **Modularity**: 24+ small files instead of 2 large monoliths
-3. **Single Responsibility**: Each file does ONE thing well
-4. **Testability**: Easy to unit test individual components
-5. **Extensibility**: Simple to add new calibration methods
-
-## Configuration
-
-### Motor Calibration Config
-
-```cpp
-libstp::calibration::CalibrationConfig config;
-config.use_relay_feedback = false;  // Use step response (conservative)
-config.validate_parameter_ranges = false;  // Disable strict range checks (default)
-config.velocity_test_commands = {10.0, 15.0, 20.0};  // Test speeds (%)
-config.max_calibration_duration = 120.0;  // Timeout (seconds)
-
-libstp::calibration::MotorCalibrator calibrator(motor, config);
-```
-
-### Motion Calibration Config
-
-```cpp
-libstp::calibration::MotionCalibrationConfig config;
-config.target_settling_time = 1.5;  // Target settling time (s)
-config.max_overshoot = 0.15;        // Max overshoot (15%)
-config.max_iterations = 10;         // Optimization iterations
-
-libstp::calibration::MotionCalibrator calibrator(drive, odometry, config);
-```
-
-## Dependencies
-
-- `foundation` - Core types (PidGains, Feedforward, logging)
-- `hal` - Motor hardware interface
-- `drive` - Motor adapter and velocity control
-- `motion` - Motion primitives (turn, drive, strafe)
-- `odometry` - Position and heading tracking
-
-## Building
-
-The calibration module is automatically built as part of libstp:
-
-```bash
-mkdir build && cd build
-cmake ..
-cmake --build .
-```
+- It only autotunes the heading loop used while driving straight.
+- It runs a relay-feedback experiment against `Drive` and `IOdometry`.
+- It returns a `DriveStraightAutotuneResult` containing the measured oscillation data and derived PID gains.
 
 ## Python Bindings
 
-Python bindings are available when `BUILD_PYTHON_BINDINGS=ON`:
+`libstp.calibration` currently exposes:
 
-```python
-import libstp.calibration as cal
+- `CalibrationConfig`
+- `CalibrationResult`
+- `CalibrationMetrics`
 
-# Motor calibration
-motor = libstp.hal.Motor(0)
-calibrator = cal.MotorCalibrator(motor)
-result = calibrator.calibrate()
+It does **not** currently expose:
 
-print(f"Success: {result.success}")
-print(f"kS: {result.ff.kS}, kV: {result.ff.kV}, kA: {result.ff.kA}")
-```
+- `MotorCalibrator`
+- `DriveStraightAutotuner`
+- the helper component classes under `motor/`
 
-## Performance
+If you need those from Python, you must extend the bindings first.
 
-### Before Refactoring
-- 2 monolithic files (~1,940 lines)
-- Mixed concerns
-- Hard to test
-- Difficult to extend
+## Safety And Operational Assumptions
 
-### After Refactoring
-- 24+ focused files (50-150 lines each)
-- Clear separation
-- Easy to test
-- Simple to extend
+This module can command real motors aggressively. Contributors should assume:
 
-## Contributing
+- The motor under test is free to move through the configured travel distance.
+- Encoder feedback is working and scaled correctly.
+- The test environment can tolerate repeated starts, stops, and oscillation experiments.
+- Safety limits in `CalibrationConfig` are last-resort guardrails, not a replacement for supervision.
 
-When adding new features:
+Relevant safety knobs include:
 
-1. **Motor calibration**: Add to appropriate `motor/` subdirectory
-2. **Motion calibration**: Add to appropriate `motion/` subdirectory
-3. Keep files small (< 200 lines)
-4. One responsibility per file
-5. Update CMakeLists.txt
-6. Add to documentation
+- `max_test_distance_m`
+- `max_single_test_duration`
+- `max_calibration_duration`
+- `max_retries`
+- `validate_parameter_ranges`
 
-## License
+## Extension Points
 
-Part of the libstp robotics library.
+To add a new motor-calibration stage:
 
-## Authors
+1. Put the implementation in the appropriate `motor/` subdirectory.
+2. Keep it focused on one concern.
+3. Thread it into `MotorCalibrator` only after its inputs/outputs are clear.
+4. Add result fields only when the data is useful outside the helper itself.
 
-- Tobias Schoch (@tobias)
-- Refactored with Claude Code (2025)
+To add a new motion autotuner:
+
+1. Place it under `include/calibration/motion/` and `src/motion/`.
+2. Keep it separate from `MotorCalibrator`.
+3. Document exactly which loop it tunes and what runtime assumptions it makes.
+
+## Testing
+
+This module is validated indirectly by:
+
+- the calibration-related binding tests
+- drive and motion tests that consume tuned constants
+- runtime workflows in `libstp.step.motion` and `libstp.step.calibration`
+
+When changing calibration math, verify both the numeric outputs and the failure modes. New code in this module should be explicit about what happens when the signal is too noisy, the motor saturates, or the robot cannot complete the requested test safely.

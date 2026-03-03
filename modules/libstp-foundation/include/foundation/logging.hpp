@@ -28,6 +28,7 @@ namespace spdlog { class logger; }
 
 namespace logging {
 
+    /// Runtime severity used by the foundation logger and its Python bindings.
     enum class Level : int {
         trace = LIBSTP_LOG_LEVEL_TRACE,
         debug = LIBSTP_LOG_LEVEL_DEBUG,
@@ -56,18 +57,28 @@ namespace logging {
         }
     }
 
+    /// Reset the relative elapsed-time clock used by the log formatter.
     void initialize_timer();
+
+    /// Initialize the shared logger, sinks, and formatter. Safe to call more than once.
     void init();
 
-    // Runtime log level filtering API
+    /// Runtime log level filtering API.
     void set_global_level(Level level);
     void set_file_level(const std::string& filename, Level level);
     void clear_file_level(const std::string& filename);
     void clear_filters();
 
+    /// Query whether a log level is enabled by the current runtime filter state.
     bool is_enabled(Level level);
+
+    /// Query whether a log level is enabled for a specific source-file basename.
     bool is_enabled_for(Level level, const char* file);
+
+    /// Log a preformatted message without source-file context.
     void log(Level level, std::string_view message);
+
+    /// Log a preformatted message while annotating the originating source file.
     void log(Level level, const char* source_file, std::string_view message);
 
     // Format-aware logging helper that keeps formatting outside of the logging backend.
@@ -111,6 +122,7 @@ namespace logging {
         }
     }
 
+    /// Access the shared spdlog logger after initialization.
     std::shared_ptr<spdlog::logger> core();
 }
 

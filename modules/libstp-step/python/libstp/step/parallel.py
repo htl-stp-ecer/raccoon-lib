@@ -11,9 +11,7 @@ from .annotation import dsl
 @dsl(hidden=True)
 class Parallel(Step):
     """
-    Parallel step executor that runs steps concurrently.
-    Waits for all steps to complete before continuing.
-    Each step will be executed only once.
+    Composite step that runs branches concurrently and waits for all of them.
     """
 
     def __init__(self, steps: List[Step]) -> None:
@@ -67,14 +65,7 @@ class Parallel(Step):
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         """
-        Execute all steps in parallel, waiting for all to complete.
-        Can only be run once.
-
-        Args:
-            robot: The robot instance on which to run the steps.
-
-        Raises:
-            RuntimeError: If attempting to run this sequence more than once
+        Run every branch concurrently against the same robot instance.
         """
         if not self.steps:
             return
@@ -96,10 +87,11 @@ class Parallel(Step):
 @dsl(hidden=True)
 def parallel(*args) -> Parallel:
     """
-    Create a parallel sequence of steps.
+    Create a parallel composite step.
 
     Args:
-        *args: Each argument can be a Step, a Sequential step, or a list of Steps.
+        *args: Each argument can be a step, a sequential composite, or a list
+            of steps that should be wrapped into a sequential branch.
 
     Returns:
         Parallel: A Parallel step instance containing all specified steps.

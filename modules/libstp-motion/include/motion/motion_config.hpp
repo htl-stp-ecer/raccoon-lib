@@ -23,8 +23,11 @@ namespace libstp::motion
     };
 
     /**
-     * Unified PID configuration for all motion primitives.
-     * This configuration is speed-independent and can be set once in config.yml.
+     * Unified PID and saturation configuration for all motion primitives.
+     *
+     * This configuration is intended to be robot-wide and speed-independent.
+     * The axis constraints should come from measured robot behavior rather than
+     * hand-picked guesses.
      */
     struct UnifiedMotionPidConfig
     {
@@ -61,7 +64,8 @@ namespace libstp::motion
         double heading_saturation_error_rad{0.01};
         double heading_recovery_error_rad{0.005};
 
-        // Per-axis motion profile constraints
+        // Per-axis motion profile constraints, typically populated from
+        // characterization data such as characterize_drive().
         AxisConstraints linear{};
         AxisConstraints lateral{};
         AxisConstraints angular{};

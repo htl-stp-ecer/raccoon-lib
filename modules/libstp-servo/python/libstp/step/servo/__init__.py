@@ -1,3 +1,5 @@
+"""Servo-focused step helpers layered on top of the HAL `Servo` type."""
+
 from __future__ import annotations
 
 from .resolver import resolve_servo

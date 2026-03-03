@@ -6,6 +6,7 @@
 
 namespace libstp::calibration
 {
+    /** Result object returned from `MotorCalibrator`. */
     struct CalibrationResult
     {
         foundation::PidGains pid;
@@ -14,7 +15,7 @@ namespace libstp::calibration
         std::string error_message;
         double duration_seconds{0.0};
 
-        // Detailed metrics for debugging
+        /** Detailed measurements captured while calibrating and validating. */
         struct Metrics {
             double static_friction_forward{0.0};
             double static_friction_backward{0.0};

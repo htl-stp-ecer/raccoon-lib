@@ -160,23 +160,6 @@ namespace libstp::odometry::fused
         return angularError(current_heading, target_heading_rad);
     }
 
-    void FusedOdometry::reset(const foundation::Pose& pose)
-    {
-        position_ = pose.position;
-        origin_position_ = position_;
-        origin_heading_ = pose.heading;
-
-        imu_initialized_ = false;
-        fusion_initialized_ = false;
-        imu_->resetIntegratedVelocity();
-
-        LIBSTP_LOG_TRACE(
-            "FusedOdometry::reset to pose pos=({:.3f}, {:.3f}, {:.3f}) heading={:.2f}deg",
-            pose.position.x(), pose.position.y(), pose.position.z(),
-            origin_heading_ * 180.0 / M_PI
-        );
-    }
-
     void FusedOdometry::reset()
     {
         // Wait for IMU to receive initial data from coprocessor

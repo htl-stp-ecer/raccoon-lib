@@ -8,11 +8,13 @@
 
 namespace libstp::foundation
 {
+    /// Basic PID gains without integrator and output shaping parameters.
     struct PidGains
     {
         double kp{1.0}, ki{0.0}, kd{0.0};
     };
 
+    /// Feedforward terms for velocity and acceleration control.
     struct Feedforward
     {
         double kS{0.0};
@@ -20,12 +22,14 @@ namespace libstp::foundation
         double kA{0.0};
     };
 
+    /// Calibration constants commonly needed for motor encoder conversions.
     struct MotorCalibration
     {
         double ticks_to_rad{2.0 * 3.14159265359 / 1440.0};
         double vel_lpf_alpha{0.5};
     };
 
+    /// Stateless calculator for the configured feedforward output.
     class FeedforwardController
     {
     public:

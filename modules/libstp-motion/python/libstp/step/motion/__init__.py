@@ -1,3 +1,5 @@
+"""Contributor-facing motion step DSL built on top of the native motion controllers."""
+
 from .motion_step import MotionStep
 from .drive import Drive, Strafe, drive_forward, drive_backward, strafe_left, strafe_right
 from .drive_angle import DriveAngle, drive_angle

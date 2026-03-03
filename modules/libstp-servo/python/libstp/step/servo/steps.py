@@ -19,6 +19,8 @@ from .utility import (
 
 @dsl(hidden=True)
 class SetServoPosition(Step):
+    """Set a servo to a target angle and optionally wait for the move to finish."""
+
     def __init__(
         self, servo: Servo, target_angle: float, duration: Optional[float] = None
     ) -> None:
@@ -65,6 +67,8 @@ def servo(servo: Servo, angle: float) -> SetServoPosition:
 
 @dsl(hidden=True)
 class ShakeServo(Step):
+    """Oscillate a servo between two angles for a fixed amount of time."""
+
     def __init__(
         self, servo: Servo, duration: float, angle_a: float, angle_b: float
     ) -> None:
@@ -137,7 +141,7 @@ _EASE_SERVO_TICK = 1 / 10
 
 @dsl(hidden=True)
 class EaseServo(Step):
-    """Move a servo to a target angle with ease-in-ease-out at a given speed."""
+    """Move a servo to a target angle with ease-in/ease-out timing."""
 
     def __init__(self, servo: Servo, target_angle: float, speed: float) -> None:
         super().__init__()

@@ -13,8 +13,10 @@
 namespace libstp::sensors::ir {
     class IRSensorCalibration {
     public:
+        /** Sample readings from all sensors for the requested duration in seconds. */
         static std::vector<float> collectValues(const std::vector<IRSensor*>& sensors, float durationSeconds = 5.0f);
 
+        /** Collect readings and update calibration for each sensor in the batch. */
         static bool calibrateSensors(const std::vector<IRSensor*>& sensors, float durationSeconds = 5.0f, bool usePre = false);
     };
 }

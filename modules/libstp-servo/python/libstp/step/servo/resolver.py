@@ -13,6 +13,8 @@ class ServoResolutionError(RuntimeError):
 
 @dataclass(frozen=True)
 class ResolvedServo:
+    """Resolved servo lookup result with the chosen display name and object."""
+
     name: str
     servo: Servo
 

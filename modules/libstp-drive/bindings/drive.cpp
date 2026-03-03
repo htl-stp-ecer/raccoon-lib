@@ -26,6 +26,7 @@ void init_drive(const py::module& m)
         .def_readwrite("wz", &libstp::drive::ChassisVelocityControlConfig::wz);
 
     py::class_<libstp::drive::Drive>(m, "Drive")
+        // Python hands in an existing kinematics instance; the C++ Drive stores ownership.
         .def(py::init([](libstp::kinematics::IKinematics* kinematics,
                          const libstp::drive::ChassisVelocityControlConfig& vel_config,
                          libstp::hal::imu::IMU& imu)
@@ -37,6 +38,7 @@ void init_drive(const py::module& m)
             py::arg("imu"),
             py::keep_alive<1, 2>(), py::keep_alive<1, 4>())
         .def("set_velocity", &libstp::drive::Drive::setVelocity, py::arg("v_body"))
+        // Preserve the existing Python API shape even though C++ returns MotorCommands.
         .def("update", [](libstp::drive::Drive& self, double dt) {
             self.update(dt);  // Ignore MotorCommands return value
         }, py::arg("dt"))

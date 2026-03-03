@@ -13,9 +13,12 @@ AnomalyCallback = Callable[[AnomalyDetection], Awaitable[None]]
 
 
 class StepTimingTracker(ClassNameLogger):
+    """Singleton tracker that persists step runtimes and reports anomalies."""
+
     _instance: Optional["StepTimingTracker"] = None
 
     def __init__(self, config: Optional[TimingConfig] = None) -> None:
+        """Initialize tracker state and open the configured timing database lazily."""
         self.config = config or TimingConfig()
         self.database = StepTimingDatabase(self.config.db_path)
         self.anomaly_callbacks: List[AnomalyCallback] = []
@@ -23,6 +26,7 @@ class StepTimingTracker(ClassNameLogger):
 
     @classmethod
     def get_instance(cls) -> "StepTimingTracker":
+        """Return the process-wide tracker instance used by ``Step.run_step``."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance

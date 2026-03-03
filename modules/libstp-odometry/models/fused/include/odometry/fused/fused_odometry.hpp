@@ -14,7 +14,7 @@
 namespace libstp::odometry::fused
 {
     /**
-     * Configuration for FusedOdometry
+     * Configuration for `FusedOdometry`.
      */
     struct FusedOdometryConfig {
         int imu_ready_timeout_ms;
@@ -49,7 +49,7 @@ namespace libstp::odometry::fused
      * - Provides all coordinate frame transformations
      *
      * Position drift will accumulate over time without external corrections.
-     * Use reset() with external position references (AprilTags, vision, etc.) to correct drift.
+     * Use zero-argument reset() to establish a fresh local origin before a motion sequence.
      */
     class FusedOdometry : public IOdometry
     {
@@ -79,21 +79,31 @@ namespace libstp::odometry::fused
     public:
         /**
          * Construct fused odometry with IMU and kinematics
-         * @param imu Shared pointer to IMU instance
-         * @param kinematics Shared pointer to kinematics model (provides velocity estimates)
-         * @param config Configuration options (optional)
+         * @param imu Shared IMU instance used for heading and optional integrated velocity
+         * @param kinematics Shared kinematics model used for chassis velocity estimation
+         * @param config Configuration options controlling IMU readiness and fusion behavior
          */
         FusedOdometry(std::shared_ptr<hal::imu::IIMU> imu,
                       std::shared_ptr<kinematics::IKinematics> kinematics,
                       FusedOdometryConfig config = {});
 
         // IOdometry interface implementation
+        /** Update heading and position estimates using the latest IMU and kinematics data. */
         void update(double dt) override;
+
+        /** Return the current world-frame pose estimate. */
         [[nodiscard]] foundation::Pose getPose() const override;
+
+        /** Return forward, lateral, and straight-line displacement from the last reset origin. */
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override;
+
+        /** Return heading relative to the heading stored at the last reset. */
         [[nodiscard]] double getHeading() const override;
+
+        /** Return the shortest signed angular error from the current heading to the target. */
         [[nodiscard]] double getHeadingError(double target_heading_rad) const override;
-        void reset(const foundation::Pose& pose) override;
+
+        /** Reset the origin to zero pose and clear encoder and IMU-integrated velocity state. */
         void reset() override;
     };
 }

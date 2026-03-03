@@ -7,6 +7,7 @@
 
 namespace libstp::calibration
 {
+    /** Parameters for the relay-feedback heading autotune. */
     struct MotionCalibrationConfig
     {
         double control_rate_hz{100.0};
@@ -19,6 +20,7 @@ namespace libstp::calibration
         double min_heading_amplitude{0.01};   // rad, minimum oscillation amplitude
     };
 
+    /** Output from `DriveStraightAutotuner::autotuneHeading()`. */
     struct DriveStraightAutotuneResult
     {
         bool success{false};

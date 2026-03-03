@@ -11,8 +11,16 @@
 
 namespace libstp::motion
 {
+    /** Selects which body-frame axis `LinearMotion` should move along. */
     enum class LinearAxis { Forward, Lateral };
 
+    /**
+     * Configuration for a straight-line motion along one chassis axis.
+     *
+     * `distance_m` follows the robot body frame:
+     * - forward axis: positive = forward, negative = backward
+     * - lateral axis: positive = right, negative = left
+     */
     struct LinearMotionConfig
     {
         LinearAxis axis{LinearAxis::Forward};
@@ -20,6 +28,7 @@ namespace libstp::motion
         double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.max_velocity
     };
 
+    /** Per-cycle diagnostics captured while a `LinearMotion` instance runs. */
     struct LinearMotionTelemetry
     {
         double time_s{0.0};             // elapsed since start
@@ -53,6 +62,12 @@ namespace libstp::motion
         bool saturated{false};
     };
 
+    /**
+     * Closed-loop straight-line controller for forward/backward or lateral motion.
+     *
+     * The controller follows a trapezoidal profile on the selected primary axis
+     * while correcting heading error and cross-track drift.
+     */
     class LinearMotion final : public Motion
     {
     public:
@@ -62,6 +77,7 @@ namespace libstp::motion
         void update(double dt) override;
         [[nodiscard]] bool isFinished() const override;
 
+        /** Telemetry samples appended on each update cycle. */
         [[nodiscard]] const std::vector<LinearMotionTelemetry>& getTelemetry() const { return telemetry_; }
 
         /// Override the internal heading PID with an external omega value.

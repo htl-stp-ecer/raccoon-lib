@@ -23,6 +23,7 @@ PYBIND11_MODULE(kinematics_differential, m)
     py::class_<libstp::kinematics::differential::DifferentialKinematics, libstp::kinematics::IKinematics,
                 std::shared_ptr<libstp::kinematics::differential::DifferentialKinematics>>(
             m, "DifferentialKinematics")
+        // Keep motor wrappers alive for at least as long as the kinematics object.
         .def(py::init<libstp::hal::motor::Motor*, libstp::hal::motor::Motor*, double, double>(),
              py::arg("left_motor"),
              py::arg("right_motor"),

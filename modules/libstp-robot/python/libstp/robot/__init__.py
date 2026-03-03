@@ -1,10 +1,4 @@
-"""Robot module for libstp.
-
-Provides:
-- GenericRobot: Abstract base class for robot implementations
-- RobotGeometry: Mixin for geometry calculations
-- SensorPosition, WheelPosition: Position dataclasses
-"""
+"""Robot abstraction layer that ties missions, services, and geometry together."""
 
 from .api import GenericRobot, RobotDefinitionsProtocol
 from .geometry import RobotGeometry, SensorPosition, WheelPosition

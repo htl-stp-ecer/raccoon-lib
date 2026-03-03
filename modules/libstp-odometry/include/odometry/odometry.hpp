@@ -48,7 +48,7 @@ namespace libstp::odometry
 
         /**
          * Get the current pose estimate
-         * @return Current pose (position and orientation)
+         * @return Current planar pose expressed in world coordinates
          */
         [[nodiscard]] virtual foundation::Pose getPose() const = 0;
 
@@ -81,12 +81,6 @@ namespace libstp::odometry
          * Use this as input to heading PID controllers.
          */
         [[nodiscard]] virtual double getHeadingError(double target_heading_rad) const = 0;
-
-        /**
-         * Reset the odometry to a given pose
-         * @param pose Initial pose to reset to
-         */
-        virtual void reset(const foundation::Pose& pose) = 0;
 
         /**
          * Reset the odometry to origin (zero position, identity orientation)

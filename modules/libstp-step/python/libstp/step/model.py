@@ -7,16 +7,22 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class StepProtocol(Protocol):
+    """Structural protocol implemented by executable step objects."""
+
     async def run_step(self, robot: "GenericRobot") -> None: ...
 
 @dataclass
 class SimulationStepDelta:
+    """Estimated pose change caused by a step in simulation space."""
+
     forward: float # in meters
     strafe: float # in meters
     angular: float # in radians
 
 @dataclass
 class SimulationStep:
+    """Simulation metadata derived from a runtime step."""
+
     # unique identifier for this step
     id: str
     # For display purposes only

@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 @dsl(hidden=True)
 class Turn(MotionStep):
+    """Step wrapper around the native `TurnMotion` controller."""
+
     def __init__(self, config: TurnConfig):
         super().__init__()
         self.config = config
