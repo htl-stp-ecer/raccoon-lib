@@ -10,6 +10,7 @@ void init_motor_adapter(const py::module& m)
     py::class_<libstp::drive::MotorAdapter>(m, "MotorAdapter")
         .def(py::init<libstp::hal::motor::Motor*>(),
              py::arg("motor"))
+        // Match the common Python convention of returning only the commanded action.
         .def("set_velocity", [](libstp::drive::MotorAdapter& self, double w_ref, double dt)
         {
             self.setVelocity(w_ref, dt);

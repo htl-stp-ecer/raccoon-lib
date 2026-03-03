@@ -5,9 +5,11 @@ from ..annotation import dsl
 
 @dsl(hidden=True)
 class WaitForCheckpoint(Step):
+    """Wait until the robot synchronizer reaches a mission-relative checkpoint."""
+
     def __init__(self, checkpoint_seconds: Union[float, int]) -> None:
         """
-        Initialize a Synchronizer step.
+        Initialize the checkpoint wait step.
 
         Args:
             checkpoint_seconds: The number of seconds to wait before synchronizing.
@@ -24,15 +26,12 @@ class WaitForCheckpoint(Step):
 
     async def _execute_step(self, robot: 'GenericRobot') -> None:
         """
-        Wait for the specified duration before synchronizing.
-
-        Args:
-            robot: The robot to run on.
+        Delegate the wait to ``robot.synchronizer``.
         """
         await robot.synchronizer.wait_until_checkpoint(self.checkpoint_seconds)
 
 
 @dsl(tags=["timing", "sync"])
 def wait_for_checkpoint(checkpoint_seconds: float) -> WaitForCheckpoint:
-    """Synchronize for specified seconds"""
+    """Create a step that waits until ``checkpoint_seconds`` is reached."""
     return WaitForCheckpoint(checkpoint_seconds=checkpoint_seconds)

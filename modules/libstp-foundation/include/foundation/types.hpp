@@ -10,6 +10,7 @@ namespace libstp::foundation {
 
     using Vector3f = Eigen::Vector3f;
 
+    /// Position plus planar heading used by several motion-related modules.
     struct Pose {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         Vector3f position{Vector3f::Zero()};
@@ -121,7 +122,7 @@ namespace libstp::foundation {
         constexpr RadiansPerSecond operator*(double scale) const { return RadiansPerSecond{value * scale}; }
     };
 
-    // User-defined literals for convenient construction
+    // User-defined literals for convenient construction.
     namespace literals {
         constexpr Meters operator""_m(long double value) { return Meters{static_cast<double>(value)}; }
         constexpr Meters operator""_cm(long double value) { return Meters::from_cm(static_cast<double>(value)); }

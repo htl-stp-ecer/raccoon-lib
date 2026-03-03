@@ -16,6 +16,12 @@ namespace libstp::calibration {
 
 namespace libstp::kinematics::mecanum
 {
+    /**
+     * Four-wheel mecanum implementation of `IKinematics`.
+     *
+     * The model uses the shared LibSTP body-frame convention: +x forward,
+     * +y right, +wz counter-clockwise.
+     */
     class MecanumKinematics : public IKinematics
     {
     private:
@@ -29,6 +35,15 @@ namespace libstp::kinematics::mecanum
         drive::MotorAdapter back_right_motor_;
 
     public:
+        /**
+         * @param front_left_motor Non-owning pointer to the front-left motor.
+         * @param front_right_motor Non-owning pointer to the front-right motor.
+         * @param back_left_motor Non-owning pointer to the back-left motor.
+         * @param back_right_motor Non-owning pointer to the back-right motor.
+         * @param wheelbase Front-to-back axle spacing in meters.
+         * @param trackWidth Left-to-right wheel spacing in meters.
+         * @param wheelRadius Radius of each drive wheel in meters.
+         */
         MecanumKinematics(hal::motor::IMotor* front_left_motor,
                          hal::motor::IMotor* front_right_motor,
                          hal::motor::IMotor* back_left_motor,
@@ -38,19 +53,33 @@ namespace libstp::kinematics::mecanum
                          double wheelRadius);
         ~MecanumKinematics() override = default;
 
+        /** Always returns `4`. */
         [[nodiscard]] std::size_t wheelCount() const override;
+
+        /** Convert chassis velocity into front-left, front-right, back-left, back-right wheel speeds. */
         MotorCommands applyCommand(const foundation::ChassisVelocity& cmd, double dt) override;
+
+        /** Recover chassis velocity from the four measured wheel speeds. */
         [[nodiscard]] foundation::ChassisVelocity estimateState() const override;
+
+        /** Brake all four drive motors immediately. */
         void hardStop() override;
+
+        /** Mecanum drivetrains can command lateral motion directly. */
         [[nodiscard]] bool supportsLateralMotion() const override;
+
+        /** Clear encoder history in all four `MotorAdapter` instances. */
         void resetEncoders() override;
 
-        // Calibration methods
+        /** Forward the default calibration flow inherited from `IKinematics`. */
         using kinematics::IKinematics::calibrateMotors;
+
+        /** Calibrate all four motors in wheel order with short pauses between motors. */
         std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config) override;
 
         [[nodiscard]] double getWheelRadius() const override { return m_wheelRadius; }
 
+        /** Return the underlying motors in front-left, front-right, back-left, back-right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
     };
 }

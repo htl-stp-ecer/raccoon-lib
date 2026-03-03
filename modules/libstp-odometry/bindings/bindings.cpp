@@ -15,7 +15,7 @@ PYBIND11_MODULE(odometry, m)
 {
     m.doc() = "Python bindings for libstp-odometry";
 
-    // Ensure foundation types are registered
+    // Ensure shared foundation types are registered before exposing IOdometry.
     py::module_::import("libstp.foundation");
 
     py::class_<libstp::odometry::IOdometry,
@@ -23,7 +23,5 @@ PYBIND11_MODULE(odometry, m)
         .def("update", &libstp::odometry::IOdometry::update,
              py::arg("dt"))
         .def("get_pose", &libstp::odometry::IOdometry::getPose)
-        .def("reset", py::overload_cast<const libstp::foundation::Pose&>(&libstp::odometry::IOdometry::reset),
-             py::arg("pose"))
         .def("reset", py::overload_cast<>(&libstp::odometry::IOdometry::reset));
 }

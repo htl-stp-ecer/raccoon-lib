@@ -10,6 +10,12 @@
 
 namespace libstp::motion
 {
+    /**
+     * Configuration for a body-frame diagonal travel command.
+     *
+     * `angle_rad` is measured in the robot frame where `0` points forward and
+     * positive angles rotate toward the robot's right side.
+     */
     struct DiagonalMotionConfig
     {
         double angle_rad{0.0};               // Travel angle: 0 = forward, pi/2 = right, -pi/2 = left
@@ -17,6 +23,7 @@ namespace libstp::motion
         double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.max_velocity
     };
 
+    /** Per-cycle diagnostics captured while a `DiagonalMotion` instance runs. */
     struct DiagonalMotionTelemetry
     {
         double time_s{0.0};             // elapsed since start
@@ -50,6 +57,13 @@ namespace libstp::motion
         bool saturated{false};
     };
 
+    /**
+     * Closed-loop controller for travel at an arbitrary body-frame angle.
+     *
+     * This controller uses the same profile and saturation logic as
+     * `LinearMotion`, but resolves the commanded velocity into forward and
+     * lateral components derived from `angle_rad`.
+     */
     class DiagonalMotion final : public Motion
     {
     public:
@@ -59,6 +73,7 @@ namespace libstp::motion
         void update(double dt) override;
         [[nodiscard]] bool isFinished() const override;
 
+        /** Telemetry samples appended on each update cycle. */
         [[nodiscard]] const std::vector<DiagonalMotionTelemetry>& getTelemetry() const { return telemetry_; }
 
     private:

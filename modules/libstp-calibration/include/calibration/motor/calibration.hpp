@@ -41,11 +41,12 @@ namespace libstp::calibration
         explicit MotorCalibrator(hal::motor::IMotor& motor, CalibrationConfig config = {});
         ~MotorCalibrator();
 
-        // Main calibration entry point
+        /** Run the full feedforward + PID calibration pipeline. */
         CalibrationResult calibrate();
 
-        // Individual calibration steps (can be called separately)
+        /** Measure static friction, velocity, and acceleration feedforward terms. */
         foundation::Feedforward calibrateFeedforward();
+        /** Tune PID gains using the configured strategy and a known feedforward model. */
         foundation::PidGains calibratePID(const foundation::Feedforward& ff);
 
     private:

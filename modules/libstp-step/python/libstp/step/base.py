@@ -12,12 +12,14 @@ if TYPE_CHECKING:
 
 
 class Step(ClassNameLogger):
+    """Base async action executed by missions and higher-level step combinators."""
+
     def __init__(self) -> None:
         pass
 
     async def run_step(self, robot: "GenericRobot") -> None:
         """
-        Execute the step logic with execution timing instrumentation.
+        Execute the step with logging and optional timing instrumentation.
         """
         self.debug(f"Executing {self.__class__.__name__} step")
 
@@ -47,8 +49,10 @@ class Step(ClassNameLogger):
 
     def _generate_signature(self) -> str:
         """
-        Generate a unique signature for this step and its parameters.
-        Override in subclasses to include configuration details.
+        Return the timing/simulation identity for this step instance.
+
+        Override in subclasses when constructor parameters materially change
+        runtime behavior and should not share the same timing baseline.
         """
         return self.__class__.__name__
 
@@ -59,11 +63,11 @@ class Step(ClassNameLogger):
 
     def to_simulation_step(self) -> SimulationStep:
         """
-        Convert this step to a SimulationStep representation.
+        Convert this step to a simulation-friendly summary.
 
-        Default implementation uses timing data from the database if available,
-        otherwise returns reasonable defaults. Override this method in subclasses
-        to provide accurate delta values for position/heading changes.
+        The default implementation uses timing history only when it can query
+        the tracker synchronously; otherwise it returns conservative defaults.
+        Override in subclasses that know their motion delta or exact duration.
         """
         signature = self._generate_signature()
 

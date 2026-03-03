@@ -8,10 +8,12 @@
 
 namespace libstp::async
 {
+    /// Minimal coroutine wrapper that stores the last yielded value and supports manual stepping.
     template <typename T>
     class AsyncAlgorithm
     {
     public:
+        /// Coroutine promise storing the most recent yielded or returned value.
         struct promise_type
         {
             bool initialized = false;
@@ -41,14 +43,19 @@ namespace libstp::async
 
         ~AsyncAlgorithm();
 
+        /// Resume the coroutine once. Returns false when the coroutine is finished.
         bool advance();
 
+        /// Return the last yielded or returned value from the coroutine.
         T current() const;
 
+        /// Awaiter API: reports ready only once the wrapped coroutine is done.
         [[nodiscard]] bool await_ready() const noexcept;
 
+        /// Awaiter API: resume the wrapped coroutine, then resume the awaiting coroutine.
         void await_suspend(std::coroutine_handle<> awaiting_coro) noexcept;
 
+        /// Awaiter API: return the current value after suspension completes.
         T await_resume() noexcept;
 
     private:

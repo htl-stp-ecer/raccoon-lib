@@ -9,7 +9,10 @@ from .models import AnomalyDetection
 
 
 class StepTimingDatabase:
+    """Async SQLite store for raw step execution history and anomaly flags."""
+
     def __init__(self, db_path: str) -> None:
+        """Create a database wrapper for the configured SQLite path."""
         self.db_path = db_path
         self._initialized = False
         self._init_lock = asyncio.Lock()

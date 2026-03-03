@@ -6,19 +6,21 @@ from libstp.robot.api import GenericRobot
 
 @dsl(hidden=True)
 class BreakpointStep(Step):
+    """Step-level breakpoint marker that currently only emits a log line."""
+
     def __init__(self, label: Optional[str] = None) -> None:
         """
-        Lightweight breakpoint marker step.
+        Initialize a lightweight breakpoint marker step.
 
         Args:
-            label: Optional label that can be used for logging or UI display.
+            label: Optional label used for the runtime log message.
         """
         super().__init__()
         self._label = label
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         """
-        Execute the breakpoint step. At runtime this simply logs the breakpoint hit.
+        Emit a log message for the breakpoint and return immediately.
         """
         label_suffix = f" ({self._label})" if self._label else ""
         self.info(f"Breakpoint reached{label_suffix}")
@@ -28,9 +30,9 @@ class BreakpointStep(Step):
 @dsl(hidden=True)
 def breakpoint(label: Optional[str] = None) -> BreakpointStep:
     """
-    Create a breakpoint step marker.
+    Create a breakpoint marker step.
 
     Args:
-        label: Optional label for the breakpoint.
+        label: Optional label included in the breakpoint log message.
     """
     return BreakpointStep(label=label)

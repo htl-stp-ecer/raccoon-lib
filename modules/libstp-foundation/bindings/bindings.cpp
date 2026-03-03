@@ -18,6 +18,8 @@ PYBIND11_MODULE(foundation, m)
 {
     m.doc() = "Python bindings for libstp-foundation";
 
+    // Keep the Python module grouped the same way as the C++ headers: controllers,
+    // logging, motor helpers, and shared types.
     init_pid(m);
     init_logger(m);
     init_motor(m);

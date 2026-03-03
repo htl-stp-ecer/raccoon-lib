@@ -8,6 +8,7 @@ namespace py = pybind11;
 
 void init_analog(const py::module& m)
 {
+    // Mirrors the thin C++ wrapper: constructor + raw read + public port field.
     py::class_<libstp::hal::analog::AnalogSensor>(m, "AnalogSensor")
         .def(py::init<int>(), py::arg("port"))
         .def("read", &libstp::hal::analog::AnalogSensor::read)

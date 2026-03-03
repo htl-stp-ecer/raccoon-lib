@@ -16,6 +16,12 @@
 #include <functional>
 
 namespace platform::wombat::core {
+    /**
+     * Cached raccoon transport reader for the wombat bundle.
+     *
+     * The reader owns a background listener thread that keeps the latest values
+     * for sensors and device status so HAL wrappers can expose synchronous APIs.
+     */
     class LcmReader {
     public:
         explicit LcmReader();
@@ -30,10 +36,12 @@ namespace platform::wombat::core {
         raccoon::scalar_i8_t readServoMode(int port);
         raccoon::scalar_i32_t readServoValue(int port);
 
+        /// Return the latest cached IMU vectors from raccoon subscriptions.
         raccoon::vector3f_t readGyro();
         raccoon::vector3f_t readAccel();
         raccoon::vector3f_t readLinearAccel();
         raccoon::vector3f_t readAccelVelocity();
+        /// Snapshot the current integrated-velocity reading as the new zero point.
         void resetAccelVelocity();
         raccoon::vector3f_t readMag();
         raccoon::scalar_f_t readHeading();
@@ -46,21 +54,20 @@ namespace platform::wombat::core {
 
         raccoon::scalar_f_t readTemp();
 
-        // Wait for IMU orientation data to be received from the coprocessor
-        // Returns true if data was received within timeout_ms, false otherwise
+        /// Wait until heading data has been observed at least once.
         bool waitForImuReady(int timeout_ms = 1000);
 
-        // Deprecated: callback mechanism removed, use getIntegratedVelocity via IIMU instead
+        // Deprecated: callback mechanism removed, use getIntegratedVelocity via IIMU instead.
         void setLinearAccelCallback(std::function<void(float, float, float)> /*callback*/) {}
 
     private:
         raccoon::Transport transport_;
 
-        // Background thread for listening
+        // Background thread for listening.
         std::thread listener_thread_;
         std::atomic<bool> running_{false};
 
-        // Caches for all sensors values
+        // Cached copies of the most recent transport data.
         std::mutex cache_mutex_;
         std::unordered_map<int, int8_t> servo_mode_cache_;
         std::unordered_map<int, int32_t> servo_value_cache_;
@@ -79,10 +86,10 @@ namespace platform::wombat::core {
         raccoon::scalar_f_t heading_cache_{};
         raccoon::scalar_f_t temp_cache_{};
 
-        // Track whether real IMU heading data has been received
+        // Track whether real IMU heading data has been received.
         std::atomic<bool> imu_heading_received_{false};
 
-        // Background listening function
+        // Background listening function.
         void listenLoop();
     };
 

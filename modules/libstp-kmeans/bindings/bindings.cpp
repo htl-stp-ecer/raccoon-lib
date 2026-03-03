@@ -14,5 +14,6 @@ PYBIND11_MODULE(kmeans, m) {
 
     py::class_<libstp::kmeans::KMeans>(m, "KMeans")
         .def(py::init<int>(), py::arg("max_iterations") = 10)
+        // Mirrors the C++ implementation directly: 1D input, two centroids, fixed iterations.
         .def("fit", &libstp::kmeans::KMeans::fit, py::arg("data"));
 }

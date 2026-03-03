@@ -10,6 +10,12 @@
 
 namespace libstp::hal::digital
 {
+    /**
+     * Digital input wrapper implemented by the active platform bundle.
+     *
+     * The wrapper only owns the requested port number and shared safety-check
+     * bookkeeping. Platform drivers provide the actual I/O behavior.
+     */
     class DigitalSensor
     {
 #ifdef SAFETY_CHECKS_ENABLED
@@ -20,10 +26,12 @@ namespace libstp::hal::digital
     public:
         int port;
 
+        /// Create a digital input bound to a platform-defined port index.
         explicit DigitalSensor(int port);
 
         ~DigitalSensor();
 
+        /// Return the current boolean state for the configured input.
         bool read() const;
     };
 }

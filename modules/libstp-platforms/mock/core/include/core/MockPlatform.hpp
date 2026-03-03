@@ -11,6 +11,12 @@ namespace platform::mock::core
     enum class MotorDir : uint8_t { Off = 0b00, CCW = 0b01, CW = 0b10, ServoLike = 0b11 };
     enum class ServoMode : uint8_t { FullyDisabled = 0, Disabled = 1, Enabled = 2 };
 
+    /**
+     * In-process backend used by the mock driver bundle.
+     *
+     * HAL driver implementations call this singleton instead of touching real
+     * hardware. Tests can also seed state through the helper setters below.
+     */
     class MockPlatform
     {
     public:
@@ -50,7 +56,7 @@ namespace platform::mock::core
         
         uint32_t getLastUpdateUs() const;
 
-        // Test utilities
+        // Test utilities for contributors and higher-level tests.
         void setAnalogValue(uint8_t port, uint16_t value);
         void setDigitalValue(uint8_t bit, bool value);
         void setIMUValues(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
@@ -95,7 +101,7 @@ namespace platform::mock::core
         float addNoise(float value) const;
     };
 
-    // Global functions that match the wombat interface
+    // Free functions keep mock driver code shaped similarly to wombat driver code.
     inline void setMotor(uint8_t port, MotorDir dir, uint32_t value)
     {
         MockPlatform::instance().setMotor(port, dir, value);

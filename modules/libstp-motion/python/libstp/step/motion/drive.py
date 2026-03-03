@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 
 @dsl(hidden=True)
 class Drive(MotionStep):
+    """Step wrapper around the native `LinearMotion` controller."""
+
     def __init__(self, config: LinearMotionConfig):
         super().__init__()
         self.config = config

@@ -8,6 +8,8 @@ from .model import StepProtocol
 
 @dataclass(frozen=True)
 class DslMeta:
+    """Discovery metadata attached by ``@dsl`` to steps and factories."""
+
     hidden: bool = False
     name: Optional[str] = None
     tags: tuple[str, ...] = field(default_factory=tuple)

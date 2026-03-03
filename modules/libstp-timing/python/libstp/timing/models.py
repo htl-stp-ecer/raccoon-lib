@@ -4,6 +4,8 @@ from typing import Optional
 
 @dataclass
 class AnomalyDetection:
+    """An outlier execution relative to the recent baseline for one signature."""
+
     signature: str
     duration: float
     expected_mean: float
@@ -16,6 +18,8 @@ class AnomalyDetection:
 
 @dataclass
 class StepStatistics:
+    """Rolling statistics computed from recent non-anomalous step durations."""
+
     mean: float
     stddev: float
     min: float

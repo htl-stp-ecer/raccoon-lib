@@ -12,6 +12,12 @@
 
 
 namespace libstp::hal::screen_render {
+    /**
+     * Singleton helper for publishing screen-render state over raccoon transport.
+     *
+     * This header declares the public surface; the in-tree implementation exists
+     * only for the wombat platform bundle.
+     */
     class ScreenRender {
         std::string screenName;
         raccoon::Transport transport_;
@@ -26,8 +32,10 @@ namespace libstp::hal::screen_render {
         explicit ScreenRender();
         ~ScreenRender()=default;
 
+        /// Publish the current screen payload if a screen name has been selected.
         void sendState(const std::string& jsonData);
 
+        /// Set the logical screen name used by later `sendState()` calls.
         void setCurrentScreenSetting(std::string newScreen);
     };
 }

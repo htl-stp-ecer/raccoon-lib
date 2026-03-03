@@ -5,6 +5,7 @@
 
 namespace libstp::motion
 {
+    /** Configuration for an in-place turn. */
     struct TurnConfig
     {
         double target_angle_rad{0.0};        // Target turn angle (positive = CCW, negative = CW)

@@ -5,6 +5,7 @@ namespace py = pybind11;
 
 void init_servo(const py::module& m)
 {
+    // Servo only exposes the command-oriented wrapper state, not any platform internals.
     py::class_<libstp::hal::servo::Servo>(m, "Servo")
         .def(py::init<int>(), py::arg("port"))
         .def("set_position", &libstp::hal::servo::Servo::setPosition, py::arg("position"))

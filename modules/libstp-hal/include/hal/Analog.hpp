@@ -10,6 +10,13 @@
 
 namespace libstp::hal::analog
 {
+    /**
+     * Thin analog input wrapper implemented by the selected platform bundle.
+     *
+     * The constructor stores the requested port number and, when safety checks
+     * are enabled, participates in duplicate-port detection shared across
+     * platforms.
+     */
     class AnalogSensor
     {
 #ifdef SAFETY_CHECKS_ENABLED
@@ -21,10 +28,12 @@ namespace libstp::hal::analog
     public:
         int port;
 
+        /// Create an analog sensor bound to a platform-defined port index.
         explicit AnalogSensor(int port);
 
         virtual ~AnalogSensor();
 
+        /// Read the current raw analog value from the selected platform.
         virtual int read() const;
     };
 }

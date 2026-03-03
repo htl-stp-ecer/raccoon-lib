@@ -97,7 +97,9 @@ namespace libstp::hal::imu
     {
         virtual ~IIMU() = default;
 
+        /// Read accel, gyro, and magnetometer vectors into caller-owned buffers.
         virtual void read(float* accel, float* gyro, float* magneto) = 0;
+        /// Run platform-specific IMU calibration if implemented.
         virtual void calibrate() = 0;
 
         /**
@@ -117,12 +119,14 @@ namespace libstp::hal::imu
             gyro[0] = g[0]; gyro[1] = g[1]; gyro[2] = g[2];
         }
 
+        /// Configure which axis `getYawRate()` reports, using the enum form.
         void setYawRateAxisMode(const TurnAxisMode mode)
         {
             yaw_rate_axis_mode_ = mode;
             yaw_rate_sign_ = 1.0f;
         }
 
+        /// Configure which axis `getYawRate()` reports, using a string alias.
         void setYawRateAxisMode(const std::string& mode)
         {
             const auto cfg = parseTurnAxisConfig(mode);
@@ -185,8 +189,7 @@ namespace libstp::hal::imu
          */
         virtual void resetIntegratedVelocity() {}
 
-        // Wait for IMU to receive initial orientation data
-        // Returns true if data received within timeout_ms, false otherwise
+        /// Wait until the implementation has enough data to provide orientation.
         virtual bool waitForReady(int timeout_ms = 1000) = 0;
 
     private:

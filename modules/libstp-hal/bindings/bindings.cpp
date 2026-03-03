@@ -4,6 +4,8 @@
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 
+// Submodule initializers live in separate files so the binding surface can grow
+// without turning the main module entrypoint into a single large translation unit.
 void init_imu(const py::module& m);
 void init_analog(const py::module& m);
 void init_digital(const py::module& m);
@@ -13,7 +15,7 @@ void init_servo(const py::module& m);
 PYBIND11_MODULE(hal, m) {
     m.doc() = "Python bindings for libstp-hal";
 
-    // Import foundation module to ensure MotorCalibration type is available
+    // Motor exposes foundation::MotorCalibration, so load the sibling module first.
     py::module::import("libstp.foundation");
 
     init_imu(m);

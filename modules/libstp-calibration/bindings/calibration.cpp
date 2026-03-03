@@ -12,7 +12,7 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(calibration, m)
 {
-    m.doc() = "Python bindings for motor calibration";
+    m.doc() = "Python bindings for libstp calibration result and configuration types.";
 
     // Ensure foundation types are available
     py::module_::import("libstp.foundation");

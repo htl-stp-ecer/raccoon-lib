@@ -4,6 +4,7 @@
 
 namespace libstp::foundation
 {
+    /// Full PID configuration including anti-windup, derivative filtering, and output limits.
     struct PidConfig
     {
         double kp{1.0};
@@ -27,15 +28,17 @@ namespace libstp::foundation
             , output_min(output_min), output_max(output_max)
         {}
 
-        // Convenience: construct from simple PidGains (advanced params get defaults)
+        // Convenience: construct from simple PidGains (advanced params get defaults).
         PidConfig(const PidGains& g) : kp(g.kp), ki(g.ki), kd(g.kd) {}
     };
 
+    /// Stateful PID controller with integral clamping and a low-pass filtered derivative term.
     class PidController
     {
     public:
         explicit PidController(PidConfig config = {});
 
+        /// Update the controller using `error` for both the proportional and derivative signals.
         double update(double error, double dt);
 
         /**
@@ -44,7 +47,10 @@ namespace libstp::foundation
          */
         double update(double error, double dt, double deriv_signal);
 
+        /// Clear accumulated integral and derivative state.
         void reset();
+
+        /// Replace only the proportional, integral, and derivative gains.
         void setGains(double kp, double ki, double kd);
 
         [[nodiscard]] double getIntegral() const { return integral_; }

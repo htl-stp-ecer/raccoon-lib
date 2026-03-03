@@ -22,6 +22,7 @@ PYBIND11_MODULE(kinematics_mecanum, m)
 
     py::class_<libstp::kinematics::mecanum::MecanumKinematics, libstp::kinematics::IKinematics,
                 std::shared_ptr<libstp::kinematics::mecanum::MecanumKinematics>>(m, "MecanumKinematics")
+        // Keep motor wrappers alive for at least as long as the kinematics object.
         .def(py::init<libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,

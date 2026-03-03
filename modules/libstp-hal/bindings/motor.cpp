@@ -9,6 +9,7 @@ namespace py = pybind11;
 
 void init_motor(const py::module& m)
 {
+    // Expose both the injectable interface and the concrete platform-backed type.
     py::class_<libstp::hal::motor::IMotor>(m, "IMotor")
         .def("set_speed", &libstp::hal::motor::IMotor::setSpeed, py::arg("percent"))
         .def("set_velocity", &libstp::hal::motor::IMotor::setVelocity, py::arg("velocity"),
@@ -31,6 +32,8 @@ void init_motor(const py::module& m)
         .def("set_calibration", &libstp::hal::motor::IMotor::setCalibration, py::arg("calibration"));
 
     py::class_<libstp::hal::motor::Motor, libstp::hal::motor::IMotor>(m, "Motor")
+        // Calibration is passed by value so Python can construct and update it
+        // through the existing libstp.foundation binding.
         .def(py::init<int, bool, libstp::foundation::MotorCalibration>(), py::arg("port"), py::arg("inverted") = false,
              py::arg("calibration") = libstp::foundation::MotorCalibration{})
         .def_static("disable_all", &libstp::hal::motor::Motor::disableAll)

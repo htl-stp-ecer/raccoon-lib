@@ -12,8 +12,10 @@
 
 namespace libstp::button {
 
+    /** Singleton wrapper around the robot's shared physical button input. */
     class Button final {
     public:
+        /** Access the process-wide button instance. */
         static Button& instance();
 
         // Set up the digital sensor using a port number (creates the sensor internally).
@@ -21,8 +23,10 @@ namespace libstp::button {
         // Alternatively inject an already-created sensor (helps in tests).
         void setDigital(std::unique_ptr<hal::digital::DigitalSensor> sensor);
 
+        /** Return the current raw pressed state. */
         bool isPressed() const;
 
+        /** Block until the button is pressed according to the active sensor implementation. */
         void waitForButtonPress() const;
 
         Button(const Button&) = delete;

@@ -46,17 +46,9 @@ class Timeout(Step):
 
     async def _execute_step(self, robot) -> None:
         """
-        Execute the wrapped step with a timeout.
-        
-        Args:
-            device: The device to run on
-            definitions: Additional definitions needed for execution
-            
-        Returns:
-            TimeoutResult: The result of the execution
+        Run the wrapped step and log if it exceeds the timeout budget.
         """
         try:
-            # Try to execute the step with a timeout
             await asyncio.wait_for(
                 self.step.run_step(robot),
                 timeout=self.timeout_seconds
@@ -65,7 +57,9 @@ class Timeout(Step):
             self.error(f"Step timed out after {self.timeout_seconds} seconds")
         except Exception:
             raise
+
+
 @dsl(tags=["control", "timeout"])
 def timeout(step: StepProtocol, seconds: float) -> Timeout:
-    """Apply a timeout to a step"""
+    """Wrap a step so it is cancelled if it runs past ``seconds``."""
     return Timeout(step=step, timeout_seconds=seconds)

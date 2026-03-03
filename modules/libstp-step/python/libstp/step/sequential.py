@@ -7,8 +7,7 @@ from .annotation import dsl
 @dsl(hidden=True)
 class Sequential(Step):
     """
-    Sequential step executor that runs steps in a sequential order.
-    Each step will be executed only once.
+    Composite step that runs child steps one after another.
     """
 
     def __init__(self, steps: List[Step]) -> None:
@@ -64,21 +63,12 @@ class Sequential(Step):
 
     async def _execute_step(self, robot) -> None:
         """
-        Execute each step in sequence, passing device and definitions to each step.
-        Can only be run once.
-        
-        Args:
-            device: The device to run on
-            definitions: Additional definitions needed for execution
-            
-        Raises:
-            RuntimeError: If attempting to run this sequence more than once
+        Run each child step in order against the same robot instance.
         """
-        # Now execute all child steps
         for i, step in enumerate(self.steps):
             await step.run_step(robot)
 
 @dsl(hidden=True)
 def seq(steps: List[Step]) -> Sequential:
-    """Create a sequential sequence of steps"""
+    """Create a sequential composite from an explicit list of steps."""
     return Sequential(steps)

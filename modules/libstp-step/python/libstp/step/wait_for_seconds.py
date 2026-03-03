@@ -41,18 +41,12 @@ class WaitForSeconds(Step):
 
     async def _execute_step(self, robot) -> None:
         """
-        Wait for the specified duration.
-        
-        Args:
-            device: The device to run on (not used in this step)
-            definitions: Additional definitions needed for execution
+        Sleep for the configured duration without touching the robot.
         """
-
-        # Simply wait for the specified duration
         await asyncio.sleep(self.seconds)
 
 
 @dsl(tags=["timing", "wait"])
 def wait(seconds: float) -> WaitForSeconds:
-    """Wait for specified seconds"""
+    """Create a step that sleeps for ``seconds`` before continuing."""
     return WaitForSeconds(seconds=seconds)
