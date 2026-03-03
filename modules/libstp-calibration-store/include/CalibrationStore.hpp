@@ -31,13 +31,19 @@ namespace libstp::calibration_store {
         /// Return the singleton store instance.
         static CalibrationStore& instance();
 
-        /// Persist one black/white threshold pair for the given calibration type.
-        void storeReading(float black_tresh, float white_tresh, CalibrationType type) const;
+        /// Persist one black/white threshold pair for the given calibration type and set.
+        void storeReading(float black_tresh, float white_tresh, CalibrationType type,
+                          const std::string& set_name = "default") const;
 
-        /// Report whether both expected values are present for the given type.
-        [[nodiscard]] bool hasReadings(CalibrationType type) const;
+        /// Report whether both expected values are present for the given type and set.
+        [[nodiscard]] bool hasReadings(CalibrationType type,
+                                       const std::string& set_name = "default") const;
 
         /// Return `{white_tresh, black_tresh}` or `{0.0, 0.0}` when no reading exists.
-        [[nodiscard]] std::vector<float> getReadings(CalibrationType type) const;
+        [[nodiscard]] std::vector<float> getReadings(CalibrationType type,
+                                                      const std::string& set_name = "default") const;
+
+        /// Return the names of all calibration sets stored for the given type.
+        [[nodiscard]] std::vector<std::string> getSetNames(CalibrationType type) const;
     };
 }

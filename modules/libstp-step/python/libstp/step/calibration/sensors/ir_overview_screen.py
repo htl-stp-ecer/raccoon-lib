@@ -12,9 +12,10 @@ class IROverviewScreen(UIScreen[IRCalibrationChoice]):
 
     title = "IR Sensor Calibration"
 
-    def __init__(self, has_existing: bool = False):
+    def __init__(self, has_existing: bool = False, set_name: str = "default"):
         super().__init__()
         self.has_existing = has_existing
+        self.set_name = set_name
 
     def build(self) -> Widget:
         buttons = [
@@ -23,13 +24,17 @@ class IROverviewScreen(UIScreen[IRCalibrationChoice]):
         if self.has_existing:
             buttons.append(Button("use_existing", "Use Existing", style="secondary"))
 
+        subtitle = "Calibrate black and white thresholds"
+        if self.set_name != "default":
+            subtitle = f"Calibrate thresholds for '{self.set_name}' surface"
+
         return Split(
             left=[
                 StatusIcon(icon="sensors", color="blue"),
                 Spacer(8),
                 Text("IR Sensor Calibration", size="large"),
                 Spacer(4),
-                Text("Calibrate black and white thresholds", size="small", muted=True),
+                Text(subtitle, size="small", muted=True),
             ],
             right=[
                 HintBox("Place sensors over surface", style="prominent"),

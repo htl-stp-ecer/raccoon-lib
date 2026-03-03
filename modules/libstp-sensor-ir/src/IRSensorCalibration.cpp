@@ -12,14 +12,15 @@ using namespace libstp::sensors::ir;
 
 bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensors,
                                            float durationSeconds,
-                                           bool usePre) {
+                                           bool usePre,
+                                           const std::string& set_name) {
     hal::screen_render::ScreenRender::instance().setCurrentScreenSetting("calibrate_sensors");
 
     std::vector<float> values;
     bool allGood = true;
 
     if (usePre) {
-        values = calibration_store::CalibrationStore::instance().getReadings(calibration_store::CalibrationType::IR_SENSOR);
+        values = calibration_store::CalibrationStore::instance().getReadings(calibration_store::CalibrationType::IR_SENSOR, set_name);
         for (auto *sensor: sensors) {
             sensor->whiteThreshold = values[0];
             sensor->blackThreshold = values[1];
@@ -61,7 +62,8 @@ bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensor
                 << "}";
         calibration_store::CalibrationStore::instance().storeReading(sensors[0]->blackThreshold,
                                                                      sensors[0]->whiteThreshold,
-                                                                     calibration_store::CalibrationType::IR_SENSOR);
+                                                                     calibration_store::CalibrationType::IR_SENSOR,
+                                                                     set_name);
         hal::screen_render::ScreenRender::instance().sendState(json.str());
         return true;
     }

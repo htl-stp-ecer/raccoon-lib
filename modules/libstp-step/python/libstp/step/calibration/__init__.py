@@ -14,6 +14,12 @@ from .deadzone import (
     CalibrateDeadzone,
     DeadzoneCalibrationResult,
 )
+from .sensors import (
+    calibrate_sensors,
+    CalibrateSensors,
+    switch_calibration_set,
+    SwitchCalibrationSet,
+)
 
 __all__ = [
     "calibrate",
@@ -29,4 +35,8 @@ __all__ = [
     "calibrate_deadzone",
     "CalibrateDeadzone",
     "DeadzoneCalibrationResult",
+    "calibrate_sensors",
+    "CalibrateSensors",
+    "switch_calibration_set",
+    "SwitchCalibrationSet",
 ]
