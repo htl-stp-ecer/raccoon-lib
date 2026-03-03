@@ -61,9 +61,12 @@ from .line_follow import (
     LineSide,
     SingleSensorLineFollow,
     SingleLineFollowConfig,
+    SingleSensorLineFollowUntilBlack,
+    SingleLineFollowUntilBlackConfig,
     follow_line,
     follow_line_until_both_black,
     follow_line_single,
+    follow_line_single_until_black,
 )
 from .at_distance import WaitUntilDistance, wait_until_distance
 from .tune_drive import TuneDrive, tune_drive
@@ -149,6 +152,9 @@ __all__ = [
     "follow_line",
     "follow_line_until_both_black",
     "follow_line_single",
+    "SingleSensorLineFollowUntilBlack",
+    "SingleLineFollowUntilBlackConfig",
+    "follow_line_single_until_black",
     "lineup",
     # Distance wait
     "WaitUntilDistance",

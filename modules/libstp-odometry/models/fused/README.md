@@ -95,5 +95,5 @@ No tests live under this submodule today.
 ## Extension points
 
 - Add alternative fusion strategies by extending this model or by introducing a sibling model under `models/`.
-- If you add external pose corrections, keep the origin-relative semantics of `getHeading()` and `getDistanceFromOrigin()` explicit in the API docs.
+- If you add external pose corrections in the future, document how they interact with the origin-relative semantics of `getHeading()` and `getDistanceFromOrigin()`.
 - Any change to `turn_axis` handling must stay coordinated with the IMU firmware and HAL expectations.

@@ -9,7 +9,7 @@ Supports two calibration modes:
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING, Sequence
 
 import yaml
 
@@ -175,6 +175,7 @@ class CalibrateDistance(UIStep):
         calibrate_light_sensors: bool = False,
         persist_to_yaml: bool = True,
         ema_alpha: float = DEFAULT_EMA_ALPHA,
+        calibration_sets: Optional[List[str]] = None,
     ) -> None:
         """
         Initialize the distance calibration step.
@@ -184,17 +185,23 @@ class CalibrateDistance(UIStep):
             calibrate_light_sensors: If True, calibrate IR sensors after distance confirmation
             persist_to_yaml: If True, update raccoon.project.yml with EMA-filtered baseline
             ema_alpha: EMA coefficient for baseline updates (0.0-1.0, higher = slower convergence)
+            calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
         """
         super().__init__()
         self.calibration_distance_cm = calibration_distance_cm
         self.calibrate_light_sensors = calibrate_light_sensors
         self.persist_to_yaml = persist_to_yaml
         self.ema_alpha = ema_alpha
+        self.calibration_sets = calibration_sets or ["default"]
         self.result: Optional[DistanceCalibrationResult] = None
         self.per_wheel_results: List[PerWheelCalibration] = []
 
     def _generate_signature(self) -> str:
-        return f"CalibrateDistance(distance_cm={self.calibration_distance_cm}, light_sensors={self.calibrate_light_sensors}, persist={self.persist_to_yaml})"
+        return (
+            f"CalibrateDistance(distance_cm={self.calibration_distance_cm}, "
+            f"light_sensors={self.calibrate_light_sensors}, "
+            f"persist={self.persist_to_yaml}, sets={self.calibration_sets})"
+        )
 
     async def _sample_sensors(
         self,
@@ -226,9 +233,12 @@ class CalibrateDistance(UIStep):
         self,
         ir_sensors: List["IRSensor"],
         initial_samples: Dict[int, List[float]],
+        set_name: str = "default",
     ) -> None:
         from libstp.step.calibration.sensors.ir_calibrating_screen import IRCalibratingScreen
         from libstp.step.calibration.sensors.ir_confirm_screen import IRConfirmScreen
+        from libstp import calibration_store as CalibrationStore
+        from libstp.calibration_store import CalibrationType
 
         if not ir_sensors:
             return
@@ -271,6 +281,12 @@ class CalibrateDistance(UIStep):
                         confirm_result.black_threshold,
                         confirm_result.white_threshold,
                     )
+                CalibrationStore.store_readings(
+                    CalibrationType.IR_SENSOR,
+                    confirm_result.white_threshold,
+                    confirm_result.black_threshold,
+                    set_name,
+                )
                 return
 
             samples = await self.run_with_ui(
@@ -469,7 +485,19 @@ class CalibrateDistance(UIStep):
                 self.debug(f"Distance calibration applied: {len(self.per_wheel_results)} motor(s) calibrated")
 
                 if self.calibrate_light_sensors and ir_sensors:
-                    await self._confirm_light_sensors(ir_sensors, sensor_samples)
+                    for cal_set in self.calibration_sets:
+                        if len(self.calibration_sets) > 1:
+                            label = cal_set.upper()
+                            proceed = await self.confirm(
+                                f"Place sensors on {label} surface, then confirm.",
+                                title=f"Calibrate: {label}",
+                                yes_label="Ready",
+                                no_label="Skip",
+                            )
+                            if not proceed:
+                                self.debug(f"Skipping calibration set '{cal_set}'")
+                                continue
+                        await self._confirm_light_sensors(ir_sensors, sensor_samples, cal_set)
                 return
 
             # User wants to retry - loop continues
@@ -481,6 +509,7 @@ def calibrate_distance(
     calibrate_light_sensors: bool = False,
     persist_to_yaml: bool = True,
     ema_alpha: float = DEFAULT_EMA_ALPHA,
+    calibration_sets: Optional[List[str]] = None,
 ) -> CalibrateDistance:
     """
     Create a distance calibration step.
@@ -499,6 +528,7 @@ def calibrate_distance(
         calibrate_light_sensors: If True, calibrate IR sensors after distance confirmation
         persist_to_yaml: If True, update raccoon.project.yml with EMA baseline
         ema_alpha: EMA coefficient (0.0-1.0, higher = slower convergence)
+        calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
 
     Returns:
         CalibrateDistance step instance
@@ -508,4 +538,5 @@ def calibrate_distance(
         calibrate_light_sensors,
         persist_to_yaml,
         ema_alpha,
+        calibration_sets=calibration_sets,
     )

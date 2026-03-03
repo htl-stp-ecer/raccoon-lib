@@ -57,6 +57,24 @@ class SingleLineFollowConfig:
     kd: float = 0.3
 
 
+@dataclass
+class SingleLineFollowUntilBlackConfig:
+    """Configuration for single-sensor line following that stops when a second sensor sees black.
+
+    The ``sensor`` tracks the line edge using PID control, while
+    ``stop_sensor`` is monitored each cycle. When the stop sensor's
+    probabilityOfBlack exceeds ``stop_threshold``, the step finishes.
+    """
+    sensor: IRSensor
+    stop_sensor: IRSensor
+    speed_scale: float  # 0-1 fraction of max velocity
+    side: LineSide = LineSide.LEFT
+    stop_threshold: float = 0.7
+    kp: float = 1.0
+    ki: float = 0.0
+    kd: float = 0.3
+
+
 @dsl(hidden=True)
 class LineFollow(MotionStep):
     """
@@ -218,6 +236,89 @@ class SingleSensorLineFollow(MotionStep):
         return self._motion.is_finished()
 
 
+@dsl(hidden=True)
+class SingleSensorLineFollowUntilBlack(MotionStep):
+    """
+    Follow a line using a single IR sensor, stopping when a second sensor detects black.
+
+    Uses LinearMotion for velocity control and odometry, with sensor-based
+    PID steering overriding the heading controller. The stop sensor is
+    checked each cycle; when it exceeds the threshold the step finishes.
+    """
+
+    def __init__(self, config: SingleLineFollowUntilBlackConfig):
+        super().__init__()
+        self.config = config
+        self._motion: LinearMotion | None = None
+        self._pid: PidController | None = None
+
+    def _generate_signature(self) -> str:
+        return (
+            f"SingleSensorLineFollowUntilBlack("
+            f"side={self.config.side.value}, speed={self.config.speed_scale:.2f}, "
+            f"stop_thresh={self.config.stop_threshold:.2f})"
+        )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        base.delta = SimulationStepDelta(
+            forward=0.3,
+            strafe=0.0,
+            angular=0.0,
+        )
+        return base
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        cfg = self.config
+
+        motion_config = LinearMotionConfig()
+        motion_config.axis = LinearAxis.Forward
+        # Large distance so LinearMotion never finishes by distance;
+        # the stop_sensor check in on_update stops early.
+        motion_config.distance_m = 100.0
+        motion_config.speed_scale = cfg.speed_scale
+
+        self._motion = LinearMotion(
+            robot.drive, robot.odometry, robot.motion_pid_config, motion_config,
+        )
+        self._motion.start()
+
+        self._pid = PidController(PidConfig(kp=cfg.kp, ki=cfg.ki, kd=cfg.kd))
+
+        self.debug(
+            f"on_start: side={cfg.side.value}, speed_scale={cfg.speed_scale:.2f}, "
+            f"stop_thresh={cfg.stop_threshold:.2f}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+        )
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        cfg = self.config
+
+        # Check stop sensor
+        stop_reading = cfg.stop_sensor.probabilityOfBlack()
+        if stop_reading >= cfg.stop_threshold:
+            self.debug(
+                f"stop: stop_sensor black={stop_reading:.2f} >= {cfg.stop_threshold:.2f}"
+            )
+            return True
+
+        # Edge-tracking error: 0.5 = edge of line
+        reading = cfg.sensor.probabilityOfBlack()
+        error = reading - 0.5
+        if cfg.side == LineSide.RIGHT:
+            error = -error
+
+        # PID steering -> omega override on LinearMotion
+        wz = self._pid.update(error, dt)
+        self._motion.set_omega_override(wz)
+
+        self.debug(
+            f"black={reading:.2f} stop={stop_reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+        )
+
+        self._motion.update(dt)
+        return False
+
+
 @dsl(tags=["motion", "line-follow"])
 def follow_line(
     left_sensor: IRSensor,
@@ -319,3 +420,43 @@ def follow_line_single(
         kp=kp, ki=ki, kd=kd,
     )
     return SingleSensorLineFollow(config)
+
+
+@dsl(tags=["motion", "line-follow"])
+def follow_line_single_until_black(
+    sensor: IRSensor,
+    stop_sensor: IRSensor,
+    speed: float = 0.5,
+    side: LineSide = LineSide.LEFT,
+    stop_threshold: float = 0.7,
+    kp: float = 1.0,
+    ki: float = 0.0,
+    kd: float = 0.3,
+) -> SingleSensorLineFollowUntilBlack:
+    """
+    Follow a line using a single sensor, stopping when a second sensor detects black.
+
+    The ``sensor`` tracks the edge of the line (where probabilityOfBlack ~ 0.5).
+    ``side`` selects which edge to follow. The step finishes when
+    ``stop_sensor.probabilityOfBlack()`` exceeds ``stop_threshold``.
+
+    Args:
+        sensor: The IR sensor used for edge-tracking
+        stop_sensor: A second IR sensor; step stops when this reads black
+        speed: Fraction of max speed, 0-1 (default 0.5)
+        side: Which edge to track (LEFT or RIGHT)
+        stop_threshold: probabilityOfBlack threshold for stop sensor (default 0.7)
+        kp, ki, kd: PID gains for steering
+
+    Returns:
+        SingleSensorLineFollowUntilBlack step
+    """
+    config = SingleLineFollowUntilBlackConfig(
+        sensor=sensor,
+        stop_sensor=stop_sensor,
+        speed_scale=speed,
+        side=side,
+        stop_threshold=stop_threshold,
+        kp=kp, ki=ki, kd=kd,
+    )
+    return SingleSensorLineFollowUntilBlack(config)

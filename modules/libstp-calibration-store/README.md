@@ -92,7 +92,7 @@ The current implementation is easy to extend in a few specific directions:
 - add new `CalibrationType` values and update the type-to-YAML-key switch statements
 - make the file path configurable instead of hard-coded
 - add validation/error reporting for malformed YAML
-- expose a richer Python API once the argument ordering issue is addressed in code
+- expose a richer Python API if more calibration families need structured return types
 
 If you add a new calibration family, update both the enum and every `switch` in
 `CalibrationStore.cpp`; unsupported values currently fall back to `"unknown-calibration"` on write

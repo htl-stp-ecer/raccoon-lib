@@ -30,7 +30,7 @@ Types and roles:
 - `DistanceFromOrigin`
   Forward, lateral, and straight-line displacement relative to the most recent reset.
 - `IOdometry`
-  Abstract interface with `update`, `getPose`, `getDistanceFromOrigin`, `getHeading`, `getHeadingError`, and reset overloads.
+  Abstract interface with `update`, `getPose`, `getDistanceFromOrigin`, `getHeading`, `getHeadingError`, and `reset()`.
 - Angle helpers
   Header-only utility functions for heading wrapping and extraction.
 
@@ -46,7 +46,7 @@ Exposed Python type:
 
 - `IOdometry`
 
-The base binding only exposes `update`, `get_pose`, and the two `reset` overloads. Model-specific bindings export additional behavior.
+The base binding exposes `update`, `get_pose`, and `reset()`. Model-specific bindings export additional behavior.
 
 ## Tests
 

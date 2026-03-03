@@ -48,7 +48,7 @@ jobs:
         run: |
           mkdir -p release-bundle
           cp "${{ steps.version.outputs.wheel }}" release-bundle/
-          cp install.sh release-bundle/
+          cp install.py release-bundle/
           cd release-bundle
           tar czf ../libstp-${{ steps.version.outputs.version }}.tar.gz *
 
@@ -63,7 +63,7 @@ jobs:
             **Install on Raspberry Pi:**
             ```bash
             tar xzf libstp-${{ steps.version.outputs.version }}.tar.gz
-            RPI_HOST=<your-pi-ip> bash install.sh
+            RPI_HOST=<your-pi-ip> python3 install.py
             ```
           files: |
             libstp-${{ steps.version.outputs.version }}.tar.gz
