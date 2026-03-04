@@ -17,12 +17,12 @@ if [[ ! -f "$WHEEL_FILE" ]]; then
   exit 1
 fi
 
-# Stage wheel + install.sh in a temp dir (build dir is root-owned from Docker)
+# Stage wheel + install.py in a temp dir (build dir is root-owned from Docker)
 STAGE_DIR=$(mktemp -d)
 trap 'rm -rf "$STAGE_DIR"' EXIT
 cp "$WHEEL_FILE" "$STAGE_DIR/"
-cp install.sh "$STAGE_DIR/install.sh"
+cp install.py "$STAGE_DIR/install.py"
 
 # Deploy
 echo "▶ Deploying to Pi..."
-bash "$STAGE_DIR/install.sh"
+python3 "$STAGE_DIR/install.py"

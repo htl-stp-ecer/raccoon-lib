@@ -12,7 +12,7 @@ import asyncio
 import json
 
 import time
-import lcm
+from raccoon_transport import Transport
 from libstp.step.base import Step
 from libstp.button import is_pressed
 from .raccoon.screen_render_t import screen_render_t
@@ -61,7 +61,7 @@ class UIStep(Step, ABC):
         super().__init__()
         self._robot: Optional[GenericRobot] = None
         self._current_screen: Optional[UIScreen] = None
-        self._lcm = lcm.LCM()
+        self._transport = Transport()
         self._lcm_pump_task: Optional[asyncio.Task] = None
         self._ui_active: bool = False  # Track if any UI has been shown
 
@@ -104,7 +104,7 @@ class UIStep(Step, ABC):
         msg.screen_name = self._SCREEN_NAME
         msg.entries = json.dumps(screen._to_dict())
         self.debug(f"[LCM TX] screen_render -> {screen.__class__.__name__}: {screen.title}")
-        self._lcm.publish("libstp/screen_render", msg.encode())
+        self._transport.publish("libstp/screen_render", msg)
         self._ui_active = True
 
     async def _run_screen_events(self, screen: UIScreen) -> None:
@@ -112,7 +112,7 @@ class UIStep(Step, ABC):
         loop = asyncio.get_event_loop()
         event_queue: asyncio.Queue = asyncio.Queue()
 
-        # LCM message handler
+        # LCM message handler — receives unwrapped payload from reliable envelope
         def lcm_handler(channel, data):
             msg = screen_render_answer_t.decode(data)
             if msg.screen_name == self._SCREEN_NAME:
@@ -124,16 +124,18 @@ class UIStep(Step, ABC):
                 self.debug(f"[LCM RX] screen_answer <- action={msg.value}, data={msg.reason[:100] if msg.reason else 'none'}...")
                 loop.call_soon_threadsafe(event_queue.put_nowait, event)
 
-        # Subscribe to LCM responses
-        sub = self._lcm.subscribe("libstp/screen_render/answer", lcm_handler)
+        # Subscribe with reliable=True to receive Flutter's reliable-published answers
+        sub = self._transport.subscribe(
+            "libstp/screen_render/answer", lcm_handler, reliable=True,
+        )
 
         # Start button listener task
         button_task = asyncio.create_task(self._button_listener(event_queue))
 
         try:
             while not screen._closed:
-                # Handle LCM messages
-                self._lcm.handle_timeout(0)
+                # Handle LCM messages (includes reliable ACK handling)
+                self._transport.spin_once(timeout_ms=0)
 
                 # Process events from queue
                 try:
@@ -149,7 +151,7 @@ class UIStep(Step, ABC):
                 await button_task
             except asyncio.CancelledError:
                 pass
-            self._lcm.unsubscribe(sub)
+            self._transport._lcm.unsubscribe(sub)
 
     async def _button_listener(self, queue: asyncio.Queue) -> None:
         """Listen for physical button presses."""
@@ -174,7 +176,7 @@ class UIStep(Step, ABC):
         msg.screen_name = self._SCREEN_NAME
         msg.entries = json.dumps({"screen": "close"})
         self.debug("[LCM TX] screen_render -> close")
-        self._lcm.publish("libstp/screen_render", msg.encode())
+        self._transport.publish("libstp/screen_render", msg)
         self._current_screen = None
         self._ui_active = False
 
@@ -256,9 +258,11 @@ class UIStep(Step, ABC):
                 self.debug(f"[LCM RX] pump <- action={msg.value}")
                 loop.call_soon_threadsafe(event_queue.put_nowait, event)
 
-        sub = self._lcm.subscribe("libstp/screen_render/answer", lcm_handler)
+        sub = self._transport.subscribe(
+            "libstp/screen_render/answer", lcm_handler, reliable=True,
+        )
         try:
-            self._lcm.handle_timeout(int(timeout * 1000))
+            self._transport.spin_once(timeout_ms=int(timeout * 1000))
             while True:
                 try:
                     event = event_queue.get_nowait()
@@ -266,7 +270,7 @@ class UIStep(Step, ABC):
                 except asyncio.QueueEmpty:
                     break
         finally:
-            self._lcm.unsubscribe(sub)
+            self._transport._lcm.unsubscribe(sub)
 
     @asynccontextmanager
     async def showing(self, screen: UIScreen[T]):

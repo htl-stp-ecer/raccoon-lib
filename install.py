@@ -79,18 +79,19 @@ def main() -> None:
         f"{python_cmd} -m pip install --user --force-reinstall '/tmp/{wheel_basename}' --break-system-packages",
     )
 
-    # Verify
+    # Verify — check stdout for success marker (exit code may be non-zero
+    # due to hardware cleanup segfault in atexit handler)
     print("• Verifying import...")
-    rc = ssh(
-        rpi_host,
-        rpi_user,
-        f"{python_cmd} -c 'import {project_name}; print(\"{project_name} OK\")'",
-        check=False,
+    result = subprocess.run(
+        ["ssh", "-o", "ConnectTimeout=5", f"{rpi_user}@{rpi_host}",
+         f"{python_cmd} -c 'import {project_name}; print(\"{project_name} OK\")'"],
+        capture_output=True, text=True,
     )
-    if rc == 0:
+    if f"{project_name} OK" in result.stdout:
         print(f"✓ {project_name} deployed successfully to {rpi_user}@{rpi_host}")
     else:
         print("⚠ Package installed but import test failed")
+        print(result.stderr)
         sys.exit(1)
 
 

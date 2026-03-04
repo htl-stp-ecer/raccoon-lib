@@ -2,8 +2,10 @@ import asyncio
 from typing import Optional, List
 
 from libstp import calibration_store as CalibrationStore
-from libstp import dsl, UIStep, IRSensor, IRSensorCalibration
 from libstp.calibration_store import CalibrationType
+from libstp.sensor_ir import IRSensor, IRSensorCalibration
+from libstp.step.annotation import dsl
+from libstp.ui.step import UIStep
 
 from .dataclasses import IRSensorCalibrationResult
 from .ir_calibrating_screen import IRCalibratingScreen
