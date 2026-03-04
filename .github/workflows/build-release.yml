@@ -40,7 +40,9 @@ jobs:
         run: |
           WHL=$(find build-docker -name '*.whl' -type f | head -1)
           VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
+          RELEASE_TAG="${VERSION}+${GITHUB_RUN_NUMBER}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
 
@@ -55,8 +57,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: libstp ${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.release_tag }}
+          name: libstp ${{ steps.version.outputs.release_tag }}
           body: |
             Automated release from commit ${{ github.sha }}.
 
