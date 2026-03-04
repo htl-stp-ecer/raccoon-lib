@@ -1,8 +1,10 @@
 from typing import List
 
 from libstp import calibration_store as CalibrationStore
-from libstp import dsl, UIStep, IRSensor
 from libstp.calibration_store import CalibrationType
+from libstp.sensor_ir import IRSensor
+from libstp.step.annotation import dsl
+from libstp.ui.step import UIStep
 
 
 @dsl(hidden=True)
