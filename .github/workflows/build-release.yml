@@ -40,7 +40,7 @@ jobs:
         run: |
           WHL=$(find build-docker -name '*.whl' -type f | head -1)
           VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
-          RELEASE_TAG="${VERSION}+${GITHUB_RUN_NUMBER}"
+          RELEASE_TAG="${VERSION}.${GITHUB_RUN_NUMBER}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
