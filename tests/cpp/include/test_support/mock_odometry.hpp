@@ -14,7 +14,6 @@ namespace libstp::test
         MOCK_METHOD(odometry::DistanceFromOrigin, getDistanceFromOrigin, (), (const, override));
         MOCK_METHOD(double, getHeading, (), (const, override));
         MOCK_METHOD(double, getHeadingError, (double target_heading_rad), (const, override));
-        MOCK_METHOD(void, reset, (const foundation::Pose& pose), (override));
         MOCK_METHOD(void, reset, (), (override));
 
         // Simulation state for testing motion controllers
