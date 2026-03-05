@@ -16,27 +16,30 @@ bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensor
                                            const std::string& set_name) {
     hal::screen_render::ScreenRender::instance().setCurrentScreenSetting("calibrate_sensors");
 
-    std::vector<float> values;
     bool allGood = true;
+    const size_t n = sensors.size();
 
     if (usePre) {
-        values = calibration_store::CalibrationStore::instance().getReadings(calibration_store::CalibrationType::IR_SENSOR, set_name);
-        for (auto *sensor: sensors) {
-            sensor->whiteThreshold = values[0];
-            sensor->blackThreshold = values[1];
+        for (size_t i = 0; i < n; ++i) {
+            const std::string key = set_name + "_port" + std::to_string(sensors[i]->port);
+            auto vals = calibration_store::CalibrationStore::instance().getReadings(
+                calibration_store::CalibrationType::IR_SENSOR, key);
+            sensors[i]->whiteThreshold = vals[0];
+            sensors[i]->blackThreshold = vals[1];
         }
     } else {
         hal::screen_render::ScreenRender::instance().sendState(
-    R"({"type":"IR","state":"readData"})"
+            R"({"type":"IR","state":"readData"})"
         );
-        values = collectValues(sensors, durationSeconds);
-        if (values.empty()) {
+
+        auto perSensor = collectValues(sensors, durationSeconds);
+        if (perSensor.empty()) {
             LIBSTP_LOG_WARN("No sensor values collected.");
             return false;
         }
 
-        for (auto *sensor: sensors) {
-            if (!sensor->calibrate(values)) {
+        for (size_t i = 0; i < n; ++i) {
+            if (!sensors[i]->calibrate(perSensor[i])) {
                 allGood = false;
                 break;
             }
@@ -46,24 +49,22 @@ bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensor
     if (allGood) {
         LIBSTP_LOG_INFO("All sensors calibrated successfully.");
         std::ostringstream json;
-        json << R"({"type":"IR","state":"confirm",)"
-                << R"("collected_values":[)";
+        json << R"({"type":"IR","state":"confirm","sensors":[)";
 
-        for (size_t i = 0; i < values.size(); ++i) {
-            json << values[i];
-            if (i + 1 < values.size()) {
-                json << ",";
-            }
+        for (size_t i = 0; i < n; ++i) {
+            if (i > 0) json << ",";
+            json << R"({"black_thresh":)" << sensors[i]->blackThreshold
+                 << R"(,"white_thresh":)" << sensors[i]->whiteThreshold << "}";
+
+            const std::string key = set_name + "_port" + std::to_string(sensors[i]->port);
+            calibration_store::CalibrationStore::instance().storeReading(
+                sensors[i]->blackThreshold,
+                sensors[i]->whiteThreshold,
+                calibration_store::CalibrationType::IR_SENSOR,
+                key);
         }
 
-        json << "],"
-                << R"("black_thresh":)" << sensors[0]->blackThreshold << ","
-                << R"("white_thresh":)" << sensors[0]->whiteThreshold
-                << "}";
-        calibration_store::CalibrationStore::instance().storeReading(sensors[0]->blackThreshold,
-                                                                     sensors[0]->whiteThreshold,
-                                                                     calibration_store::CalibrationType::IR_SENSOR,
-                                                                     set_name);
+        json << "]}";
         hal::screen_render::ScreenRender::instance().sendState(json.str());
         return true;
     }
@@ -73,8 +74,9 @@ bool IRSensorCalibration::calibrateSensors(const std::vector<IRSensor *> &sensor
 }
 
 
-std::vector<float> IRSensorCalibration::collectValues(const std::vector<IRSensor *> &sensors, float durationSeconds) {
-    std::vector<float> values;
+std::vector<std::vector<float>> IRSensorCalibration::collectValues(const std::vector<IRSensor *> &sensors, float durationSeconds) {
+    const size_t n = sensors.size();
+    std::vector<std::vector<float>> perSensor(n);
 
     auto t_end = std::chrono::steady_clock::now() +
                  std::chrono::milliseconds(static_cast<long long>(durationSeconds * 1000));
@@ -82,11 +84,11 @@ std::vector<float> IRSensorCalibration::collectValues(const std::vector<IRSensor
     LIBSTP_LOG_INFO("Collecting Sensor Values");
 
     while (std::chrono::steady_clock::now() < t_end) {
-        for (auto *sensor: sensors) {
-            values.push_back(sensor->read());
+        for (size_t i = 0; i < n; ++i) {
+            perSensor[i].push_back(sensors[i]->read());
             std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long long>(10)));
         }
     }
 
-    return values;
+    return perSensor;
 }

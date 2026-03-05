@@ -19,23 +19,23 @@ class SwitchCalibrationSet(UIStep):
         return f"SwitchCalibrationSet(set_name={self.set_name!r})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        if not CalibrationStore.has_readings(CalibrationType.IR_SENSOR, self.set_name):
-            self.warn(f"No calibration data for set '{self.set_name}'")
-            return
-
-        values = CalibrationStore.get_readings(CalibrationType.IR_SENSOR, self.set_name)
-        white_thresh, black_thresh = values[0], values[1]
-
         sensors = robot.defs.analog_sensors
         ir_sensors: List[IRSensor] = [s for s in sensors if isinstance(s, IRSensor)]
 
         for sensor in ir_sensors:
+            key = f"{self.set_name}_port{sensor.port}"
+            if not CalibrationStore.has_readings(CalibrationType.IR_SENSOR, key):
+                self.warn(f"No calibration data for set '{key}'")
+                continue
+
+            values = CalibrationStore.get_readings(CalibrationType.IR_SENSOR, key)
+            white_thresh, black_thresh = values[0], values[1]
             sensor.setCalibration(black_thresh, white_thresh)
 
-        self.debug(
-            f"Applied calibration set '{self.set_name}': "
-            f"black={black_thresh}, white={white_thresh}"
-        )
+            self.debug(
+                f"Applied calibration set '{key}': "
+                f"black={black_thresh}, white={white_thresh}"
+            )
 
 
 @dsl(tags=["calibration", "sensor"])
