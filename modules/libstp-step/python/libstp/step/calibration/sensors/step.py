@@ -7,10 +7,10 @@ from libstp.sensor_ir import IRSensor, IRSensorCalibration
 from libstp.step.annotation import dsl
 from libstp.ui.step import UIStep
 
-from .dataclasses import IRSensorCalibrationResult
+from .dataclasses import IRSensorCalibrationResult, SensorCalibrationData
 from .ir_calibrating_screen import IRCalibratingScreen
-from .ir_confirm_screen import IRConfirmScreen
 from .ir_overview_screen import IROverviewScreen
+from .ir_results_screen import IRResultsDashboardScreen
 
 
 @dsl(hidden=True)
@@ -58,6 +58,37 @@ class CalibrateSensors(UIStep):
             set_name,
         )
 
+    def _collect_sensor_data(self, ir_sensors: List[IRSensor], ports: List[int]) -> List[SensorCalibrationData]:
+        """Collect per-sensor calibration data after calibration run."""
+        sensor_data = []
+        for sensor, port in zip(ir_sensors, ports):
+            samples = []
+            try:
+                if hasattr(sensor, '_calibration_values'):
+                    samples = [float(v) for v in sensor._calibration_values]
+            except Exception:
+                pass
+
+            try:
+                black_threshold = float(sensor.blackThreshold)
+                white_threshold = float(sensor.whiteThreshold)
+            except Exception:
+                black_threshold = 0.0
+                white_threshold = 0.0
+
+            data = SensorCalibrationData(
+                port=port,
+                samples=samples,
+                black_threshold=black_threshold,
+                white_threshold=white_threshold,
+                black_mean=float(getattr(sensor, 'blackMean', 0.0)),
+                white_mean=float(getattr(sensor, 'whiteMean', 0.0)),
+                black_std=float(getattr(sensor, 'blackStdDev', 0.0)),
+                white_std=float(getattr(sensor, 'whiteStdDev', 0.0)),
+            )
+            sensor_data.append(data)
+        return sensor_data
+
     async def _calibrate_single_set(
         self,
         robot: "GenericRobot",
@@ -66,7 +97,10 @@ class CalibrateSensors(UIStep):
         set_name: str,
     ) -> bool:
         """Run the calibration flow for a single named set. Returns True if completed."""
-        has_existing = CalibrationStore.has_readings(CalibrationType.IR_SENSOR, set_name)
+        has_existing = all(
+            CalibrationStore.has_readings(CalibrationType.IR_SENSOR, f"{set_name}_port{s.port}")
+            for s in ir_sensors
+        )
 
         while True:
             show_existing = self.allow_use_existing and has_existing
@@ -98,39 +132,30 @@ class CalibrateSensors(UIStep):
             if not calibration_success:
                 self.warn("Calibration failed - sensor contrast too low")
 
-            black_thresh = ir_sensors[0].blackThreshold
-            white_thresh = ir_sensors[0].whiteThreshold
+            # Collect per-sensor data for the dashboard
+            sensor_data = self._collect_sensor_data(ir_sensors, ports)
 
-            collected_values = []
-            if hasattr(ir_sensors[0], '_calibration_values'):
-                collected_values = ir_sensors[0]._calibration_values
-
-            confirm_result = await self.show(
-                IRConfirmScreen(
-                    black_threshold=black_thresh,
-                    white_threshold=white_thresh,
-                    collected_values=collected_values,
-                )
+            dashboard_result = await self.show(
+                IRResultsDashboardScreen(sensors=sensor_data)
             )
             await self.close_ui()
 
-            if confirm_result is None:
-                self.warn("Calibration confirmation dismissed; aborting")
+            if dashboard_result is None:
+                self.warn("Calibration dashboard dismissed; aborting")
                 return False
 
-            if confirm_result.confirmed:
-                for sensor in ir_sensors:
-                    sensor.setCalibration(confirm_result.black_threshold, confirm_result.white_threshold)
+            if dashboard_result.confirmed:
+                # Apply per-sensor thresholds
+                for sensor, data in zip(ir_sensors, sensor_data):
+                    sensor.setCalibration(data.black_threshold, data.white_threshold)
+                    self.debug(
+                        f"IR calibration for set '{set_name}' port {data.port}: "
+                        f"black={data.black_threshold}, white={data.white_threshold}"
+                    )
 
                 self.calibration_result = IRSensorCalibrationResult(
-                    white_threshold=confirm_result.white_threshold,
-                    black_threshold=confirm_result.black_threshold,
-                )
-
-                self.debug(
-                    f"IR calibration complete for set '{set_name}': "
-                    f"black={confirm_result.black_threshold}, "
-                    f"white={confirm_result.white_threshold}"
+                    white_threshold=sensor_data[0].white_threshold,
+                    black_threshold=sensor_data[0].black_threshold,
                 )
                 return True
 

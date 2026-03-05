@@ -8,10 +8,10 @@ import math
 import time
 from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
-from libstp.step import Sequential, seq
+from libstp.step import Sequential, seq, defer
 from typing import TYPE_CHECKING
 
-from ..turn import Turn, TurnConfig
+from ..turn import turn_left, turn_right
 from ..move_until import SurfaceColor, strafe_until_black, strafe_until_white
 from ... import dsl
 from ..motion_step import MotionStep
@@ -100,31 +100,20 @@ class TimingBasedStrafeLineUp(MotionStep):
         self.results = (self._first_sensor, self.distance_between_hits_m)
 
 
-@dsl(hidden=True)
-class ComputeTimingBasedStrafeAngle(Turn):
-
-    def __init__(self, step: TimingBasedStrafeLineUp):
-        config = TurnConfig()
-        config.speed_scale = 1.0
-        super().__init__(config)
-        self.step = step
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        distance_between_sensors_m = robot.distance_between_sensors(
-            self.step.front_sensor,
-            self.step.back_sensor
-        ) / 100
-        self.info(f"Distance between sensors: {distance_between_sensors_m}m")
-        distance_strafed = self.step.results[1]
-        self.config.target_angle_rad = math.atan(distance_strafed / distance_between_sensors_m)
-        # When strafing right (+), front first -> CCW (+); back first -> CW (-)
-        # When strafing left (-), the correction direction flips
-        if self.step.results[0] == "back":
-            self.config.target_angle_rad = -self.config.target_angle_rad
-        if self.step.strafe_speed < 0:
-            self.config.target_angle_rad = -self.config.target_angle_rad
-        self.info(f"Computed turn angle: {math.degrees(self.config.target_angle_rad):.2f} sensor that hit first: {self.step.results[0]}")
-        await super()._execute_step(robot)
+def _compute_strafe_lineup_turn(measure: TimingBasedStrafeLineUp, robot: "GenericRobot"):
+    sensor_gap_m = robot.distance_between_sensors(
+        measure.front_sensor, measure.back_sensor
+    ) / 100
+    first_sensor, distance_strafed = measure.results
+    angle_rad = math.atan(distance_strafed / sensor_gap_m)
+    # When strafing right (+), front first -> CCW (+); back first -> CW (-)
+    # When strafing left (-), the correction direction flips
+    if first_sensor == "back":
+        angle_rad = -angle_rad
+    if measure.strafe_speed < 0:
+        angle_rad = -angle_rad
+    degrees = math.degrees(abs(angle_rad))
+    return turn_left(degrees) if angle_rad >= 0 else turn_right(degrees)
 
 
 @dsl(hidden=True)
@@ -135,13 +124,13 @@ def strafe_lineup(
         strafe_speed: float = 1.0,
         detection_threshold: float = 0.7
 ) -> Sequential:
-    step = TimingBasedStrafeLineUp(front_sensor, back_sensor, target,
-                                   strafe_speed=strafe_speed,
-                                   detection_threshold=detection_threshold)
+    measure = TimingBasedStrafeLineUp(front_sensor, back_sensor, target,
+                                       strafe_speed=strafe_speed,
+                                       detection_threshold=detection_threshold)
 
     return seq([
-        step,
-        ComputeTimingBasedStrafeAngle(step),
+        measure,
+        defer(lambda robot: _compute_strafe_lineup_turn(measure, robot)),
     ])
 
 

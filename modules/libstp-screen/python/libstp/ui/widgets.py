@@ -248,6 +248,18 @@ class MeasuringTape(Widget):
     distance: float = 30.0
 
 
+@dataclass
+class CalibrationChart(Widget):
+    """
+    Static scatter/line chart for calibration data.
+
+    Shows collected sample points with horizontal threshold lines.
+    """
+    samples: List[float] = field(default_factory=list)
+    thresholds: List[tuple] = field(default_factory=list)  # [(value, label, color), ...]
+    height: int = 200
+
+
 # ============================================================
 # LAYOUT WIDGETS
 # ============================================================

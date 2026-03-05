@@ -113,6 +113,7 @@ from .widgets import (
     # Visualization
     SensorValue,
     SensorGraph,
+    CalibrationChart,
     LightBulb,
     AnimatedRobot,
     CircularSlider,
@@ -196,6 +197,7 @@ __all__ = [
     # Widgets - Visualization
     "SensorValue",
     "SensorGraph",
+    "CalibrationChart",
     "LightBulb",
     "AnimatedRobot",
     "CircularSlider",

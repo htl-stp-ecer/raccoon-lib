@@ -14,11 +14,10 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from libstp.foundation import ChassisVelocity
-from libstp.motion import TurnConfig
 from libstp.sensor_ir import IRSensor
-from libstp.step import Sequential, seq
+from libstp.step import Sequential, seq, defer
 
-from ..turn import Turn
+from ..turn import turn_left, turn_right
 from ... import SimulationStep, SimulationStepDelta, dsl
 from ..motion_step import MotionStep
 
@@ -131,39 +130,17 @@ class SingleSensorCrossing(MotionStep):
         return False
 
 
-@dsl(hidden=True)
-class ComputeSingleSensorAngle(Turn):
-    """
-    Read the crossing measurement and execute a corrective turn.
+def _compute_single_sensor_turn(crossing: SingleSensorCrossing, _robot: "GenericRobot"):
+    from libstp.step import run
 
-    The turn magnitude comes from the crossing step's ``crossing_angle_rad``.
-    The direction comes from ``correction_side`` in the config.
-    """
+    angle = crossing.crossing_angle_rad
+    if angle < math.radians(1.0):
+        return run(lambda _: None)
 
-    def __init__(self, crossing: SingleSensorCrossing):
-        config = TurnConfig()
-        config.speed_scale = 1.0
-        super().__init__(config)
-        self._crossing = crossing
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        angle = self._crossing.crossing_angle_rad
-        if angle < math.radians(1.0):
-            self.info(
-                f"Angle {math.degrees(angle):.1f}deg below 1deg, skipping correction"
-            )
-            return
-
-        cfg = self._crossing.config
-        if cfg.correction_side == CorrectionSide.RIGHT:
-            angle = -angle  # CW
-
-        self.config.target_angle_rad = angle
-        self.info(
-            f"Correcting {math.degrees(angle):.1f}deg "
-            f"({cfg.correction_side.value})"
-        )
-        await super()._execute_step(robot)
+    degrees = math.degrees(angle)
+    if crossing.config.correction_side == CorrectionSide.RIGHT:
+        return turn_right(degrees)
+    return turn_left(degrees)
 
 
 @dsl(hidden=True)
@@ -190,7 +167,7 @@ def single_sensor_lineup(
         exit_threshold=exit_threshold,
     )
     crossing = SingleSensorCrossing(config)
-    return seq([crossing, ComputeSingleSensorAngle(crossing)])
+    return seq([crossing, defer(lambda robot: _compute_single_sensor_turn(crossing, robot))])
 
 
 @dsl(tags=["motion", "lineup"])

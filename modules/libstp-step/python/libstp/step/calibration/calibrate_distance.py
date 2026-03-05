@@ -33,6 +33,9 @@ if TYPE_CHECKING:
 # 0.7 means ~83% of correction absorbed after 5 calibrations
 DEFAULT_EMA_ALPHA = 0.7
 
+# Distance (cm) for additional IR sensor calibration drives
+_SENSOR_CAL_DRIVE_CM = 50.0
+
 
 class CalibrationRequiredError(Exception):
     """Raised when an operation requires calibration but none has been performed."""
@@ -229,6 +232,36 @@ class CalibrateDistance(UIStep):
             stop_event.set()
         return await sampling_task
 
+    def _collect_sensor_data(
+        self,
+        ir_sensors: List["IRSensor"],
+        per_sensor_samples: Dict[int, List[float]],
+    ) -> List["SensorCalibrationData"]:
+        """Build per-sensor calibration data for the dashboard."""
+        from libstp.step.calibration.sensors.dataclasses import SensorCalibrationData
+
+        sensor_data = []
+        for sensor in ir_sensors:
+            samples = [float(v) for v in per_sensor_samples.get(sensor.port, [])]
+            try:
+                black_threshold = float(sensor.blackThreshold)
+                white_threshold = float(sensor.whiteThreshold)
+            except Exception:
+                black_threshold = 0.0
+                white_threshold = 0.0
+
+            sensor_data.append(SensorCalibrationData(
+                port=sensor.port,
+                samples=samples,
+                black_threshold=black_threshold,
+                white_threshold=white_threshold,
+                black_mean=float(getattr(sensor, 'blackMean', 0.0)),
+                white_mean=float(getattr(sensor, 'whiteMean', 0.0)),
+                black_std=float(getattr(sensor, 'blackStdDev', 0.0)),
+                white_std=float(getattr(sensor, 'whiteStdDev', 0.0)),
+            ))
+        return sensor_data
+
     async def _confirm_light_sensors(
         self,
         ir_sensors: List["IRSensor"],
@@ -236,7 +269,7 @@ class CalibrateDistance(UIStep):
         set_name: str = "default",
     ) -> None:
         from libstp.step.calibration.sensors.ir_calibrating_screen import IRCalibratingScreen
-        from libstp.step.calibration.sensors.ir_confirm_screen import IRConfirmScreen
+        from libstp.step.calibration.sensors.ir_results_screen import IRResultsDashboardScreen
         from libstp import calibration_store as CalibrationStore
         from libstp.calibration_store import CalibrationType
 
@@ -254,45 +287,80 @@ class CalibrateDistance(UIStep):
             )
 
         while True:
-            display_sensor = next(
-                (sensor for sensor in ir_sensors if samples.get(sensor.port)),
-                ir_sensors[0],
-            )
-            self.debug(f"Using sensor port {display_sensor.port} for threshold confirmation")
-            values = samples.get(display_sensor.port, [])
-            success = bool(values) and display_sensor.calibrate(values)
-            black_threshold = display_sensor.blackThreshold if success else 0.0
-            white_threshold = display_sensor.whiteThreshold if success else 0.0
+            # Calibrate each sensor with its own samples
+            for sensor in ir_sensors:
+                values = samples.get(sensor.port, [])
+                if values:
+                    sensor.calibrate(values)
 
-            confirm_result = await self.show(
-                IRConfirmScreen(
-                    black_threshold=black_threshold,
-                    white_threshold=white_threshold,
-                    collected_values=values,
-                )
+            sensor_data = self._collect_sensor_data(ir_sensors, samples)
+
+            dashboard_result = await self.show(
+                IRResultsDashboardScreen(sensors=sensor_data)
             )
-            if confirm_result is None:
-                self.warn("Sensor calibration confirmation dismissed; aborting")
+            if dashboard_result is None:
+                self.warn("Sensor calibration dashboard dismissed; aborting")
                 return
 
-            if confirm_result.confirmed:
+            if dashboard_result.confirmed:
+                # Use first sensor's thresholds (all share same calibration)
+                black_thresh = sensor_data[0].black_threshold
+                white_thresh = sensor_data[0].white_threshold
+
                 for sensor in ir_sensors:
-                    sensor.setCalibration(
-                        confirm_result.black_threshold,
-                        confirm_result.white_threshold,
-                    )
+                    sensor.setCalibration(black_thresh, white_thresh)
                 CalibrationStore.store_readings(
                     CalibrationType.IR_SENSOR,
-                    confirm_result.white_threshold,
-                    confirm_result.black_threshold,
+                    white_thresh,
+                    black_thresh,
                     set_name,
                 )
                 return
 
+            # Retry: resample
             samples = await self.run_with_ui(
                 IRCalibratingScreen(ports=ports),
                 self._sample_sensors_for_duration(ir_sensors, self._SENSOR_RETRY_SAMPLE_SECONDS),
             )
+
+    async def _drive_and_sample_for_set(
+        self,
+        robot: "GenericRobot",
+        ir_sensors: List["IRSensor"],
+        set_name: str,
+    ) -> None:
+        """Drive forward and sample IR sensors for an additional calibration set."""
+        from libstp.step.motion.drive import _drive_forward_uncalibrated
+        from libstp.step.motion.stop import stop
+
+        label = set_name.upper()
+        proceed = await self.confirm(
+            f"Place sensors on {label} surface, then confirm to drive.",
+            title=f"Calibrate: {label}",
+            yes_label="Drive",
+            no_label="Skip",
+        )
+        if not proceed:
+            self.debug(f"Skipping calibration set '{set_name}'")
+            return
+
+        driving_screen = DistanceDrivingScreen(_SENSOR_CAL_DRIVE_CM)
+        await self._render_screen(driving_screen)
+
+        stop_sampling = asyncio.Event()
+        sampling_task = asyncio.create_task(
+            self._sample_sensors(ir_sensors, stop_sampling)
+        )
+        try:
+            drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM)
+            await drive_step.run_step(robot)
+        finally:
+            stop_sampling.set()
+            sensor_samples = await sampling_task
+
+        await stop().run_step(robot)
+
+        await self._confirm_light_sensors(ir_sensors, sensor_samples, set_name)
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """
@@ -485,19 +553,12 @@ class CalibrateDistance(UIStep):
                 self.debug(f"Distance calibration applied: {len(self.per_wheel_results)} motor(s) calibrated")
 
                 if self.calibrate_light_sensors and ir_sensors:
-                    for cal_set in self.calibration_sets:
-                        if len(self.calibration_sets) > 1:
-                            label = cal_set.upper()
-                            proceed = await self.confirm(
-                                f"Place sensors on {label} surface, then confirm.",
-                                title=f"Calibrate: {label}",
-                                yes_label="Ready",
-                                no_label="Skip",
-                            )
-                            if not proceed:
-                                self.debug(f"Skipping calibration set '{cal_set}'")
-                                continue
-                        await self._confirm_light_sensors(ir_sensors, sensor_samples, cal_set)
+                    # First set uses samples from the distance calibration drive
+                    await self._confirm_light_sensors(ir_sensors, sensor_samples, self.calibration_sets[0])
+
+                    # Remaining sets each get their own drive-and-sample cycle
+                    for cal_set in self.calibration_sets[1:]:
+                        await self._drive_and_sample_for_set(robot, ir_sensors, cal_set)
                 return
 
             # User wants to retry - loop continues

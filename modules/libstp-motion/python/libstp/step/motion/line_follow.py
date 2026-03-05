@@ -229,7 +229,7 @@ class SingleSensorLineFollow(MotionStep):
         self._motion.set_omega_override(wz)
 
         self.debug(
-            f"black={reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+            f"raw={cfg.sensor.read():.0f} black={reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
         )
 
         self._motion.update(dt)
@@ -297,7 +297,7 @@ class SingleSensorLineFollowUntilBlack(MotionStep):
         stop_reading = cfg.stop_sensor.probabilityOfBlack()
         if stop_reading >= cfg.stop_threshold:
             self.debug(
-                f"stop: stop_sensor black={stop_reading:.2f} >= {cfg.stop_threshold:.2f}"
+                f"stop: stop_raw={cfg.stop_sensor.read():.0f} stop_black={stop_reading:.2f} >= {cfg.stop_threshold:.2f}"
             )
             return True
 
@@ -312,7 +312,7 @@ class SingleSensorLineFollowUntilBlack(MotionStep):
         self._motion.set_omega_override(wz)
 
         self.debug(
-            f"black={reading:.2f} stop={stop_reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+            f"raw={cfg.sensor.read():.0f} black={reading:.2f} stop_raw={cfg.stop_sensor.read():.0f} stop={stop_reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
         )
 
         self._motion.update(dt)

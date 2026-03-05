@@ -8,10 +8,10 @@ import math
 import time
 from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
-from libstp.step import Sequential, seq
+from libstp.step import Sequential, seq, defer
 from typing import TYPE_CHECKING
 
-from ..turn import Turn, TurnConfig
+from ..turn import turn_left, turn_right
 from ..move_until import SurfaceColor, drive_until_black, drive_until_white
 from ... import dsl
 from ..motion_step import MotionStep
@@ -100,27 +100,16 @@ class TimingBasedLineUp(MotionStep):
         self.results = (self._first_sensor, self.distance_between_hits_m)
 
 
-@dsl(hidden=True)
-class ComputeTimingBasedAngle(Turn):
-
-    def __init__(self, step: TimingBasedLineUp):
-        config = TurnConfig()
-        config.speed_scale = 1.0
-        super().__init__(config)
-        self.step = step
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        distance_between_sensors_m = robot.distance_between_sensors(
-            self.step.left_sensor,
-            self.step.right_sensor
-        ) / 100
-        self.info(f"Distance between sensors: {distance_between_sensors_m}m")
-        distance_driven = self.step.results[1]
-        self.config.target_angle_rad = math.atan(distance_driven / distance_between_sensors_m)
-        if self.step.results[0] == "right":
-            self.config.target_angle_rad = -self.config.target_angle_rad
-        self.info(f"Computed turn angle: {math.degrees(self.config.target_angle_rad):.2f}\u00b0 sensor that hit first: {self.step.results[0]}")
-        await super()._execute_step(robot)
+def _compute_lineup_turn(measure: TimingBasedLineUp, robot: "GenericRobot"):
+    sensor_gap_m = robot.distance_between_sensors(
+        measure.left_sensor, measure.right_sensor
+    ) / 100
+    first_sensor, distance_driven = measure.results
+    angle_rad = math.atan(distance_driven / sensor_gap_m)
+    if first_sensor == "right":
+        angle_rad = -angle_rad
+    degrees = math.degrees(abs(angle_rad))
+    return turn_left(degrees) if angle_rad >= 0 else turn_right(degrees)
 
 
 @dsl(hidden=True)
@@ -130,11 +119,11 @@ def lineup(
         target: SurfaceColor = SurfaceColor.BLACK,
         detection_threshold: float = 0.7
 ) -> Sequential:
-    step = TimingBasedLineUp(left_sensor, right_sensor, target, detection_threshold=detection_threshold)
+    measure = TimingBasedLineUp(left_sensor, right_sensor, target, detection_threshold=detection_threshold)
 
     return seq([
-        step,
-        ComputeTimingBasedAngle(step),
+        measure,
+        defer(lambda robot: _compute_lineup_turn(measure, robot)),
     ])
 
 
