@@ -38,6 +38,7 @@ INCLUDE_GRAPH          = YES
 INCLUDED_BY_GRAPH      = YES
 CALL_GRAPH             = NO
 CALLER_GRAPH           = NO
+DOT_NUM_THREADS        = 1
 
 # Warnings
 QUIET                  = NO

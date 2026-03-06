@@ -69,13 +69,11 @@ jobs:
               cd docs
               mkdir -p _build/doxygen
               doxygen Doxyfile
-              echo "--- Doxygen output ---"
-              ls _build/doxygen/html/ | head -20
+              echo "Doxygen: $(find _build/doxygen/html -name "*.html" | wc -l) HTML files"
 
               # Build Sphinx (Python docs)
               make html
-              echo "--- Sphinx output ---"
-              ls _build/html/ | head -20
+              echo "Sphinx: $(find _build/html -name "*.html" | wc -l) HTML files"
               cd ..
 
               # Package into zip
@@ -85,9 +83,6 @@ jobs:
               cp -R docs/_build/doxygen/html/. docs-site/doxygen/
               cd docs-site
               zip -r ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip .
-              echo "--- Docs zip contents ---"
-              zipinfo -1 ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip | wc -l
-              echo "files in zip"
             '
 
       # --- Release ---
