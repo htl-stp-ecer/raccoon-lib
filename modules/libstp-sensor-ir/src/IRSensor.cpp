@@ -103,7 +103,7 @@ bool IRSensor::calibrate(const std::vector<float>& values) {
     this->blackThreshold = black;
 
     LIBSTP_LOG_INFO(
-        "Calibration successful: whiteThreshold=" +
+        "Calibration successful (port " + std::to_string(port) + "): whiteThreshold=" +
         std::to_string(whiteThreshold) +
         ", blackThreshold=" +
         std::to_string(blackThreshold) +

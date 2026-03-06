@@ -303,18 +303,14 @@ class CalibrateDistance(UIStep):
                 return
 
             if dashboard_result.confirmed:
-                # Use first sensor's thresholds (all share same calibration)
-                black_thresh = sensor_data[0].black_threshold
-                white_thresh = sensor_data[0].white_threshold
-
-                for sensor in ir_sensors:
-                    sensor.setCalibration(black_thresh, white_thresh)
-                CalibrationStore.store_readings(
-                    CalibrationType.IR_SENSOR,
-                    white_thresh,
-                    black_thresh,
-                    set_name,
-                )
+                for sensor, data in zip(ir_sensors, sensor_data):
+                    sensor.setCalibration(data.black_threshold, data.white_threshold)
+                    CalibrationStore.store_readings(
+                        CalibrationType.IR_SENSOR,
+                        data.white_threshold,
+                        data.black_threshold,
+                        set_name + f"_port{sensor.port}",
+                    )
                 return
 
             # Retry: resample
