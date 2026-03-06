@@ -58,19 +58,36 @@ jobs:
             -w /workspace \
             python:3.11-slim \
             bash -c '
+              set -euo pipefail
               apt-get update && apt-get install --yes --no-install-recommends doxygen make zip graphviz
               pip install --no-cache-dir -r docs/requirements.txt
+
+              # Clean previous build artifacts
+              rm -rf docs/_build docs-site
+
+              # Build Doxygen (C++ API docs)
               cd docs
               mkdir -p _build/doxygen
               doxygen Doxyfile
+              echo "--- Doxygen output ---"
+              ls _build/doxygen/html/ | head -20
+
+              # Build Sphinx (Python docs)
               make html
+              echo "--- Sphinx output ---"
+              ls _build/html/ | head -20
               cd ..
+
+              # Package into zip
               mkdir -p docs-site
               cp -R docs/_build/html/. docs-site/
               mkdir -p docs-site/doxygen
               cp -R docs/_build/doxygen/html/. docs-site/doxygen/
               cd docs-site
               zip -r ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip .
+              echo "--- Docs zip contents ---"
+              zipinfo -1 ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip | wc -l
+              echo "files in zip"
             '
 
       # --- Release ---
