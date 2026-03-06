@@ -28,6 +28,7 @@ namespace libstp::kinematics::mecanum
         double m_wheelbase;
         double m_trackWidth;
         double m_wheelRadius;
+        double m_maxWheelSpeed{0.0}; // 0 = no limiting
 
         drive::MotorAdapter front_left_motor_;
         drive::MotorAdapter front_right_motor_;
@@ -78,6 +79,10 @@ namespace libstp::kinematics::mecanum
         std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config) override;
 
         [[nodiscard]] double getWheelRadius() const override { return m_wheelRadius; }
+
+        /** Set max wheel speed (rad/s) for desaturation. 0 = disabled. */
+        void setMaxWheelSpeed(double max_wheel_speed) { m_maxWheelSpeed = max_wheel_speed; }
+        [[nodiscard]] double getMaxWheelSpeed() const { return m_maxWheelSpeed; }
 
         /** Return the underlying motors in front-left, front-right, back-left, back-right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;

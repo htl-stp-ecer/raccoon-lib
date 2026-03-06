@@ -55,6 +55,11 @@ PYBIND11_MODULE(kinematics_mecanum, m)
              "Returns True since mecanum drives can strafe")
         .def("get_wheel_radius", &libstp::kinematics::mecanum::MecanumKinematics::getWheelRadius,
              "Get the wheel radius in meters")
+        .def("set_max_wheel_speed", &libstp::kinematics::mecanum::MecanumKinematics::setMaxWheelSpeed,
+             py::arg("max_wheel_speed"),
+             "Set max wheel speed (rad/s) for desaturation. 0 = disabled.")
+        .def("get_max_wheel_speed", &libstp::kinematics::mecanum::MecanumKinematics::getMaxWheelSpeed,
+             "Get the max wheel speed limit (rad/s). 0 = disabled.")
         .def_property_readonly("motors", &libstp::kinematics::mecanum::MecanumKinematics::getMotors,
              "List of motors managed by this kinematics model");
 }
