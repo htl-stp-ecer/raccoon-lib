@@ -29,15 +29,10 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # --- Build library ---
-      - name: Compute build number
-        id: buildnum
-        run: |
-          echo "value=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
-
       - name: Build ARM64 wheel
         run: |
           SKIP_TESTS=1 \
-          BUILD_NUMBER=${{ steps.buildnum.outputs.value }} \
+          BUILD_NUMBER=${{ github.run_number }} \
           BUILD_JOBS=4 \
           bash build.sh
 
