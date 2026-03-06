@@ -144,7 +144,11 @@ namespace libstp::motion
 
         // Apply scaling from previous saturation feedback
         primary_cmd *= speed_scale_;
-        const double omega_cmd_scaled = omega_cmd_raw * heading_scale_;
+        // When omega_override is active (line follow), the external PID manages omega directly.
+        // Only apply heading_scale for internal heading corrections.
+        const double omega_cmd_scaled = omega_override_.has_value()
+            ? omega_cmd_raw
+            : omega_cmd_raw * heading_scale_;
 
         LIBSTP_LOG_TRACE("LinearMotion scaled cmd: primary={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
                     primary_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);

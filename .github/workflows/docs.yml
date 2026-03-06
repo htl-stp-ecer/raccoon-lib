@@ -59,3 +59,22 @@ jobs:
         with:
           name: docs-site
           path: site
+
+      - name: Add viewing instructions
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << 'EOF'
+          ## Documentation
+
+          The built documentation is attached as the **docs-site** artifact above.
+
+          **To view locally:**
+          1. Download and unzip the `docs-site` artifact
+          2. Open a terminal in the extracted folder
+          3. Run a local server:
+             ```bash
+             python3 -m http.server 8000
+             ```
+          4. Open [http://localhost:8000](http://localhost:8000) in your browser
+             - Sphinx docs: [http://localhost:8000](http://localhost:8000)
+             - Doxygen API docs: [http://localhost:8000/doxygen](http://localhost:8000/doxygen)
+          EOF

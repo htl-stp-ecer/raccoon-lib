@@ -124,7 +124,10 @@ class LineFollow(MotionStep):
         )
         self._motion.start()
 
-        self._pid = PidController(PidConfig(kp=cfg.kp, ki=cfg.ki, kd=cfg.kd))
+        self._pid = PidController(PidConfig(
+            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
+            integral_max=1.0, output_min=-1.0, output_max=1.0,
+        ))
 
         mode = f"{cfg.distance_cm:.1f}cm" if cfg.distance_cm else "until_both_black"
         self.debug(
@@ -208,7 +211,10 @@ class SingleSensorLineFollow(MotionStep):
         )
         self._motion.start()
 
-        self._pid = PidController(PidConfig(kp=cfg.kp, ki=cfg.ki, kd=cfg.kd))
+        self._pid = PidController(PidConfig(
+            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
+            integral_max=1.0, output_min=-1.0, output_max=1.0,
+        ))
 
         self.debug(
             f"on_start: distance={cfg.distance_cm:.1f}cm, side={cfg.side.value}, "
@@ -270,6 +276,9 @@ class SingleSensorLineFollowUntilBlack(MotionStep):
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
+        self._odometry = robot.odometry
+        self._start_heading = robot.odometry.get_heading()
+        self._elapsed = 0.0
 
         motion_config = LinearMotionConfig()
         motion_config.axis = LinearAxis.Forward
@@ -283,21 +292,31 @@ class SingleSensorLineFollowUntilBlack(MotionStep):
         )
         self._motion.start()
 
-        self._pid = PidController(PidConfig(kp=cfg.kp, ki=cfg.ki, kd=cfg.kd))
+        self._pid = PidController(PidConfig(
+            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
+            integral_max=1.0, output_min=-1.0, output_max=1.0,
+        ))
 
         self.debug(
             f"on_start: side={cfg.side.value}, speed_scale={cfg.speed_scale:.2f}, "
-            f"stop_thresh={cfg.stop_threshold:.2f}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+            f"stop_thresh={cfg.stop_threshold:.2f}, PID({cfg.kp}, {cfg.ki}, {cfg.kd}), "
+            f"track_port={cfg.sensor.port} (white={cfg.sensor.whiteThreshold:.0f}, black={cfg.sensor.blackThreshold:.0f}), "
+            f"stop_port={cfg.stop_sensor.port} (white={cfg.stop_sensor.whiteThreshold:.0f}, black={cfg.stop_sensor.blackThreshold:.0f}), "
+            f"heading={self._start_heading:.2f}rad"
         )
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
         cfg = self.config
+        self._elapsed += dt
 
         # Check stop sensor
         stop_reading = cfg.stop_sensor.probabilityOfBlack()
         if stop_reading >= cfg.stop_threshold:
+            heading = self._odometry.get_heading()
             self.debug(
                 f"stop: stop_raw={cfg.stop_sensor.read():.0f} stop_black={stop_reading:.2f} >= {cfg.stop_threshold:.2f}"
+                f" (port={cfg.stop_sensor.port}, white={cfg.stop_sensor.whiteThreshold:.0f}, black={cfg.stop_sensor.blackThreshold:.0f})"
+                f" elapsed={self._elapsed:.2f}s heading={heading:.2f}rad (delta={heading - self._start_heading:.2f})"
             )
             return True
 
@@ -311,8 +330,11 @@ class SingleSensorLineFollowUntilBlack(MotionStep):
         wz = self._pid.update(error, dt)
         self._motion.set_omega_override(wz)
 
+        heading = self._odometry.get_heading()
         self.debug(
-            f"raw={cfg.sensor.read():.0f} black={reading:.2f} stop_raw={cfg.stop_sensor.read():.0f} stop={stop_reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+            f"raw={cfg.sensor.read():.0f} black={reading:.2f} stop_raw={cfg.stop_sensor.read():.0f} stop={stop_reading:.2f} "
+            f"err={error:.2f} wz={wz:.3f} I={self._pid.integral:.3f} "
+            f"hdg={heading:.2f} dhdg={heading - self._start_heading:.2f} t={self._elapsed:.2f}s"
         )
 
         self._motion.update(dt)

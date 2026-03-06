@@ -74,7 +74,10 @@ def dsl(
 
     def wrap_function(fn: F) -> F:
         # Validate return type annotation if available
-        hints = get_type_hints(fn) if hasattr(fn, "__annotations__") else {}
+        try:
+            hints = get_type_hints(fn) if hasattr(fn, "__annotations__") else {}
+        except NameError:
+            hints = {}
         return_hint = hints.get("return")
 
         # We can't always verify at decoration time, but we attach metadata
