@@ -59,33 +59,40 @@ namespace libstp::kinematics::mecanum
         const double L = (m_wheelbase + m_trackWidth) / 2.0;
 
         // Body frame convention: +x forward, +y to the right (matches odometry/motion modules)
-        const double w_fl = (cmd.vx + cmd.vy - L * cmd.wz) / m_wheelRadius;
-        const double w_fr = (cmd.vx - cmd.vy + L * cmd.wz) / m_wheelRadius;
-        const double w_bl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
-        const double w_br = (cmd.vx + cmd.vy + L * cmd.wz) / m_wheelRadius;
+        double w_fl = (cmd.vx + cmd.vy - L * cmd.wz) / m_wheelRadius;
+        double w_fr = (cmd.vx - cmd.vy + L * cmd.wz) / m_wheelRadius;
+        double w_bl = (cmd.vx - cmd.vy - L * cmd.wz) / m_wheelRadius;
+        double w_br = (cmd.vx + cmd.vy + L * cmd.wz) / m_wheelRadius;
+
+        // Desaturate: if any wheel exceeds max, scale ALL proportionally to preserve ratio
+        double max_abs = std::max({std::abs(w_fl), std::abs(w_fr), std::abs(w_bl), std::abs(w_br)});
+        bool saturated = false;
+        if (m_maxWheelSpeed > 0.0 && max_abs > m_maxWheelSpeed)
+        {
+            const double scale = m_maxWheelSpeed / max_abs;
+            w_fl *= scale;
+            w_fr *= scale;
+            w_bl *= scale;
+            w_br *= scale;
+            saturated = true;
+            LIBSTP_LOG_DEBUG(
+                "MecanumKinematics desaturated: scale={:.3f} (max_abs={:.2f}, limit={:.2f})",
+                scale, max_abs, m_maxWheelSpeed);
+        }
 
         LIBSTP_LOG_TRACE(
-            "MecanumKinematics wheel speeds fl={} fr={} bl={} br={}",
-            w_fl,
-            w_fr,
-            w_bl,
-            w_br);
+            "MecanumKinematics wheel speeds fl={} fr={} bl={} br={}{}",
+            w_fl, w_fr, w_bl, w_br,
+            saturated ? " [desaturated]" : "");
 
         front_left_motor_.setVelocity(w_fl, dt);
         front_right_motor_.setVelocity(w_fr, dt);
         back_left_motor_.setVelocity(w_bl, dt);
         back_right_motor_.setVelocity(w_br, dt);
 
-        LIBSTP_LOG_TRACE(
-            "MecanumKinematics command applied fl={} fr={} bl={} br={} dt={}",
-            w_fl,
-            w_fr,
-            w_bl,
-            w_br,
-            dt);
-
         MotorCommands result;
         result.wheel_velocities = {w_fl, w_fr, w_bl, w_br};
+        result.saturated_any = saturated;
 
         return result;
     }

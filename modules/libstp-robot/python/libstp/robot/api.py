@@ -116,6 +116,14 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         from libstp import button
         button.set_digital(self.defs.button)
 
+        # Auto-configure wheel speed desaturation from motion config
+        if hasattr(self.kinematics, 'set_max_wheel_speed') and hasattr(self, 'motion_pid_config'):
+            cfg = self.motion_pid_config
+            max_linear = max(cfg.linear.max_velocity, cfg.lateral.max_velocity)
+            max_wheel = max_linear / self.kinematics.get_wheel_radius()
+            self.kinematics.set_max_wheel_speed(max_wheel)
+            self.info(f"Kinematics desaturation: max_wheel_speed={max_wheel:.2f} rad/s")
+
         if not self.missions:
             self.warn("Robot does not have any missions attached")
 
