@@ -44,33 +44,27 @@ jobs:
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install docs dependencies
+      - name: Build and package docs
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes doxygen
-          python -m pip install --upgrade pip
-          python -m pip install -r docs/requirements.txt
-
-      - name: Build docs
-        working-directory: docs
-        run: |
-          mkdir -p _build/doxygen
-          doxygen Doxyfile
-          make html
-
-      - name: Package docs
-        run: |
-          mkdir -p docs-site
-          cp -R docs/_build/html/. docs-site/
-          mkdir -p docs-site/doxygen
-          cp -R docs/_build/doxygen/html/. docs-site/doxygen/
-          cd docs-site
-          zip -r ../libstp-docs-${{ steps.version.outputs.version }}.zip .
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            python:3.11-slim \
+            bash -c '
+              apt-get update && apt-get install --yes --no-install-recommends doxygen make zip graphviz
+              pip install --no-cache-dir -r docs/requirements.txt
+              cd docs
+              mkdir -p _build/doxygen
+              doxygen Doxyfile
+              make html
+              cd ..
+              mkdir -p docs-site
+              cp -R docs/_build/html/. docs-site/
+              mkdir -p docs-site/doxygen
+              cp -R docs/_build/doxygen/html/. docs-site/doxygen/
+              cd docs-site
+              zip -r ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip .
+            '
 
       - name: Bundle release assets
         run: |
