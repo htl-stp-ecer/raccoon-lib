@@ -44,6 +44,34 @@ jobs:
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install docs dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes doxygen
+          python -m pip install --upgrade pip
+          python -m pip install -r docs/requirements.txt
+
+      - name: Build docs
+        working-directory: docs
+        run: |
+          mkdir -p _build/doxygen
+          doxygen Doxyfile
+          make html
+
+      - name: Package docs
+        run: |
+          mkdir -p docs-site
+          cp -R docs/_build/html/. docs-site/
+          mkdir -p docs-site/doxygen
+          cp -R docs/_build/doxygen/html/. docs-site/doxygen/
+          cd docs-site
+          zip -r ../libstp-docs-${{ steps.version.outputs.version }}.zip .
+
       - name: Bundle release assets
         run: |
           mkdir -p release-bundle
@@ -65,6 +93,12 @@ jobs:
             tar xzf libstp-${{ steps.version.outputs.version }}.tar.gz
             RPI_HOST=<your-pi-ip> python3 install.py
             ```
+
+            **View documentation:**
+            1. Download and unzip `libstp-docs-${{ steps.version.outputs.version }}.zip`
+            2. Run `python3 -m http.server 8000` in the extracted folder
+            3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
           files: |
             libstp-${{ steps.version.outputs.version }}.tar.gz
             ${{ steps.version.outputs.wheel }}
+            libstp-docs-${{ steps.version.outputs.version }}.zip
