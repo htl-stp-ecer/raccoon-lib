@@ -25,6 +25,7 @@ from .wfl import (
     WFLConfirmScreen,
     WFLMeasureResult,
     WFLConfirmResult,
+    WFLDetectScreen,
 )
 
 from .distance import (
