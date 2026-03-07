@@ -1172,6 +1172,123 @@ def strafe_follow_line_until_both_black(
 
 
 @dsl(tags=["motion", "line-follow"])
+def strafe_follow_line_single(
+    sensor: IRSensor,
+    distance_cm: float,
+    speed: float = 0.5,
+    side: LineSide = LineSide.LEFT,
+    kp: float = 1.0,
+    ki: float = 0.0,
+    kd: float = 0.3,
+) -> DirectionalSingleLineFollow:
+    """Follow a line edge by strafing right using a single sensor.
+
+    Convenience wrapper around ``directional_follow_line_single`` for pure
+    lateral single-sensor line following.  The robot strafes at the given
+    speed while PID edge-tracking keeps the sensor on the line boundary.
+
+    The sensor must be calibrated.  Requires a mecanum or omni-wheel
+    drivetrain.
+
+    Args:
+        sensor: IR sensor for edge tracking.
+        distance_cm: Distance to strafe in centimeters.
+        speed: Strafe speed as fraction of max lateral velocity (0.0 to
+            1.0).  Default 0.5.  Use negative values to strafe left.
+        side: Which edge of the line to track.  Default ``LineSide.LEFT``.
+        kp: Proportional gain for steering PID.  Default 1.0.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.3.
+
+    Returns:
+        A ``DirectionalSingleLineFollow`` step configured for lateral motion.
+
+    Example::
+
+        from libstp.step.motion import strafe_follow_line_single, LineSide
+
+        # Strafe right along a line edge for 40 cm
+        strafe_follow_line_single(
+            sensor=robot.front_ir,
+            distance_cm=40.0,
+            speed=0.4,
+            side=LineSide.LEFT,
+        )
+
+        # Strafe left along a line edge for 30 cm
+        strafe_follow_line_single(
+            sensor=robot.front_ir,
+            distance_cm=30.0,
+            speed=-0.4,
+            side=LineSide.RIGHT,
+        )
+    """
+    return directional_follow_line_single(
+        sensor=sensor,
+        distance_cm=distance_cm,
+        strafe_speed=speed,
+        side=side,
+        kp=kp, ki=ki, kd=kd,
+    )
+
+
+@dsl(tags=["motion", "line-follow"])
+def strafe_follow_line_single_until_black(
+    sensor: IRSensor,
+    stop_sensor: IRSensor,
+    speed: float = 0.5,
+    side: LineSide = LineSide.LEFT,
+    stop_threshold: float = 0.7,
+    kp: float = 1.0,
+    ki: float = 0.0,
+    kd: float = 0.3,
+) -> DirectionalSingleLineFollow:
+    """Follow a line edge by strafing, stopping when a second sensor sees black.
+
+    Convenience wrapper around ``directional_follow_line_single_until_black``
+    for pure lateral single-sensor line following with a stop-sensor trigger.
+
+    Both sensors must be calibrated.  Requires a mecanum or omni-wheel
+    drivetrain.
+
+    Args:
+        sensor: IR sensor for edge tracking.
+        stop_sensor: Second IR sensor for the stop condition.
+        speed: Strafe speed as fraction of max lateral velocity (0.0 to
+            1.0).  Default 0.5.  Use negative values to strafe left.
+        side: Which edge of the line to track.  Default ``LineSide.LEFT``.
+        stop_threshold: ``probabilityOfBlack()`` the stop sensor must
+            exceed.  Default 0.7.
+        kp: Proportional gain for steering PID.  Default 1.0.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.3.
+
+    Returns:
+        A ``DirectionalSingleLineFollow`` step that stops on sensor trigger.
+
+    Example::
+
+        from libstp.step.motion import strafe_follow_line_single_until_black, LineSide
+
+        # Strafe right along a line edge until the stop sensor hits a cross-line
+        strafe_follow_line_single_until_black(
+            sensor=robot.left_ir,
+            stop_sensor=robot.right_ir,
+            speed=0.4,
+            side=LineSide.LEFT,
+        )
+    """
+    return directional_follow_line_single_until_black(
+        sensor=sensor,
+        stop_sensor=stop_sensor,
+        strafe_speed=speed,
+        side=side,
+        stop_threshold=stop_threshold,
+        kp=kp, ki=ki, kd=kd,
+    )
+
+
+@dsl(tags=["motion", "line-follow"])
 def directional_follow_line_single(
     sensor: IRSensor,
     distance_cm: float,

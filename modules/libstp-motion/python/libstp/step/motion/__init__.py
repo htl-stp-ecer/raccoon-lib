@@ -78,6 +78,8 @@ from .line_follow import (
     directional_follow_line_until_both_black,
     strafe_follow_line,
     strafe_follow_line_until_both_black,
+    strafe_follow_line_single,
+    strafe_follow_line_single_until_black,
     directional_follow_line_single,
     directional_follow_line_single_until_black,
 )
@@ -185,6 +187,8 @@ __all__ = [
     "directional_follow_line_until_both_black",
     "strafe_follow_line",
     "strafe_follow_line_until_both_black",
+    "strafe_follow_line_single",
+    "strafe_follow_line_single_until_black",
     "directional_follow_line_single",
     "directional_follow_line_single_until_black",
     "lineup",
