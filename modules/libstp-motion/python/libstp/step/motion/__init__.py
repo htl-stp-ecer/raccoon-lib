@@ -70,6 +70,16 @@ from .line_follow import (
     follow_line_until_both_black,
     follow_line_single,
     follow_line_single_until_black,
+    DirectionalLineFollow,
+    DirectionalLineFollowConfig,
+    DirectionalSingleLineFollow,
+    DirectionalSingleLineFollowConfig,
+    directional_follow_line,
+    directional_follow_line_until_both_black,
+    strafe_follow_line,
+    strafe_follow_line_until_both_black,
+    directional_follow_line_single,
+    directional_follow_line_single_until_black,
 )
 from .at_distance import WaitUntilDistance, wait_until_distance
 from .tune_drive import TuneDrive, tune_drive
@@ -166,6 +176,17 @@ __all__ = [
     "SingleSensorLineFollowUntilBlack",
     "SingleLineFollowUntilBlackConfig",
     "follow_line_single_until_black",
+    # Directional line follow
+    "DirectionalLineFollow",
+    "DirectionalLineFollowConfig",
+    "DirectionalSingleLineFollow",
+    "DirectionalSingleLineFollowConfig",
+    "directional_follow_line",
+    "directional_follow_line_until_both_black",
+    "strafe_follow_line",
+    "strafe_follow_line_until_both_black",
+    "directional_follow_line_single",
+    "directional_follow_line_single_until_black",
     "lineup",
     # Distance wait
     "WaitUntilDistance",
