@@ -13,6 +13,7 @@ class IRConfirmScreen(UIScreen[IRConfirmResult]):
     """
 
     title = "IR Sensor Calibration"
+    _primary_button_id = "confirm"
 
     def __init__(
         self,

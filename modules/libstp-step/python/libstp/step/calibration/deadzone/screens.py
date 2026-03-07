@@ -164,6 +164,7 @@ class DeadzoneResultsScreen(UIScreen[DeadzoneConfirmResult]):
     """
 
     title = "Calibration Results"
+    _primary_button_id = "confirm"
 
     def __init__(
         self,
@@ -243,6 +244,7 @@ class DeadzoneSummaryScreen(UIScreen[bool]):
     """
 
     title = "ff.kS Calibration Summary"
+    _primary_button_id = "apply"
 
     def __init__(self, results: list):
         """

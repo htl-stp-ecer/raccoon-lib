@@ -508,6 +508,8 @@ class _ShowingContext:
 class _QuickMessageScreen(UIScreen[None]):
     """Simple message screen."""
 
+    _primary_button_id = "ok"
+
     def __init__(self, text: str, title: str, button_label: str):
         super().__init__()
         self.title = title
@@ -525,12 +527,17 @@ class _QuickMessageScreen(UIScreen[None]):
 
     async def _dispatch_event(self, event: dict) -> None:
         await super()._dispatch_event(event)
-        if event.get("_action") == "click" and event.get("button_id") == "ok":
+        action = event.get("_action")
+        if action == "click" and event.get("button_id") == "ok":
+            self.close()
+        elif action == "button_press":
             self.close()
 
 
 class _QuickConfirmScreen(UIScreen[bool]):
     """Yes/No confirmation screen."""
+
+    _primary_button_id = "yes"
 
     def __init__(self, text: str, title: str, yes_label: str, no_label: str):
         super().__init__()
@@ -553,12 +560,15 @@ class _QuickConfirmScreen(UIScreen[bool]):
 
     async def _dispatch_event(self, event: dict) -> None:
         await super()._dispatch_event(event)
-        if event.get("_action") == "click":
+        action = event.get("_action")
+        if action == "click":
             btn = event.get("button_id")
             if btn == "yes":
                 self.close(True)
             elif btn == "no":
                 self.close(False)
+        elif action == "button_press":
+            self.close(True)
 
 
 class _QuickChoiceScreen(UIScreen[Optional[str]]):
