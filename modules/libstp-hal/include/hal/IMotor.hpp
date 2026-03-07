@@ -30,6 +30,8 @@ namespace libstp::hal::motor
         [[nodiscard]] virtual bool isDone() const = 0;
         /// Stop this motor using the implementation's preferred strategy.
         virtual void brake() = 0;
+        /// Disable this motor completely (no power, no brake — free-spinning).
+        virtual void off() = 0;
 
         [[nodiscard]] virtual const foundation::MotorCalibration& getCalibration() const = 0;
         virtual void setCalibration(const foundation::MotorCalibration& calibration) = 0;

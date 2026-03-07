@@ -74,6 +74,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/_generate/
+docs/_autoapi_src/
+docs-site/
+libstp-docs-*.zip
 
 # PyBuilder
 .pybuilder/

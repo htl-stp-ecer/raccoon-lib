@@ -13,6 +13,7 @@ def calibrate(
     persist_to_yaml: bool = True,
     ema_alpha: float = DEFAULT_EMA_ALPHA,
     calibration_sets=None,
+    exclude_ir_sensors=None,
 ) -> CalibrateDistance:
     """
     Create a unified calibration step.
@@ -25,6 +26,7 @@ def calibrate(
         persist_to_yaml: If True, update raccoon.project.yml with EMA baseline
         ema_alpha: EMA coefficient (0.0-1.0, higher = slower convergence)
         calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
+        exclude_ir_sensors: IR sensor instances to exclude from calibration
 
     Returns:
         CalibrateDistance step instance
@@ -35,4 +37,5 @@ def calibrate(
         persist_to_yaml=persist_to_yaml,
         ema_alpha=ema_alpha,
         calibration_sets=calibration_sets,
+        exclude_ir_sensors=exclude_ir_sensors,
     )

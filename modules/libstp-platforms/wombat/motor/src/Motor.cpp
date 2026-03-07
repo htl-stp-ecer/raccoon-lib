@@ -100,7 +100,14 @@ void libstp::hal::motor::Motor::brake()
 {
     platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 1);
     platform::wombat::core::LcmDataWriter::instance().setMotor(port_, 0);
-    LIBSTP_LOG_DEBUG("Wombat Motor port={} brake (stop latch engaged)", port_);
+    LIBSTP_LOG_DEBUG("Wombat Motor port={} brake (passive brake engaged)", port_);
+}
+
+void libstp::hal::motor::Motor::off()
+{
+    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
+    platform::wombat::core::LcmDataWriter::instance().setMotor(port_, 0);
+    LIBSTP_LOG_DEBUG("Wombat Motor port={} off (motor disabled, free-spinning)", port_);
 }
 
 void libstp::hal::motor::Motor::disableAll()

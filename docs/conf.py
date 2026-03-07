@@ -34,8 +34,17 @@ extensions = [
 # AutoAPI configuration (parses Python files without importing)
 import glob
 import os
+import shutil
 autoapi_type = 'python'
 _base = os.path.dirname(__file__)
+
+# Merge all Python sources into a single directory tree so autoapi sees
+# 'libstp' and 'raccoon_transport' as top-level packages (not 'python.libstp').
+_merged_dir = os.path.join(_base, '_autoapi_src')
+if os.path.exists(_merged_dir):
+    shutil.rmtree(_merged_dir)
+os.makedirs(_merged_dir, exist_ok=True)
+
 _module_python_dirs = sorted(
     path for path in glob.glob(os.path.join(_base, '../modules/*/python'))
     if os.path.isdir(path)
@@ -44,10 +53,35 @@ _extra_python_dirs = [
     os.path.join(_base, '../raccoon-transport/python'),
 ]
 _extra_python_dirs = [p for p in _extra_python_dirs if os.path.isdir(p)]
-autoapi_dirs = [*_module_python_dirs, *_extra_python_dirs]
+_stubs_dir = os.path.join(_base, '../python/stubs')
+
+for src_dir in _module_python_dirs + _extra_python_dirs:
+    for root, _dirs, files in os.walk(src_dir):
+        for f in files:
+            if f.endswith(('.py', '.pyi')):
+                src = os.path.join(root, f)
+                rel = os.path.relpath(src, src_dir)
+                dst = os.path.join(_merged_dir, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+
+# Include .pyi stubs for C++ bindings (hal, foundation, sensor_ir, etc.)
+if os.path.isdir(_stubs_dir):
+    for root, _dirs, files in os.walk(_stubs_dir):
+        for f in files:
+            if f.endswith(('.py', '.pyi')):
+                src = os.path.join(root, f)
+                rel = os.path.relpath(src, _stubs_dir)
+                dst = os.path.join(_merged_dir, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if not os.path.exists(dst):
+                    shutil.copy2(src, dst)
+
+autoapi_dirs = [_merged_dir]
 autoapi_ignore = ['*__pycache__*']
 autoapi_options = ['members', 'undoc-members', 'show-inheritance', 'show-module-summary']
-autoapi_python_use_implicit_namespaces = True
+autoapi_python_use_implicit_namespaces = False
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

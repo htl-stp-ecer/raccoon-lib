@@ -179,6 +179,7 @@ class CalibrateDistance(UIStep):
         persist_to_yaml: bool = True,
         ema_alpha: float = DEFAULT_EMA_ALPHA,
         calibration_sets: Optional[List[str]] = None,
+        exclude_ir_sensors: Optional[List["IRSensor"]] = None,
     ) -> None:
         """
         Initialize the distance calibration step.
@@ -189,6 +190,7 @@ class CalibrateDistance(UIStep):
             persist_to_yaml: If True, update raccoon.project.yml with EMA-filtered baseline
             ema_alpha: EMA coefficient for baseline updates (0.0-1.0, higher = slower convergence)
             calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
+            exclude_ir_sensors: IR sensor instances to exclude from calibration
         """
         super().__init__()
         self.calibration_distance_cm = calibration_distance_cm
@@ -196,14 +198,17 @@ class CalibrateDistance(UIStep):
         self.persist_to_yaml = persist_to_yaml
         self.ema_alpha = ema_alpha
         self.calibration_sets = calibration_sets or ["default"]
+        self.exclude_ir_sensors: List["IRSensor"] = exclude_ir_sensors or []
         self.result: Optional[DistanceCalibrationResult] = None
         self.per_wheel_results: List[PerWheelCalibration] = []
 
     def _generate_signature(self) -> str:
+        excluded = [s.port for s in self.exclude_ir_sensors]
         return (
             f"CalibrateDistance(distance_cm={self.calibration_distance_cm}, "
             f"light_sensors={self.calibrate_light_sensors}, "
-            f"persist={self.persist_to_yaml}, sets={self.calibration_sets})"
+            f"persist={self.persist_to_yaml}, sets={self.calibration_sets}, "
+            f"exclude_ir_ports={sorted(excluded)})"
         )
 
     async def _sample_sensors(
@@ -262,13 +267,40 @@ class CalibrateDistance(UIStep):
             ))
         return sensor_data
 
+    async def _drive_and_sample(
+        self,
+        robot: "GenericRobot",
+        ir_sensors: List["IRSensor"],
+    ) -> Dict[int, List[float]]:
+        """Drive forward while sampling IR sensors, then passive-brake."""
+        from libstp.step.motion.drive import _drive_forward_uncalibrated
+
+        driving_screen = DistanceDrivingScreen(_SENSOR_CAL_DRIVE_CM)
+        await self._render_screen(driving_screen)
+
+        stop_sampling = asyncio.Event()
+        sampling_task = asyncio.create_task(
+            self._sample_sensors(ir_sensors, stop_sampling)
+        )
+        try:
+            drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM)
+            await drive_step.run_step(robot)
+        finally:
+            stop_sampling.set()
+            sensor_samples = await sampling_task
+
+        for motor in robot.drive.get_motors():
+            motor.set_speed(0)
+
+        return sensor_samples
+
     async def _confirm_light_sensors(
         self,
+        robot: "GenericRobot",
         ir_sensors: List["IRSensor"],
         initial_samples: Dict[int, List[float]],
         set_name: str = "default",
     ) -> None:
-        from libstp.step.calibration.sensors.ir_calibrating_screen import IRCalibratingScreen
         from libstp.step.calibration.sensors.ir_results_screen import IRResultsDashboardScreen
         from libstp import calibration_store as CalibrationStore
         from libstp.calibration_store import CalibrationType
@@ -281,10 +313,7 @@ class CalibrateDistance(UIStep):
 
         if not any(samples.values()):
             self.warn("No sensor samples collected during drive; resampling now")
-            samples = await self.run_with_ui(
-                IRCalibratingScreen(ports=ports),
-                self._sample_sensors_for_duration(ir_sensors, self._SENSOR_RETRY_SAMPLE_SECONDS),
-            )
+            samples = await self._drive_and_sample(robot, ir_sensors)
 
         while True:
             # Calibrate each sensor with its own samples
@@ -313,11 +342,8 @@ class CalibrateDistance(UIStep):
                     )
                 return
 
-            # Retry: resample
-            samples = await self.run_with_ui(
-                IRCalibratingScreen(ports=ports),
-                self._sample_sensors_for_duration(ir_sensors, self._SENSOR_RETRY_SAMPLE_SECONDS),
-            )
+            # Retry: drive forward again and resample
+            samples = await self._drive_and_sample(robot, ir_sensors)
 
     async def _drive_and_sample_for_set(
         self,
@@ -327,7 +353,6 @@ class CalibrateDistance(UIStep):
     ) -> None:
         """Drive forward and sample IR sensors for an additional calibration set."""
         from libstp.step.motion.drive import _drive_forward_uncalibrated
-        from libstp.step.motion.stop import stop
 
         label = set_name.upper()
         proceed = await self.confirm(
@@ -354,9 +379,12 @@ class CalibrateDistance(UIStep):
             stop_sampling.set()
             sensor_samples = await sampling_task
 
-        await stop().run_step(robot)
+        # Passive brake – no active hold so motors won't twitch over time
+        drive_motors = robot.drive.get_motors()
+        for motor in drive_motors:
+            motor.set_speed(0)
 
-        await self._confirm_light_sensors(ir_sensors, sensor_samples, set_name)
+        await self._confirm_light_sensors(robot, ir_sensors, sensor_samples, set_name)
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """
@@ -373,7 +401,6 @@ class CalibrateDistance(UIStep):
             robot: The robot instance for driving
         """
         from libstp.step.motion.drive import _drive_forward_uncalibrated
-        from libstp.step.motion.stop import stop
         from libstp.foundation import MotorCalibration
         from libstp.sensor_ir import IRSensor
 
@@ -393,7 +420,7 @@ class CalibrateDistance(UIStep):
         ir_sensors: List[IRSensor] = []
         if self.calibrate_light_sensors:
             for sensor in robot.defs.analog_sensors:
-                if isinstance(sensor, IRSensor):
+                if isinstance(sensor, IRSensor) and sensor not in self.exclude_ir_sensors:
                     ir_sensors.append(sensor)
             if ir_sensors:
                 self.debug(f"Will calibrate {len(ir_sensors)} IR sensor(s) during drive")
@@ -432,8 +459,9 @@ class CalibrateDistance(UIStep):
             else:
                 await drive_step.run_step(robot)
 
-            # Stop motors after drive completes
-            await stop().run_step(robot)
+            # Passive brake – no active hold so motors won't twitch over time
+            for motor in drive_motors:
+                motor.set_speed(0)
 
             # Record encoder positions AFTER drive
             encoder_after: Dict[int, int] = {}
@@ -550,7 +578,7 @@ class CalibrateDistance(UIStep):
 
                 if self.calibrate_light_sensors and ir_sensors:
                     # First set uses samples from the distance calibration drive
-                    await self._confirm_light_sensors(ir_sensors, sensor_samples, self.calibration_sets[0])
+                    await self._confirm_light_sensors(robot, ir_sensors, sensor_samples, self.calibration_sets[0])
 
                     # Remaining sets each get their own drive-and-sample cycle
                     for cal_set in self.calibration_sets[1:]:
@@ -567,6 +595,7 @@ def calibrate_distance(
     persist_to_yaml: bool = True,
     ema_alpha: float = DEFAULT_EMA_ALPHA,
     calibration_sets: Optional[List[str]] = None,
+    exclude_ir_sensors: Optional[List["IRSensor"]] = None,
 ) -> CalibrateDistance:
     """
     Create a distance calibration step.
@@ -586,6 +615,7 @@ def calibrate_distance(
         persist_to_yaml: If True, update raccoon.project.yml with EMA baseline
         ema_alpha: EMA coefficient (0.0-1.0, higher = slower convergence)
         calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
+        exclude_ir_sensors: IR sensor instances to exclude from calibration
 
     Returns:
         CalibrateDistance step instance
@@ -596,4 +626,5 @@ def calibrate_distance(
         persist_to_yaml,
         ema_alpha,
         calibration_sets=calibration_sets,
+        exclude_ir_sensors=exclude_ir_sensors,
     )
