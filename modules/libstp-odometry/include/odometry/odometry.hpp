@@ -83,6 +83,12 @@ namespace libstp::odometry
         [[nodiscard]] virtual double getHeadingError(double target_heading_rad) const = 0;
 
         /**
+         * Get the absolute IMU heading that is unaffected by reset().
+         * @return Heading in radians (CCW-positive). Stable across odometry resets.
+         */
+        [[nodiscard]] virtual double getAbsoluteHeading() const = 0;
+
+        /**
          * Reset the odometry to origin (zero position, identity orientation)
          */
         virtual void reset() = 0;

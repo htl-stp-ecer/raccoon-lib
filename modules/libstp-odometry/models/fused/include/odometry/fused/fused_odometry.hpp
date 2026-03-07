@@ -100,6 +100,9 @@ namespace libstp::odometry::fused
         /** Return heading relative to the heading stored at the last reset. */
         [[nodiscard]] double getHeading() const override;
 
+        /** Return the raw IMU heading unaffected by reset(). */
+        [[nodiscard]] double getAbsoluteHeading() const override;
+
         /** Return the shortest signed angular error from the current heading to the target. */
         [[nodiscard]] double getHeadingError(double target_heading_rad) const override;
 

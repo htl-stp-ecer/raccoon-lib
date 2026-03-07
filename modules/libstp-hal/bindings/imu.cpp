@@ -51,6 +51,20 @@ void init_imu(const py::module& m)
          "'world_z' (default), 'body_x', 'body_y', or 'body_z'")
     .def("get_yaw_rate_axis_mode", &libstp::hal::imu::IMU::getYawRateAxisModeName,
          "Get current turn-rate axis mode string")
+    .def("get_linear_acceleration", [](libstp::hal::imu::IMU& self)
+    {
+        float linear_accel[3] = {0.0f, 0.0f, 0.0f};
+        self.getLinearAcceleration(linear_accel);
+        return py::make_tuple(linear_accel[0], linear_accel[1], linear_accel[2]);
+    }, "Get gravity-compensated linear acceleration as (x, y, z) in m/s²")
+    .def("get_integrated_velocity", [](libstp::hal::imu::IMU& self)
+    {
+        float vel[3] = {0.0f, 0.0f, 0.0f};
+        self.getIntegratedVelocity(vel);
+        return py::make_tuple(vel[0], vel[1], vel[2]);
+    }, "Get firmware-integrated velocity as (x, y, z) in m/s")
+    .def("reset_integrated_velocity", &libstp::hal::imu::IMU::resetIntegratedVelocity,
+         "Reset the firmware-integrated velocity accumulator")
     .def("calibrate", &libstp::hal::imu::IMU::calibrate, "Calibrate the IMU sensor")
     .def("get_heading", &libstp::hal::imu::IMU::getHeading,
          "Get firmware-computed heading in radians");

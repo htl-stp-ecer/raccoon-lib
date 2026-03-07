@@ -95,6 +95,10 @@ PYBIND11_MODULE(odometry_fused, m)
              "    Heading in radians, range [-π, π].\n"
              "    0 = facing initial forward direction\n"
              "    positive = rotated CCW, negative = rotated CW")
+        .def("get_absolute_heading", &libstp::odometry::fused::FusedOdometry::getAbsoluteHeading,
+             "Get absolute IMU heading unaffected by reset().\n\n"
+             "Returns:\n"
+             "    Heading in radians (CCW-positive). Stable across odometry resets.")
         .def("get_heading_error", &libstp::odometry::fused::FusedOdometry::getHeadingError,
              py::arg("target_heading_rad"),
              "Get heading error to reach a target heading.\n\n"

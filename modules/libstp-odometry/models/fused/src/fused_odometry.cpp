@@ -154,6 +154,11 @@ namespace libstp::odometry::fused
         return wrapAngle(origin_heading_ + imu_heading_delta);
     }
 
+    double FusedOdometry::getAbsoluteHeading() const
+    {
+        return imu_->getHeading();
+    }
+
     double FusedOdometry::getHeadingError(double target_heading_rad) const
     {
         const double current_heading = getHeading();

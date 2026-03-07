@@ -23,5 +23,9 @@ PYBIND11_MODULE(odometry, m)
         .def("update", &libstp::odometry::IOdometry::update,
              py::arg("dt"))
         .def("get_pose", &libstp::odometry::IOdometry::getPose)
+        .def("get_absolute_heading", &libstp::odometry::IOdometry::getAbsoluteHeading,
+             "Get absolute IMU heading unaffected by reset().\n\n"
+             "Returns:\n"
+             "    Heading in radians (CCW-positive). Stable across odometry resets.")
         .def("reset", py::overload_cast<>(&libstp::odometry::IOdometry::reset));
 }

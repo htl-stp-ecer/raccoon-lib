@@ -13,6 +13,7 @@ namespace libstp::test
         MOCK_METHOD(foundation::Pose, getPose, (), (const, override));
         MOCK_METHOD(odometry::DistanceFromOrigin, getDistanceFromOrigin, (), (const, override));
         MOCK_METHOD(double, getHeading, (), (const, override));
+        MOCK_METHOD(double, getAbsoluteHeading, (), (const, override));
         MOCK_METHOD(double, getHeadingError, (double target_heading_rad), (const, override));
         MOCK_METHOD(void, reset, (), (override));
 

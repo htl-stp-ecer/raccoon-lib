@@ -27,6 +27,18 @@ class IMU:
         """
         Get firmware-computed heading in radians
         """
+    def get_linear_acceleration(self) -> tuple[float, float, float]:
+        """
+        Get gravity-compensated linear acceleration as (x, y, z) in m/s²
+        """
+    def get_integrated_velocity(self) -> tuple[float, float, float]:
+        """
+        Get firmware-integrated velocity as (x, y, z) in m/s
+        """
+    def reset_integrated_velocity(self) -> None:
+        """
+        Reset the firmware-integrated velocity accumulator
+        """
     def read(self) -> tuple:
         """
         Read acceleration, gyroscope, and magnetometer data

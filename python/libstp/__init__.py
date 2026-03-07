@@ -19,6 +19,7 @@ from libstp.class_name_logger import ClassNameLogger
 from libstp.foundation import initialize_logging
 from libstp.log import error, info, debug, warn
 from libstp.sensor_ir import IRSensor, IRSensorCalibration
+from libstp.sensor_et import ETSensor
 # Core hardware
 Motor = _hal.Motor
 Servo = _hal.Servo
@@ -69,6 +70,7 @@ __all__ = [
     # Sensors
     "IRSensor",
     "IRSensorCalibration",
+    "ETSensor",
     # Timing
     "StepTimingTracker",
     # UI
