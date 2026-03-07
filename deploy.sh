@@ -11,7 +11,7 @@ echo "▶ Building wheel..."
 bash ./build.sh
 
 # Find the built wheel
-WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f -exec ls -t {} + | head -1)
 if [[ ! -f "$WHEEL_FILE" ]]; then
   echo "Error: No wheel found in $BUILD_DIR after build"
   exit 1
