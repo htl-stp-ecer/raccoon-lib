@@ -1,0 +1,144 @@
+import math
+from libstp.motion import ArcMotion, ArcMotionConfig
+from typing import TYPE_CHECKING
+
+from .. import SimulationStep, SimulationStepDelta, dsl
+from .motion_step import MotionStep
+
+if TYPE_CHECKING:
+    from libstp.robot.api import GenericRobot
+
+
+@dsl(hidden=True)
+class Arc(MotionStep):
+    """Step wrapper around the native `ArcMotion` controller."""
+
+    def __init__(self, config: ArcMotionConfig):
+        super().__init__()
+        self.config = config
+        self._motion: ArcMotion | None = None
+
+    def _generate_signature(self) -> str:
+        return (
+            f"Arc(radius_cm={self.config.radius_m * 100:.1f}, "
+            f"arc_deg={math.degrees(self.config.arc_angle_rad):.1f}, "
+            f"speed_scale={self.config.speed_scale:.2f})"
+        )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        r = self.config.radius_m
+        theta = self.config.arc_angle_rad
+        # Arc endpoint relative to start:
+        # forward = R * sin(|theta|), strafe depends on turn direction
+        base.delta = SimulationStepDelta(
+            forward=r * math.sin(abs(theta)),
+            strafe=r * (1 - math.cos(theta)) * (-1 if theta > 0 else 1),
+            angular=theta,
+        )
+        return base
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        self._motion = ArcMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
+        self._motion.start()
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        self._motion.update(dt)
+        return self._motion.is_finished()
+
+
+@dsl(tags=["motion", "arc"])
+def drive_arc_left(radius_cm: float, degrees: float, speed: float = 1.0) -> Arc:
+    """
+    Drive along a circular arc curving to the left.
+
+    The robot drives forward while simultaneously turning counter-clockwise,
+    tracing a circular arc of the given radius. The motion completes when
+    the robot has turned by the specified number of degrees.
+
+    Args:
+        radius_cm: Turning radius in centimeters (center of arc to robot center).
+        degrees: Arc angle in degrees (how much the robot turns).
+        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+
+    Returns:
+        An Arc step configured for a left (CCW) arc.
+
+    Example::
+
+        from libstp.step.motion import drive_arc_left
+
+        # Quarter-circle left with 30 cm radius
+        drive_arc_left(radius_cm=30, degrees=90)
+
+        # Gentle wide arc at half speed
+        drive_arc_left(radius_cm=50, degrees=45, speed=0.5)
+    """
+    config = ArcMotionConfig()
+    config.radius_m = radius_cm / 100.0
+    config.arc_angle_rad = math.radians(degrees)  # Positive for CCW
+    config.speed_scale = speed
+    return Arc(config)
+
+
+@dsl(tags=["motion", "arc"])
+def drive_arc_right(radius_cm: float, degrees: float, speed: float = 1.0) -> Arc:
+    """
+    Drive along a circular arc curving to the right.
+
+    The robot drives forward while simultaneously turning clockwise,
+    tracing a circular arc of the given radius. The motion completes when
+    the robot has turned by the specified number of degrees.
+
+    Args:
+        radius_cm: Turning radius in centimeters (center of arc to robot center).
+        degrees: Arc angle in degrees (how much the robot turns).
+        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+
+    Returns:
+        An Arc step configured for a right (CW) arc.
+
+    Example::
+
+        from libstp.step.motion import drive_arc_right
+
+        # Quarter-circle right with 30 cm radius
+        drive_arc_right(radius_cm=30, degrees=90)
+    """
+    config = ArcMotionConfig()
+    config.radius_m = radius_cm / 100.0
+    config.arc_angle_rad = -math.radians(degrees)  # Negative for CW
+    config.speed_scale = speed
+    return Arc(config)
+
+
+@dsl(tags=["motion", "arc"])
+def drive_arc(radius_cm: float, degrees: float, speed: float = 1.0) -> Arc:
+    """
+    Drive along a circular arc with explicit direction.
+
+    Positive degrees = counter-clockwise (left), negative = clockwise (right).
+
+    Args:
+        radius_cm: Turning radius in centimeters (always positive).
+        degrees: Arc angle in degrees. Positive = left/CCW, negative = right/CW.
+        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+
+    Returns:
+        An Arc step.
+
+    Example::
+
+        from libstp.step.motion import drive_arc
+
+        # Left arc
+        drive_arc(radius_cm=30, degrees=90)
+
+        # Right arc
+        drive_arc(radius_cm=30, degrees=-90)
+    """
+    config = ArcMotionConfig()
+    config.radius_m = radius_cm / 100.0
+    config.arc_angle_rad = math.radians(degrees)
+    config.speed_scale = speed
+    return Arc(config)

@@ -30,13 +30,23 @@ class Stop(Step):
 @dsl(tags=["motion", "stop"])
 def stop(hard: bool = True) -> Stop:
     """
-    Create a step that stops all drive motors.
+    Stop all drive motors immediately.
+
+    Use this between motion sequences or at the end of a mission
+    to ensure the robot is stationary.
 
     Args:
-        hard: If True (default), immediately zero motor output.
-              If False, decelerate smoothly.
+        hard: If ``True`` (default), immediately zero motor output.
+              If ``False``, decelerate smoothly using the drive controller.
 
     Returns:
-        Stop step instance
+        A Stop step instance.
+
+    Example::
+
+        from libstp.step.motion import drive_forward, stop
+
+        # Drive forward then stop
+        seq([drive_forward(50), stop()])
     """
     return Stop(hard)

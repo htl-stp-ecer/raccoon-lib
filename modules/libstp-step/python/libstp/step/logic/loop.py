@@ -70,26 +70,64 @@ class LoopForStep(Step):
 @dsl(tags=["control", "loop"])
 def loop_forever(step: StepProtocol) -> LoopForeverStep:
     """
-    Create a step that runs another step indefinitely.
+    Repeat a step indefinitely until externally cancelled.
+
+    Wraps the given step in an infinite loop. Each iteration awaits the
+    child step to completion before starting the next. The loop only
+    terminates when the enclosing context cancels it (e.g. via
+    ``do_while_active`` or ``do_until_checkpoint``).
 
     Args:
-        step: The step to execute in a loop.
+        step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
 
     Returns:
-        LoopForeverStep: The step that runs the provided step indefinitely.
+        LoopForeverStep: A step that runs ``step`` in an infinite loop.
+
+    Example::
+
+        from libstp.step.logic import loop_forever
+        from libstp.step.motor import set_motor_speed
+
+        # Continuously toggle a motor on and off (until parent cancels)
+        toggle = seq([
+            set_motor_speed(0, 1000),
+            wait(0.5),
+            set_motor_speed(0, 0),
+            wait(0.5),
+        ])
+        do_until_checkpoint(30.0, loop_forever(toggle))
     """
     return LoopForeverStep(step=step)
 
 @dsl(tags=["control", "loop"])
 def loop_for(step: StepProtocol, iterations: int) -> LoopForStep:
     """
-    Create a step that runs another step a specified number of times.
+    Repeat a step a fixed number of times.
+
+    Wraps the given step in a counted loop. Each iteration awaits the
+    child step to completion before starting the next. After all
+    iterations complete, the step finishes normally.
 
     Args:
-        step: The step to execute in a loop.
-        iterations: Number of times to run the step.
+        step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
+        iterations: Number of times to run the step. Must be a positive
+            integer.
 
     Returns:
-        LoopForStep: The step that runs the provided step for the specified iterations.
+        LoopForStep: A step that runs ``step`` exactly ``iterations`` times.
+
+    Example::
+
+        from libstp.step.logic import loop_for
+        from libstp.step.motor import set_motor_speed
+
+        # Drive forward in three short bursts
+        burst = seq([
+            set_motor_speed(0, 800),
+            wait(0.3),
+            set_motor_speed(0, 0),
+            wait(0.2),
+        ])
+        loop_for(burst, 3)
     """
     return LoopForStep(step=step, iterations=iterations)

@@ -1,4 +1,4 @@
-"""Turn until sensor factories."""
+"""Factory functions for turning in place until an IR sensor detects a surface color."""
 from libstp.sensor_ir import IRSensor
 from typing import Union
 
@@ -12,13 +12,36 @@ def turn_until_black(
         angular_speed: float,
         confidence_threshold: float = 0.7,
 ) -> MoveUntil:
-    """
-    Turn until any sensor detects black.
+    """Turn in place until any sensor detects a black surface.
+
+    Commands a constant angular velocity and polls the given IR sensor(s) each
+    control cycle. The step completes as soon as any sensor's
+    ``probabilityOfBlack()`` meets or exceeds ``confidence_threshold``. This is
+    the low-level variant that accepts a signed angular speed; prefer the
+    directional helpers ``turn_left_until_black`` / ``turn_right_until_black``
+    for most use cases.
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        angular_speed: Speed in rad/s (positive = CCW, negative = CW)
-        confidence_threshold: Probability threshold for detection (0-1)
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            black.
+        angular_speed: Rotational speed in rad/s. Positive values rotate
+            counter-clockwise (left), negative values rotate clockwise (right).
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for black before the step considers the condition met.
+            Defaults to 0.7.
+
+    Returns:
+        MoveUntil: A configured motion step that rotates in place and stops
+        when black is detected.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+
+        side_ir = IRSensor(1)
+        # Rotate CCW at 0.5 rad/s until the sensor finds black
+        step = turn_until_black(side_ir, angular_speed=0.5)
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
@@ -34,13 +57,36 @@ def turn_until_white(
         angular_speed: float,
         confidence_threshold: float = 0.7,
 ) -> MoveUntil:
-    """
-    Turn until any sensor detects white.
+    """Turn in place until any sensor detects a white surface.
+
+    Commands a constant angular velocity and polls the given IR sensor(s) each
+    control cycle. The step completes as soon as any sensor's
+    ``probabilityOfWhite()`` meets or exceeds ``confidence_threshold``. This is
+    the low-level variant that accepts a signed angular speed; prefer the
+    directional helpers ``turn_left_until_white`` / ``turn_right_until_white``
+    for most use cases.
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        angular_speed: Speed in rad/s (positive = CCW, negative = CW)
-        confidence_threshold: Probability threshold for detection (0-1)
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            white.
+        angular_speed: Rotational speed in rad/s. Positive values rotate
+            counter-clockwise (left), negative values rotate clockwise (right).
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for white before the step considers the condition met.
+            Defaults to 0.7.
+
+    Returns:
+        MoveUntil: A configured motion step that rotates in place and stops
+        when white is detected.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+
+        side_ir = IRSensor(1)
+        # Rotate CW at 0.5 rad/s until the sensor finds white
+        step = turn_until_white(side_ir, angular_speed=-0.5)
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
@@ -56,13 +102,38 @@ def turn_left_until_black(
         speed: float = 1.0,
         confidence_threshold: float = 0.7,
 ) -> MoveUntil:
-    """
-    Turn left (CCW) until any sensor detects black.
+    """Turn left (counter-clockwise) until any sensor detects a black surface.
+
+    Commands a constant counter-clockwise angular velocity and polls the given
+    IR sensor(s) each control cycle. The step completes as soon as any sensor's
+    ``probabilityOfBlack()`` meets or exceeds ``confidence_threshold``. The
+    speed is forced positive (CCW) regardless of the sign passed in.
+
+    A common use case is sweeping a side-mounted IR sensor across the field to
+    locate a black line, then stopping precisely when found.
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        speed: Angular speed in rad/s (positive value)
-        confidence_threshold: Probability threshold for detection (0-1)
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            black.
+        speed: Angular speed in rad/s. The absolute value is used, so negative
+            inputs are treated as positive. Defaults to 1.0.
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for black before the step considers the condition met.
+            Defaults to 0.7.
+
+    Returns:
+        MoveUntil: A configured motion step that turns left and stops when
+        black is detected.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+
+        right_ir = IRSensor(3)
+
+        # Sweep left at 0.8 rad/s until the right sensor crosses a black line
+        step = turn_left_until_black(right_ir, speed=0.8)
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
@@ -78,13 +149,35 @@ def turn_left_until_white(
         speed: float = 1.0,
         confidence_threshold: float = 0.7,
 ) -> MoveUntil:
-    """
-    Turn left (CCW) until any sensor detects white.
+    """Turn left (counter-clockwise) until any sensor detects a white surface.
+
+    Commands a constant counter-clockwise angular velocity and polls the given
+    IR sensor(s) each control cycle. The step completes as soon as any sensor's
+    ``probabilityOfWhite()`` meets or exceeds ``confidence_threshold``. The
+    speed is forced positive (CCW) regardless of the sign passed in.
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        speed: Angular speed in rad/s (positive value)
-        confidence_threshold: Probability threshold for detection (0-1)
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            white.
+        speed: Angular speed in rad/s. The absolute value is used, so negative
+            inputs are treated as positive. Defaults to 1.0.
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for white before the step considers the condition met.
+            Defaults to 0.7.
+
+    Returns:
+        MoveUntil: A configured motion step that turns left and stops when
+        white is detected.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+
+        right_ir = IRSensor(3)
+
+        # Sweep left at 0.6 rad/s until white surface is found
+        step = turn_left_until_white(right_ir, speed=0.6)
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
@@ -100,13 +193,39 @@ def turn_right_until_black(
         speed: float = 1.0,
         confidence_threshold: float = 0.7,
 ) -> MoveUntil:
-    """
-    Turn right (CW) until any sensor detects black.
+    """Turn right (clockwise) until any sensor detects a black surface.
+
+    Commands a constant clockwise angular velocity and polls the given IR
+    sensor(s) each control cycle. The step completes as soon as any sensor's
+    ``probabilityOfBlack()`` meets or exceeds ``confidence_threshold``. The
+    speed is negated internally to produce clockwise rotation, so you should
+    pass a positive value.
+
+    A common use case is sweeping a side-mounted IR sensor across the field to
+    locate a black line, then stopping precisely when found.
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        speed: Angular speed in rad/s (positive value)
-        confidence_threshold: Probability threshold for detection (0-1)
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            black.
+        speed: Angular speed in rad/s. Pass a positive value; the sign is
+            negated internally to rotate clockwise. Defaults to 1.0.
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for black before the step considers the condition met.
+            Defaults to 0.7.
+
+    Returns:
+        MoveUntil: A configured motion step that turns right and stops when
+        black is detected.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+
+        left_ir = IRSensor(1)
+
+        # Sweep right at 0.8 rad/s until the left sensor crosses a black line
+        step = turn_right_until_black(left_ir, speed=0.8)
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,
@@ -122,13 +241,36 @@ def turn_right_until_white(
         speed: float = 1.0,
         confidence_threshold: float = 0.7,
 ) -> MoveUntil:
-    """
-    Turn right (CW) until any sensor detects white.
+    """Turn right (clockwise) until any sensor detects a white surface.
+
+    Commands a constant clockwise angular velocity and polls the given IR
+    sensor(s) each control cycle. The step completes as soon as any sensor's
+    ``probabilityOfWhite()`` meets or exceeds ``confidence_threshold``. The
+    speed is negated internally to produce clockwise rotation, so you should
+    pass a positive value.
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        speed: Angular speed in rad/s (positive value)
-        confidence_threshold: Probability threshold for detection (0-1)
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            white.
+        speed: Angular speed in rad/s. Pass a positive value; the sign is
+            negated internally to rotate clockwise. Defaults to 1.0.
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for white before the step considers the condition met.
+            Defaults to 0.7.
+
+    Returns:
+        MoveUntil: A configured motion step that turns right and stops when
+        white is detected.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+
+        left_ir = IRSensor(1)
+
+        # Sweep right slowly until the left sensor finds white
+        step = turn_right_until_white(left_ir, speed=0.5)
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,

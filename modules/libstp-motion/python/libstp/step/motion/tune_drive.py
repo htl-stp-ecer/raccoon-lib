@@ -84,11 +84,14 @@ def _write_csv(path: str, telemetry: list[LinearMotionTelemetry]) -> None:
 
 @dsl(hidden=True)
 class TuneDrive(Step):
-    """
-    Run test drives and collect telemetry CSVs.
+    """Run test drives and collect per-cycle telemetry into CSV files.
 
-    For each (distance, speed) pair, drives forward, waits for settling,
-    then saves the telemetry to a CSV file. Prints a summary after each run.
+    Iterates over every (distance, speed) combination, executing a real
+    ``LinearMotion`` drive at 50 Hz and capturing detailed telemetry
+    (position, velocity, PID outputs, saturation state, heading error, etc.).
+    Each run produces a separate CSV file and a console summary with final
+    position error, peak velocity, cross-track error, and heading error.
+    Intended for offline analysis and PID gain tuning during robot setup.
     """
 
     def __init__(
@@ -211,25 +214,66 @@ def tune_drive(
     settle_time: float = 1.5,
     timeout: float = 15.0,
 ) -> TuneDrive:
-    """
-    Run test drives and save per-cycle telemetry to CSV files.
+    """Run test drives at various distances and speeds, saving telemetry to CSV.
 
-    Each (distance, speed) combination produces one CSV with columns:
-    time_s, dt, target_m, position_m, predicted_m, cross_track_m,
-    distance_error_m, actual_error_m, yaw_error_rad, filtered_velocity_mps,
-    cmd_vx_mps, cmd_vy_mps, cmd_wz_radps, pid_primary_raw, pid_cross_raw,
-    pid_heading_raw, heading_rad, speed_scale, heading_scale, saturated
+    Executes every combination of (distance, speed) as a real ``LinearMotion``
+    drive, collecting per-cycle telemetry at 50 Hz. Each run produces a CSV
+    file containing columns such as ``time_s``, ``position_m``,
+    ``setpoint_position_m``, ``setpoint_velocity_mps``, ``distance_error_m``,
+    ``actual_error_m``, ``filtered_velocity_mps``, ``cmd_vx_mps``,
+    ``pid_primary_raw``, ``heading_rad``, ``saturated``, and more (see
+    ``CSV_HEADER`` in the module source for the full list).
+
+    The CSV files are intended for offline analysis -- plot position vs.
+    setpoint to check tracking, examine PID outputs for saturation, compare
+    overshoot across speeds, etc. This is a diagnostic/tuning tool used
+    during robot setup, not during competition runs.
+
+    The robot must have enough clear space to drive the longest requested
+    distance.
 
     Args:
-        distances_cm: Distances to test (default [10, 25, 50, 100])
-        speeds: Speed scales to test, 0-1 (default [0.3, 0.6, 1.0])
-        csv_dir: Directory for CSV output (default /tmp/drive_telemetry)
-        axis: "forward" or "lateral"
-        settle_time: Wait between runs in seconds (default 1.5)
-        timeout: Max time per run in seconds (default 15.0)
+        distances_cm: List of distances to test, in centimeters. Negative
+            values drive in reverse. Default ``[10, 25, 50, 100]``.
+        speeds: List of speed scales to test (0.0--1.0). Each distance is
+            driven at each speed. Default ``[0.3, 0.6, 1.0]``.
+        csv_dir: Directory where CSV files are written. Created
+            automatically if it does not exist. Default
+            ``"/tmp/drive_telemetry"``.
+        axis: Drive axis to test: ``"forward"`` or ``"lateral"``. Default
+            ``"forward"``.
+        settle_time: Seconds to wait between runs for the robot to come to
+            rest. Default 1.5.
+        timeout: Maximum seconds per run before the drive is aborted.
+            Default 15.0.
 
     Returns:
-        Step that runs test drives and writes telemetry CSVs
+        A ``TuneDrive`` step that executes the test matrix and writes CSV
+        files.
+
+    Example::
+
+        from libstp.step.motion import tune_drive
+
+        # Quick test at a single distance and speed
+        step = tune_drive(
+            distances_cm=[50],
+            speeds=[0.5],
+            csv_dir="/tmp/quick_test",
+        )
+
+        # Full sweep for forward axis tuning
+        step = tune_drive(
+            distances_cm=[10, 25, 50, 100],
+            speeds=[0.3, 0.6, 1.0],
+        )
+
+        # Lateral axis characterization
+        step = tune_drive(
+            distances_cm=[20, 40],
+            speeds=[0.3, 0.6],
+            axis="lateral",
+        )
     """
     if distances_cm is None:
         distances_cm = [10, 25, 50, 100]

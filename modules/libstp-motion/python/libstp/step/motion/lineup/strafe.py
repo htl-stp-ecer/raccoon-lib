@@ -22,6 +22,32 @@ if TYPE_CHECKING:
 
 @dsl(hidden=True)
 class TimingBasedStrafeLineUp(MotionStep):
+    """Strafe sideways until both front and back IR sensors detect a line.
+
+    The robot strafes at ``strafe_speed`` (positive = right, negative = left)
+    while polling both sensors each update cycle.  When the first sensor
+    crosses the target-colored line its lateral odometry position is recorded.
+    Strafing continues until the second sensor also crosses.  The lateral
+    distance traveled between the two hits is stored in ``results`` as
+    ``(first_sensor_name, distance_m)`` so a downstream step can compute the
+    corrective turn angle.
+
+    This is an internal building-block step -- use the public
+    ``strafe_right_lineup_on_black`` family of functions instead.
+
+    Prerequisites:
+        A mecanum or omni-wheel drivetrain capable of lateral strafing.
+
+    Args:
+        front_sensor: IR sensor mounted on the front of the chassis.
+        back_sensor: IR sensor mounted on the rear of the chassis.
+        target: The surface color to detect (BLACK or WHITE).
+        strafe_speed: Lateral speed in m/s.  Positive = strafe right,
+            negative = strafe left.
+        detection_threshold: Confidence value (0--1) a sensor must reach to
+            count as having detected the target color.
+    """
+
     def __init__(self, front_sensor: IRSensor, back_sensor: IRSensor,
                  target: SurfaceColor = SurfaceColor.BLACK,
                  strafe_speed: float = 1.0,
@@ -124,6 +150,31 @@ def strafe_lineup(
         strafe_speed: float = 1.0,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Measure angular skew from a line via lateral strafing, then correct with a turn.
+
+    Composes a ``TimingBasedStrafeLineUp`` measurement phase with a deferred
+    corrective turn.  During the measurement the robot strafes until both
+    sensors cross the target line.  The lateral distance between the two hit
+    positions and the known physical gap between the sensors are used to compute
+    a corrective turn angle via ``atan(distance_strafed / sensor_gap)``.  The
+    turn is then executed to align the robot perpendicular to the line.
+
+    This is an internal helper -- prefer the public
+    ``strafe_right_lineup_on_black`` family of functions.
+
+    Prerequisites:
+        A mecanum or omni-wheel drivetrain capable of lateral strafing.
+
+    Args:
+        front_sensor: IR sensor on the front of the chassis.
+        back_sensor: IR sensor on the rear of the chassis.
+        target: Surface color to detect (BLACK or WHITE).
+        strafe_speed: Lateral speed in m/s (positive = right, negative = left).
+        detection_threshold: Confidence (0--1) required to register a hit.
+
+    Returns:
+        Sequential: A two-step sequence (measure + corrective turn).
+    """
     measure = TimingBasedStrafeLineUp(front_sensor, back_sensor, target,
                                        strafe_speed=strafe_speed,
                                        detection_threshold=detection_threshold)
@@ -140,6 +191,40 @@ def strafe_right_lineup_on_black(
         back_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Strafe right onto a black line, align perpendicular, then clear to white.
+
+    The robot strafes right until both front and back IR sensors detect a black
+    line.  The lateral stagger distance between the two sensor hits is used to
+    compute a corrective turn that aligns the chassis perpendicular to the
+    line.  After the turn the robot strafes right at reduced speed until both
+    sensors see white, leaving it just past the line and squared up.
+
+    Prerequisites:
+        Two IR line sensors mounted on the front and rear of the chassis, with
+        the robot's ``distance_between_sensors`` configured.  Requires a
+        mecanum or omni-wheel drivetrain capable of lateral strafing.
+
+    Args:
+        front_sensor: IR sensor on the front of the chassis.
+        back_sensor: IR sensor on the rear of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a line.  Lower values trigger earlier but are
+            more susceptible to noise.
+
+    Returns:
+        Sequential: measure + corrective turn + strafe-until-white.
+
+    Example::
+
+        from libstp.step.motion.lineup.strafe import strafe_right_lineup_on_black
+
+        step = strafe_right_lineup_on_black(
+            front_sensor=robot.front_line_sensor,
+            back_sensor=robot.back_line_sensor,
+            detection_threshold=0.8,
+        )
+        step.run(robot)
+    """
     return seq([
         strafe_lineup(
             front_sensor=front_sensor,
@@ -161,6 +246,39 @@ def strafe_right_lineup_on_white(
         back_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Strafe right onto a white line, align perpendicular, then clear to black.
+
+    The robot strafes right until both front and back IR sensors detect a white
+    surface.  The lateral stagger distance between the two sensor hits is used
+    to compute a corrective turn that aligns the chassis perpendicular to the
+    line edge.  After the turn the robot strafes right at reduced speed until
+    both sensors see black, leaving it just past the white region and squared
+    up.
+
+    Prerequisites:
+        Two IR line sensors mounted on the front and rear of the chassis, with
+        the robot's ``distance_between_sensors`` configured.  Requires a
+        mecanum or omni-wheel drivetrain capable of lateral strafing.
+
+    Args:
+        front_sensor: IR sensor on the front of the chassis.
+        back_sensor: IR sensor on the rear of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a white surface.
+
+    Returns:
+        Sequential: measure + corrective turn + strafe-until-black.
+
+    Example::
+
+        from libstp.step.motion.lineup.strafe import strafe_right_lineup_on_white
+
+        step = strafe_right_lineup_on_white(
+            front_sensor=robot.front_line_sensor,
+            back_sensor=robot.back_line_sensor,
+        )
+        step.run(robot)
+    """
     return seq([
         strafe_lineup(
             front_sensor=front_sensor,
@@ -182,6 +300,37 @@ def strafe_left_lineup_on_black(
         back_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Strafe left onto a black line, align perpendicular, then clear to white.
+
+    Identical to ``strafe_right_lineup_on_black`` but the robot strafes left
+    instead of right.  The corrective turn direction is automatically mirrored
+    to account for the reversed lateral geometry.  After alignment the robot
+    continues strafing left at reduced speed until both sensors see white.
+
+    Prerequisites:
+        Two IR line sensors mounted on the front and rear of the chassis, with
+        the robot's ``distance_between_sensors`` configured.  Requires a
+        mecanum or omni-wheel drivetrain capable of lateral strafing.
+
+    Args:
+        front_sensor: IR sensor on the front of the chassis.
+        back_sensor: IR sensor on the rear of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a line.
+
+    Returns:
+        Sequential: measure + corrective turn + strafe-until-white (leftward).
+
+    Example::
+
+        from libstp.step.motion.lineup.strafe import strafe_left_lineup_on_black
+
+        step = strafe_left_lineup_on_black(
+            front_sensor=robot.front_line_sensor,
+            back_sensor=robot.back_line_sensor,
+        )
+        step.run(robot)
+    """
     return seq([
         strafe_lineup(
             front_sensor=front_sensor,
@@ -203,6 +352,38 @@ def strafe_left_lineup_on_white(
         back_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Strafe left onto a white line, align perpendicular, then clear to black.
+
+    Identical to ``strafe_right_lineup_on_white`` but the robot strafes left
+    instead of right.  The corrective turn direction is automatically mirrored
+    to account for the reversed lateral geometry.  After alignment the robot
+    continues strafing left at reduced speed until both sensors see black.
+
+    Prerequisites:
+        Two IR line sensors mounted on the front and rear of the chassis, with
+        the robot's ``distance_between_sensors`` configured.  Requires a
+        mecanum or omni-wheel drivetrain capable of lateral strafing.
+
+    Args:
+        front_sensor: IR sensor on the front of the chassis.
+        back_sensor: IR sensor on the rear of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a white surface.
+
+    Returns:
+        Sequential: measure + corrective turn + strafe-until-black (leftward).
+
+    Example::
+
+        from libstp.step.motion.lineup.strafe import strafe_left_lineup_on_white
+
+        step = strafe_left_lineup_on_white(
+            front_sensor=robot.front_line_sensor,
+            back_sensor=robot.back_line_sensor,
+            detection_threshold=0.65,
+        )
+        step.run(robot)
+    """
     return seq([
         strafe_lineup(
             front_sensor=front_sensor,

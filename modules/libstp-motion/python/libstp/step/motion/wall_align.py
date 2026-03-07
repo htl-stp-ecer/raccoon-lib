@@ -71,9 +71,23 @@ def wall_align_forward(duration: float = 1.0, speed: float = 0.5) -> WallAlign:
     """
     Drive forward into a wall to align the front of the robot.
 
+    Applies constant forward velocity without heading correction, allowing
+    the robot to naturally rotate flush against the wall surface.
+    Useful for resetting heading error accumulated during a mission.
+
     Args:
-        duration: How long to push against the wall in seconds (default 1.0)
-        speed: Drive speed in m/s (default 0.5)
+        duration: Seconds to push against the wall (default 1.0).
+        speed: Drive speed in m/s (default 0.5).
+
+    Returns:
+        A WallAlign step driving forward.
+
+    Example::
+
+        from libstp.step.motion import wall_align_forward, drive_forward
+
+        # Drive to the wall, then align against it
+        seq([drive_forward(40), wall_align_forward(duration=1.5)])
     """
     return WallAlign(WallDirection.FORWARD, abs(speed), duration)
 
@@ -83,9 +97,23 @@ def wall_align_backward(duration: float = 1.0, speed: float = 0.5) -> WallAlign:
     """
     Drive backward into a wall to align the back of the robot.
 
+    Applies constant backward velocity without heading correction, allowing
+    the robot to naturally rotate flush against the wall surface.
+    Useful after turning around when the back of the robot faces a wall.
+
     Args:
-        duration: How long to push against the wall in seconds (default 1.0)
-        speed: Drive speed in m/s (default 0.5)
+        duration: Seconds to push against the wall (default 1.0).
+        speed: Drive speed in m/s (default 0.5).
+
+    Returns:
+        A WallAlign step driving backward.
+
+    Example::
+
+        from libstp.step.motion import wall_align_backward, drive_backward
+
+        # Drive to the wall in reverse, then align against it
+        seq([drive_backward(40), wall_align_backward(duration=1.5)])
     """
     return WallAlign(WallDirection.BACKWARD, abs(speed), duration)
 
@@ -95,9 +123,24 @@ def wall_align_strafe_left(duration: float = 1.0, speed: float = 0.3) -> WallAli
     """
     Strafe left into a wall to align the left side of the robot.
 
+    Applies constant leftward velocity without heading correction, allowing
+    the robot to naturally rotate flush against the wall surface.
+    Requires a mecanum or omni drivetrain capable of lateral movement.
+    Default speed is lower (0.3 m/s) because strafing has less traction.
+
     Args:
-        duration: How long to push against the wall in seconds (default 1.0)
-        speed: Strafe speed in m/s (default 0.3)
+        duration: Seconds to push against the wall (default 1.0).
+        speed: Strafe speed in m/s (default 0.3).
+
+    Returns:
+        A WallAlign step strafing left.
+
+    Example::
+
+        from libstp.step.motion import wall_align_strafe_left, drive_forward
+
+        # Drive forward, then strafe-align the left side against a wall
+        seq([drive_forward(20), wall_align_strafe_left(duration=1.5)])
     """
     return WallAlign(WallDirection.STRAFE_LEFT, abs(speed), duration)
 
@@ -107,8 +150,23 @@ def wall_align_strafe_right(duration: float = 1.0, speed: float = 0.3) -> WallAl
     """
     Strafe right into a wall to align the right side of the robot.
 
+    Applies constant rightward velocity without heading correction, allowing
+    the robot to naturally rotate flush against the wall surface.
+    Requires a mecanum or omni drivetrain capable of lateral movement.
+    Default speed is lower (0.3 m/s) because strafing has less traction.
+
     Args:
-        duration: How long to push against the wall in seconds (default 1.0)
-        speed: Strafe speed in m/s (default 0.3)
+        duration: Seconds to push against the wall (default 1.0).
+        speed: Strafe speed in m/s (default 0.3).
+
+    Returns:
+        A WallAlign step strafing right.
+
+    Example::
+
+        from libstp.step.motion import wall_align_strafe_right, drive_forward
+
+        # Drive forward, then strafe-align the right side against a wall
+        seq([drive_forward(20), wall_align_strafe_right(duration=1.5)])
     """
     return WallAlign(WallDirection.STRAFE_RIGHT, abs(speed), duration)

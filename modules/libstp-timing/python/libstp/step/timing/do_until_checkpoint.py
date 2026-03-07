@@ -25,5 +25,41 @@ class DoUntilCheckpoint(Step):
 
 @dsl(tags=["timing", "sync"])
 def do_until_checkpoint(checkpoint: float, step) -> DoUntilCheckpoint:
-    """Create a step that cancels ``step`` when ``checkpoint`` is reached."""
+    """
+    Run a step until a mission-relative time checkpoint, then cancel it.
+
+    Starts executing ``step`` immediately and cancels it when the robot's
+    global synchronizer clock reaches ``checkpoint`` seconds since mission
+    start. If the step finishes before the checkpoint, execution continues
+    without waiting. This is useful for time-boxing actions within a timed
+    Botball run (e.g. "search for objects, but stop at T=45s no matter what").
+
+    Prerequisites:
+        The robot must have a ``synchronizer`` configured. The synchronizer
+        clock starts when the mission begins.
+
+    Args:
+        checkpoint: The mission-relative deadline (in seconds) at which
+            ``step`` will be cancelled.
+        step: The step to run. Will be cancelled if still active when the
+            checkpoint time is reached.
+
+    Returns:
+        DoUntilCheckpoint: A step that manages the time-boxed execution.
+
+    Example::
+
+        from libstp.step.timing import do_until_checkpoint
+        from libstp.step.logic import loop_forever
+
+        # Search for objects until T=45s, then move on
+        search = loop_forever(seq([
+            scan_for_object(),
+            drive_forward(10),
+        ]))
+        seq([
+            do_until_checkpoint(45.0, search),
+            drive_to_start(),
+        ])
+    """
     return DoUntilCheckpoint(checkpoint=checkpoint, step=step)
