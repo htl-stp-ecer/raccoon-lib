@@ -90,6 +90,7 @@ jobs:
       # --- Release ---
       - name: Bundle release assets
         run: |
+          rm -rf release-bundle
           mkdir -p release-bundle
           cp "${{ steps.version.outputs.wheel }}" release-bundle/
           cp install.py release-bundle/
