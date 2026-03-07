@@ -84,12 +84,12 @@ void LcmDataWriter::resetMotorPosition(uint8_t port)
     transport_.publish(Channels::motorPositionResetCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setMotorStop(uint8_t port, int value)
+void LcmDataWriter::setMotorMode(uint8_t port, int mode)
 {
-    raccoon::scalar_i32_t stopCmd{};
-    stopCmd.timestamp = currentTimestampUsec();
-    stopCmd.value = value;
-    transport_.publish(Channels::motorStopCommand(port), stopCmd, reliableOpts);
+    raccoon::scalar_i32_t modeCmd{};
+    modeCmd.timestamp = currentTimestampUsec();
+    modeCmd.value = mode;
+    transport_.publish(Channels::motorModeCommand(port), modeCmd, reliableOpts);
 }
 
 void LcmDataWriter::setShutdown(bool enabled)

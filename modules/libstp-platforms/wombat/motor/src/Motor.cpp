@@ -98,15 +98,13 @@ bool libstp::hal::motor::Motor::isDone() const
 
 void libstp::hal::motor::Motor::brake()
 {
-    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 1);
-    platform::wombat::core::LcmDataWriter::instance().setMotor(port_, 0);
+    platform::wombat::core::LcmDataWriter::instance().setMotorMode(port_, 1); // PASSIVE_BRAKE
     LIBSTP_LOG_DEBUG("Wombat Motor port={} brake (passive brake engaged)", port_);
 }
 
 void libstp::hal::motor::Motor::off()
 {
-    platform::wombat::core::LcmDataWriter::instance().setMotorStop(port_, 0);
-    platform::wombat::core::LcmDataWriter::instance().setMotor(port_, 0);
+    platform::wombat::core::LcmDataWriter::instance().setMotorMode(port_, 0); // OFF
     LIBSTP_LOG_DEBUG("Wombat Motor port={} off (motor disabled, free-spinning)", port_);
 }
 
@@ -117,11 +115,10 @@ void libstp::hal::motor::Motor::disableAll()
     // before completing the individual motor stop commands.
     platform::wombat::core::LcmDataWriter::instance().setShutdown(true);
 
-    // Also send individual stop commands for redundancy
+    // Also send individual brake commands for redundancy
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
     {
-        platform::wombat::core::LcmDataWriter::instance().setMotorStop(p, 1);
-        platform::wombat::core::LcmDataWriter::instance().setMotor(p, 0);
+        platform::wombat::core::LcmDataWriter::instance().setMotorMode(p, 1); // PASSIVE_BRAKE
     }
     LIBSTP_LOG_DEBUG("Wombat Motor disableAll executed (STM32 shutdown + stop latch engaged)");
 }
@@ -131,10 +128,10 @@ void libstp::hal::motor::Motor::enableAll()
     // Clear the STM32 shutdown flag to allow motors and servos to operate
     platform::wombat::core::LcmDataWriter::instance().setShutdown(false);
 
-    // Clear individual motor stop latches
+    // Clear individual motor modes back to OFF
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
     {
-        platform::wombat::core::LcmDataWriter::instance().setMotorStop(p, 0);
+        platform::wombat::core::LcmDataWriter::instance().setMotorMode(p, 0); // OFF
     }
     LIBSTP_LOG_DEBUG("Wombat Motor enableAll executed (STM32 shutdown cleared)");
 }

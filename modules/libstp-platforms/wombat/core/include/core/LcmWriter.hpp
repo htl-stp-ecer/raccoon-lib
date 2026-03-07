@@ -27,8 +27,8 @@ namespace platform::wombat::core
             return writer;
         }
 
-        /// Publish motor stop latch command. Non-zero stops; 0 clears the latch.
-        void setMotorStop(uint8_t port, int value);
+        /// Publish motor mode command (0=OFF, 1=PASSIVE_BRAKE).
+        void setMotorMode(uint8_t port, int mode);
         /// Publish open-loop motor power for one port.
         void setMotor(uint8_t port, int valueData);
         /// Publish a firmware-side velocity target in BEMF units.
