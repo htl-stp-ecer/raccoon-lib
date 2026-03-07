@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from libstp.hal import IMotor
 from libstp.step import Step
 from libstp.step.annotation import dsl
+
+# BEMF sampling rate in Hz (5ms interval on firmware) — must match motor_adapter.cpp
+_BEMF_SAMPLE_RATE = 200.0
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -57,6 +61,28 @@ class SetMotorVelocity(Step):
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         self._motor.set_velocity(self._velocity)
+
+
+@dsl(hidden=True)
+class SetMotorDps(Step):
+    """Set a motor to closed-loop velocity specified in degrees per second."""
+
+    def __init__(self, motor: IMotor, dps: float) -> None:
+        super().__init__()
+        self._motor = motor
+        self._dps = float(dps)
+
+    def _generate_signature(self) -> str:
+        return f"SetMotorDps(port={self._motor.port},dps={self._dps})"
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        ticks_to_rad = self._motor.get_calibration().ticks_to_rad
+        self.info(f"Motor {self._motor.port} dps: {self._dps} -> {ticks_to_rad} rad/s")
+        rad_per_sec = self._dps * math.pi / 180.0
+        self.info(f"Motor {self._motor.port} rad/s: {rad_per_sec}")
+        bemf_target = int(round(rad_per_sec / (ticks_to_rad * _BEMF_SAMPLE_RATE)))
+        self.info(f"Motor {self._motor.port} bemf: {bemf_target}")
+        self._motor.set_velocity(bemf_target)
 
 
 @dsl(hidden=True)
@@ -153,7 +179,7 @@ class StopMotor(Step):
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         if self._mode == StopMode.OFF:
-            self._motor.set_speed(0)
+            self._motor.off()
         elif self._mode == StopMode.PASSIVE_BRAKE:
             self._motor.set_speed(0)
         elif self._mode == StopMode.ACTIVE_BRAKE:
@@ -200,6 +226,12 @@ def motor_move_relative(
 
 
 @dsl(tags=["motor", "actuator"])
+def motor_dps(motor: IMotor, dps: float) -> SetMotorDps:
+    """Set a motor to closed-loop velocity in degrees per second."""
+    return SetMotorDps(motor=motor, dps=dps)
+
+
+@dsl(tags=["motor", "actuator"])
 def motor_off(motor: IMotor) -> StopMotor:
     """Turn a motor off (coast / free-spin)."""
     return StopMotor(motor=motor, mode=StopMode.OFF)
@@ -221,11 +253,13 @@ __all__ = [
     "StopMode",
     "SetMotorPower",
     "SetMotorVelocity",
+    "SetMotorDps",
     "MoveMotorTo",
     "MoveMotorRelative",
     "StopMotor",
     "motor_power",
     "motor_velocity",
+    "motor_dps",
     "motor_move_to",
     "motor_move_relative",
     "motor_off",

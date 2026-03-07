@@ -114,3 +114,11 @@ jobs:
             libstp-${{ steps.version.outputs.version }}.tar.gz
             ${{ steps.version.outputs.wheel }}
             libstp-docs-${{ steps.version.outputs.version }}.zip
+
+      - name: Trigger documentation rebuild
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
+            -d '{"event_type":"library-release","client_payload":{"version":"${{ steps.version.outputs.version }}"}}'

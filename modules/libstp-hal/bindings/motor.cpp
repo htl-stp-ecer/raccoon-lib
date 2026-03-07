@@ -26,6 +26,8 @@ void init_motor(const py::module& m)
         .def("is_done", &libstp::hal::motor::IMotor::isDone,
              "Check if position move is complete")
         .def("brake", &libstp::hal::motor::IMotor::brake)
+        .def("off", &libstp::hal::motor::IMotor::off,
+             "Disable motor completely (no power, no brake — free-spinning)")
         .def_property_readonly("port", &libstp::hal::motor::IMotor::getPort)
         .def_property_readonly("inverted", &libstp::hal::motor::IMotor::isInverted)
         .def("get_calibration", &libstp::hal::motor::IMotor::getCalibration)
@@ -48,6 +50,8 @@ void init_motor(const py::module& m)
         .def("get_bemf", &libstp::hal::motor::Motor::getBemf)
         .def("is_done", &libstp::hal::motor::Motor::isDone)
         .def("brake", &libstp::hal::motor::Motor::brake)
+        .def("off", &libstp::hal::motor::Motor::off,
+             "Disable motor completely (no power, no brake — free-spinning)")
         .def_property_readonly("port", &libstp::hal::motor::Motor::getPort)
         .def_property_readonly("inverted", &libstp::hal::motor::Motor::isInverted)
         .def("get_calibration", &libstp::hal::motor::Motor::getCalibration)

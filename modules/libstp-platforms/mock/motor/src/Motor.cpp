@@ -98,6 +98,12 @@ void libstp::hal::motor::Motor::brake()
     LIBSTP_LOG_INFO("Mock Motor port={} brake", port_);
 }
 
+void libstp::hal::motor::Motor::off()
+{
+    platform::mock::core::setMotor(port_, platform::mock::core::MotorDir::Off, 0);
+    LIBSTP_LOG_INFO("Mock Motor port={} off", port_);
+}
+
 void libstp::hal::motor::Motor::disableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)

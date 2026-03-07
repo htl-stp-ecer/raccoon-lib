@@ -57,6 +57,8 @@ namespace libstp::hal::motor
 
         /// Actively stop this motor using the platform's safest available path.
         void brake() override;
+        /// Disable this motor completely (no power, no brake — free-spinning).
+        void off() override;
 
         [[nodiscard]] const foundation::MotorCalibration& getCalibration() const override;
         void setCalibration(const foundation::MotorCalibration& calibration) override;

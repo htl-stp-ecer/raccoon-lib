@@ -108,6 +108,10 @@ def _compute_lineup_turn(measure: TimingBasedLineUp, robot: "GenericRobot"):
     angle_rad = math.atan(distance_driven / sensor_gap_m)
     if first_sensor == "right":
         angle_rad = -angle_rad
+    # When driving backward the sensor-to-line geometry is mirrored,
+    # so the corrective turn must go in the opposite direction.
+    if measure.forward_speed < 0:
+        angle_rad = -angle_rad
     degrees = math.degrees(abs(angle_rad))
     return turn_left(degrees) if angle_rad >= 0 else turn_right(degrees)
 
@@ -117,9 +121,12 @@ def lineup(
         left_sensor: IRSensor,
         right_sensor: IRSensor,
         target: SurfaceColor = SurfaceColor.BLACK,
+        forward_speed: float = 1.0,
         detection_threshold: float = 0.7
 ) -> Sequential:
-    measure = TimingBasedLineUp(left_sensor, right_sensor, target, detection_threshold=detection_threshold)
+    measure = TimingBasedLineUp(left_sensor, right_sensor, target,
+                                forward_speed=forward_speed,
+                                detection_threshold=detection_threshold)
 
     return seq([
         measure,
@@ -200,6 +207,7 @@ def backward_lineup_on_black(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
             target=SurfaceColor.BLACK,
+            forward_speed=-1.0,
             detection_threshold=detection_threshold
         ),
         drive_until_white(
@@ -231,10 +239,11 @@ def backward_lineup_on_white(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
             target=SurfaceColor.WHITE,
+            forward_speed=-1.0,
             detection_threshold=detection_threshold
         ),
         drive_until_black(
             [left_sensor, right_sensor],
-            forward_speed=0.5
+            forward_speed=-0.5
         )
     ])
