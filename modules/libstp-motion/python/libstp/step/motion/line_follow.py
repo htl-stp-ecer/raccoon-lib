@@ -77,11 +77,17 @@ class SingleLineFollowUntilBlackConfig:
 
 @dsl(hidden=True)
 class LineFollow(MotionStep):
-    """
-    Follow a line using two IR sensors with PID steering.
+    """Follow a line using two IR sensors with PID steering.
 
-    Uses LinearMotion for profiled distance control and odometry,
-    with sensor-based PID steering overriding the heading controller.
+    Computes a steering error as the difference between the left and right
+    sensors' ``probabilityOfBlack()`` readings and feeds it through a PID
+    controller. The PID output is applied as an angular velocity (omega)
+    override on the underlying ``LinearMotion``, which handles profiled
+    distance control and odometry integration.
+
+    Supports two modes: fixed-distance (stop after traveling a set distance)
+    and until-both-black (stop when both sensors see black simultaneously,
+    indicating an intersection).
     """
 
     def __init__(self, config: LineFollowConfig):
@@ -170,11 +176,14 @@ class LineFollow(MotionStep):
 
 @dsl(hidden=True)
 class SingleSensorLineFollow(MotionStep):
-    """
-    Follow a line using a single IR sensor with PID edge-tracking.
+    """Follow a line edge using a single IR sensor with PID edge-tracking.
 
-    Uses LinearMotion for profiled distance control and odometry,
-    with sensor-based PID steering overriding the heading controller.
+    Targets ``probabilityOfBlack() = 0.5`` (the line edge) as the setpoint.
+    The ``side`` configuration flips the error sign to select left vs. right
+    edge tracking. The PID output overrides the angular velocity on the
+    underlying ``LinearMotion``, which handles profiled distance control
+    and odometry integration. Terminates when the configured distance has
+    been traveled.
     """
 
     def __init__(self, config: SingleLineFollowConfig):
@@ -244,12 +253,14 @@ class SingleSensorLineFollow(MotionStep):
 
 @dsl(hidden=True)
 class SingleSensorLineFollowUntilBlack(MotionStep):
-    """
-    Follow a line using a single IR sensor, stopping when a second sensor detects black.
+    """Follow a line edge using one sensor, stopping when a second sensor sees black.
 
-    Uses LinearMotion for velocity control and odometry, with sensor-based
-    PID steering overriding the heading controller. The stop sensor is
-    checked each cycle; when it exceeds the threshold the step finishes.
+    Combines single-sensor edge tracking (targeting ``probabilityOfBlack() =
+    0.5``) with an event-based stop condition. The tracking sensor feeds a
+    PID controller whose output overrides angular velocity on the underlying
+    ``LinearMotion``. Each cycle, the stop sensor is checked; when its
+    ``probabilityOfBlack()`` exceeds the configured threshold the step
+    finishes immediately.
     """
 
     def __init__(self, config: SingleLineFollowUntilBlackConfig):
@@ -351,18 +362,58 @@ def follow_line(
     ki: float = 0.0,
     kd: float = 0.5,
 ) -> LineFollow:
-    """
-    Follow a line for a specified distance using two sensors.
+    """Follow a line for a specified distance using two IR sensors for steering.
+
+    Drives forward while a PID controller steers the robot to keep it centered
+    on a line. The error signal is the difference between the left and right
+    sensors' ``probabilityOfBlack()`` readings. A positive error (left sees
+    more black) steers the robot back toward center. The underlying
+    ``LinearMotion`` handles profiled velocity control and odometry-based
+    distance tracking, while the PID output overrides the heading command
+    as an angular velocity (omega).
+
+    Both sensors must be calibrated (white/black thresholds set) before use.
 
     Args:
-        left_sensor: Left IR sensor instance
-        right_sensor: Right IR sensor instance
-        distance_cm: Distance to follow in centimeters
-        speed: Fraction of max speed, 0-1 (default 0.5)
-        kp, ki, kd: PID gains for steering
+        left_sensor: Left IR sensor instance, positioned to the left of the
+            line.
+        right_sensor: Right IR sensor instance, positioned to the right of
+            the line.
+        distance_cm: Distance to follow in centimeters. The step finishes
+            when this distance has been traveled according to odometry.
+        speed: Fraction of max velocity (0.0--1.0). Lower speeds give the
+            PID more time to correct but are slower overall. Default 0.5.
+        kp: Proportional gain for steering PID. Higher values produce
+            sharper corrections. Default 0.75.
+        ki: Integral gain for steering PID. Typically left at 0.0 unless
+            there is a persistent drift. Default 0.0.
+        kd: Derivative gain for steering PID. Damps oscillation around the
+            line. Default 0.5.
 
     Returns:
-        LineFollow step configured for distance-based following
+        A ``LineFollow`` step configured for distance-based line following.
+
+    Example::
+
+        from libstp.step.motion import follow_line
+
+        # Follow a line for 80 cm at half speed
+        step = follow_line(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            distance_cm=80.0,
+            speed=0.5,
+        )
+
+        # Tighter tracking with higher kp
+        step = follow_line(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            distance_cm=120.0,
+            speed=0.3,
+            kp=1.2,
+            kd=0.8,
+        )
     """
     config = LineFollowConfig(
         left_sensor=left_sensor,
@@ -384,18 +435,53 @@ def follow_line_until_both_black(
     kd: float = 0.5,
     both_black_threshold: float = 0.7,
 ) -> LineFollow:
-    """
-    Follow a line until both sensors detect black (intersection).
+    """Follow a line until both sensors detect black, indicating an intersection.
+
+    Drives forward with PID-based steering (same as ``follow_line``) but instead
+    of stopping after a fixed distance, the step monitors both sensors each
+    cycle. When *both* ``probabilityOfBlack()`` readings exceed
+    ``both_black_threshold`` simultaneously, the robot has reached a
+    perpendicular line or intersection and the step finishes.
+
+    Internally the distance target is set very large so ``LinearMotion`` never
+    finishes on its own -- the both-black condition is the sole termination
+    criterion.
+
+    Both sensors must be calibrated (white/black thresholds set) before use.
 
     Args:
-        left_sensor: Left IR sensor instance
-        right_sensor: Right IR sensor instance
-        speed: Fraction of max speed, 0-1 (default 0.5)
-        kp, ki, kd: PID gains for steering
-        both_black_threshold: Both sensors must exceed this to stop
+        left_sensor: Left IR sensor instance, positioned to the left of the
+            line.
+        right_sensor: Right IR sensor instance, positioned to the right of
+            the line.
+        speed: Fraction of max velocity (0.0--1.0). Default 0.5.
+        kp: Proportional gain for steering PID. Default 0.75.
+        ki: Integral gain for steering PID. Default 0.0.
+        kd: Derivative gain for steering PID. Default 0.5.
+        both_black_threshold: The ``probabilityOfBlack()`` value that both
+            sensors must exceed to trigger the stop. Default 0.7.
 
     Returns:
-        LineFollow step that stops at intersections
+        A ``LineFollow`` step that stops when an intersection is detected.
+
+    Example::
+
+        from libstp.step.motion import follow_line_until_both_black
+
+        # Follow a line until hitting a cross-line
+        step = follow_line_until_both_black(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            speed=0.4,
+        )
+
+        # More sensitive intersection detection
+        step = follow_line_until_both_black(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            speed=0.3,
+            both_black_threshold=0.6,
+        )
     """
     config = LineFollowConfig(
         left_sensor=left_sensor,
@@ -418,21 +504,56 @@ def follow_line_single(
     ki: float = 0.0,
     kd: float = 0.3,
 ) -> SingleSensorLineFollow:
-    """
-    Follow a line using a single sensor for a specified distance.
+    """Follow a line edge using a single IR sensor for a specified distance.
 
-    The sensor tracks the edge of the line (where probabilityOfBlack ~ 0.5).
-    ``side`` selects which edge to follow.
+    The sensor tracks the boundary between the line and the background, where
+    ``probabilityOfBlack()`` is approximately 0.5. The PID controller drives
+    the error ``(reading - 0.5)`` toward zero, keeping the sensor positioned
+    right on the edge. The ``side`` parameter controls which edge: ``LEFT``
+    means the sensor is to the left of the line (steers right when it sees
+    black), and ``RIGHT`` is the opposite.
+
+    This variant is useful when only one sensor is available, or when the line
+    is too narrow for two sensors. The underlying ``LinearMotion`` handles
+    profiled velocity and odometry-based distance tracking.
+
+    The sensor must be calibrated (white/black thresholds set) before use.
 
     Args:
-        sensor: The IR sensor instance
-        distance_cm: Distance to follow in centimeters
-        speed: Fraction of max speed, 0-1 (default 0.5)
-        side: Which edge to track (LEFT or RIGHT)
-        kp, ki, kd: PID gains for steering
+        sensor: The IR sensor instance used for edge tracking.
+        distance_cm: Distance to follow in centimeters. The step finishes
+            when this distance has been traveled.
+        speed: Fraction of max velocity (0.0--1.0). Default 0.5.
+        side: Which edge of the line to track. ``LineSide.LEFT`` (default)
+            or ``LineSide.RIGHT``.
+        kp: Proportional gain for steering PID. Default 1.0.
+        ki: Integral gain for steering PID. Default 0.0.
+        kd: Derivative gain for steering PID. Default 0.3.
 
     Returns:
-        SingleSensorLineFollow step
+        A ``SingleSensorLineFollow`` step.
+
+    Example::
+
+        from libstp.step.motion import follow_line_single, LineSide
+
+        # Follow the left edge of a line for 60 cm
+        step = follow_line_single(
+            sensor=robot.front_ir,
+            distance_cm=60.0,
+            speed=0.4,
+            side=LineSide.LEFT,
+        )
+
+        # Follow the right edge with custom PID gains
+        step = follow_line_single(
+            sensor=robot.front_ir,
+            distance_cm=100.0,
+            speed=0.5,
+            side=LineSide.RIGHT,
+            kp=1.5,
+            kd=0.5,
+        )
     """
     config = SingleLineFollowConfig(
         sensor=sensor,
@@ -455,23 +576,57 @@ def follow_line_single_until_black(
     ki: float = 0.0,
     kd: float = 0.3,
 ) -> SingleSensorLineFollowUntilBlack:
-    """
-    Follow a line using a single sensor, stopping when a second sensor detects black.
+    """Follow a line edge using one sensor, stopping when a second sensor sees black.
 
-    The ``sensor`` tracks the edge of the line (where probabilityOfBlack ~ 0.5).
-    ``side`` selects which edge to follow. The step finishes when
-    ``stop_sensor.probabilityOfBlack()`` exceeds ``stop_threshold``.
+    Combines single-sensor edge tracking with an event-based stop condition.
+    The ``sensor`` tracks the line edge (targeting ``probabilityOfBlack() ~
+    0.5``) using PID control, while the ``stop_sensor`` is polled each cycle.
+    When the stop sensor's ``probabilityOfBlack()`` exceeds
+    ``stop_threshold``, the step finishes immediately.
+
+    This is useful for following a line until the robot reaches a perpendicular
+    marker or a specific position detected by a second sensor (e.g., a side-
+    mounted sensor that crosses a branch line).
+
+    Both sensors must be calibrated (white/black thresholds set) before use.
 
     Args:
-        sensor: The IR sensor used for edge-tracking
-        stop_sensor: A second IR sensor; step stops when this reads black
-        speed: Fraction of max speed, 0-1 (default 0.5)
-        side: Which edge to track (LEFT or RIGHT)
-        stop_threshold: probabilityOfBlack threshold for stop sensor (default 0.7)
-        kp, ki, kd: PID gains for steering
+        sensor: The IR sensor used for edge-tracking along the line.
+        stop_sensor: A second IR sensor monitored for the stop condition.
+            The step finishes when this sensor's ``probabilityOfBlack()``
+            exceeds ``stop_threshold``.
+        speed: Fraction of max velocity (0.0--1.0). Default 0.5.
+        side: Which edge of the line to track. ``LineSide.LEFT`` (default)
+            or ``LineSide.RIGHT``.
+        stop_threshold: The ``probabilityOfBlack()`` value the stop sensor
+            must exceed to trigger the stop. Default 0.7.
+        kp: Proportional gain for steering PID. Default 1.0.
+        ki: Integral gain for steering PID. Default 0.0.
+        kd: Derivative gain for steering PID. Default 0.3.
 
     Returns:
-        SingleSensorLineFollowUntilBlack step
+        A ``SingleSensorLineFollowUntilBlack`` step.
+
+    Example::
+
+        from libstp.step.motion import follow_line_single_until_black, LineSide
+
+        # Follow left edge until the right sensor hits a cross-line
+        step = follow_line_single_until_black(
+            sensor=robot.left_ir,
+            stop_sensor=robot.right_ir,
+            speed=0.4,
+            side=LineSide.LEFT,
+        )
+
+        # Lower stop threshold for earlier detection
+        step = follow_line_single_until_black(
+            sensor=robot.front_ir,
+            stop_sensor=robot.side_ir,
+            speed=0.3,
+            stop_threshold=0.5,
+            kp=1.2,
+        )
     """
     config = SingleLineFollowUntilBlackConfig(
         sensor=sensor,

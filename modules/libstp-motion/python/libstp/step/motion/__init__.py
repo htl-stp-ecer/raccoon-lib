@@ -3,6 +3,7 @@
 from .motion_step import MotionStep
 from .drive import Drive, Strafe, drive_forward, drive_backward, strafe_left, strafe_right
 from .drive_angle import DriveAngle, drive_angle
+from .arc import Arc, drive_arc_left, drive_arc_right, drive_arc
 from .stop import Stop, stop
 from .turn import Turn, turn_left, turn_right
 from .move_until import (
@@ -94,6 +95,10 @@ __all__ = [
     "strafe_right",
     "DriveAngle",
     "drive_angle",
+    "Arc",
+    "drive_arc_left",
+    "drive_arc_right",
+    "drive_arc",
     "Turn",
     "turn_left",
     "turn_right",

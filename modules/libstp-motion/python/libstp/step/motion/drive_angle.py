@@ -47,18 +47,35 @@ def drive_angle(angle_deg: float, cm: float, speed: float = 1.0) -> DriveAngle:
     """
     Drive at an arbitrary angle for a specified distance.
 
-    Uses profiled PID with heading maintenance and cross-track correction
-    in a rotated coordinate frame. Mecanum-only.
+    Decomposes the desired heading into forward and lateral velocity
+    components, then runs a profiled PID controller in a rotated
+    coordinate frame with heading maintenance and cross-track correction.
 
-    Angle convention: 0 = forward, 90 = right, -90 = left, 180 = backward.
+    Requires a mecanum or omni-wheel drivetrain.
+
+    Angle convention (robot-centric):
+        - ``0`` = forward
+        - ``90`` = right
+        - ``-90`` = left
+        - ``180`` = backward
 
     Args:
-        angle_deg: Travel angle in degrees (0=forward, 90=right, -90=left)
-        cm: Distance to travel in centimeters
-        speed: Fraction of max speed, 0-1 (default 1.0)
+        angle_deg: Travel angle in degrees.
+        cm: Distance to travel in centimeters.
+        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
 
     Returns:
-        DriveAngle step
+        A DriveAngle step.
+
+    Example::
+
+        from libstp.step.motion import drive_angle
+
+        # Drive diagonally forward-right at 45 degrees
+        drive_angle(45, cm=30)
+
+        # Drive pure right (same as strafe_right)
+        drive_angle(90, cm=20)
     """
     config = DiagonalMotionConfig()
     config.angle_rad = math.radians(angle_deg)

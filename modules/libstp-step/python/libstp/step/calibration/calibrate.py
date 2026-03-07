@@ -16,20 +16,60 @@ def calibrate(
     exclude_ir_sensors=None,
 ) -> CalibrateDistance:
     """
-    Create a unified calibration step.
+    Run a unified distance and IR sensor calibration.
 
-    Runs distance calibration and then IR sensor calibration.
-    Persists calibration to YAML using EMA for convergence over time.
+    This is the recommended all-in-one calibration entry point. It drives
+    the robot a known distance, prompts the user to measure the actual
+    distance traveled, then adjusts the per-wheel ``ticks_to_rad`` values
+    to correct odometry. After distance calibration, it automatically
+    calibrates IR sensors by sampling them during a drive over the
+    calibration surface(s).
+
+    Calibration values are persisted to ``raccoon.project.yml`` using an
+    exponential moving average (EMA), so the baseline converges toward the
+    true value over multiple calibration runs. The EMA formula is:
+    ``new_baseline = old_baseline * alpha + measured * (1 - alpha)``.
+
+    Prerequisites:
+        The robot must have drive motors with encoder feedback and
+        a configured kinematics model. For IR calibration, IR sensors
+        must be registered in ``robot.defs.analog_sensors``.
 
     Args:
-        distance_cm: Distance to drive for calibration (default 30cm)
-        persist_to_yaml: If True, update raccoon.project.yml with EMA baseline
-        ema_alpha: EMA coefficient (0.0-1.0, higher = slower convergence)
-        calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
-        exclude_ir_sensors: IR sensor instances to exclude from calibration
+        distance_cm: Distance (in cm) the robot drives during calibration.
+            Default is 30 cm. Longer distances yield more accurate results.
+        persist_to_yaml: If ``True``, write the EMA-filtered baseline
+            back to ``raccoon.project.yml`` so it persists across runs.
+        ema_alpha: EMA smoothing coefficient between 0.0 and 1.0. Higher
+            values produce slower convergence but a more stable baseline.
+            With the default of 0.7, approximately 83% of systematic error
+            is absorbed after 5 calibration runs.
+        calibration_sets: List of named IR calibration surface sets to
+            run (e.g. ``["default", "transparent"]``). Each set beyond
+            the first triggers an additional drive-and-sample cycle.
+            Defaults to ``["default"]``.
+        exclude_ir_sensors: List of ``IRSensor`` instances to skip during
+            IR calibration (e.g. sensors not mounted near the ground).
 
     Returns:
-        CalibrateDistance step instance
+        CalibrateDistance: A step that performs the full calibration flow.
+
+    Example::
+
+        from libstp.step.calibration import calibrate
+
+        # Basic calibration with defaults (30cm drive, persist to YAML)
+        seq([
+            calibrate(),
+            drive_forward(100),
+        ])
+
+        # Custom calibration: longer drive, two IR surface sets
+        calibrate(
+            distance_cm=50.0,
+            calibration_sets=["default", "transparent"],
+            ema_alpha=0.8,
+        )
     """
     return CalibrateDistance(
         distance_cm,

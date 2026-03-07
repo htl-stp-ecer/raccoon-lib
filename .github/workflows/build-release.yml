@@ -72,6 +72,9 @@ jobs:
               # Build Sphinx (Python docs)
               make html
               echo "Sphinx: $(find _build/html -name "*.html" | wc -l) HTML files"
+
+              # Generate DSL step catalog
+              python3 /workspace/docs/generate_dsl_catalog.py
               cd ..
 
               # Package into zip
@@ -79,6 +82,7 @@ jobs:
               cp -R docs/_build/html/. docs-site/
               mkdir -p docs-site/doxygen
               cp -R docs/_build/doxygen/html/. docs-site/doxygen/
+              cp docs/_build/dsl-steps.json docs-site/
               cd docs-site
               zip -r ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip .
             '

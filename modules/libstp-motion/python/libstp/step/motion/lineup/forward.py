@@ -22,6 +22,29 @@ if TYPE_CHECKING:
 
 @dsl(hidden=True)
 class TimingBasedLineUp(MotionStep):
+    """Drive forward or backward until both left and right IR sensors detect a line.
+
+    The robot drives at ``forward_speed`` while polling both sensors each update
+    cycle.  When the first sensor crosses the target-colored line its odometry
+    position is recorded.  Driving continues until the second sensor also
+    crosses.  The distance traveled between the two hits is stored in
+    ``results`` as ``(first_sensor_name, distance_m)`` so a downstream step can
+    compute the corrective turn angle.
+
+    This is an internal building-block step -- use the public
+    ``forward_lineup_on_black`` / ``backward_lineup_on_white`` (etc.) factory
+    functions instead.
+
+    Args:
+        left_sensor: IR sensor mounted on the left side of the chassis.
+        right_sensor: IR sensor mounted on the right side of the chassis.
+        target: The surface color to detect (BLACK or WHITE).
+        forward_speed: Driving speed in m/s.  Positive = forward, negative =
+            backward.
+        detection_threshold: Confidence value (0--1) a sensor must reach to
+            count as having detected the target color.
+    """
+
     def __init__(self, left_sensor: IRSensor, right_sensor: IRSensor,
                  target: SurfaceColor = SurfaceColor.BLACK,
                  forward_speed: float = 1.0,
@@ -124,6 +147,28 @@ def lineup(
         forward_speed: float = 1.0,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Measure angular skew from a line using two IR sensors, then correct with a turn.
+
+    Composes a ``TimingBasedLineUp`` measurement phase with a deferred
+    corrective turn.  During the measurement the robot drives until both
+    sensors cross the target line.  The distance between the two hit positions
+    and the known physical gap between the sensors are used to compute a
+    corrective turn angle via ``atan(distance_driven / sensor_gap)``.  The turn
+    is then executed to align the robot perpendicular to the line.
+
+    This is an internal helper -- prefer the public ``forward_lineup_on_black``
+    family of functions.
+
+    Args:
+        left_sensor: IR sensor on the left side of the chassis.
+        right_sensor: IR sensor on the right side of the chassis.
+        target: Surface color to detect (BLACK or WHITE).
+        forward_speed: Driving speed in m/s (negative for backward).
+        detection_threshold: Confidence (0--1) required to register a hit.
+
+    Returns:
+        Sequential: A two-step sequence (measure + corrective turn).
+    """
     measure = TimingBasedLineUp(left_sensor, right_sensor, target,
                                 forward_speed=forward_speed,
                                 detection_threshold=detection_threshold)
@@ -140,6 +185,39 @@ def forward_lineup_on_black(
         right_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
+    """Drive forward onto a black line, align perpendicular, then clear to white.
+
+    The robot drives forward until both IR sensors detect a black line.  The
+    stagger distance between the two sensor hits is used to compute a
+    corrective turn that aligns the chassis perpendicular to the line.  After
+    the turn the robot creeps forward at half speed until both sensors see
+    white, leaving it just past the line and squared up.
+
+    Prerequisites:
+        Two IR line sensors mounted on the left and right sides of the chassis,
+        with the robot's ``distance_between_sensors`` configured.
+
+    Args:
+        left_sensor: IR sensor on the left side of the chassis.
+        right_sensor: IR sensor on the right side of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a line.  Lower values trigger earlier but are
+            more susceptible to noise.
+
+    Returns:
+        Sequential: measure + corrective turn + drive-until-white.
+
+    Example::
+
+        from libstp.step.motion.lineup.forward import forward_lineup_on_black
+
+        step = forward_lineup_on_black(
+            left_sensor=robot.left_line_sensor,
+            right_sensor=robot.right_line_sensor,
+            detection_threshold=0.8,
+        )
+        step.run(robot)
+    """
     return seq([
         lineup(
             left_sensor=left_sensor,
@@ -160,16 +238,37 @@ def forward_lineup_on_white(
         right_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
-    """
-    Drive forward past black, then line up on white.
+    """Drive forward onto a white line, align perpendicular, then clear to black.
+
+    The robot drives forward until both IR sensors detect a white surface.  The
+    stagger distance between the two sensor hits is used to compute a
+    corrective turn that aligns the chassis perpendicular to the line edge.
+    After the turn the robot creeps forward at half speed until both sensors see
+    black, leaving it just past the white region and squared up.
+
+    Prerequisites:
+        Two IR line sensors mounted on the left and right sides of the chassis,
+        with the robot's ``distance_between_sensors`` configured.
 
     Args:
-        left_sensor: Left IR sensor instance
-        right_sensor: Right IR sensor instance
-        detection_threshold: Stop when confidence exceeds this
+        left_sensor: IR sensor on the left side of the chassis.
+        right_sensor: IR sensor on the right side of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a white surface.  Lower values trigger earlier
+            but are more susceptible to noise.
 
     Returns:
-        Sequential step: drive_until_black -> lineup_on_white
+        Sequential: measure + corrective turn + drive-until-black.
+
+    Example::
+
+        from libstp.step.motion.lineup.forward import forward_lineup_on_white
+
+        step = forward_lineup_on_white(
+            left_sensor=robot.left_line_sensor,
+            right_sensor=robot.right_line_sensor,
+        )
+        step.run(robot)
     """
     return seq([
         lineup(
@@ -191,16 +290,38 @@ def backward_lineup_on_black(
         right_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
-    """
-    Drive backward past white, then line up on black.
+    """Drive backward onto a black line, align perpendicular, then clear to white.
+
+    Identical to ``forward_lineup_on_black`` but the robot reverses into the
+    line instead of driving forward.  The corrective turn direction is
+    automatically mirrored to account for the reversed geometry.  After
+    alignment the robot continues backward at half speed until both sensors see
+    white.
+
+    Prerequisites:
+        Two IR line sensors mounted on the left and right sides of the chassis,
+        with the robot's ``distance_between_sensors`` configured.
 
     Args:
-        left_sensor: Left IR sensor instance
-        right_sensor: Right IR sensor instance
-        detection_threshold: Stop when confidence exceeds this
+        left_sensor: IR sensor on the left side of the chassis.
+        right_sensor: IR sensor on the right side of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a line.
 
     Returns:
-        Sequential step: drive_until_white (backward) -> lineup_on_black (backward)
+        Sequential: measure (backward) + corrective turn + drive-until-white
+        (backward).
+
+    Example::
+
+        from libstp.step.motion.lineup.forward import backward_lineup_on_black
+
+        step = backward_lineup_on_black(
+            left_sensor=robot.left_line_sensor,
+            right_sensor=robot.right_line_sensor,
+            detection_threshold=0.7,
+        )
+        step.run(robot)
     """
     return seq([
         lineup(
@@ -223,16 +344,37 @@ def backward_lineup_on_white(
         right_sensor: IRSensor,
         detection_threshold: float = 0.7
 ) -> Sequential:
-    """
-    Drive backward past black, then line up on white.
+    """Drive backward onto a white line, align perpendicular, then clear to black.
+
+    Identical to ``forward_lineup_on_white`` but the robot reverses into the
+    line instead of driving forward.  The corrective turn direction is
+    automatically mirrored to account for the reversed geometry.  After
+    alignment the robot continues backward at half speed until both sensors see
+    black.
+
+    Prerequisites:
+        Two IR line sensors mounted on the left and right sides of the chassis,
+        with the robot's ``distance_between_sensors`` configured.
 
     Args:
-        left_sensor: Left IR sensor instance
-        right_sensor: Right IR sensor instance
-        detection_threshold: Stop when confidence exceeds this
+        left_sensor: IR sensor on the left side of the chassis.
+        right_sensor: IR sensor on the right side of the chassis.
+        detection_threshold: Confidence value (0--1) each sensor must reach to
+            count as detecting a white surface.
 
     Returns:
-        Sequential step: drive_until_black (backward) -> lineup_on_white (backward)
+        Sequential: measure (backward) + corrective turn + drive-until-black
+        (backward).
+
+    Example::
+
+        from libstp.step.motion.lineup.forward import backward_lineup_on_white
+
+        step = backward_lineup_on_white(
+            left_sensor=robot.left_line_sensor,
+            right_sensor=robot.right_line_sensor,
+        )
+        step.run(robot)
     """
     return seq([
         lineup(

@@ -107,17 +107,63 @@ def move_until(
         confidence_threshold: float = 0.7,
         scale_speed_on_approach: bool = True,
 ) -> MoveUntil:
-    """
-    Move with any combination of velocities until any sensor detects target color.
+    """Move with any combination of velocities until any sensor detects the target color.
+
+    This is the most general "move until" factory. It accepts arbitrary
+    forward, strafe, and angular velocity components simultaneously, allowing
+    complex motions such as arcing turns or diagonal drives while waiting for
+    a sensor trigger. Each control cycle the given IR sensor(s) are polled,
+    and the step completes as soon as any sensor's probability for the target
+    color meets or exceeds ``confidence_threshold``.
+
+    For simpler cases, prefer the dedicated helpers (``drive_forward_until_black``,
+    ``turn_left_until_white``, ``strafe_right_until_black``, etc.).
 
     Args:
-        sensor: Single IR sensor or list of sensors (triggers when ANY detects)
-        target: Target color (SurfaceColor.BLACK or SurfaceColor.WHITE)
-        forward_speed: Forward speed in m/s (positive = forward)
-        angular_speed: Angular speed in rad/s (positive = CCW)
-        strafe_speed: Strafe speed in m/s (positive = left)
-        confidence_threshold: Probability threshold for detection (0-1)
-        scale_speed_on_approach: Slow down as sensor approaches target
+        sensor: A single :class:`~libstp.sensor_ir.IRSensor` or a list of
+            sensors. The step triggers when **any** sensor in the list detects
+            the target color.
+        target: The surface color to detect --
+            :attr:`SurfaceColor.BLACK` or :attr:`SurfaceColor.WHITE`.
+        forward_speed: Forward/backward speed in m/s. Positive = forward,
+            negative = backward. Defaults to 0.0.
+        angular_speed: Rotational speed in rad/s. Positive = counter-clockwise,
+            negative = clockwise. Defaults to 0.0.
+        strafe_speed: Lateral speed in m/s. Positive = left, negative = right.
+            Requires a mecanum or holonomic drivetrain. Defaults to 0.0.
+        confidence_threshold: Minimum probability (0.0 -- 1.0) that the sensor
+            must report for the target color before the step considers the
+            condition met. Defaults to 0.7.
+        scale_speed_on_approach: If ``True``, reduce velocity as the sensor
+            reading approaches the threshold to allow more precise stopping.
+            Defaults to ``True``.
+
+    Returns:
+        MoveUntil: A configured motion step that can be executed by the step
+        runner.
+
+    Example::
+
+        from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until.core import SurfaceColor
+
+        front_ir = IRSensor(0)
+
+        # Arc forward-left while looking for black
+        step = move_until(
+            front_ir,
+            target=SurfaceColor.BLACK,
+            forward_speed=0.3,
+            angular_speed=0.2,
+        )
+
+        # Strafe right with high confidence threshold
+        step = move_until(
+            front_ir,
+            target=SurfaceColor.WHITE,
+            strafe_speed=-0.2,
+            confidence_threshold=0.9,
+        )
     """
     return MoveUntil(MoveUntilConfig(
         sensor=sensor,

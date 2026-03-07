@@ -49,33 +49,74 @@ class Run(Step):
 
 @dsl(tags=["control", "defer"])
 def defer(factory: Callable[["GenericRobot"], Step]) -> Defer:
-    """Create a step whose child step is built at execution time.
+    """
+    Defer step construction until execution time.
+
+    Wraps a factory callable that receives the robot instance and returns
+    a step. The factory is called when the ``Defer`` step executes, not
+    when the step tree is built. This allows steps to depend on runtime
+    values such as sensor readings, odometry data, or results computed by
+    earlier steps in a sequence.
 
     Args:
-        factory: Called with the robot instance; must return a Step.
+        factory: A callable that takes a ``GenericRobot`` and returns a
+            ``Step`` to execute. Called exactly once when the deferred
+            step runs.
+
+    Returns:
+        Defer: A step that lazily constructs and runs its child.
 
     Example::
 
+        from libstp.step.logic import defer
+
+        # Turn by an angle computed from a sensor reading at runtime
         seq([
-            measure_step,
-            defer(lambda robot: turn_left(compute_angle(measure_step, robot))),
+            scan_step,
+            defer(lambda robot: turn_left(
+                compute_angle_from_scan(robot)
+            )),
         ])
+
+        # Drive a distance based on current odometry position
+        defer(lambda robot: drive_forward(
+            target_x - robot.odometry().getPosition().x
+        ))
     """
     return Defer(factory)
 
 
 @dsl(tags=["control", "run"])
 def run(action: Callable[["GenericRobot"], Union[None, Awaitable[None]]]) -> Run:
-    """Create a step that executes an arbitrary callable.
+    """
+    Execute an arbitrary callable as a step.
+
+    Wraps a sync or async callable so it can be used inline in a step
+    sequence. This is useful for one-off side effects, logging,
+    variable assignments, or any imperative code that does not warrant
+    its own step class. The callable receives the robot instance and
+    its return value is ignored (unless it returns an awaitable, which
+    is then awaited).
 
     Args:
-        action: Called with the robot instance.  May be sync or async.
+        action: A callable that takes a ``GenericRobot``. May be
+            synchronous (returning ``None``) or asynchronous (returning
+            an ``Awaitable[None]``).
+
+    Returns:
+        Run: A step that calls ``action`` when executed.
 
     Example::
 
+        from libstp.step.logic import run
+
+        # Emergency stop before turning
         seq([
             run(lambda robot: robot.drive.hard_stop()),
             turn_left(90),
         ])
+
+        # Log odometry mid-sequence
+        run(lambda robot: print(f"Heading: {robot.odometry().getHeading()}"))
     """
     return Run(action)

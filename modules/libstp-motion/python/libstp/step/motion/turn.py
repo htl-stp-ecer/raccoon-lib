@@ -45,14 +45,28 @@ class Turn(MotionStep):
 @dsl(tags=["motion", "turn"])
 def turn_left(degrees: float, speed: float = 1.0) -> Turn:
     """
-    Turn counter-clockwise by specified degrees at a given speed.
+    Turn counter-clockwise (left) by a specified angle.
+
+    Uses a PID controller on the IMU heading to rotate the robot in place.
+    The controller saturates output at the configured max angular rate,
+    producing an implicit trapezoidal velocity profile.
 
     Args:
-        degrees: The angle to turn in degrees (positive values turn CCW)
-        speed: Fraction of max angular speed, 0-1 (default 1.0)
+        degrees: Angle to turn in degrees (positive = counter-clockwise).
+        speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
 
     Returns:
-        Turn step configured for counter-clockwise rotation
+        A Turn step configured for counter-clockwise rotation.
+
+    Example::
+
+        from libstp.step.motion import turn_left
+
+        # Turn 90 degrees to the left
+        turn_left(90)
+
+        # Gentle 45-degree turn at half speed
+        turn_left(45, speed=0.5)
     """
     config = TurnConfig()
     config.target_angle_rad = math.radians(degrees)  # Positive for CCW
@@ -63,14 +77,25 @@ def turn_left(degrees: float, speed: float = 1.0) -> Turn:
 @dsl(tags=["motion", "turn"])
 def turn_right(degrees: float, speed: float = 1.0) -> Turn:
     """
-    Turn clockwise by specified degrees at a given speed.
+    Turn clockwise (right) by a specified angle.
+
+    Uses a PID controller on the IMU heading to rotate the robot in place.
+    The controller saturates output at the configured max angular rate,
+    producing an implicit trapezoidal velocity profile.
 
     Args:
-        degrees: The angle to turn in degrees (positive values turn CW)
-        speed: Fraction of max angular speed, 0-1 (default 1.0)
+        degrees: Angle to turn in degrees (positive = clockwise).
+        speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
 
     Returns:
-        Turn step configured for clockwise rotation
+        A Turn step configured for clockwise rotation.
+
+    Example::
+
+        from libstp.step.motion import turn_right
+
+        # Turn 90 degrees to the right
+        turn_right(90)
     """
     config = TurnConfig()
     config.target_angle_rad = -math.radians(degrees)  # Negative for CW
