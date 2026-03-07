@@ -288,11 +288,49 @@ def slow_servo(servo: Servo, angle: float, speed: float = 60.0) -> EaseServo:
     return EaseServo(servo=servo, target_angle=angle, speed=speed)
 
 
+@dsl(hidden=True)
+class FullyDisableServos(Step):
+    """Fully disable all servo outputs, removing all power."""
+
+    def _generate_signature(self) -> str:
+        return "FullyDisableServos()"
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        Servo.fully_disable_all()
+
+
+@dsl(tags=["servo", "actuator"])
+def fully_disable_servos() -> FullyDisableServos:
+    """Fully disable all servo outputs, removing all power from the servo pins.
+
+    Commands the firmware to enter the fully-disabled servo mode for every
+    servo port. In this mode, no PWM signal is sent and the servos can be
+    moved freely by hand. This is useful for saving power or when the
+    servos should not hold position (e.g. at the end of a run).
+
+    Servos will automatically re-enable when a new position command is
+    sent (e.g. via ``servo()`` or ``slow_servo()``).
+
+    Returns:
+        A ``FullyDisableServos`` step.
+
+    Example::
+
+        from libstp.step.servo import fully_disable_servos
+
+        # Release all servos at the end of a mission
+        fully_disable_servos()
+    """
+    return FullyDisableServos()
+
+
 __all__ = [
     "SetServoPosition",
     "EaseServo",
     "ShakeServo",
+    "FullyDisableServos",
     "servo",
     "slow_servo",
     "shake_servo",
+    "fully_disable_servos",
 ]

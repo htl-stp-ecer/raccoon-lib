@@ -51,18 +51,19 @@ int libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
 
 void libstp::hal::servo::Servo::enable() const
 {
+    platform::wombat::core::LcmDataWriter::instance().setServoMode(port, 2); // Enabled
     platform::wombat::core::LcmDataWriter::instance().setServo(port, storedPosition);
 }
 
 void libstp::hal::servo::Servo::disable() const
 {
-    platform::wombat::core::LcmDataWriter::instance().setServo(port, storedPosition);
+    platform::wombat::core::LcmDataWriter::instance().setServoMode(port, 1); // Disabled
 }
 
 void libstp::hal::servo::Servo::fullyDisableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
-        platform::wombat::core::LcmDataWriter::instance().setServo(p, 0);
+        platform::wombat::core::LcmDataWriter::instance().setServoMode(p, 0); // FullyDisabled
 }
 
 /*
