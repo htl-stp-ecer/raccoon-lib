@@ -29,8 +29,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # --- Build library ---
-      - name: Clean old wheel
-        run: rm -f build-docker/*.whl
+      - name: Clean old wheels
+        run: find build-docker -name '*.whl' -delete 2>/dev/null || true
 
       - name: Build ARM64 wheel
         run: |
@@ -42,7 +42,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          WHL=$(find build-docker -name '*.whl' -type f | head -1)
+          WHL=$(find build-docker -name '*.whl' -type f -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
           VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
