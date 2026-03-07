@@ -188,7 +188,7 @@ class StopMotor(Step):
         if self._mode == StopMode.OFF:
             self._motor.off()
         elif self._mode == StopMode.PASSIVE_BRAKE:
-            self._motor.brake()
+            self._motor.set_speed(0)
         elif self._mode == StopMode.ACTIVE_BRAKE:
             self._motor.brake()
 

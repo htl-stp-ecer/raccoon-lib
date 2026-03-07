@@ -6,6 +6,7 @@ from .drive_angle import DriveAngle, drive_angle
 from .arc import Arc, drive_arc_left, drive_arc_right, drive_arc
 from .stop import Stop, stop
 from .turn import Turn, turn_left, turn_right
+from .heading_reference import MarkHeadingReference, mark_heading_reference, turn_to_heading
 from .move_until import (
     SurfaceColor,
     MoveUntil,
@@ -51,6 +52,7 @@ from .lineup import (
 from .wall_align import (
     WallAlign,
     WallDirection,
+    BumpResult,
     wall_align_forward,
     wall_align_backward,
     wall_align_strafe_left,
@@ -102,6 +104,9 @@ __all__ = [
     "Turn",
     "turn_left",
     "turn_right",
+    "MarkHeadingReference",
+    "mark_heading_reference",
+    "turn_to_heading",
     # Move until sensor
     "SurfaceColor",
     "MoveUntil",
@@ -144,6 +149,7 @@ __all__ = [
     # Wall align
     "WallAlign",
     "WallDirection",
+    "BumpResult",
     "wall_align_forward",
     "wall_align_backward",
     "wall_align_strafe_left",

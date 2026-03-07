@@ -1,14 +1,19 @@
 """
-Wall alignment step.
+Wall alignment step with IMU-based bump detection.
 
-Drives against a wall at constant velocity without heading correction,
-allowing the robot to physically align itself against the wall surface.
+Drives toward a wall at constant velocity without heading correction.
+Uses the IMU's gravity-compensated linear acceleration to detect the
+moment of impact, then optionally continues pushing for a short settle
+period so the robot can rotate flush against the wall surface.
 """
 import asyncio
+import math
+from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from libstp.foundation import ChassisVelocity
+from libstp.hal import IMU
 
 from .. import dsl
 from .motion_step import MotionStep
@@ -25,26 +30,82 @@ class WallDirection(Enum):
     STRAFE_RIGHT = "strafe_right"
 
 
+# Expected deceleration angle (radians) for each drive direction.
+# When driving forward, the wall pushes back at ~180 deg, etc.
+_EXPECTED_DECEL_ANGLE = {
+    WallDirection.FORWARD: math.pi,        # decel in -X
+    WallDirection.BACKWARD: 0.0,           # decel in +X
+    WallDirection.STRAFE_LEFT: math.pi / 2,   # decel in +Y
+    WallDirection.STRAFE_RIGHT: -math.pi / 2, # decel in -Y
+}
+
+
+def _normalize_angle(a: float) -> float:
+    """Wrap angle to (-180, 180] degrees."""
+    while a > 180.0:
+        a -= 360.0
+    while a <= -180.0:
+        a += 360.0
+    return a
+
+
+@dataclass
+class BumpResult:
+    """Information about a detected wall impact."""
+    accel_magnitude: float
+    """XY acceleration magnitude at impact in m/s²."""
+    impact_angle_deg: float
+    """Wall misalignment angle in degrees.  0 = hit the wall square-on.
+    Positive = wall surface angled CCW from perpendicular.
+    Computed from the peak accel vector; may be noisy on single samples."""
+    heading_correction_deg: float
+    """How many degrees the robot actually rotated during the settle push
+    to become flush with the wall.  This is the reliable metric — it
+    comes from the IMU heading, not a single accel sample."""
+
+
 @dsl(hidden=True)
 class WallAlign(MotionStep):
     """
-    Drive into a wall at constant velocity without heading correction.
+    Drive into a wall using IMU bump detection, then settle flush.
 
-    By not applying any PID heading correction, the robot naturally
-    rotates to align flush against the wall surface.
+    The robot drives at constant velocity without heading correction.
+    When the horizontal linear acceleration exceeds a threshold (indicating
+    a collision), it records the impact and continues pushing for a settle
+    period to let the chassis rotate flush against the wall.
     """
 
-    def __init__(self, direction: WallDirection, speed: float, duration: float):
+    def __init__(
+        self,
+        direction: WallDirection,
+        speed: float,
+        accel_threshold: float,
+        settle_duration: float,
+        max_duration: float,
+        grace_period: float,
+    ):
         super().__init__()
         self.direction = direction
         self.speed = speed
-        self.duration = duration
-        self._deadline: float = 0.0
+        self.accel_threshold = accel_threshold
+        self.settle_duration = settle_duration
+        self.max_duration = max_duration
+        self.grace_period = grace_period
+
+        self._imu: Optional[IMU] = None
+        self._elapsed: float = 0.0
+        self._bump_time: Optional[float] = None
+        self._heading_at_bump: float = 0.0
+        self._peak_accel: float = 0.0
+        self._peak_ax: float = 0.0
+        self._peak_ay: float = 0.0
+        self.bump_result: Optional[BumpResult] = None
 
     def _generate_signature(self) -> str:
         return (
             f"WallAlign(direction={self.direction.value}, "
-            f"speed={self.speed:.2f}, duration={self.duration:.2f})"
+            f"speed={self.speed:.2f}, threshold={self.accel_threshold:.1f}, "
+            f"settle={self.settle_duration:.2f})"
         )
 
     def _get_velocity(self) -> ChassisVelocity:
@@ -58,115 +119,239 @@ class WallAlign(MotionStep):
             return ChassisVelocity(0.0, self.speed, 0.0)
 
     def on_start(self, robot: "GenericRobot") -> None:
+        self._imu = IMU()
         robot.drive.set_velocity(self._get_velocity())
-        self._deadline = asyncio.get_event_loop().time() + self.duration
+        self._elapsed = 0.0
+        self._bump_time = None
+        self._peak_accel = 0.0
+        self.bump_result = None
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
         robot.drive.update(dt)
-        return asyncio.get_event_loop().time() >= self._deadline
+        self._elapsed += dt
 
+        # Safety timeout
+        if self._elapsed >= self.max_duration:
+            self.warn("Wall align timed out without detecting a bump")
+            return True
+
+        ax, ay, _az = self._imu.get_linear_acceleration()
+        accel_mag = math.hypot(ax, ay)
+
+        if self._bump_time is None:
+            # Skip the grace period while the robot accelerates from rest
+            if self._elapsed < self.grace_period:
+                return False
+
+            if accel_mag >= self.accel_threshold:
+                self._bump_time = asyncio.get_event_loop().time()
+                self._heading_at_bump = robot.odometry.get_heading()
+                self._peak_accel = accel_mag
+                self._peak_ax = ax
+                self._peak_ay = ay
+                self.info(f"Bump detected: {accel_mag:.2f} m/s²")
+        else:
+            # Track the peak accel sample during the settle window
+            # — the true impact peak often arrives 1-2 samples after
+            # the threshold crossing
+            if accel_mag > self._peak_accel:
+                self._peak_accel = accel_mag
+                self._peak_ax = ax
+                self._peak_ay = ay
+
+            # Post-bump: keep pushing to align flush against the wall
+            if asyncio.get_event_loop().time() - self._bump_time >= self.settle_duration:
+                heading_now = robot.odometry.get_heading()
+                heading_correction = math.degrees(heading_now - self._heading_at_bump)
+
+                # Wall misalignment = raw accel angle minus expected decel direction
+                raw_angle = math.degrees(math.atan2(self._peak_ay, self._peak_ax))
+                expected = math.degrees(_EXPECTED_DECEL_ANGLE[self.direction])
+                impact_angle = _normalize_angle(raw_angle - expected)
+
+                self.bump_result = BumpResult(
+                    accel_magnitude=self._peak_accel,
+                    impact_angle_deg=impact_angle,
+                    heading_correction_deg=heading_correction,
+                )
+                self.info(
+                    f"Wall align done: peak={self._peak_accel:.2f} m/s², "
+                    f"wall_angle={impact_angle:.1f} deg, "
+                    f"heading_correction={heading_correction:.1f} deg"
+                )
+                return True
+
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Public factory functions
+# ---------------------------------------------------------------------------
 
 @dsl(tags=["motion", "wall"])
-def wall_align_forward(duration: float = 1.0, speed: float = 0.5) -> WallAlign:
-    """
-    Drive forward into a wall to align the front of the robot.
+def wall_align_forward(
+    speed: float = 1.0,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+) -> WallAlign:
+    """Drive forward into a wall and align the front of the robot.
 
-    Applies constant forward velocity without heading correction, allowing
-    the robot to naturally rotate flush against the wall surface.
-    Useful for resetting heading error accumulated during a mission.
+    Apply constant forward velocity without heading correction so the robot
+    naturally rotates flush against the wall surface.  The step monitors
+    gravity-compensated linear acceleration from the IMU and stops once a
+    collision spike is detected followed by a short settle period.
+
+    The grace period prevents false triggers from the initial acceleration
+    transient when the robot starts moving.
+
+    After the step completes, ``step.bump_result`` contains the impact
+    magnitude, estimated wall misalignment angle, and the heading
+    correction applied during the settle push.
 
     Args:
-        duration: Seconds to push against the wall (default 1.0).
-        speed: Drive speed in m/s (default 0.5).
+        speed: Drive speed in m/s (default 1.0).
+        accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
+            to classify as a bump (default 0.5).  Lower values are more
+            sensitive but may false-trigger on rough surfaces.
+        settle_duration: Seconds to keep pushing after the bump is detected,
+            letting the chassis rotate flush (default 0.2).
+        max_duration: Safety timeout in seconds — the step finishes even if
+            no bump is detected (default 5.0).
+        grace_period: Seconds to ignore acceleration after starting, so the
+            robot's own acceleration doesn't trigger detection (default 0.3).
 
     Returns:
-        A WallAlign step driving forward.
+        A WallAlign step driving forward with bump detection.
 
     Example::
 
         from libstp.step.motion import wall_align_forward, drive_forward
 
-        # Drive to the wall, then align against it
-        seq([drive_forward(40), wall_align_forward(duration=1.5)])
+        # Drive near the wall, then bump-align against it
+        seq([drive_forward(30), wall_align_forward()])
+
+        # More sensitive detection at slower speed
+        wall_align_forward(speed=0.3, accel_threshold=0.3)
     """
-    return WallAlign(WallDirection.FORWARD, abs(speed), duration)
+    return WallAlign(
+        WallDirection.FORWARD, abs(speed),
+        accel_threshold, settle_duration, max_duration, grace_period,
+    )
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_backward(duration: float = 1.0, speed: float = 0.5) -> WallAlign:
-    """
-    Drive backward into a wall to align the back of the robot.
+def wall_align_backward(
+    speed: float = 1.0,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+) -> WallAlign:
+    """Drive backward into a wall and align the back of the robot.
 
-    Applies constant backward velocity without heading correction, allowing
-    the robot to naturally rotate flush against the wall surface.
-    Useful after turning around when the back of the robot faces a wall.
+    Apply constant backward velocity without heading correction so the robot
+    naturally rotates flush against the wall surface.  Uses IMU bump
+    detection to know when the wall has been reached.
 
     Args:
-        duration: Seconds to push against the wall (default 1.0).
-        speed: Drive speed in m/s (default 0.5).
+        speed: Drive speed in m/s (default 1.0).
+        accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
+            to classify as a bump (default 0.5).
+        settle_duration: Seconds to keep pushing after impact (default 0.2).
+        max_duration: Safety timeout in seconds (default 5.0).
+        grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlign step driving backward.
+        A WallAlign step driving backward with bump detection.
 
     Example::
 
         from libstp.step.motion import wall_align_backward, drive_backward
 
         # Drive to the wall in reverse, then align against it
-        seq([drive_backward(40), wall_align_backward(duration=1.5)])
+        seq([drive_backward(30), wall_align_backward()])
     """
-    return WallAlign(WallDirection.BACKWARD, abs(speed), duration)
+    return WallAlign(
+        WallDirection.BACKWARD, abs(speed),
+        accel_threshold, settle_duration, max_duration, grace_period,
+    )
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_strafe_left(duration: float = 1.0, speed: float = 0.3) -> WallAlign:
-    """
-    Strafe left into a wall to align the left side of the robot.
+def wall_align_strafe_left(
+    speed: float = 0.5,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+) -> WallAlign:
+    """Strafe left into a wall and align the left side of the robot.
 
-    Applies constant leftward velocity without heading correction, allowing
-    the robot to naturally rotate flush against the wall surface.
-    Requires a mecanum or omni drivetrain capable of lateral movement.
-    Default speed is lower (0.3 m/s) because strafing has less traction.
+    Apply constant leftward velocity without heading correction so the robot
+    naturally rotates flush against the wall surface.  Uses IMU bump
+    detection.  Requires a mecanum or omni drivetrain capable of lateral
+    movement.
 
     Args:
-        duration: Seconds to push against the wall (default 1.0).
-        speed: Strafe speed in m/s (default 0.3).
+        speed: Strafe speed in m/s (default 0.5).
+        accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
+            to classify as a bump (default 0.5).
+        settle_duration: Seconds to keep pushing after impact (default 0.2).
+        max_duration: Safety timeout in seconds (default 5.0).
+        grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlign step strafing left.
+        A WallAlign step strafing left with bump detection.
 
     Example::
 
-        from libstp.step.motion import wall_align_strafe_left, drive_forward
+        from libstp.step.motion import wall_align_strafe_left
 
-        # Drive forward, then strafe-align the left side against a wall
-        seq([drive_forward(20), wall_align_strafe_left(duration=1.5)])
+        # Strafe-align the left side against a wall
+        wall_align_strafe_left(speed=0.4)
     """
-    return WallAlign(WallDirection.STRAFE_LEFT, abs(speed), duration)
+    return WallAlign(
+        WallDirection.STRAFE_LEFT, abs(speed),
+        accel_threshold, settle_duration, max_duration, grace_period,
+    )
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_strafe_right(duration: float = 1.0, speed: float = 0.3) -> WallAlign:
-    """
-    Strafe right into a wall to align the right side of the robot.
+def wall_align_strafe_right(
+    speed: float = 0.5,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+) -> WallAlign:
+    """Strafe right into a wall and align the right side of the robot.
 
-    Applies constant rightward velocity without heading correction, allowing
-    the robot to naturally rotate flush against the wall surface.
-    Requires a mecanum or omni drivetrain capable of lateral movement.
-    Default speed is lower (0.3 m/s) because strafing has less traction.
+    Apply constant rightward velocity without heading correction so the robot
+    naturally rotates flush against the wall surface.  Uses IMU bump
+    detection.  Requires a mecanum or omni drivetrain capable of lateral
+    movement.
 
     Args:
-        duration: Seconds to push against the wall (default 1.0).
-        speed: Strafe speed in m/s (default 0.3).
+        speed: Strafe speed in m/s (default 0.5).
+        accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
+            to classify as a bump (default 0.5).
+        settle_duration: Seconds to keep pushing after impact (default 0.2).
+        max_duration: Safety timeout in seconds (default 5.0).
+        grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlign step strafing right.
+        A WallAlign step strafing right with bump detection.
 
     Example::
 
-        from libstp.step.motion import wall_align_strafe_right, drive_forward
+        from libstp.step.motion import wall_align_strafe_right
 
-        # Drive forward, then strafe-align the right side against a wall
-        seq([drive_forward(20), wall_align_strafe_right(duration=1.5)])
+        # Strafe-align the right side against a wall
+        wall_align_strafe_right(speed=0.4)
     """
-    return WallAlign(WallDirection.STRAFE_RIGHT, abs(speed), duration)
+    return WallAlign(
+        WallDirection.STRAFE_RIGHT, abs(speed),
+        accel_threshold, settle_duration, max_duration, grace_period,
+    )
