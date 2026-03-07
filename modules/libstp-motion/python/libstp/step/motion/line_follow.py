@@ -2,14 +2,25 @@
 Line following using IR sensors.
 
 This module provides steps for following lines using one or two IR sensors
-with PID-based steering control, built on top of LinearMotion for proper
-profiled distance control and odometry integration.
+with PID-based steering control.
+
+Two families of steps are available:
+
+1. **Profiled line follow** (``follow_line``, ``follow_line_single``, etc.) —
+   built on ``LinearMotion`` for trapezoidal-profiled distance control along
+   a single axis.
+
+2. **Directional line follow** (``directional_follow_line``,
+   ``strafe_follow_line``, etc.) — uses direct ``ChassisVelocity`` control
+   with independent heading and strafe speed inputs, allowing line following
+   while strafing, driving diagonally, or any combination.
 """
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from libstp.foundation import PidConfig, PidController
+from libstp.foundation import ChassisVelocity, PidConfig, PidController
 from libstp.motion import LinearMotion, LinearMotionConfig, LinearAxis
 from libstp.sensor_ir import IRSensor
 
@@ -637,3 +648,642 @@ def follow_line_single_until_black(
         kp=kp, ki=ki, kd=kd,
     )
     return SingleSensorLineFollowUntilBlack(config)
+
+
+# ---------------------------------------------------------------------------
+# Directional line follow — generic heading + strafe with PID steering
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DirectionalLineFollowConfig:
+    """Configuration for directional line following with two sensors.
+
+    Allows independent heading (forward/backward) and strafe (left/right)
+    speed components.  The PID controller steers via angular velocity based
+    on the difference between left and right sensor readings.
+    """
+    left_sensor: IRSensor
+    right_sensor: IRSensor
+    heading_speed: float    # -1..1 fraction of max forward velocity
+    strafe_speed: float     # -1..1 fraction of max lateral velocity (positive = right)
+    distance_cm: float | None = None  # None = run until both black
+    kp: float = 0.75
+    ki: float = 0.0
+    kd: float = 0.5
+    both_black_threshold: float = 0.7
+
+
+@dsl(hidden=True)
+class DirectionalLineFollow(MotionStep):
+    """Follow a line with independent heading and strafe velocity components.
+
+    Uses direct ``ChassisVelocity`` control instead of ``LinearMotion``,
+    enabling line following while strafing, driving diagonally, or any
+    combination.  A PID controller computes angular velocity from the
+    difference between the left and right sensors' ``probabilityOfBlack()``
+    readings.
+
+    Distance is tracked via odometry as euclidean distance from the start
+    position.  Supports two stop modes: fixed distance and until-both-black.
+    """
+
+    def __init__(self, config: DirectionalLineFollowConfig):
+        super().__init__()
+        self.config = config
+        self._pid: PidController | None = None
+        self._vx: float = 0.0
+        self._vy: float = 0.0
+        self._target_distance_m: float | None = None
+
+    def _generate_signature(self) -> str:
+        mode = f"{self.config.distance_cm:.1f}cm" if self.config.distance_cm else "until_both_black"
+        return (
+            f"DirectionalLineFollow(mode={mode}, "
+            f"heading={self.config.heading_speed:.2f}, "
+            f"strafe={self.config.strafe_speed:.2f})"
+        )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else 0.3
+        # Approximate direction from speed components
+        speed_mag = math.hypot(self.config.heading_speed, self.config.strafe_speed)
+        if speed_mag > 0:
+            fwd_frac = self.config.heading_speed / speed_mag
+            str_frac = self.config.strafe_speed / speed_mag
+        else:
+            fwd_frac, str_frac = 1.0, 0.0
+        base.delta = SimulationStepDelta(
+            forward=distance_m * fwd_frac,
+            strafe=distance_m * str_frac,
+            angular=0.0,
+        )
+        return base
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        cfg = self.config
+
+        # Convert speed fractions to m/s
+        pid_cfg = robot.motion_pid_config
+        self._vx = cfg.heading_speed * pid_cfg.linear.max_velocity
+        self._vy = cfg.strafe_speed * pid_cfg.lateral.max_velocity
+
+        if cfg.distance_cm is not None:
+            self._target_distance_m = cfg.distance_cm / 100.0
+
+        robot.odometry.reset()
+
+        self._pid = PidController(PidConfig(
+            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
+            integral_max=1.0, output_min=-1.0, output_max=1.0,
+        ))
+
+        mode = f"{cfg.distance_cm:.1f}cm" if cfg.distance_cm else "until_both_black"
+        self.debug(
+            f"on_start: mode={mode}, vx={self._vx:.3f}m/s, vy={self._vy:.3f}m/s, "
+            f"PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+        )
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        cfg = self.config
+
+        left_conf = cfg.left_sensor.probabilityOfBlack()
+        right_conf = cfg.right_sensor.probabilityOfBlack()
+
+        # Check both_black stop condition (only for until_both_black mode)
+        if cfg.distance_cm is None:
+            if (left_conf >= cfg.both_black_threshold and
+                    right_conf >= cfg.both_black_threshold):
+                self.debug(
+                    f"stop: both black (L={left_conf:.2f}, R={right_conf:.2f}, "
+                    f"thresh={cfg.both_black_threshold:.2f})"
+                )
+                return True
+
+        # Check distance stop condition
+        if self._target_distance_m is not None:
+            dist = robot.odometry.get_distance_from_origin()
+            if dist.straight_line >= self._target_distance_m:
+                self.debug(
+                    f"stop: distance reached ({dist.straight_line:.3f}m >= "
+                    f"{self._target_distance_m:.3f}m)"
+                )
+                return True
+
+        # PID steering: sensor error -> omega
+        error = left_conf - right_conf
+        wz = self._pid.update(error, dt)
+
+        robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, wz))
+        robot.drive.update(dt)
+
+        self.debug(
+            f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+        )
+
+        return False
+
+
+@dataclass
+class DirectionalSingleLineFollowConfig:
+    """Configuration for directional single-sensor line following.
+
+    The sensor tracks the edge of a line using PID control while the robot
+    moves with the given heading and strafe velocity components.
+    """
+    sensor: IRSensor
+    heading_speed: float    # -1..1 fraction of max forward velocity
+    strafe_speed: float     # -1..1 fraction of max lateral velocity (positive = right)
+    distance_cm: float | None = None  # None requires stop_sensor
+    side: LineSide = LineSide.LEFT
+    stop_sensor: IRSensor | None = None
+    stop_threshold: float = 0.7
+    kp: float = 1.0
+    ki: float = 0.0
+    kd: float = 0.3
+
+
+@dsl(hidden=True)
+class DirectionalSingleLineFollow(MotionStep):
+    """Follow a line edge with independent heading and strafe velocity.
+
+    Targets ``probabilityOfBlack() = 0.5`` (the line edge) as the setpoint.
+    The ``side`` configuration flips the error sign to select left vs. right
+    edge tracking.  The PID output controls angular velocity while heading
+    and strafe velocities are set directly via ``ChassisVelocity``.
+
+    Supports distance-based and stop-sensor-based termination.
+    """
+
+    def __init__(self, config: DirectionalSingleLineFollowConfig):
+        super().__init__()
+        self.config = config
+        self._pid: PidController | None = None
+        self._vx: float = 0.0
+        self._vy: float = 0.0
+        self._target_distance_m: float | None = None
+
+    def _generate_signature(self) -> str:
+        if self.config.distance_cm is not None:
+            mode = f"{self.config.distance_cm:.1f}cm"
+        elif self.config.stop_sensor is not None:
+            mode = "until_stop_sensor"
+        else:
+            mode = "indefinite"
+        return (
+            f"DirectionalSingleLineFollow(mode={mode}, "
+            f"side={self.config.side.value}, "
+            f"heading={self.config.heading_speed:.2f}, "
+            f"strafe={self.config.strafe_speed:.2f})"
+        )
+
+    def to_simulation_step(self) -> SimulationStep:
+        base = super().to_simulation_step()
+        distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else 0.3
+        speed_mag = math.hypot(self.config.heading_speed, self.config.strafe_speed)
+        if speed_mag > 0:
+            fwd_frac = self.config.heading_speed / speed_mag
+            str_frac = self.config.strafe_speed / speed_mag
+        else:
+            fwd_frac, str_frac = 1.0, 0.0
+        base.delta = SimulationStepDelta(
+            forward=distance_m * fwd_frac,
+            strafe=distance_m * str_frac,
+            angular=0.0,
+        )
+        return base
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        cfg = self.config
+
+        pid_cfg = robot.motion_pid_config
+        self._vx = cfg.heading_speed * pid_cfg.linear.max_velocity
+        self._vy = cfg.strafe_speed * pid_cfg.lateral.max_velocity
+
+        if cfg.distance_cm is not None:
+            self._target_distance_m = cfg.distance_cm / 100.0
+
+        robot.odometry.reset()
+
+        self._pid = PidController(PidConfig(
+            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
+            integral_max=1.0, output_min=-1.0, output_max=1.0,
+        ))
+
+        self.debug(
+            f"on_start: side={cfg.side.value}, vx={self._vx:.3f}m/s, vy={self._vy:.3f}m/s, "
+            f"PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+        )
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        cfg = self.config
+
+        # Check stop sensor
+        if cfg.stop_sensor is not None:
+            stop_reading = cfg.stop_sensor.probabilityOfBlack()
+            if stop_reading >= cfg.stop_threshold:
+                self.debug(
+                    f"stop: stop_sensor black={stop_reading:.2f} >= {cfg.stop_threshold:.2f}"
+                )
+                return True
+
+        # Check distance
+        if self._target_distance_m is not None:
+            dist = robot.odometry.get_distance_from_origin()
+            if dist.straight_line >= self._target_distance_m:
+                self.debug(
+                    f"stop: distance reached ({dist.straight_line:.3f}m >= "
+                    f"{self._target_distance_m:.3f}m)"
+                )
+                return True
+
+        # Edge-tracking error: 0.5 = edge of line
+        reading = cfg.sensor.probabilityOfBlack()
+        error = reading - 0.5
+        if cfg.side == LineSide.RIGHT:
+            error = -error
+
+        wz = self._pid.update(error, dt)
+
+        robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, wz))
+        robot.drive.update(dt)
+
+        self.debug(
+            f"black={reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+        )
+
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Directional line follow — public factory functions
+# ---------------------------------------------------------------------------
+
+
+@dsl(tags=["motion", "line-follow"])
+def directional_follow_line(
+    left_sensor: IRSensor,
+    right_sensor: IRSensor,
+    distance_cm: float,
+    heading_speed: float = 0.0,
+    strafe_speed: float = 0.0,
+    kp: float = 0.75,
+    ki: float = 0.0,
+    kd: float = 0.5,
+) -> DirectionalLineFollow:
+    """Follow a line for a distance with independent heading and strafe speeds.
+
+    Drive along a line using any combination of forward and lateral velocity
+    while a PID controller steers the robot via angular velocity.  The error
+    signal is the difference between the left and right sensors'
+    ``probabilityOfBlack()`` readings.  Distance is tracked via odometry as
+    the euclidean distance from the start position.
+
+    Unlike ``follow_line`` which only drives forward, this step accepts both
+    ``heading_speed`` (forward/backward) and ``strafe_speed`` (left/right)
+    as independent fractions of max velocity, enabling line following while
+    strafing or driving diagonally.
+
+    Both sensors must be calibrated (white/black thresholds set) before use.
+    Requires a mecanum or omni-wheel drivetrain if ``strafe_speed`` is
+    nonzero.
+
+    Args:
+        left_sensor: Left IR sensor instance, positioned to the left of the
+            line.
+        right_sensor: Right IR sensor instance, positioned to the right of
+            the line.
+        distance_cm: Distance to follow in centimeters.  The step finishes
+            when this euclidean distance has been traveled.
+        heading_speed: Forward/backward speed as a fraction of max velocity
+            (-1.0 to 1.0).  Positive = forward, negative = backward.
+            Default 0.0.
+        strafe_speed: Lateral speed as a fraction of max velocity (-1.0 to
+            1.0).  Positive = right, negative = left.  Default 0.0.
+        kp: Proportional gain for steering PID.  Default 0.75.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.5.
+
+    Returns:
+        A ``DirectionalLineFollow`` step.
+
+    Example::
+
+        from libstp.step.motion import directional_follow_line
+
+        # Strafe right while following a line for 50 cm
+        directional_follow_line(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            distance_cm=50.0,
+            strafe_speed=0.5,
+        )
+
+        # Drive diagonally forward-right along a line
+        directional_follow_line(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            distance_cm=80.0,
+            heading_speed=0.3,
+            strafe_speed=0.4,
+        )
+    """
+    return DirectionalLineFollow(DirectionalLineFollowConfig(
+        left_sensor=left_sensor,
+        right_sensor=right_sensor,
+        heading_speed=heading_speed,
+        strafe_speed=strafe_speed,
+        distance_cm=distance_cm,
+        kp=kp, ki=ki, kd=kd,
+    ))
+
+
+@dsl(tags=["motion", "line-follow"])
+def directional_follow_line_until_both_black(
+    left_sensor: IRSensor,
+    right_sensor: IRSensor,
+    heading_speed: float = 0.0,
+    strafe_speed: float = 0.0,
+    kp: float = 0.75,
+    ki: float = 0.0,
+    kd: float = 0.5,
+    both_black_threshold: float = 0.7,
+) -> DirectionalLineFollow:
+    """Follow a line with heading and strafe until both sensors detect black.
+
+    Same as ``directional_follow_line`` but instead of stopping after a
+    fixed distance, the step monitors both sensors each cycle and finishes
+    when both ``probabilityOfBlack()`` readings exceed
+    ``both_black_threshold`` simultaneously, indicating an intersection.
+
+    Both sensors must be calibrated (white/black thresholds set) before use.
+    Requires a mecanum or omni-wheel drivetrain if ``strafe_speed`` is
+    nonzero.
+
+    Args:
+        left_sensor: Left IR sensor instance.
+        right_sensor: Right IR sensor instance.
+        heading_speed: Forward/backward speed fraction (-1.0 to 1.0).
+            Default 0.0.
+        strafe_speed: Lateral speed fraction (-1.0 to 1.0).  Default 0.0.
+        kp: Proportional gain for steering PID.  Default 0.75.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.5.
+        both_black_threshold: ``probabilityOfBlack()`` value that both
+            sensors must exceed to trigger the stop.  Default 0.7.
+
+    Returns:
+        A ``DirectionalLineFollow`` step that stops at an intersection.
+
+    Example::
+
+        from libstp.step.motion import directional_follow_line_until_both_black
+
+        # Strafe right along a line until hitting a cross-line
+        directional_follow_line_until_both_black(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            strafe_speed=0.4,
+        )
+    """
+    return DirectionalLineFollow(DirectionalLineFollowConfig(
+        left_sensor=left_sensor,
+        right_sensor=right_sensor,
+        heading_speed=heading_speed,
+        strafe_speed=strafe_speed,
+        distance_cm=None,
+        kp=kp, ki=ki, kd=kd,
+        both_black_threshold=both_black_threshold,
+    ))
+
+
+@dsl(tags=["motion", "line-follow"])
+def strafe_follow_line(
+    left_sensor: IRSensor,
+    right_sensor: IRSensor,
+    distance_cm: float,
+    speed: float = 0.5,
+    kp: float = 0.75,
+    ki: float = 0.0,
+    kd: float = 0.5,
+) -> DirectionalLineFollow:
+    """Follow a line by strafing right for a specified distance.
+
+    Convenience wrapper around ``directional_follow_line`` for pure lateral
+    line following.  The robot strafes right at the given speed while PID
+    steering keeps it centered on the line using two sensors.
+
+    Both sensors must be calibrated.  Requires a mecanum or omni-wheel
+    drivetrain.
+
+    Args:
+        left_sensor: Left IR sensor instance.
+        right_sensor: Right IR sensor instance.
+        distance_cm: Distance to strafe in centimeters.
+        speed: Strafe speed as fraction of max lateral velocity (0.0 to
+            1.0).  Default 0.5.  Use negative values to strafe left.
+        kp: Proportional gain for steering PID.  Default 0.75.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.5.
+
+    Returns:
+        A ``DirectionalLineFollow`` step configured for lateral motion.
+
+    Example::
+
+        from libstp.step.motion import strafe_follow_line
+
+        # Strafe right along a line for 40 cm
+        strafe_follow_line(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            distance_cm=40.0,
+            speed=0.4,
+        )
+
+        # Strafe left along a line for 30 cm
+        strafe_follow_line(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            distance_cm=30.0,
+            speed=-0.4,
+        )
+    """
+    return directional_follow_line(
+        left_sensor=left_sensor,
+        right_sensor=right_sensor,
+        distance_cm=distance_cm,
+        strafe_speed=speed,
+        kp=kp, ki=ki, kd=kd,
+    )
+
+
+@dsl(tags=["motion", "line-follow"])
+def strafe_follow_line_until_both_black(
+    left_sensor: IRSensor,
+    right_sensor: IRSensor,
+    speed: float = 0.5,
+    kp: float = 0.75,
+    ki: float = 0.0,
+    kd: float = 0.5,
+    both_black_threshold: float = 0.7,
+) -> DirectionalLineFollow:
+    """Follow a line by strafing right until both sensors detect black.
+
+    Convenience wrapper around ``directional_follow_line_until_both_black``
+    for pure lateral line following until an intersection is reached.
+
+    Both sensors must be calibrated.  Requires a mecanum or omni-wheel
+    drivetrain.
+
+    Args:
+        left_sensor: Left IR sensor instance.
+        right_sensor: Right IR sensor instance.
+        speed: Strafe speed as fraction of max lateral velocity (0.0 to
+            1.0).  Default 0.5.  Use negative values to strafe left.
+        kp: Proportional gain for steering PID.  Default 0.75.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.5.
+        both_black_threshold: ``probabilityOfBlack()`` value that both
+            sensors must exceed to trigger the stop.  Default 0.7.
+
+    Returns:
+        A ``DirectionalLineFollow`` step that stops at an intersection.
+
+    Example::
+
+        from libstp.step.motion import strafe_follow_line_until_both_black
+
+        # Strafe right along a line until a cross-line
+        strafe_follow_line_until_both_black(
+            left_sensor=robot.left_ir,
+            right_sensor=robot.right_ir,
+            speed=0.4,
+        )
+    """
+    return directional_follow_line_until_both_black(
+        left_sensor=left_sensor,
+        right_sensor=right_sensor,
+        strafe_speed=speed,
+        kp=kp, ki=ki, kd=kd,
+        both_black_threshold=both_black_threshold,
+    )
+
+
+@dsl(tags=["motion", "line-follow"])
+def directional_follow_line_single(
+    sensor: IRSensor,
+    distance_cm: float,
+    heading_speed: float = 0.0,
+    strafe_speed: float = 0.0,
+    side: LineSide = LineSide.LEFT,
+    kp: float = 1.0,
+    ki: float = 0.0,
+    kd: float = 0.3,
+) -> DirectionalSingleLineFollow:
+    """Follow a line edge with a single sensor and independent heading/strafe speeds.
+
+    The sensor tracks the boundary between the line and the background, where
+    ``probabilityOfBlack()`` is approximately 0.5.  The ``side`` parameter
+    selects which edge to track.  The PID output controls angular velocity
+    while heading and strafe velocities are set independently.
+
+    The sensor must be calibrated (white/black thresholds set) before use.
+    Requires a mecanum or omni-wheel drivetrain if ``strafe_speed`` is
+    nonzero.
+
+    Args:
+        sensor: IR sensor for edge tracking.
+        distance_cm: Distance to follow in centimeters.
+        heading_speed: Forward/backward speed fraction (-1.0 to 1.0).
+            Default 0.0.
+        strafe_speed: Lateral speed fraction (-1.0 to 1.0).  Default 0.0.
+        side: Which edge of the line to track.  Default ``LineSide.LEFT``.
+        kp: Proportional gain for steering PID.  Default 1.0.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.3.
+
+    Returns:
+        A ``DirectionalSingleLineFollow`` step.
+
+    Example::
+
+        from libstp.step.motion import directional_follow_line_single, LineSide
+
+        # Strafe right while tracking the left edge of a line
+        directional_follow_line_single(
+            sensor=robot.front_ir,
+            distance_cm=50.0,
+            strafe_speed=0.4,
+            side=LineSide.LEFT,
+        )
+    """
+    return DirectionalSingleLineFollow(DirectionalSingleLineFollowConfig(
+        sensor=sensor,
+        heading_speed=heading_speed,
+        strafe_speed=strafe_speed,
+        distance_cm=distance_cm,
+        side=side,
+        kp=kp, ki=ki, kd=kd,
+    ))
+
+
+@dsl(tags=["motion", "line-follow"])
+def directional_follow_line_single_until_black(
+    sensor: IRSensor,
+    stop_sensor: IRSensor,
+    heading_speed: float = 0.0,
+    strafe_speed: float = 0.0,
+    side: LineSide = LineSide.LEFT,
+    stop_threshold: float = 0.7,
+    kp: float = 1.0,
+    ki: float = 0.0,
+    kd: float = 0.3,
+) -> DirectionalSingleLineFollow:
+    """Follow a line edge with heading/strafe, stopping when a second sensor sees black.
+
+    Combines single-sensor edge tracking with an event-based stop condition.
+    The ``sensor`` tracks the line edge using PID control while the
+    ``stop_sensor`` is polled each cycle.
+
+    Both sensors must be calibrated before use.  Requires a mecanum or
+    omni-wheel drivetrain if ``strafe_speed`` is nonzero.
+
+    Args:
+        sensor: IR sensor for edge tracking.
+        stop_sensor: Second IR sensor for the stop condition.
+        heading_speed: Forward/backward speed fraction (-1.0 to 1.0).
+            Default 0.0.
+        strafe_speed: Lateral speed fraction (-1.0 to 1.0).  Default 0.0.
+        side: Which edge of the line to track.  Default ``LineSide.LEFT``.
+        stop_threshold: ``probabilityOfBlack()`` the stop sensor must
+            exceed.  Default 0.7.
+        kp: Proportional gain for steering PID.  Default 1.0.
+        ki: Integral gain for steering PID.  Default 0.0.
+        kd: Derivative gain for steering PID.  Default 0.3.
+
+    Returns:
+        A ``DirectionalSingleLineFollow`` step.
+
+    Example::
+
+        from libstp.step.motion import directional_follow_line_single_until_black, LineSide
+
+        # Strafe right along a line edge until the stop sensor hits a cross-line
+        directional_follow_line_single_until_black(
+            sensor=robot.left_ir,
+            stop_sensor=robot.right_ir,
+            strafe_speed=0.4,
+            side=LineSide.LEFT,
+        )
+    """
+    return DirectionalSingleLineFollow(DirectionalSingleLineFollowConfig(
+        sensor=sensor,
+        heading_speed=heading_speed,
+        strafe_speed=strafe_speed,
+        side=side,
+        stop_sensor=stop_sensor,
+        stop_threshold=stop_threshold,
+        kp=kp, ki=ki, kd=kd,
+    ))
