@@ -54,6 +54,8 @@ class ConfirmScreen(UIScreen[bool]):
         ))
     """
 
+    _primary_button_id = "confirm"
+
     def __init__(self, title: str, message: str,
                  confirm_label: str = "Confirm",
                  cancel_label: str = "Cancel",
@@ -102,6 +104,8 @@ class MessageScreen(UIScreen[None]):
             icon_color="green"
         ))
     """
+
+    _primary_button_id = "ok"
 
     def __init__(self, title: str, message: str,
                  button_label: str = "OK",

@@ -15,6 +15,7 @@ class IRResultsDashboardScreen(UIScreen[IRDashboardResult]):
     """
 
     title = "IR Sensor Calibration"
+    _primary_button_id = "done"
 
     def __init__(self, sensors: List[SensorCalibrationData]):
         super().__init__()

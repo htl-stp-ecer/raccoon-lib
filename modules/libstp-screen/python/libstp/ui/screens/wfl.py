@@ -87,6 +87,7 @@ class WFLConfirmScreen(UIScreen[WFLConfirmResult]):
     """
 
     title = "Wait for Light Calibration"
+    _primary_button_id = "confirm"
 
     def __init__(self, port: int, light_off: float, light_on: float):
         super().__init__()

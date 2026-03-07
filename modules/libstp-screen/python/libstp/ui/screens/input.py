@@ -50,6 +50,8 @@ class NumberInputScreen(UIScreen[NumberInputResult]):
             distance = result.value
     """
 
+    _primary_button_id = "submit"
+
     def __init__(
         self,
         title: str = "Input",
@@ -150,6 +152,8 @@ class TextInputScreen(UIScreen[TextInputResult]):
             name = result.value
     """
 
+    _primary_button_id = "submit"
+
     def __init__(
         self,
         title: str = "Input",
@@ -207,6 +211,8 @@ class SliderInputScreen(UIScreen[SliderInputResult]):
         if result.confirmed:
             speed = result.value
     """
+
+    _primary_button_id = "submit"
 
     def __init__(
         self,

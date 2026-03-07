@@ -85,6 +85,7 @@ class DistanceMeasureScreen(UIScreen[float]):
     """
 
     title = "Distance Calibration"
+    _primary_button_id = "submit"
 
     def __init__(self, requested_distance: float, default_value: float = None):
         super().__init__()
@@ -156,6 +157,7 @@ class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
     """
 
     title = "Distance Calibration"
+    _primary_button_id = "apply"
 
     def __init__(self, requested: float, measured: float):
         super().__init__()

@@ -54,6 +54,7 @@ class UIScreen(ABC, Generic[T], ClassNameLogger):
 
     # Override in subclass
     title: str = "Screen"
+    _primary_button_id: Optional[str] = None  # Physical button triggers this button's click
 
     def __init__(self):
         super().__init__()
@@ -185,6 +186,11 @@ class UIScreen(ABC, Generic[T], ClassNameLogger):
 
         if action == "button_press":
             handler = self._event_handlers.get(("button_press", None))
+            # Fallback: trigger primary button click if no explicit handler
+            if not handler and self._primary_button_id:
+                handler = self._event_handlers.get(("click", self._primary_button_id))
+                if handler:
+                    self.debug(f"Physical button -> primary button '{self._primary_button_id}'")
 
         elif action == "click":
             button_id = event.get("button_id")
