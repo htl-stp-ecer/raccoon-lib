@@ -160,7 +160,7 @@ fi
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
 docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args=-DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
 
-WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f | head -1)
+WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
 if [[ ! -f "$WHEEL_FILE" ]]; then
   echo "✖ Build completed but wheel not found in $BUILD_DIR"
   exit 1
