@@ -13,6 +13,7 @@ from .timing import *
 from .timing import __all__ as _timing_all
 from .wait_for_seconds import WaitForSeconds, wait
 from .wait_for_button import WaitForButton, wait_for_button
+from .wait_for_light import WaitForLight, wait_for_light, WaitForLightLegacy, wait_for_light_legacy
 from .servo import *
 from .servo import __all__ as _servo_all
 from .motor import *
@@ -30,6 +31,10 @@ __all__ = [
     "wait",
     "WaitForButton",
     "wait_for_button",
+    "WaitForLight",
+    "wait_for_light",
+    "WaitForLightLegacy",
+    "wait_for_light_legacy",
     "dsl",
     "DslMeta",
     "Defer",

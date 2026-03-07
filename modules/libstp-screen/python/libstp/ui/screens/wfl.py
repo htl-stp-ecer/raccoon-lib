@@ -1,5 +1,5 @@
 """
-Wait-for-light calibration screens.
+Wait-for-light screens: calibration (legacy) and auto-detection.
 """
 
 from dataclasses import dataclass
@@ -9,7 +9,7 @@ from ..widgets import (
     Widget, Text, Icon, Button, Spacer,
     StatusBadge, StatusIcon, HintBox, ResultsTable,
     LightBulb, SensorValue, SensorGraph,
-    NumericInput, Row, Column, Split, Card,
+    NumericInput, Row, Column, Split, Card, Center,
 )
 from ..events import on_click, on_button_press, on_change
 
@@ -175,3 +175,46 @@ class WFLConfirmScreen(UIScreen[WFLConfirmResult]):
             light_off=self.light_off,
             light_on=self.light_on,
         ))
+
+
+# =============================================================================
+# Auto-detection screen (Kalman-filtered flank detection)
+# =============================================================================
+
+
+class WFLDetectScreen(UIScreen[None]):
+    """
+    Status display for automatic wait-for-light detection.
+
+    Shows the current sensor value, Kalman-filtered baseline, trigger
+    threshold, and detection status (WARMING UP / ARMED / GO!).
+    This screen is display-only — no user interaction needed.
+    """
+
+    title = "Wait for Light"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.status: str = "WARMING UP"
+        self.status_color: str = "amber"
+        self.raw_value: int = 0
+        self.baseline: float = 0.0
+        self.threshold: float = 0.0
+
+    def build(self) -> Widget:
+        return Center(children=[
+            Column(children=[
+                StatusBadge(
+                    text=self.status,
+                    color=self.status_color,
+                    glow=self.status == "ARMED",
+                ),
+                Spacer(16),
+                Text(f"Sensor: {self.raw_value}", size="xlarge"),
+                Spacer(8),
+                ResultsTable(rows=[
+                    ("Baseline", f"{self.baseline:.0f}", "grey"),
+                    ("Threshold", f"{self.threshold:.0f}", "blue"),
+                ]),
+            ], align="center", spacing=0),
+        ])

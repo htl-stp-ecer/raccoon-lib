@@ -37,6 +37,7 @@ class RobotDefinitionsProtocol(Protocol):
     analog_sensors: List[AnalogSensor]
     button: DigitalSensor
     wait_for_light_sensor: Optional[AnalogSensor]
+    wait_for_light_mode: str  # "auto" (default) or "legacy"
 
 class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     """
@@ -187,8 +188,13 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 await wait_for_button().run_step(self)
             else:
                 self.info("Waiting for light...")
-                from libstp.step.calibration import calibrate_wait_for_light
-                await calibrate_wait_for_light(sensor).run_step(self)
+                wfl_mode = getattr(self.defs, "wait_for_light_mode", "auto")
+                if wfl_mode == "legacy":
+                    from libstp.step import wait_for_light_legacy
+                    await wait_for_light_legacy(sensor).run_step(self)
+                else:
+                    from libstp.step import wait_for_light
+                    await wait_for_light(sensor).run_step(self)
 
     async def _run_main_missions(self, missions: List["MissionProtocol"]) -> None:
         """Execute main missions sequentially."""
