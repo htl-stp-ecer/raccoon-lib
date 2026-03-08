@@ -1,8 +1,8 @@
-"""Factory functions for driving forward or backward until an IR sensor detects a surface color."""
+"""Drive forward or backward until an IR sensor detects a surface color."""
 from libstp.sensor_ir import IRSensor
 from typing import Union
 
-from ... import dsl
+from ... import dsl, dsl_step
 from .core import MoveUntil, MoveUntilConfig, SurfaceColor
 
 
@@ -94,12 +94,8 @@ def drive_until_white(
     ))
 
 
-@dsl(tags=["motion", "sensor"])
-def drive_forward_until_black(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class DriveForwardUntilBlack(MoveUntil):
     """Drive forward until any sensor detects a black surface.
 
     Commands a constant forward velocity and polls the given IR sensor(s) each
@@ -123,36 +119,45 @@ def drive_forward_until_black(
             false positives. Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that drives forward and stops when
-        black is detected.
+        DriveForwardUntilBlack: A configured motion step that drives forward
+        and stops when black is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import DriveForwardUntilBlack
 
         front_ir = IRSensor(0)
 
         # Drive forward at 0.5 m/s until the front sensor sees black
-        step = drive_forward_until_black(front_ir, speed=0.5)
+        DriveForwardUntilBlack(front_ir, speed=0.5)
 
         # Use two sensors -- stop when either one detects black
         left_ir = IRSensor(1)
-        step = drive_forward_until_black([front_ir, left_ir], speed=0.8)
+        DriveForwardUntilBlack([front_ir, left_ir], speed=0.8)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.BLACK,
-        forward_speed=abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.BLACK,
+            forward_speed=abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"DriveForwardUntilBlack(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def drive_forward_until_white(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class DriveForwardUntilWhite(MoveUntil):
     """Drive forward until any sensor detects a white surface.
 
     Commands a constant forward velocity and polls the given IR sensor(s) each
@@ -174,35 +179,44 @@ def drive_forward_until_white(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that drives forward and stops when
-        white is detected.
+        DriveForwardUntilWhite: A configured motion step that drives forward
+        and stops when white is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import DriveForwardUntilWhite
 
         front_ir = IRSensor(0)
 
         # Drive forward at default speed until white is found
-        step = drive_forward_until_white(front_ir)
+        DriveForwardUntilWhite(front_ir)
 
         # Slower approach with stricter detection
-        step = drive_forward_until_white(front_ir, speed=0.3, confidence_threshold=0.9)
+        DriveForwardUntilWhite(front_ir, speed=0.3, confidence_threshold=0.9)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.WHITE,
-        forward_speed=abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.WHITE,
+            forward_speed=abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"DriveForwardUntilWhite(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def drive_backward_until_black(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class DriveBackwardUntilBlack(MoveUntil):
     """Drive backward until any sensor detects a black surface.
 
     Commands a constant backward velocity and polls the given IR sensor(s)
@@ -224,32 +238,41 @@ def drive_backward_until_black(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that drives backward and stops
-        when black is detected.
+        DriveBackwardUntilBlack: A configured motion step that drives backward
+        and stops when black is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import DriveBackwardUntilBlack
 
         rear_ir = IRSensor(2)
 
         # Back up at 0.4 m/s until the rear sensor detects black
-        step = drive_backward_until_black(rear_ir, speed=0.4)
+        DriveBackwardUntilBlack(rear_ir, speed=0.4)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.BLACK,
-        forward_speed=-abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.BLACK,
+            forward_speed=-abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"DriveBackwardUntilBlack(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def drive_backward_until_white(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class DriveBackwardUntilWhite(MoveUntil):
     """Drive backward until any sensor detects a white surface.
 
     Commands a constant backward velocity and polls the given IR sensor(s)
@@ -268,21 +291,34 @@ def drive_backward_until_white(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that drives backward and stops
-        when white is detected.
+        DriveBackwardUntilWhite: A configured motion step that drives backward
+        and stops when white is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import DriveBackwardUntilWhite
 
         rear_ir = IRSensor(2)
 
         # Back up slowly until the rear sensor sees white
-        step = drive_backward_until_white(rear_ir, speed=0.3)
+        DriveBackwardUntilWhite(rear_ir, speed=0.3)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.WHITE,
-        forward_speed=-abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.WHITE,
+            forward_speed=-abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"DriveBackwardUntilWhite(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"

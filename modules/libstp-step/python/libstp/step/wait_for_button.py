@@ -1,20 +1,13 @@
 import asyncio
 
 from .base import Step
-from .annotation import dsl
+from .annotation import dsl_step
 from libstp.button import is_pressed
 from libstp.ui import UIStep
 
-@dsl(hidden=True)
+
+@dsl_step(tags=["timing", "button"])
 class WaitForButton(UIStep):
-    """UI step that blocks until the operator presses the hardware button."""
-
-    async def _execute_step(self, robot) -> None:
-        await self.wait_for_button("Waiting for button press...")
-
-
-@dsl(tags=["timing", "button"])
-def wait_for_button() -> WaitForButton:
     """Wait for the operator to press the hardware button before continuing.
 
     Blocks the step sequence until the physical button on the robot
@@ -23,10 +16,6 @@ def wait_for_button() -> WaitForButton:
     between autonomous phases, confirming the robot is correctly
     positioned before starting, or gating destructive actions behind
     human approval.
-
-    Returns:
-        A ``WaitForButton`` UI step ready to be scheduled in a step
-        sequence.
 
     Example::
 
@@ -40,4 +29,6 @@ def wait_for_button() -> WaitForButton:
             motor_brake(robot.motor(0)),
         )
     """
-    return WaitForButton()
+
+    async def _execute_step(self, robot) -> None:
+        await self.wait_for_button("Waiting for button press...")

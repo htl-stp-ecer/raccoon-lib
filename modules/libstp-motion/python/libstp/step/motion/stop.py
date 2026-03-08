@@ -1,46 +1,22 @@
-from libstp.robot.api import GenericRobot
-from .. import Step, dsl
+from typing import TYPE_CHECKING
+
+from ..annotation import dsl_step
+from .. import Step
+
+if TYPE_CHECKING:
+    from libstp.robot.api import GenericRobot
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "stop"])
 class Stop(Step):
-    """Step that stops all drive motors."""
-
-    def __init__(self, hard: bool = True) -> None:
-        """
-        Initialize the Stop step.
-
-        Args:
-            hard: If True, immediately zero motor output. If False, decelerate smoothly.
-        """
-        super().__init__()
-        self.hard = hard
-
-    def _generate_signature(self) -> str:
-        return f"Stop(hard={self.hard})"
-
-    async def _execute_step(self, robot: GenericRobot) -> None:
-        """Stop all drive motors."""
-        if self.hard:
-            robot.drive.hard_stop()
-        else:
-            robot.drive.soft_stop()
-
-
-@dsl(tags=["motion", "stop"])
-def stop(hard: bool = True) -> Stop:
-    """
-    Stop all drive motors immediately.
+    """Stop all drive motors immediately.
 
     Use this between motion sequences or at the end of a mission
     to ensure the robot is stationary.
 
     Args:
         hard: If ``True`` (default), immediately zero motor output.
-              If ``False``, decelerate smoothly using the drive controller.
-
-    Returns:
-        A Stop step instance.
+            If ``False``, decelerate smoothly using the drive controller.
 
     Example::
 
@@ -49,4 +25,17 @@ def stop(hard: bool = True) -> Stop:
         # Drive forward then stop
         seq([drive_forward(50), stop()])
     """
-    return Stop(hard)
+
+    def __init__(self, hard: bool = True) -> None:
+        super().__init__()
+        self.hard = hard
+
+    def _generate_signature(self) -> str:
+        return f"Stop(hard={self.hard})"
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
+        """Stop all drive motors."""
+        if self.hard:
+            robot.drive.hard_stop()
+        else:
+            robot.drive.soft_stop()

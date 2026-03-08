@@ -16,6 +16,7 @@ from libstp.foundation import ChassisVelocity
 from libstp.hal import IMU
 
 from .. import dsl
+from ..annotation import dsl_step
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -185,17 +186,11 @@ class WallAlign(MotionStep):
 
 
 # ---------------------------------------------------------------------------
-# Public factory functions
+# Public dsl_step subclasses
 # ---------------------------------------------------------------------------
 
-@dsl(tags=["motion", "wall"])
-def wall_align_forward(
-    speed: float = 1.0,
-    accel_threshold: float = 0.5,
-    settle_duration: float = 0.2,
-    max_duration: float = 5.0,
-    grace_period: float = 0.3,
-) -> WallAlign:
+@dsl_step(tags=["motion", "wall"])
+class WallAlignForward(WallAlign):
     """Drive forward into a wall and align the front of the robot.
 
     Apply constant forward velocity without heading correction so the robot
@@ -223,7 +218,7 @@ def wall_align_forward(
             robot's own acceleration doesn't trigger detection (default 0.3).
 
     Returns:
-        A WallAlign step driving forward with bump detection.
+        A WallAlignForward step driving forward with bump detection.
 
     Example::
 
@@ -235,20 +230,34 @@ def wall_align_forward(
         # More sensitive detection at slower speed
         wall_align_forward(speed=0.3, accel_threshold=0.3)
     """
-    return WallAlign(
-        WallDirection.FORWARD, abs(speed),
-        accel_threshold, settle_duration, max_duration, grace_period,
-    )
+
+    def __init__(
+        self,
+        speed: float = 1.0,
+        accel_threshold: float = 0.5,
+        settle_duration: float = 0.2,
+        max_duration: float = 5.0,
+        grace_period: float = 0.3,
+    ):
+        super().__init__(
+            direction=WallDirection.FORWARD,
+            speed=abs(speed),
+            accel_threshold=accel_threshold,
+            settle_duration=settle_duration,
+            max_duration=max_duration,
+            grace_period=grace_period,
+        )
+
+    def _generate_signature(self) -> str:
+        return (
+            f"WallAlignForward(speed={self.speed:.2f}, "
+            f"threshold={self.accel_threshold:.1f}, "
+            f"settle={self.settle_duration:.2f})"
+        )
 
 
-@dsl(tags=["motion", "wall"])
-def wall_align_backward(
-    speed: float = 1.0,
-    accel_threshold: float = 0.5,
-    settle_duration: float = 0.2,
-    max_duration: float = 5.0,
-    grace_period: float = 0.3,
-) -> WallAlign:
+@dsl_step(tags=["motion", "wall"])
+class WallAlignBackward(WallAlign):
     """Drive backward into a wall and align the back of the robot.
 
     Apply constant backward velocity without heading correction so the robot
@@ -264,7 +273,7 @@ def wall_align_backward(
         grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlign step driving backward with bump detection.
+        A WallAlignBackward step driving backward with bump detection.
 
     Example::
 
@@ -273,20 +282,34 @@ def wall_align_backward(
         # Drive to the wall in reverse, then align against it
         seq([drive_backward(30), wall_align_backward()])
     """
-    return WallAlign(
-        WallDirection.BACKWARD, abs(speed),
-        accel_threshold, settle_duration, max_duration, grace_period,
-    )
+
+    def __init__(
+        self,
+        speed: float = 1.0,
+        accel_threshold: float = 0.5,
+        settle_duration: float = 0.2,
+        max_duration: float = 5.0,
+        grace_period: float = 0.3,
+    ):
+        super().__init__(
+            direction=WallDirection.BACKWARD,
+            speed=abs(speed),
+            accel_threshold=accel_threshold,
+            settle_duration=settle_duration,
+            max_duration=max_duration,
+            grace_period=grace_period,
+        )
+
+    def _generate_signature(self) -> str:
+        return (
+            f"WallAlignBackward(speed={self.speed:.2f}, "
+            f"threshold={self.accel_threshold:.1f}, "
+            f"settle={self.settle_duration:.2f})"
+        )
 
 
-@dsl(tags=["motion", "wall"])
-def wall_align_strafe_left(
-    speed: float = 0.5,
-    accel_threshold: float = 0.5,
-    settle_duration: float = 0.2,
-    max_duration: float = 5.0,
-    grace_period: float = 0.3,
-) -> WallAlign:
+@dsl_step(tags=["motion", "wall"])
+class WallAlignStrafeLeft(WallAlign):
     """Strafe left into a wall and align the left side of the robot.
 
     Apply constant leftward velocity without heading correction so the robot
@@ -303,7 +326,7 @@ def wall_align_strafe_left(
         grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlign step strafing left with bump detection.
+        A WallAlignStrafeLeft step strafing left with bump detection.
 
     Example::
 
@@ -312,20 +335,34 @@ def wall_align_strafe_left(
         # Strafe-align the left side against a wall
         wall_align_strafe_left(speed=0.4)
     """
-    return WallAlign(
-        WallDirection.STRAFE_LEFT, abs(speed),
-        accel_threshold, settle_duration, max_duration, grace_period,
-    )
+
+    def __init__(
+        self,
+        speed: float = 0.5,
+        accel_threshold: float = 0.5,
+        settle_duration: float = 0.2,
+        max_duration: float = 5.0,
+        grace_period: float = 0.3,
+    ):
+        super().__init__(
+            direction=WallDirection.STRAFE_LEFT,
+            speed=abs(speed),
+            accel_threshold=accel_threshold,
+            settle_duration=settle_duration,
+            max_duration=max_duration,
+            grace_period=grace_period,
+        )
+
+    def _generate_signature(self) -> str:
+        return (
+            f"WallAlignStrafeLeft(speed={self.speed:.2f}, "
+            f"threshold={self.accel_threshold:.1f}, "
+            f"settle={self.settle_duration:.2f})"
+        )
 
 
-@dsl(tags=["motion", "wall"])
-def wall_align_strafe_right(
-    speed: float = 0.5,
-    accel_threshold: float = 0.5,
-    settle_duration: float = 0.2,
-    max_duration: float = 5.0,
-    grace_period: float = 0.3,
-) -> WallAlign:
+@dsl_step(tags=["motion", "wall"])
+class WallAlignStrafeRight(WallAlign):
     """Strafe right into a wall and align the right side of the robot.
 
     Apply constant rightward velocity without heading correction so the robot
@@ -342,7 +379,7 @@ def wall_align_strafe_right(
         grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlign step strafing right with bump detection.
+        A WallAlignStrafeRight step strafing right with bump detection.
 
     Example::
 
@@ -351,7 +388,27 @@ def wall_align_strafe_right(
         # Strafe-align the right side against a wall
         wall_align_strafe_right(speed=0.4)
     """
-    return WallAlign(
-        WallDirection.STRAFE_RIGHT, abs(speed),
-        accel_threshold, settle_duration, max_duration, grace_period,
-    )
+
+    def __init__(
+        self,
+        speed: float = 0.5,
+        accel_threshold: float = 0.5,
+        settle_duration: float = 0.2,
+        max_duration: float = 5.0,
+        grace_period: float = 0.3,
+    ):
+        super().__init__(
+            direction=WallDirection.STRAFE_RIGHT,
+            speed=abs(speed),
+            accel_threshold=accel_threshold,
+            settle_duration=settle_duration,
+            max_duration=max_duration,
+            grace_period=grace_period,
+        )
+
+    def _generate_signature(self) -> str:
+        return (
+            f"WallAlignStrafeRight(speed={self.speed:.2f}, "
+            f"threshold={self.accel_threshold:.1f}, "
+            f"settle={self.settle_duration:.2f})"
+        )

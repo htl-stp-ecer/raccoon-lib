@@ -35,6 +35,7 @@ class ParamInfo:
     annotation: str  # source-level type annotation, or ""
     default: str  # source-level default expression, or ""
     has_default: bool = False
+    default_refs: List[str] = field(default_factory=list)  # top-level names in default
 
 
 @dataclass
@@ -261,6 +262,24 @@ def _extract_init_params(cls_node: ast.ClassDef) -> List[ParamInfo]:
     return []
 
 
+def _extract_default_refs(node: ast.expr) -> List[str]:
+    """Extract top-level names referenced in a default-value AST node.
+
+    For example, ``LineSide.LEFT`` yields ``["LineSide"]``, while
+    literal values like ``0.5`` or ``None`` yield nothing.
+    """
+    refs: List[str] = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name):
+            # Skip builtins and common literals
+            if child.id not in (
+                "None", "True", "False", "int", "float", "str", "bool",
+                "list", "dict", "tuple", "set", "Optional", "Union", "List",
+            ):
+                refs.append(child.id)
+    return refs
+
+
 def _parse_function_params(func: ast.FunctionDef) -> List[ParamInfo]:
     params: List[ParamInfo] = []
     args = func.args
@@ -272,17 +291,18 @@ def _parse_function_params(func: ast.FunctionDef) -> List[ParamInfo]:
         annotation = _ast_to_source(arg.annotation) if arg.annotation else ""
         default_index = i - (num_args - num_defaults)
         has_default = default_index >= 0
-        default = (
-            _ast_to_source(args.defaults[default_index]) if has_default else ""
-        )
-        params.append(ParamInfo(arg.arg, annotation, default, has_default))
+        default_node = args.defaults[default_index] if has_default else None
+        default = _ast_to_source(default_node) if default_node else ""
+        default_refs = _extract_default_refs(default_node) if default_node else []
+        params.append(ParamInfo(arg.arg, annotation, default, has_default, default_refs))
 
     for i, arg in enumerate(args.kwonlyargs):
         annotation = _ast_to_source(arg.annotation) if arg.annotation else ""
         kw_default = args.kw_defaults[i]
         has_default = kw_default is not None
         default = _ast_to_source(kw_default) if kw_default else ""
-        params.append(ParamInfo(arg.arg, annotation, default, has_default))
+        default_refs = _extract_default_refs(kw_default) if kw_default else []
+        params.append(ParamInfo(arg.arg, annotation, default, has_default, default_refs))
 
     return params
 
@@ -412,6 +432,8 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
         f"Source: {source_file.name}",
         '"""',
         "",
+        "from __future__ import annotations",
+        "",
         f"{_SENTINEL} = object()",
         "",
         "from libstp.step.step_builder import StepBuilder",
@@ -419,8 +441,17 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
     ]
     if has_tags:
         lines.append("from libstp.step.annotation import dsl")
+    # Collect names from the source module needed for default values
+    class_names = [c.name for c in classes]
+    default_ref_names: List[str] = []
+    for c in classes:
+        for p in c.params:
+            for ref in p.default_refs:
+                if ref not in class_names and ref not in default_ref_names:
+                    default_ref_names.append(ref)
+    all_imports = class_names + default_ref_names
     lines += [
-        f"from .{source_file.stem} import {', '.join(c.name for c in classes)}",
+        f"from .{source_file.stem} import {', '.join(all_imports)}",
         "",
         "",
     ]

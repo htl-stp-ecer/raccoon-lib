@@ -4,11 +4,19 @@ from .motion_step import MotionStep
 from .drive import (
     DriveForward, DriveBackward, StrafeLeft, StrafeRight,
 )
-from .drive_angle import DriveAngle, drive_angle
-from .arc import Arc, drive_arc_left, drive_arc_right, drive_arc
-from .stop import Stop, stop
+from .drive_dsl import (
+    drive_forward, drive_backward, strafe_left, strafe_right,
+)
+from .drive_angle import DriveAngle
+from .drive_angle_dsl import drive_angle
+from .arc import Arc, DriveArcLeft, DriveArcRight, DriveArc
+from .arc_dsl import drive_arc_left, drive_arc_right, drive_arc
+from .stop import Stop
+from .stop_dsl import stop
 from .turn import TurnLeft, TurnRight
-from .heading_reference import MarkHeadingReference, mark_heading_reference, turn_to_heading
+from .turn_dsl import turn_left, turn_right
+from .heading_reference import MarkHeadingReference, turn_to_heading
+from .heading_reference_dsl import mark_heading_reference
 from .move_until import (
     SurfaceColor,
     MoveUntil,
@@ -16,23 +24,37 @@ from .move_until import (
     move_until,
     drive_until_black,
     drive_until_white,
+    DriveForwardUntilBlack,
     drive_forward_until_black,
+    DriveForwardUntilWhite,
     drive_forward_until_white,
+    DriveBackwardUntilBlack,
     drive_backward_until_black,
+    DriveBackwardUntilWhite,
     drive_backward_until_white,
     turn_until_black,
     turn_until_white,
+    TurnLeftUntilBlack,
     turn_left_until_black,
+    TurnLeftUntilWhite,
     turn_left_until_white,
+    TurnRightUntilBlack,
     turn_right_until_black,
+    TurnRightUntilWhite,
     turn_right_until_white,
     strafe_until_black,
     strafe_until_white,
+    StrafeLeftUntilBlack,
     strafe_left_until_black,
+    StrafeLeftUntilWhite,
     strafe_left_until_white,
+    StrafeRightUntilBlack,
     strafe_right_until_black,
+    StrafeRightUntilWhite,
     strafe_right_until_white,
+    DriveAngleUntilBlack,
     drive_angle_until_black,
+    DriveAngleUntilWhite,
     drive_angle_until_white,
 )
 from .lineup import (
@@ -55,6 +77,12 @@ from .wall_align import (
     WallAlign,
     WallDirection,
     BumpResult,
+    WallAlignForward,
+    WallAlignBackward,
+    WallAlignStrafeLeft,
+    WallAlignStrafeRight,
+)
+from .wall_align_dsl import (
     wall_align_forward,
     wall_align_backward,
     wall_align_strafe_left,
@@ -68,14 +96,28 @@ from .line_follow import (
     SingleLineFollowConfig,
     SingleSensorLineFollowUntilBlack,
     SingleLineFollowUntilBlackConfig,
-    follow_line,
-    follow_line_until_both_black,
-    follow_line_single,
-    follow_line_single_until_black,
+    FollowLine,
+    FollowLineUntilBothBlack,
+    FollowLineSingle,
+    FollowLineSingleUntilBlack,
     DirectionalLineFollow,
     DirectionalLineFollowConfig,
     DirectionalSingleLineFollow,
     DirectionalSingleLineFollowConfig,
+    DirectionalFollowLine,
+    DirectionalFollowLineUntilBothBlack,
+    StrafeFollowLine,
+    StrafeFollowLineUntilBothBlack,
+    StrafeFollowLineSingle,
+    StrafeFollowLineSingleUntilBlack,
+    DirectionalFollowLineSingle,
+    DirectionalFollowLineSingleUntilBlack,
+)
+from .line_follow_dsl import (
+    follow_line,
+    follow_line_until_both_black,
+    follow_line_single,
+    follow_line_single_until_black,
     directional_follow_line,
     directional_follow_line_until_both_black,
     strafe_follow_line,
@@ -85,25 +127,19 @@ from .line_follow import (
     directional_follow_line_single,
     directional_follow_line_single_until_black,
 )
-# Generated builders + DSL functions (from @dsl_step classes)
-from .drive_dsl import (
-    DriveForwardBuilder, drive_forward,
-    DriveBackwardBuilder, drive_backward,
-    StrafeLeftBuilder, strafe_left,
-    StrafeRightBuilder, strafe_right,
-)
-from .turn_dsl import (
-    TurnLeftBuilder, turn_left,
-    TurnRightBuilder, turn_right,
-)
 
-from .at_distance import WaitUntilDistance, wait_until_distance
-from .tune_drive import TuneDrive, tune_drive
-from .characterize_drive import CharacterizeDrive, characterize_drive
+from .at_distance import WaitUntilDistance
+from .at_distance_dsl import wait_until_distance
+from .tune_drive import TuneDrive
+from .tune_drive_dsl import tune_drive
+from .characterize_drive import CharacterizeDrive
+from .characterize_drive_dsl import characterize_drive
 from .auto_tune import (
     AutoTune,
     AutoTuneVelocity,
     AutoTuneMotion,
+)
+from .auto_tune_dsl import (
     auto_tune,
     auto_tune_velocity,
     auto_tune_motion,
@@ -113,33 +149,30 @@ __all__ = [
     # Base
     "MotionStep",
     # Basic motion
+    "DriveForward",
     "drive_forward",
+    "DriveBackward",
     "drive_backward",
     "Stop",
     "stop",
+    "StrafeLeft",
     "strafe_left",
+    "StrafeRight",
     "strafe_right",
     "DriveAngle",
     "drive_angle",
     "Arc",
+    "DriveArcLeft",
     "drive_arc_left",
+    "DriveArcRight",
     "drive_arc_right",
+    "DriveArc",
     "drive_arc",
-    "turn_left",
-    "turn_right",
-    # Conditional motion (dsl_step — builders generated by codegen)
-    "DriveForward",
-    "DriveForwardBuilder",
-    "DriveBackward",
-    "DriveBackwardBuilder",
-    "StrafeLeft",
-    "StrafeLeftBuilder",
-    "StrafeRight",
-    "StrafeRightBuilder",
     "TurnLeft",
-    "TurnLeftBuilder",
+    "turn_left",
     "TurnRight",
-    "TurnRightBuilder",
+    "turn_right",
+    # Heading reference
     "MarkHeadingReference",
     "mark_heading_reference",
     "turn_to_heading",
@@ -150,25 +183,40 @@ __all__ = [
     "move_until",
     "drive_until_black",
     "drive_until_white",
+    "DriveForwardUntilBlack",
     "drive_forward_until_black",
+    "DriveForwardUntilWhite",
     "drive_forward_until_white",
+    "DriveBackwardUntilBlack",
     "drive_backward_until_black",
+    "DriveBackwardUntilWhite",
     "drive_backward_until_white",
     "turn_until_black",
     "turn_until_white",
+    "TurnLeftUntilBlack",
     "turn_left_until_black",
+    "TurnLeftUntilWhite",
     "turn_left_until_white",
+    "TurnRightUntilBlack",
     "turn_right_until_black",
+    "TurnRightUntilWhite",
     "turn_right_until_white",
     "strafe_until_black",
     "strafe_until_white",
+    "StrafeLeftUntilBlack",
     "strafe_left_until_black",
+    "StrafeLeftUntilWhite",
     "strafe_left_until_white",
+    "StrafeRightUntilBlack",
     "strafe_right_until_black",
+    "StrafeRightUntilWhite",
     "strafe_right_until_white",
+    "DriveAngleUntilBlack",
     "drive_angle_until_black",
+    "DriveAngleUntilWhite",
     "drive_angle_until_white",
     # Lineup
+    "lineup",
     "forward_lineup_on_black",
     "forward_lineup_on_white",
     "backward_lineup_on_black",
@@ -186,9 +234,13 @@ __all__ = [
     "WallAlign",
     "WallDirection",
     "BumpResult",
+    "WallAlignForward",
     "wall_align_forward",
+    "WallAlignBackward",
     "wall_align_backward",
+    "WallAlignStrafeLeft",
     "wall_align_strafe_left",
+    "WallAlignStrafeRight",
     "wall_align_strafe_right",
     # Line follow
     "LineFollow",
@@ -196,26 +248,37 @@ __all__ = [
     "LineSide",
     "SingleSensorLineFollow",
     "SingleLineFollowConfig",
-    "follow_line",
-    "follow_line_until_both_black",
-    "follow_line_single",
     "SingleSensorLineFollowUntilBlack",
     "SingleLineFollowUntilBlackConfig",
+    "FollowLine",
+    "follow_line",
+    "FollowLineUntilBothBlack",
+    "follow_line_until_both_black",
+    "FollowLineSingle",
+    "follow_line_single",
+    "FollowLineSingleUntilBlack",
     "follow_line_single_until_black",
     # Directional line follow
     "DirectionalLineFollow",
     "DirectionalLineFollowConfig",
     "DirectionalSingleLineFollow",
     "DirectionalSingleLineFollowConfig",
+    "DirectionalFollowLine",
     "directional_follow_line",
+    "DirectionalFollowLineUntilBothBlack",
     "directional_follow_line_until_both_black",
+    "StrafeFollowLine",
     "strafe_follow_line",
+    "StrafeFollowLineUntilBothBlack",
     "strafe_follow_line_until_both_black",
+    "StrafeFollowLineSingle",
     "strafe_follow_line_single",
+    "StrafeFollowLineSingleUntilBlack",
     "strafe_follow_line_single_until_black",
+    "DirectionalFollowLineSingle",
     "directional_follow_line_single",
+    "DirectionalFollowLineSingleUntilBlack",
     "directional_follow_line_single_until_black",
-    "lineup",
     # Distance wait
     "WaitUntilDistance",
     "wait_until_distance",
@@ -227,9 +290,9 @@ __all__ = [
     "characterize_drive",
     # Auto-tune PID
     "AutoTune",
-    "AutoTuneVelocity",
-    "AutoTuneMotion",
     "auto_tune",
+    "AutoTuneVelocity",
     "auto_tune_velocity",
+    "AutoTuneMotion",
     "auto_tune_motion",
 ]

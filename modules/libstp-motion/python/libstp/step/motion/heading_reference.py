@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 from libstp.robot.heading_reference import HeadingReferenceService
 
 from .. import Step, dsl
+from ..annotation import dsl_step
 from ..logic.defer import Defer
 from .turn_dsl import turn_left, turn_right
 
@@ -10,19 +11,8 @@ if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "turn"])
 class MarkHeadingReference(Step):
-    """Captures the absolute IMU heading as a reference for future absolute turns."""
-
-    def _generate_signature(self) -> str:
-        return "MarkHeadingReference()"
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        robot.get_service(HeadingReferenceService).mark()
-
-
-@dsl(tags=["motion", "turn"])
-def mark_heading_reference() -> MarkHeadingReference:
     """Mark the current IMU heading as a reference point for absolute turns.
 
     Captures the robot's current absolute IMU heading and stores it as
@@ -36,9 +26,6 @@ def mark_heading_reference() -> MarkHeadingReference:
 
     Multiple calls overwrite the previous reference.
 
-    Returns:
-        A MarkHeadingReference step that records the heading when executed.
-
     Example::
 
         from libstp.step.motion import mark_heading_reference, turn_to_heading
@@ -51,7 +38,12 @@ def mark_heading_reference() -> MarkHeadingReference:
         # Turn to face 180 degrees from where we marked
         turn_to_heading(180)
     """
-    return MarkHeadingReference()
+
+    def _generate_signature(self) -> str:
+        return "MarkHeadingReference()"
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
+        robot.get_service(HeadingReferenceService).mark()
 
 
 @dsl(tags=["motion", "turn"])

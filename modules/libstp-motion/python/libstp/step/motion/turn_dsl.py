@@ -3,6 +3,8 @@
 Source: turn.py
 """
 
+from __future__ import annotations
+
 _UNSET = object()
 
 from libstp.step.step_builder import StepBuilder

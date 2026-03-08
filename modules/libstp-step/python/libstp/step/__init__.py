@@ -15,9 +15,13 @@ from .motion import *
 from .motion import __all__ as _motion_all
 from .timing import *
 from .timing import __all__ as _timing_all
-from .wait_for_seconds import WaitForSeconds, wait
-from .wait_for_button import WaitForButton, wait_for_button
-from .wait_for_light import WaitForLight, wait_for_light, WaitForLightLegacy, wait_for_light_legacy
+from .wait_for_seconds import WaitForSeconds
+from .wait_for_seconds_dsl import wait_for_seconds
+from .wait_for_button import WaitForButton
+from .wait_for_button_dsl import wait_for_button
+from .wait_for_light import WaitForLight, WaitForLightLegacy
+from .wait_for_light_dsl import wait_for_light, wait_for_light_legacy
+from .timeout_dsl import timeout
 from .servo import *
 from .servo import __all__ as _servo_all
 from .motor import *
@@ -33,13 +37,14 @@ __all__ = [
     "seq",
     "parallel",
     "WaitForSeconds",
-    "wait",
+    "wait_for_seconds",
     "WaitForButton",
     "wait_for_button",
     "WaitForLight",
     "wait_for_light",
     "WaitForLightLegacy",
     "wait_for_light_legacy",
+    "timeout",
     "dsl",
     "dsl_step",
     "DslMeta",

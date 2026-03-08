@@ -1,40 +1,11 @@
 from typing import Any, Union
 from .. import Step
-from ..annotation import dsl
+from ..annotation import dsl_step
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["timing", "sync"])
 class WaitForCheckpoint(Step):
-    """Wait until the robot synchronizer reaches a mission-relative checkpoint."""
-
-    def __init__(self, checkpoint_seconds: Union[float, int]) -> None:
-        """
-        Initialize the checkpoint wait step.
-
-        Args:
-            checkpoint_seconds: The number of seconds to wait before synchronizing.
-
-        Raises:
-            ValueError: If checkpoint_seconds is negative.
-        """
-        super().__init__()
-
-        if checkpoint_seconds < 0:
-            raise ValueError(f"Checkpoint duration cannot be negative: {checkpoint_seconds}")
-
-        self.checkpoint_seconds = float(checkpoint_seconds)
-
-    async def _execute_step(self, robot: 'GenericRobot') -> None:
-        """
-        Delegate the wait to ``robot.synchronizer``.
-        """
-        await robot.synchronizer.wait_until_checkpoint(self.checkpoint_seconds)
-
-
-@dsl(tags=["timing", "sync"])
-def wait_for_checkpoint(checkpoint_seconds: float) -> WaitForCheckpoint:
-    """
-    Wait until a mission-relative time checkpoint is reached.
+    """Wait until a mission-relative time checkpoint is reached.
 
     Pauses execution until the robot's global synchronizer clock reaches
     the specified number of seconds since mission start. If the
@@ -50,9 +21,6 @@ def wait_for_checkpoint(checkpoint_seconds: float) -> WaitForCheckpoint:
         checkpoint_seconds: The mission-relative time (in seconds) to
             wait for. Must be non-negative.
 
-    Returns:
-        WaitForCheckpoint: A step that blocks until the checkpoint time.
-
     Example::
 
         from libstp.step.timing import wait_for_checkpoint
@@ -67,4 +35,17 @@ def wait_for_checkpoint(checkpoint_seconds: float) -> WaitForCheckpoint:
             drive_to_bin(),
         ])
     """
-    return WaitForCheckpoint(checkpoint_seconds=checkpoint_seconds)
+
+    def __init__(self, checkpoint_seconds: Union[float, int]) -> None:
+        super().__init__()
+
+        if checkpoint_seconds < 0:
+            raise ValueError(f"Checkpoint duration cannot be negative: {checkpoint_seconds}")
+
+        self.checkpoint_seconds = float(checkpoint_seconds)
+
+    def _generate_signature(self) -> str:
+        return f"WaitForCheckpoint(seconds={self.checkpoint_seconds:.1f})"
+
+    async def _execute_step(self, robot: 'GenericRobot') -> None:
+        await robot.synchronizer.wait_until_checkpoint(self.checkpoint_seconds)

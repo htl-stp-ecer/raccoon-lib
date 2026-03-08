@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 
 from libstp.hal import IMotor
 from libstp.step import Step
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl, dsl_step
 
 # BEMF sampling rate in Hz (5ms interval on firmware) — must match motor_adapter.cpp
 _BEMF_SAMPLE_RATE = 200.0
@@ -32,13 +32,36 @@ class StopMode(Enum):
 
 
 # ---------------------------------------------------------------------------
-# Step classes (hidden from DSL discovery; use factory functions below)
+# Step classes
 # ---------------------------------------------------------------------------
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motor", "actuator"])
 class SetMotorPower(Step):
-    """Set a motor to open-loop percent power (-100..100)."""
+    """Set a motor to open-loop percent power.
+
+    Commands the motor at a raw duty-cycle percentage without any feedback
+    control. The command is applied immediately and the step completes
+    without waiting -- the motor keeps spinning until another command
+    (or a stop step) is issued.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(0)``).
+        percent: Duty-cycle power from -100 (full reverse) to 100 (full
+            forward). Values outside this range raise ``ValueError``.
+
+    Example::
+
+        from libstp.step.motor import motor_power, motor_off
+
+        # Spin the claw motor forward at half power for 2 seconds
+        sequence(
+            motor_power(robot.motor(1), 50),
+            wait(2.0),
+            motor_off(robot.motor(1)),
+        )
+    """
 
     def __init__(self, motor: IMotor, percent: int) -> None:
         super().__init__()
@@ -54,9 +77,35 @@ class SetMotorPower(Step):
         self._motor.set_speed(self._percent)
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motor", "actuator"])
 class SetMotorVelocity(Step):
-    """Set a motor to closed-loop velocity (firmware BEMF units)."""
+    """Set a motor to closed-loop velocity in firmware BEMF units.
+
+    Commands the motor's firmware PID controller to maintain a target
+    velocity expressed in raw BEMF tick units. The step completes
+    immediately; the motor continues at the requested speed until changed.
+
+    For a human-friendly velocity interface, prefer ``motor_dps`` which
+    accepts degrees per second.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(0)``).
+        velocity: Target velocity in firmware BEMF units (ticks per BEMF
+            sample period). Positive values drive forward; negative values
+            drive in reverse.
+
+    Example::
+
+        from libstp.step.motor import motor_velocity, motor_brake
+
+        # Drive the left wheel at 800 BEMF units, then brake
+        sequence(
+            motor_velocity(robot.motor(0), 800),
+            wait(3.0),
+            motor_brake(robot.motor(0)),
+        )
+    """
 
     def __init__(self, motor: IMotor, velocity: int) -> None:
         super().__init__()
@@ -70,9 +119,37 @@ class SetMotorVelocity(Step):
         self._motor.set_velocity(self._velocity)
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motor", "actuator"])
 class SetMotorDps(Step):
-    """Set a motor to closed-loop velocity specified in degrees per second."""
+    """Set a motor to closed-loop velocity in degrees per second.
+
+    Converts the requested angular velocity from degrees per second into
+    firmware BEMF units using the motor's calibration data, then engages
+    the firmware's closed-loop velocity controller. The step completes
+    immediately; the motor continues at the requested speed until changed.
+
+    Prerequisites:
+        The motor must have valid calibration data (``ticks_to_rad``) so
+        the deg/s to BEMF conversion is accurate. Run the motor
+        calibration step first if calibration has not been performed.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(0)``).
+        dps: Target angular velocity in degrees per second. Positive
+            values drive forward; negative values drive in reverse.
+
+    Example::
+
+        from libstp.step.motor import motor_dps, motor_brake
+
+        # Spin the left wheel at 180 deg/s for 2 seconds
+        sequence(
+            motor_dps(robot.motor(0), 180.0),
+            wait(2.0),
+            motor_brake(robot.motor(0)),
+        )
+    """
 
     def __init__(self, motor: IMotor, dps: float) -> None:
         super().__init__()
@@ -92,9 +169,33 @@ class SetMotorDps(Step):
         self._motor.set_velocity(bemf_target)
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motor", "actuator"])
 class MoveMotorTo(Step):
-    """Move a motor to an absolute encoder position, waiting for completion."""
+    """Move a motor to an absolute encoder position and wait for completion.
+
+    Commands the motor's firmware position controller to drive to the given
+    absolute encoder tick count. The step blocks (yielding to the async
+    loop) until the firmware reports the move is complete, or until the
+    optional timeout expires.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(2)``).
+        position: Target position in absolute encoder ticks.
+        velocity: Movement speed in firmware ticks/s. Must be positive.
+            Defaults to 1000.
+        timeout: Maximum seconds to wait for the move to finish. ``None``
+            (the default) means wait indefinitely. If the timeout fires
+            a warning is logged and the step returns without stopping the
+            motor.
+
+    Example::
+
+        from libstp.step.motor import motor_move_to
+
+        # Raise the arm to encoder position 500 at speed 800, with a 3s safety timeout
+        motor_move_to(robot.motor(2), position=500, velocity=800, timeout=3.0)
+    """
 
     def __init__(
         self,
@@ -131,9 +232,37 @@ class MoveMotorTo(Step):
             await asyncio.sleep(0.01)
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motor", "actuator"])
 class MoveMotorRelative(Step):
-    """Move a motor by a relative encoder delta, waiting for completion."""
+    """Move a motor by a relative encoder delta and wait for completion.
+
+    Commands the motor's firmware position controller to move by the given
+    number of encoder ticks relative to its current position. The step
+    blocks until the firmware reports the move is complete, or until the
+    optional timeout expires.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(2)``).
+        delta: Number of encoder ticks to move. Positive values move
+            forward; negative values move in reverse.
+        velocity: Movement speed in firmware ticks/s. Must be positive.
+            Defaults to 1000.
+        timeout: Maximum seconds to wait for the move to finish. ``None``
+            (the default) means wait indefinitely. If the timeout fires
+            a warning is logged and the step returns without stopping the
+            motor.
+
+    Example::
+
+        from libstp.step.motor import motor_move_relative, motor_brake
+
+        # Rotate the arm motor 200 ticks forward, then brake
+        sequence(
+            motor_move_relative(robot.motor(2), delta=200, velocity=600),
+            motor_brake(robot.motor(2)),
+        )
+    """
 
     def __init__(
         self,
@@ -193,198 +322,8 @@ class StopMotor(Step):
             self._motor.brake()
 
 
-# ---------------------------------------------------------------------------
-# DSL factory functions
-# ---------------------------------------------------------------------------
-
-
-@dsl(tags=["motor", "actuator"])
-def motor_power(motor: IMotor, percent: int) -> SetMotorPower:
-    """Set a motor to open-loop percent power.
-
-    Commands the motor at a raw duty-cycle percentage without any feedback
-    control. The command is applied immediately and the step completes
-    without waiting -- the motor keeps spinning until another command
-    (or a stop step) is issued.
-
-    Args:
-        motor: The motor to control, obtained from the robot hardware map
-            (e.g. ``robot.motor(0)``).
-        percent: Duty-cycle power from -100 (full reverse) to 100 (full
-            forward). Values outside this range raise ``ValueError``.
-
-    Returns:
-        A ``SetMotorPower`` step ready to be scheduled in a step sequence.
-
-    Example::
-
-        from libstp.step.motor import motor_power, motor_off
-
-        # Spin the claw motor forward at half power for 2 seconds
-        sequence(
-            motor_power(robot.motor(1), 50),
-            wait(2.0),
-            motor_off(robot.motor(1)),
-        )
-    """
-    return SetMotorPower(motor=motor, percent=percent)
-
-
-@dsl(tags=["motor", "actuator"])
-def motor_velocity(motor: IMotor, velocity: int) -> SetMotorVelocity:
-    """Set a motor to closed-loop velocity in firmware BEMF units.
-
-    Commands the motor's firmware PID controller to maintain a target
-    velocity expressed in raw BEMF tick units. The step completes
-    immediately; the motor continues at the requested speed until changed.
-
-    For a human-friendly velocity interface, prefer ``motor_dps`` which
-    accepts degrees per second.
-
-    Args:
-        motor: The motor to control, obtained from the robot hardware map
-            (e.g. ``robot.motor(0)``).
-        velocity: Target velocity in firmware BEMF units (ticks per BEMF
-            sample period). Positive values drive forward; negative values
-            drive in reverse.
-
-    Returns:
-        A ``SetMotorVelocity`` step ready to be scheduled in a step sequence.
-
-    Example::
-
-        from libstp.step.motor import motor_velocity, motor_brake
-
-        # Drive the left wheel at 800 BEMF units, then brake
-        sequence(
-            motor_velocity(robot.motor(0), 800),
-            wait(3.0),
-            motor_brake(robot.motor(0)),
-        )
-    """
-    return SetMotorVelocity(motor=motor, velocity=velocity)
-
-
-@dsl(tags=["motor", "actuator"])
-def motor_move_to(
-    motor: IMotor,
-    position: int,
-    velocity: int = 1000,
-    timeout: float | None = None,
-) -> MoveMotorTo:
-    """Move a motor to an absolute encoder position and wait for completion.
-
-    Commands the motor's firmware position controller to drive to the given
-    absolute encoder tick count. The step blocks (yielding to the async
-    loop) until the firmware reports the move is complete, or until the
-    optional timeout expires.
-
-    Args:
-        motor: The motor to control, obtained from the robot hardware map
-            (e.g. ``robot.motor(2)``).
-        position: Target position in absolute encoder ticks.
-        velocity: Movement speed in firmware ticks/s. Must be positive.
-            Defaults to 1000.
-        timeout: Maximum seconds to wait for the move to finish. ``None``
-            (the default) means wait indefinitely. If the timeout fires
-            a warning is logged and the step returns without stopping the
-            motor.
-
-    Returns:
-        A ``MoveMotorTo`` step ready to be scheduled in a step sequence.
-
-    Example::
-
-        from libstp.step.motor import motor_move_to
-
-        # Raise the arm to encoder position 500 at speed 800, with a 3s safety timeout
-        motor_move_to(robot.motor(2), position=500, velocity=800, timeout=3.0)
-    """
-    return MoveMotorTo(motor=motor, position=position, velocity=velocity, timeout=timeout)
-
-
-@dsl(tags=["motor", "actuator"])
-def motor_move_relative(
-    motor: IMotor,
-    delta: int,
-    velocity: int = 1000,
-    timeout: float | None = None,
-) -> MoveMotorRelative:
-    """Move a motor by a relative encoder delta and wait for completion.
-
-    Commands the motor's firmware position controller to move by the given
-    number of encoder ticks relative to its current position. The step
-    blocks until the firmware reports the move is complete, or until the
-    optional timeout expires.
-
-    Args:
-        motor: The motor to control, obtained from the robot hardware map
-            (e.g. ``robot.motor(2)``).
-        delta: Number of encoder ticks to move. Positive values move
-            forward; negative values move in reverse.
-        velocity: Movement speed in firmware ticks/s. Must be positive.
-            Defaults to 1000.
-        timeout: Maximum seconds to wait for the move to finish. ``None``
-            (the default) means wait indefinitely. If the timeout fires
-            a warning is logged and the step returns without stopping the
-            motor.
-
-    Returns:
-        A ``MoveMotorRelative`` step ready to be scheduled in a step
-        sequence.
-
-    Example::
-
-        from libstp.step.motor import motor_move_relative, motor_brake
-
-        # Rotate the arm motor 200 ticks forward, then brake
-        sequence(
-            motor_move_relative(robot.motor(2), delta=200, velocity=600),
-            motor_brake(robot.motor(2)),
-        )
-    """
-    return MoveMotorRelative(motor=motor, delta=delta, velocity=velocity, timeout=timeout)
-
-
-@dsl(tags=["motor", "actuator"])
-def motor_dps(motor: IMotor, dps: float) -> SetMotorDps:
-    """Set a motor to closed-loop velocity in degrees per second.
-
-    Converts the requested angular velocity from degrees per second into
-    firmware BEMF units using the motor's calibration data, then engages
-    the firmware's closed-loop velocity controller. The step completes
-    immediately; the motor continues at the requested speed until changed.
-
-    Prerequisites:
-        The motor must have valid calibration data (``ticks_to_rad``) so
-        the deg/s to BEMF conversion is accurate. Run the motor
-        calibration step first if calibration has not been performed.
-
-    Args:
-        motor: The motor to control, obtained from the robot hardware map
-            (e.g. ``robot.motor(0)``).
-        dps: Target angular velocity in degrees per second. Positive
-            values drive forward; negative values drive in reverse.
-
-    Returns:
-        A ``SetMotorDps`` step ready to be scheduled in a step sequence.
-
-    Example::
-
-        from libstp.step.motor import motor_dps, motor_brake
-
-        # Spin the left wheel at 180 deg/s for 2 seconds
-        sequence(
-            motor_dps(robot.motor(0), 180.0),
-            wait(2.0),
-            motor_brake(robot.motor(0)),
-        )
-    """
-    return SetMotorDps(motor=motor, dps=dps)
-
-
-@dsl(tags=["motor", "actuator"])
-def motor_off(motor: IMotor) -> StopMotor:
+@dsl_step(tags=["motor", "actuator"])
+class MotorOff(StopMotor):
     """Turn a motor off, allowing it to coast freely.
 
     Removes all power from the motor so it spins down under friction
@@ -395,9 +334,6 @@ def motor_off(motor: IMotor) -> StopMotor:
     Args:
         motor: The motor to turn off, obtained from the robot hardware map
             (e.g. ``robot.motor(0)``).
-
-    Returns:
-        A ``StopMotor`` step configured for coast / free-spin mode.
 
     Example::
 
@@ -410,11 +346,13 @@ def motor_off(motor: IMotor) -> StopMotor:
             motor_off(robot.motor(3)),
         )
     """
-    return StopMotor(motor=motor, mode=StopMode.OFF)
+
+    def __init__(self, motor: IMotor) -> None:
+        super().__init__(motor, StopMode.OFF)
 
 
-@dsl(tags=["motor", "actuator"])
-def motor_passive_brake(motor: IMotor) -> StopMotor:
+@dsl_step(tags=["motor", "actuator"])
+class MotorPassiveBrake(StopMotor):
     """Passively brake a motor by commanding zero power.
 
     Sets the motor power to zero, which causes the H-bridge to short the
@@ -425,9 +363,6 @@ def motor_passive_brake(motor: IMotor) -> StopMotor:
     Args:
         motor: The motor to brake, obtained from the robot hardware map
             (e.g. ``robot.motor(0)``).
-
-    Returns:
-        A ``StopMotor`` step configured for passive braking mode.
 
     Example::
 
@@ -440,11 +375,13 @@ def motor_passive_brake(motor: IMotor) -> StopMotor:
             motor_passive_brake(robot.motor(0)),
         )
     """
-    return StopMotor(motor=motor, mode=StopMode.PASSIVE_BRAKE)
+
+    def __init__(self, motor: IMotor) -> None:
+        super().__init__(motor, StopMode.PASSIVE_BRAKE)
 
 
-@dsl(tags=["motor", "actuator"])
-def motor_brake(motor: IMotor) -> StopMotor:
+@dsl_step(tags=["motor", "actuator"])
+class MotorBrake(StopMotor):
     """Actively brake a motor and hold its current position.
 
     Engages the firmware's active brake (stop latch), which commands the
@@ -457,9 +394,6 @@ def motor_brake(motor: IMotor) -> StopMotor:
         motor: The motor to brake, obtained from the robot hardware map
             (e.g. ``robot.motor(2)``).
 
-    Returns:
-        A ``StopMotor`` step configured for active braking mode.
-
     Example::
 
         from libstp.step.motor import motor_move_to, motor_brake
@@ -470,7 +404,9 @@ def motor_brake(motor: IMotor) -> StopMotor:
             motor_brake(robot.motor(2)),
         )
     """
-    return StopMotor(motor=motor, mode=StopMode.ACTIVE_BRAKE)
+
+    def __init__(self, motor: IMotor) -> None:
+        super().__init__(motor, StopMode.ACTIVE_BRAKE)
 
 
 __all__ = [
@@ -481,12 +417,7 @@ __all__ = [
     "MoveMotorTo",
     "MoveMotorRelative",
     "StopMotor",
-    "motor_power",
-    "motor_velocity",
-    "motor_dps",
-    "motor_move_to",
-    "motor_move_relative",
-    "motor_off",
-    "motor_passive_brake",
-    "motor_brake",
+    "MotorOff",
+    "MotorPassiveBrake",
+    "MotorBrake",
 ]

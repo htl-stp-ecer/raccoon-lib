@@ -16,7 +16,8 @@ import yaml
 
 from libstp.foundation import ChassisVelocity
 
-from .. import Step, dsl
+from .. import Step
+from ..annotation import dsl_step
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -166,31 +167,84 @@ def _find_project_root() -> Optional[Path]:
     return None
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "calibration", "characterize"])
 class CharacterizeDrive(Step):
-    """Characterize drive limits by commanding raw velocities.
+    """Characterize the robot's physical drive limits by commanding raw velocities.
 
-    For each configured axis, runs multiple acceleration + deceleration
-    trials. Acceleration phase records odometry at ~100 Hz until a velocity
-    plateau is detected; deceleration phase ramps up then commands zero and
-    records coast-down. Max velocity, acceleration, and deceleration are
-    extracted via 10%/90% rise/fall-time analysis, and the median across
-    trials is taken as the final result. Results are applied in-memory and
-    optionally persisted to ``raccoon.project.yml``.
+    Bypasses the profile and PID systems entirely to discover the true hardware
+    capabilities of each drive axis. For each axis, the step runs multiple
+    independent trials consisting of two phases:
+
+    1. **Acceleration phase** -- commands the specified velocity and records
+       odometry at ~100 Hz until a velocity plateau is detected or the timeout
+       expires. From this data, max velocity and acceleration are extracted
+       using 10%--90% rise-time analysis.
+
+    2. **Deceleration phase** -- ramps the robot back up to speed, then
+       commands zero velocity and records the coast-down. Deceleration is
+       computed from 90%--10% fall-time analysis.
+
+    The median of all valid trials for each metric is taken as the final
+    result. Measured values are applied to the in-memory
+    ``motion_pid_config`` immediately and, if ``persist`` is enabled, written
+    to the ``robot.motion_pid`` section of ``raccoon.project.yml`` so they
+    survive restarts.
+
+    This step is intended for initial robot setup and should be run on a flat
+    surface with enough room for the robot to accelerate to full speed. It is
+    typically the first phase of the full ``auto_tune()`` pipeline.
+
+    Args:
+        axes: Which axes to characterize. Options are ``"forward"``,
+            ``"lateral"``, and ``"angular"``. Default ``["forward"]``.
+        trials: Number of trials per axis. The median is used for
+            robustness against outliers. Default 3.
+        command_speed: Raw velocity command magnitude sent to the motors.
+            For forward/lateral this is in m/s; for angular it is in rad/s.
+            Should be at or near the maximum the robot can sustain.
+            Default 1.0.
+        accel_timeout: Maximum time in seconds to wait for the acceleration
+            phase before giving up. Default 3.0.
+        decel_timeout: Maximum time in seconds to record the deceleration
+            (coast-down) phase. Default 3.0.
+        persist: If ``True``, write the measured limits to
+            ``raccoon.project.yml`` under ``robot.motion_pid``. Default
+            ``True``.
+
+    Example::
+
+        from libstp.step.motion import characterize_drive
+
+        # Characterize forward axis with default settings
+        characterize_drive()
+
+        # Characterize forward and angular axes with 5 trials each
+        characterize_drive(
+            axes=["forward", "angular"],
+            trials=5,
+        )
+
+        # Characterize without saving to disk (dry run)
+        characterize_drive(
+            axes=["forward", "lateral", "angular"],
+            persist=False,
+        )
     """
 
     def __init__(
         self,
-        axes: list[str],
-        trials: int,
-        command_speed: float,
-        accel_timeout: float,
-        decel_timeout: float,
-        persist: bool,
+        axes: list[str] = None,
+        trials: int = 3,
+        command_speed: float = 1.0,
+        accel_timeout: float = 3.0,
+        decel_timeout: float = 3.0,
+        persist: bool = True,
     ):
         super().__init__()
+        if axes is None:
+            axes = ["forward"]
         self.axes = axes
-        self.trials = trials
+        self.trials = max(1, trials)
         self.command_speed = command_speed
         self.accel_timeout = accel_timeout
         self.decel_timeout = decel_timeout
@@ -531,86 +585,3 @@ class CharacterizeDrive(Step):
         self.info("=" * 60)
 
 
-@dsl(tags=["motion", "calibration", "characterize"])
-def characterize_drive(
-    axes: list[str] | None = None,
-    trials: int = 3,
-    command_speed: float = 1.0,
-    accel_timeout: float = 3.0,
-    decel_timeout: float = 3.0,
-    persist: bool = True,
-) -> CharacterizeDrive:
-    """Characterize the robot's physical drive limits by commanding raw velocities.
-
-    Bypasses the profile and PID systems entirely to discover the true hardware
-    capabilities of each drive axis. For each axis, the step runs multiple
-    independent trials consisting of two phases:
-
-    1. **Acceleration phase** -- commands the specified velocity and records
-       odometry at ~100 Hz until a velocity plateau is detected or the timeout
-       expires. From this data, max velocity and acceleration are extracted
-       using 10%--90% rise-time analysis.
-
-    2. **Deceleration phase** -- ramps the robot back up to speed, then
-       commands zero velocity and records the coast-down. Deceleration is
-       computed from 90%--10% fall-time analysis.
-
-    The median of all valid trials for each metric is taken as the final
-    result. Measured values are applied to the in-memory
-    ``motion_pid_config`` immediately and, if ``persist`` is enabled, written
-    to the ``robot.motion_pid`` section of ``raccoon.project.yml`` so they
-    survive restarts.
-
-    This step is intended for initial robot setup and should be run on a flat
-    surface with enough room for the robot to accelerate to full speed. It is
-    typically the first phase of the full ``auto_tune()`` pipeline.
-
-    Args:
-        axes: Which axes to characterize. Options are ``"forward"``,
-            ``"lateral"``, and ``"angular"``. Default ``["forward"]``.
-        trials: Number of trials per axis. The median is used for
-            robustness against outliers. Default 3.
-        command_speed: Raw velocity command magnitude sent to the motors.
-            For forward/lateral this is in m/s; for angular it is in rad/s.
-            Should be at or near the maximum the robot can sustain.
-            Default 1.0.
-        accel_timeout: Maximum time in seconds to wait for the acceleration
-            phase before giving up. Default 3.0.
-        decel_timeout: Maximum time in seconds to record the deceleration
-            (coast-down) phase. Default 3.0.
-        persist: If ``True``, write the measured limits to
-            ``raccoon.project.yml`` under ``robot.motion_pid``. Default
-            ``True``.
-
-    Returns:
-        A ``CharacterizeDrive`` step that measures and persists drive limits.
-
-    Example::
-
-        from libstp.step.motion import characterize_drive
-
-        # Characterize forward axis with default settings
-        step = characterize_drive()
-
-        # Characterize forward and angular axes with 5 trials each
-        step = characterize_drive(
-            axes=["forward", "angular"],
-            trials=5,
-        )
-
-        # Characterize without saving to disk (dry run)
-        step = characterize_drive(
-            axes=["forward", "lateral", "angular"],
-            persist=False,
-        )
-    """
-    if axes is None:
-        axes = ["forward"]
-    return CharacterizeDrive(
-        axes=axes,
-        trials=max(1, trials),
-        command_speed=command_speed,
-        accel_timeout=accel_timeout,
-        decel_timeout=decel_timeout,
-        persist=persist,
-    )

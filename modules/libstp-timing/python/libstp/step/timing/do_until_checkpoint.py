@@ -1,32 +1,11 @@
 from typing import Any
 from .. import Step
-from ..annotation import dsl
+from ..annotation import dsl_step
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["timing", "sync"])
 class DoUntilCheckpoint(Step):
-    """Run one child step until the robot synchronizer reaches a checkpoint."""
-
-    def __init__(self, checkpoint: float, step) -> None:
-        """Store the checkpoint deadline and the child step to cancel there."""
-        super().__init__()
-        self.checkpoint = checkpoint
-        self.step = step
-
-    async def _job_while_wait(self, robot: "GenericRobot"):
-        """Delegate the child execution used by the synchronizer callback."""
-        await self.step.run_step(robot)
-
-    async def run_step(self, robot: "GenericRobot") -> None:
-        """Record the wrapper step, then execute the child until the checkpoint."""
-        await super().run_step(robot)
-        await robot.synchronizer.do_until_checkpoint(self.checkpoint, self._job_while_wait, robot)
-
-
-@dsl(tags=["timing", "sync"])
-def do_until_checkpoint(checkpoint: float, step) -> DoUntilCheckpoint:
-    """
-    Run a step until a mission-relative time checkpoint, then cancel it.
+    """Run a step until a mission-relative time checkpoint, then cancel it.
 
     Starts executing ``step`` immediately and cancels it when the robot's
     global synchronizer clock reaches ``checkpoint`` seconds since mission
@@ -44,9 +23,6 @@ def do_until_checkpoint(checkpoint: float, step) -> DoUntilCheckpoint:
         step: The step to run. Will be cancelled if still active when the
             checkpoint time is reached.
 
-    Returns:
-        DoUntilCheckpoint: A step that manages the time-boxed execution.
-
     Example::
 
         from libstp.step.timing import do_until_checkpoint
@@ -62,4 +38,20 @@ def do_until_checkpoint(checkpoint: float, step) -> DoUntilCheckpoint:
             drive_to_start(),
         ])
     """
-    return DoUntilCheckpoint(checkpoint=checkpoint, step=step)
+
+    def __init__(self, checkpoint: float, step) -> None:
+        super().__init__()
+        self.checkpoint = checkpoint
+        self.step = step
+
+    def _generate_signature(self) -> str:
+        return f"DoUntilCheckpoint(checkpoint={self.checkpoint:.1f})"
+
+    async def _job_while_wait(self, robot: "GenericRobot"):
+        """Delegate the child execution used by the synchronizer callback."""
+        await self.step.run_step(robot)
+
+    async def run_step(self, robot: "GenericRobot") -> None:
+        """Record the wrapper step, then execute the child until the checkpoint."""
+        await super().run_step(robot)
+        await robot.synchronizer.do_until_checkpoint(self.checkpoint, self._job_while_wait, robot)

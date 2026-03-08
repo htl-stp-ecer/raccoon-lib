@@ -3,13 +3,33 @@ from typing import List
 from libstp import calibration_store as CalibrationStore
 from libstp.calibration_store import CalibrationType
 from libstp.sensor_ir import IRSensor
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl_step
 from libstp.ui.step import UIStep
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["calibration", "sensor"])
 class SwitchCalibrationSet(UIStep):
-    """Step that loads a named calibration set and applies it to all IR sensors."""
+    """Switch IR sensors to a named calibration set.
+
+    Loads calibration data for the given set name from the calibration
+    store and applies it to all registered IR sensors. Each sensor looks
+    up its per-port calibration key (e.g. ``"transparent_port3"``) and
+    sets its black/white thresholds accordingly.
+
+    Use this to swap between surface-specific calibrations at runtime
+    (e.g. switching from the default table surface to transparent objects).
+
+    Args:
+        set_name: Name of the calibration set to apply
+            (e.g. ``"default"``, ``"transparent"``).
+
+    Example::
+
+        from libstp.step.calibration import switch_calibration_set
+
+        # Switch to transparent calibration before scoring
+        switch_calibration_set("transparent")
+    """
 
     def __init__(self, set_name: str = "default") -> None:
         super().__init__()
@@ -36,17 +56,3 @@ class SwitchCalibrationSet(UIStep):
                 f"Applied calibration set '{key}': "
                 f"black={black_thresh}, white={white_thresh}"
             )
-
-
-@dsl(tags=["calibration", "sensor"])
-def switch_calibration_set(set_name: str = "default") -> SwitchCalibrationSet:
-    """
-    Switch IR sensors to a named calibration set.
-
-    Args:
-        set_name: Name of the calibration set to apply (e.g. "default", "transparent")
-
-    Returns:
-        SwitchCalibrationSet step instance
-    """
-    return SwitchCalibrationSet(set_name=set_name)
