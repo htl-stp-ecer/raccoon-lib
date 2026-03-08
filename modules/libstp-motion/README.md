@@ -30,7 +30,7 @@ The Python layer mirrors that structure:
 
 - `MotionStep` owns the fixed-rate async loop and lifecycle hooks.
 - Small wrapper steps such as `Drive`, `Turn`, and `DriveAngle` instantiate the C++ controllers.
-- Higher-level helper packages such as `move_until`, `lineup`, `line_follow`, `tune_drive`, `characterize_drive`, and `auto_tune` compose those wrappers into contributor-facing DSL helpers.
+- Higher-level helper packages such as `lineup`, `line_follow`, `tune_drive`, `characterize_drive`, and `auto_tune` compose those wrappers into contributor-facing DSL helpers.
 
 ## Public C++ API
 
@@ -78,7 +78,6 @@ Main step entrypoints:
 - `turn_left`, `turn_right`
 - `drive_angle`
 - `stop`
-- `move_until(...)` and the `*_until_black` / `*_until_white` helpers
 - `follow_line`, `follow_line_single`
 - `lineup(...)` and the specialized lineup helpers
 - `wall_align_*`

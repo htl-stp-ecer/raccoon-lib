@@ -6,18 +6,26 @@ then computes and executes a corrective turn angle.
 """
 import math
 import time
+from enum import Enum
 from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq, defer
+from libstp.step.condition import on_black, on_white
 from typing import TYPE_CHECKING
 
 from ..turn_dsl import turn_left, turn_right
-from ..move_until import SurfaceColor, drive_until_black, drive_until_white
+from ..drive_dsl import drive_forward, drive_backward
 from ... import dsl
 from ..motion_step import MotionStep
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
+
+
+class SurfaceColor(Enum):
+    """Target surface color for sensor-based motion."""
+    BLACK = "black"
+    WHITE = "white"
 
 
 @dsl(hidden=True)
@@ -225,10 +233,9 @@ def forward_lineup_on_black(
             target=SurfaceColor.BLACK,
             detection_threshold=detection_threshold
         ),
-        drive_until_white(
-            [left_sensor, right_sensor],
-            forward_speed=0.5
-        )
+        drive_forward(speed=0.5).until(
+            on_white(left_sensor) | on_white(right_sensor)
+        ),
     ])
 
 
@@ -277,10 +284,9 @@ def forward_lineup_on_white(
             target=SurfaceColor.WHITE,
             detection_threshold=detection_threshold
         ),
-        drive_until_black(
-            [left_sensor, right_sensor],
-            forward_speed=0.5
-        )
+        drive_forward(speed=0.5).until(
+            on_black(left_sensor) | on_black(right_sensor)
+        ),
     ])
 
 
@@ -331,10 +337,9 @@ def backward_lineup_on_black(
             forward_speed=-1.0,
             detection_threshold=detection_threshold
         ),
-        drive_until_white(
-            [left_sensor, right_sensor],
-            forward_speed=-0.5
-        )
+        drive_backward(speed=0.5).until(
+            on_white(left_sensor) | on_white(right_sensor)
+        ),
     ])
 
 
@@ -384,8 +389,7 @@ def backward_lineup_on_white(
             forward_speed=-1.0,
             detection_threshold=detection_threshold
         ),
-        drive_until_black(
-            [left_sensor, right_sensor],
-            forward_speed=-0.5
-        )
+        drive_backward(speed=0.5).until(
+            on_black(left_sensor) | on_black(right_sensor)
+        ),
     ])

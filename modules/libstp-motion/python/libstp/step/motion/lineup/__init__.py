@@ -1,4 +1,5 @@
 from .forward import (
+    SurfaceColor,
     lineup,
     forward_lineup_on_black,
     forward_lineup_on_white,
@@ -20,6 +21,7 @@ from .single import (
 )
 
 __all__ = [
+    "SurfaceColor",
     "lineup",
     "forward_lineup_on_black",
     "forward_lineup_on_white",

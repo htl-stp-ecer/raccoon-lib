@@ -9,10 +9,12 @@ import time
 from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq, defer
+from libstp.step.condition import on_black, on_white
 from typing import TYPE_CHECKING
 
 from ..turn_dsl import turn_left, turn_right
-from ..move_until import SurfaceColor, strafe_until_black, strafe_until_white
+from ..drive_dsl import strafe_left, strafe_right
+from .forward import SurfaceColor
 from ... import dsl
 from ..motion_step import MotionStep
 
@@ -233,10 +235,9 @@ def strafe_right_lineup_on_black(
             strafe_speed=1.0,
             detection_threshold=detection_threshold
         ),
-        strafe_until_white(
-            [front_sensor, back_sensor],
-            strafe_speed=0.3
-        )
+        strafe_right(speed=0.3).until(
+            on_white(front_sensor) | on_white(back_sensor)
+        ),
     ])
 
 
@@ -287,10 +288,9 @@ def strafe_right_lineup_on_white(
             strafe_speed=1.0,
             detection_threshold=detection_threshold
         ),
-        strafe_until_black(
-            [front_sensor, back_sensor],
-            strafe_speed=0.3
-        )
+        strafe_right(speed=0.3).until(
+            on_black(front_sensor) | on_black(back_sensor)
+        ),
     ])
 
 
@@ -339,10 +339,9 @@ def strafe_left_lineup_on_black(
             strafe_speed=-1.0,
             detection_threshold=detection_threshold
         ),
-        strafe_until_white(
-            [front_sensor, back_sensor],
-            strafe_speed=-0.3
-        )
+        strafe_left(speed=0.3).until(
+            on_white(front_sensor) | on_white(back_sensor)
+        ),
     ])
 
 
@@ -392,8 +391,7 @@ def strafe_left_lineup_on_white(
             strafe_speed=-1.0,
             detection_threshold=detection_threshold
         ),
-        strafe_until_black(
-            [front_sensor, back_sensor],
-            strafe_speed=-0.3
-        )
+        strafe_left(speed=0.3).until(
+            on_black(front_sensor) | on_black(back_sensor)
+        ),
     ])
