@@ -11,7 +11,7 @@ from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq, defer
 from typing import TYPE_CHECKING
 
-from ..turn import turn_left, turn_right
+from ..turn_dsl import turn_left, turn_right
 from ..move_until import SurfaceColor, drive_until_black, drive_until_white
 from ... import dsl
 from ..motion_step import MotionStep

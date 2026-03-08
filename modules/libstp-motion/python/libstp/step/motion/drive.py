@@ -1,204 +1,168 @@
 from libstp.motion import LinearMotion, LinearMotionConfig, LinearAxis
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from .. import SimulationStep, SimulationStepDelta, dsl
+from ..annotation import dsl_step
+from ..condition import StopCondition
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
+class _ConditionalDrive(MotionStep):
+    """Base for directional drive steps with optional stop conditions.
 
-@dsl(hidden=True)
-class Drive(MotionStep):
-    """Step wrapper around the native `LinearMotion` controller."""
+    Always uses profiled LinearMotion. When no distance is given,
+    a large sentinel distance (100 m) is used so the motion provider
+    handles velocity/heading control and the condition triggers the stop.
+    """
 
-    def __init__(self, config: LinearMotionConfig):
+    # Subclasses set these
+    _axis: LinearAxis = LinearAxis.Forward
+    _sign: float = 1.0  # +1 or -1 for direction
+
+    _SENTINEL_DISTANCE_M = 100.0  # Large distance; condition stops early
+
+    def __init__(self, cm: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
         super().__init__()
-        self.config = config
-        self._motion: LinearMotion | None = None
+        if cm is None and until is None:
+            raise ValueError(
+                f"{self.__class__.__name__} requires either 'cm' or 'until'"
+            )
+        self._cm = cm
+        self._speed = speed
+        self._until = until
+        self._skip_calibration = False
+        self._motion: Optional[LinearMotion] = None
 
     def _generate_signature(self) -> str:
-        axis = "Forward" if self.config.axis == LinearAxis.Forward else "Lateral"
+        mode = f"{self._cm:.1f}cm" if self._cm else "until"
         return (
-            f"Drive(axis={axis}, distance_m={self.config.distance_m:.3f}, "
-            f"speed_scale={self.config.speed_scale:.2f})"
+            f"{self.__class__.__name__}(mode={mode}, "
+            f"speed={self._speed:.2f})"
         )
 
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        if self.config.axis == LinearAxis.Forward:
-            base.delta = SimulationStepDelta(
-                forward=self.config.distance_m,
-                strafe=0.0,
-                angular=0.0,
-            )
-        else:
-            base.delta = SimulationStepDelta(
-                forward=0.0,
-                strafe=self.config.distance_m,
-                angular=0.0,
-            )
-        return base
-
     def on_start(self, robot: "GenericRobot") -> None:
-        self._motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
+        if self._cm is not None and not self._skip_calibration:
+            from libstp.step.calibration import check_distance_calibration
+            check_distance_calibration()
+
+        config = LinearMotionConfig()
+        config.axis = self._axis
+        config.distance_m = (
+            self._sign * self._cm / 100.0
+            if self._cm is not None
+            else self._sign * self._SENTINEL_DISTANCE_M
+        )
+        config.speed_scale = self._speed
+        self._motion = LinearMotion(
+            robot.drive, robot.odometry,
+            robot.motion_pid_config, config,
+        )
         self._motion.start()
 
+        if self._until:
+            self._until.start(robot)
+
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        if self._until and self._until.check(robot):
+            return True
         self._motion.update(dt)
         return self._motion.is_finished()
 
 
-# Keep Strafe as an alias for backward compatibility
-Strafe = Drive
+@dsl_step(tags=["motion", "drive"])
+class DriveForward(_ConditionalDrive):
+    """Drive forward with distance or condition-based termination.
 
+    Uses profiled PID motion control with a trapezoidal velocity profile.
+    The robot accelerates, cruises, and decelerates while maintaining
+    heading via IMU feedback. In condition-only mode the robot drives at
+    constant speed until the condition triggers.
 
-@dsl(hidden=True)
-def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Internal: Drive forward without calibration check.
-
-    Used by calibrate_distance() to perform the calibration drive.
-    Do not use directly - use drive_forward() instead.
-    """
-    config = LinearMotionConfig()
-    config.axis = LinearAxis.Forward
-    config.distance_m = cm / 100.0
-    config.speed_scale = speed
-    return Drive(config)
-
-
-@dsl(tags=["motion", "drive"])
-def drive_forward(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Drive forward a specified distance using profiled PID motion control.
-
-    The robot accelerates, cruises, and decelerates along a trapezoidal
-    velocity profile while maintaining heading via IMU feedback. Odometry
-    tracks the distance traveled and the step completes when the target
-    is reached.
-
-    Requires ``calibrate_distance()`` to have been run first so that
-    encoder-to-meter conversion is accurate.
-
-    Args:
-        cm: Distance to drive in centimeters.
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A Drive step configured for forward motion.
-
-    Raises:
-        CalibrationRequiredError: If ``calibrate_distance()`` has not been run.
+    Requires ``calibrate_distance()`` for distance-based mode.
 
     Example::
 
-        from libstp.step.motion import drive_forward
-
-        # Drive forward 50 cm at full speed
-        drive_forward(50)
-
-        # Drive forward 30 cm at half speed
-        drive_forward(30, speed=0.5)
+        drive_forward(25)                            # 25 cm
+        drive_forward(speed=0.8).until(on_black(s))  # until sensor
     """
-    from libstp.step.calibration import check_distance_calibration
-    check_distance_calibration()
-    config = LinearMotionConfig()
-    config.axis = LinearAxis.Forward
-    config.distance_m = cm / 100.0
-    config.speed_scale = speed
-    return Drive(config)
+    _axis = LinearAxis.Forward
+    _sign = 1.0
+
+    def __init__(self, cm: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
+        super().__init__(cm=cm, speed=speed, until=until)
 
 
-@dsl(tags=["motion", "drive"])
-def drive_backward(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Drive backward a specified distance using profiled PID motion control.
+@dsl_step(tags=["motion", "drive"])
+class DriveBackward(_ConditionalDrive):
+    """Drive backward with distance or condition-based termination.
 
-    Identical to ``drive_forward()`` but in reverse. The robot drives
-    backward while maintaining heading via IMU feedback.
+    Identical to ``drive_forward()`` but in reverse. Uses profiled PID
+    motion control while maintaining heading via IMU feedback.
 
-    Requires ``calibrate_distance()`` to have been run first.
-
-    Args:
-        cm: Distance to drive in centimeters.
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A Drive step configured for backward motion.
-
-    Raises:
-        CalibrationRequiredError: If ``calibrate_distance()`` has not been run.
+    Requires ``calibrate_distance()`` for distance-based mode.
 
     Example::
 
-        from libstp.step.motion import drive_backward
-
-        # Back up 20 cm
         drive_backward(20)
+        drive_backward(speed=0.5).until(on_white(s))
     """
-    from libstp.step.calibration import check_distance_calibration
-    check_distance_calibration()
-    config = LinearMotionConfig()
-    config.axis = LinearAxis.Forward
-    config.distance_m = -cm / 100.0
-    config.speed_scale = speed
-    return Drive(config)
+    _axis = LinearAxis.Forward
+    _sign = -1.0
+
+    def __init__(self, cm: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
+        super().__init__(cm=cm, speed=speed, until=until)
 
 
-@dsl(tags=["motion", "strafe"])
-def strafe_left(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Strafe left by a specified distance using profiled PID motion control.
+@dsl_step(tags=["motion", "strafe"])
+class StrafeLeft(_ConditionalDrive):
+    """Strafe left with distance or condition-based termination.
 
-    Requires a mecanum or omni-wheel drivetrain. The robot moves laterally
-    to the left while maintaining heading via IMU feedback.
-
-    Args:
-        cm: Distance to strafe in centimeters.
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A Drive step configured for leftward lateral motion.
+    Requires a mecanum or omni-wheel drivetrain. The robot moves
+    laterally to the left while maintaining heading via IMU feedback.
 
     Example::
 
-        from libstp.step.motion import strafe_left
-
-        # Strafe left 15 cm to dodge an obstacle
         strafe_left(15)
+        strafe_left(speed=0.6).until(on_black(s))
     """
-    config = LinearMotionConfig()
-    config.axis = LinearAxis.Lateral
-    config.distance_m = -cm / 100.0  # Negative for left (odometry convention: negative lateral = left)
-    config.speed_scale = speed
-    return Drive(config)
+    _axis = LinearAxis.Lateral
+    _sign = -1.0
+
+    def __init__(self, cm: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
+        super().__init__(cm=cm, speed=speed, until=until)
 
 
-@dsl(tags=["motion", "strafe"])
-def strafe_right(cm: float, speed: float = 1.0) -> Drive:
-    """
-    Strafe right by a specified distance using profiled PID motion control.
+@dsl_step(tags=["motion", "strafe"])
+class StrafeRight(_ConditionalDrive):
+    """Strafe right with distance or condition-based termination.
 
-    Requires a mecanum or omni-wheel drivetrain. The robot moves laterally
-    to the right while maintaining heading via IMU feedback.
-
-    Args:
-        cm: Distance to strafe in centimeters.
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A Drive step configured for rightward lateral motion.
+    Requires a mecanum or omni-wheel drivetrain. The robot moves
+    laterally to the right while maintaining heading via IMU feedback.
 
     Example::
 
-        from libstp.step.motion import strafe_right
-
-        # Strafe right 15 cm to align with a game piece
         strafe_right(15)
+        strafe_right(speed=0.6).until(on_black(s))
     """
-    config = LinearMotionConfig()
-    config.axis = LinearAxis.Lateral
-    config.distance_m = cm / 100.0  # Positive for right (odometry convention: positive lateral = right)
-    config.speed_scale = speed
-    return Drive(config)
+    _axis = LinearAxis.Lateral
+    _sign = 1.0
+
+    def __init__(self, cm: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
+        super().__init__(cm=cm, speed=speed, until=until)
+
+
+def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> DriveForward:
+    """Internal: drive forward without calibration check.
+
+    Used by ``calibrate_distance()`` to perform the calibration drive
+    before calibration data exists.
+    """
+    step = DriveForward(cm=cm, speed=speed)
+    step._skip_calibration = True
+    return step

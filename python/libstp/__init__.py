@@ -30,6 +30,7 @@ from libstp import hal
 from libstp import foundation
 from libstp.step import *
 from libstp.step import __all__ as _step_all
+from libstp.step.servo.preset import ServoPreset
 from libstp.ui import __all__ as _ui_all
 from libstp.robot import __all__ as _robot_all
 from libstp.robot import *
@@ -51,6 +52,7 @@ __all__ = [
     # Core hardware
     "Motor",
     "Servo",
+    "ServoPreset",
     "AnalogSensor",
     "DigitalSensor",
     # Submodules
