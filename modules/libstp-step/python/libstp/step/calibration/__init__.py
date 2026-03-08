@@ -1,7 +1,8 @@
-from .calibrate import calibrate
-from .calibrate_wfl import calibrate_wait_for_light, CalibrateWaitForLight
+from .calibrate import Calibrate
+from .calibrate_dsl import calibrate
+from .calibrate_wfl import CalibrateWaitForLight
+from .calibrate_wfl_dsl import calibrate_wait_for_light
 from .calibrate_distance import (
-    calibrate_distance,
     CalibrateDistance,
     CalibrationRequiredError,
     PerWheelCalibration,
@@ -9,6 +10,7 @@ from .calibrate_distance import (
     check_distance_calibration,
     reset_distance_calibration,
 )
+from .calibrate_distance_dsl import calibrate_distance
 from .deadzone import (
     calibrate_deadzone,
     CalibrateDeadzone,
@@ -23,6 +25,7 @@ from .sensors import (
 
 __all__ = [
     "calibrate",
+    "Calibrate",
     "calibrate_wait_for_light",
     "CalibrateWaitForLight",
     "calibrate_distance",

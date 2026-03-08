@@ -16,7 +16,7 @@ import time
 from typing import TYPE_CHECKING
 
 from libstp.hal import AnalogSensor
-from .annotation import dsl
+from .annotation import dsl_step
 from libstp.ui import UIStep
 from libstp.ui.screens.wfl import WFLDetectScreen
 
@@ -57,17 +57,58 @@ class _KalmanFilter:
         self.process_variance = pv
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["timing", "wait"])
 class WaitForLight(UIStep):
-    """Automatic light-start with Kalman-filtered flank detection."""
+    """Wait for the start lamp using automatic Kalman-filtered flank detection.
+
+    Mount the light sensor facing downward with no shielding. The step
+    establishes a stable baseline reading via a 1D Kalman filter during a
+    short warm-up phase, then arms and polls for a sharp brightness
+    increase (sensor value drop). When the raw reading falls below
+    ``baseline * (1 - drop_fraction)`` for ``confirm_count`` consecutive
+    samples, the step returns and the mission begins.
+
+    The downward-facing mount reduces environmental noise by up to 76%
+    compared to a horizontal mount (Gosling et al., 2023). No black tape
+    or straw shielding is required.
+
+    Prerequisites:
+        An analog light sensor (LDR) connected to the Wombat and mounted
+        facing the table surface. The start lamp should be positioned
+        diagonally above the sensor.
+
+    Args:
+        sensor: The AnalogSensor instance for the light sensor.
+        drop_fraction: Fraction the raw value must drop below the baseline
+            to trigger. 0.15 means a 15% brightness increase triggers the
+            start. Lower values are more sensitive (faster but riskier),
+            higher values are safer but need a stronger signal.
+        confirm_count: Number of consecutive triggering samples required
+            before starting. At the default 200 Hz poll rate, 3 samples
+            equals ~15 ms of confirmation — effectively instant while
+            rejecting single-sample noise spikes.
+        warmup_seconds: Duration in seconds to collect baseline samples
+            before arming the detector.
+        poll_interval: Seconds between sensor reads. 0.005 gives ~200 Hz.
+
+    Example::
+
+        from libstp.step.wait_for_light import wait_for_light
+
+        # Default settings — works well for most setups
+        wait_for_light(robot.defs.wait_for_light_sensor)
+
+        # More sensitive (10% drop, 2 confirms) for weak lamp signal
+        wait_for_light(robot.defs.wait_for_light_sensor, drop_fraction=0.10, confirm_count=2)
+    """
 
     def __init__(
         self,
         sensor: AnalogSensor,
-        drop_fraction: float,
-        confirm_count: int,
-        warmup_seconds: float,
-        poll_interval: float,
+        drop_fraction: float = 0.15,
+        confirm_count: int = 3,
+        warmup_seconds: float = 1.0,
+        poll_interval: float = 0.005,
     ) -> None:
         super().__init__()
         self._sensor = sensor
@@ -170,94 +211,8 @@ class WaitForLight(UIStep):
             await asyncio.sleep(self._poll_interval)
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["timing", "wait"])
 class WaitForLightLegacy(UIStep):
-    """Legacy threshold-based wait-for-light with manual calibration."""
-
-    def __init__(self, sensor: AnalogSensor) -> None:
-        super().__init__()
-        self._sensor = sensor
-
-    def _generate_signature(self) -> str:
-        port = getattr(self._sensor, "port", "?")
-        return f"WaitForLightLegacy(port={port})"
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        from libstp.step.calibration import calibrate_wait_for_light
-
-        cal_step = calibrate_wait_for_light(self._sensor)
-        await cal_step.run_step(robot)
-
-
-@dsl(tags=["timing", "wait"])
-def wait_for_light(
-    sensor: AnalogSensor,
-    *,
-    drop_fraction: float = 0.15,
-    confirm_count: int = 3,
-    warmup_seconds: float = 1.0,
-    poll_interval: float = 0.005,
-) -> WaitForLight:
-    """Wait for the start lamp using automatic Kalman-filtered flank detection.
-
-    Mount the light sensor facing downward with no shielding. The step
-    establishes a stable baseline reading via a 1D Kalman filter during a
-    short warm-up phase, then arms and polls for a sharp brightness
-    increase (sensor value drop). When the raw reading falls below
-    ``baseline * (1 - drop_fraction)`` for ``confirm_count`` consecutive
-    samples, the step returns and the mission begins.
-
-    The downward-facing mount reduces environmental noise by up to 76%
-    compared to a horizontal mount (Gosling et al., 2023). No black tape
-    or straw shielding is required.
-
-    Prerequisites:
-        An analog light sensor (LDR) connected to the Wombat and mounted
-        facing the table surface. The start lamp should be positioned
-        diagonally above the sensor.
-
-    Args:
-        sensor: The AnalogSensor instance for the light sensor.
-        drop_fraction: Fraction the raw value must drop below the baseline
-            to trigger. 0.15 means a 15% brightness increase triggers the
-            start. Lower values are more sensitive (faster but riskier),
-            higher values are safer but need a stronger signal. Default 0.15.
-        confirm_count: Number of consecutive triggering samples required
-            before starting. At the default 200 Hz poll rate, 3 samples
-            equals ~15 ms of confirmation — effectively instant while
-            rejecting single-sample noise spikes. Default 3.
-        warmup_seconds: Duration in seconds to collect baseline samples
-            before arming the detector. Default 1.0.
-        poll_interval: Seconds between sensor reads. 0.005 gives ~200 Hz.
-            Default 0.005.
-
-    Returns:
-        A WaitForLight step that blocks until the lamp turns on.
-
-    Example::
-
-        from libstp.step.wait_for_light import wait_for_light
-
-        # Default settings — works well for most setups
-        wait_for_light(robot.defs.wait_for_light_sensor)
-
-        # More sensitive (10% drop, 2 confirms) for weak lamp signal
-        wait_for_light(robot.defs.wait_for_light_sensor, drop_fraction=0.10, confirm_count=2)
-
-        # More conservative (20% drop, 5 confirms) for noisy environments
-        wait_for_light(robot.defs.wait_for_light_sensor, drop_fraction=0.20, confirm_count=5)
-    """
-    return WaitForLight(
-        sensor=sensor,
-        drop_fraction=drop_fraction,
-        confirm_count=confirm_count,
-        warmup_seconds=warmup_seconds,
-        poll_interval=poll_interval,
-    )
-
-
-@dsl(tags=["timing", "wait"])
-def wait_for_light_legacy(sensor: AnalogSensor) -> WaitForLightLegacy:
     """Wait for light using the legacy manual-calibration threshold method.
 
     Runs the traditional two-step calibration flow: the operator measures
@@ -274,13 +229,25 @@ def wait_for_light_legacy(sensor: AnalogSensor) -> WaitForLightLegacy:
     Args:
         sensor: The AnalogSensor instance for the light sensor.
 
-    Returns:
-        A WaitForLightLegacy step that runs manual calibration.
-
     Example::
 
         from libstp.step.wait_for_light import wait_for_light_legacy
 
         wait_for_light_legacy(robot.defs.wait_for_light_sensor)
     """
-    return WaitForLightLegacy(sensor)
+
+    def __init__(self, sensor: AnalogSensor) -> None:
+        super().__init__()
+        self._sensor = sensor
+
+    def _generate_signature(self) -> str:
+        port = getattr(self._sensor, "port", "?")
+        return f"WaitForLightLegacy(port={port})"
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.step.calibration import calibrate_wait_for_light
+
+        cal_step = calibrate_wait_for_light(self._sensor)
+        await cal_step.run_step(robot)
+
+

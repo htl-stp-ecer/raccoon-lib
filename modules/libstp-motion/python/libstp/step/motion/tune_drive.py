@@ -18,7 +18,8 @@ from libstp.motion import (
     LinearAxis,
 )
 
-from .. import Step, dsl
+from .. import Step
+from ..annotation import dsl_step
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -82,32 +83,90 @@ def _write_csv(path: str, telemetry: list[LinearMotionTelemetry]) -> None:
             writer.writerow(_telemetry_row(t))
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "calibration", "drive"])
 class TuneDrive(Step):
-    """Run test drives and collect per-cycle telemetry into CSV files.
+    """Run test drives at various distances and speeds, saving telemetry to CSV.
 
-    Iterates over every (distance, speed) combination, executing a real
-    ``LinearMotion`` drive at 50 Hz and capturing detailed telemetry
-    (position, velocity, PID outputs, saturation state, heading error, etc.).
-    Each run produces a separate CSV file and a console summary with final
-    position error, peak velocity, cross-track error, and heading error.
-    Intended for offline analysis and PID gain tuning during robot setup.
+    Executes every combination of (distance, speed) as a real ``LinearMotion``
+    drive, collecting per-cycle telemetry at 50 Hz. Each run produces a CSV
+    file containing columns such as ``time_s``, ``position_m``,
+    ``setpoint_position_m``, ``setpoint_velocity_mps``, ``distance_error_m``,
+    ``actual_error_m``, ``filtered_velocity_mps``, ``cmd_vx_mps``,
+    ``pid_primary_raw``, ``heading_rad``, ``saturated``, and more (see
+    ``CSV_HEADER`` in the module source for the full list).
+
+    The CSV files are intended for offline analysis -- plot position vs.
+    setpoint to check tracking, examine PID outputs for saturation, compare
+    overshoot across speeds, etc. This is a diagnostic/tuning tool used
+    during robot setup, not during competition runs.
+
+    The robot must have enough clear space to drive the longest requested
+    distance.
+
+    Args:
+        distances_cm: List of distances to test, in centimeters. Negative
+            values drive in reverse. Default ``[10, 25, 50, 100]``.
+        speeds: List of speed scales to test (0.0--1.0). Each distance is
+            driven at each speed. Default ``[0.3, 0.6, 1.0]``.
+        csv_dir: Directory where CSV files are written. Created
+            automatically if it does not exist. Default
+            ``"/tmp/drive_telemetry"``.
+        axis: Drive axis to test: ``"forward"`` or ``"lateral"``. Default
+            ``"forward"``.
+        settle_time: Seconds to wait between runs for the robot to come to
+            rest. Default 1.5.
+        timeout: Maximum seconds per run before the drive is aborted.
+            Default 15.0.
+
+    Example::
+
+        from libstp.step.motion import tune_drive
+
+        # Quick test at a single distance and speed
+        tune_drive(
+            distances_cm=[50],
+            speeds=[0.5],
+            csv_dir="/tmp/quick_test",
+        )
+
+        # Full sweep for forward axis tuning
+        tune_drive(
+            distances_cm=[10, 25, 50, 100],
+            speeds=[0.3, 0.6, 1.0],
+        )
+
+        # Lateral axis characterization
+        tune_drive(
+            distances_cm=[20, 40],
+            speeds=[0.3, 0.6],
+            axis="lateral",
+        )
     """
 
     def __init__(
         self,
-        distances_cm: list[float],
-        speeds: list[float],
-        csv_dir: str,
-        axis: LinearAxis = LinearAxis.Forward,
+        distances_cm: list[float] = None,
+        speeds: list[float] = None,
+        csv_dir: str = "/tmp/drive_telemetry",
+        axis: str = "forward",
         settle_time: float = 1.5,
         timeout: float = 15.0,
     ):
         super().__init__()
+        if distances_cm is None:
+            distances_cm = [10, 25, 50, 100]
+        if speeds is None:
+            speeds = [0.3, 0.6, 1.0]
         self.distances_cm = distances_cm
         self.speeds = speeds
         self.csv_dir = csv_dir
-        self.axis = axis
+        self.axis = (
+            LinearAxis.Lateral
+            if isinstance(axis, str) and axis.lower().startswith("l")
+            else LinearAxis.Forward
+            if isinstance(axis, str)
+            else axis
+        )
         self.settle_time = settle_time
         self.timeout = timeout
 
@@ -205,88 +264,3 @@ class TuneDrive(Step):
         return list(motion.get_telemetry())
 
 
-@dsl(tags=["motion", "calibration", "drive"])
-def tune_drive(
-    distances_cm: list[float] | None = None,
-    speeds: list[float] | None = None,
-    csv_dir: str = "/tmp/drive_telemetry",
-    axis: str = "forward",
-    settle_time: float = 1.5,
-    timeout: float = 15.0,
-) -> TuneDrive:
-    """Run test drives at various distances and speeds, saving telemetry to CSV.
-
-    Executes every combination of (distance, speed) as a real ``LinearMotion``
-    drive, collecting per-cycle telemetry at 50 Hz. Each run produces a CSV
-    file containing columns such as ``time_s``, ``position_m``,
-    ``setpoint_position_m``, ``setpoint_velocity_mps``, ``distance_error_m``,
-    ``actual_error_m``, ``filtered_velocity_mps``, ``cmd_vx_mps``,
-    ``pid_primary_raw``, ``heading_rad``, ``saturated``, and more (see
-    ``CSV_HEADER`` in the module source for the full list).
-
-    The CSV files are intended for offline analysis -- plot position vs.
-    setpoint to check tracking, examine PID outputs for saturation, compare
-    overshoot across speeds, etc. This is a diagnostic/tuning tool used
-    during robot setup, not during competition runs.
-
-    The robot must have enough clear space to drive the longest requested
-    distance.
-
-    Args:
-        distances_cm: List of distances to test, in centimeters. Negative
-            values drive in reverse. Default ``[10, 25, 50, 100]``.
-        speeds: List of speed scales to test (0.0--1.0). Each distance is
-            driven at each speed. Default ``[0.3, 0.6, 1.0]``.
-        csv_dir: Directory where CSV files are written. Created
-            automatically if it does not exist. Default
-            ``"/tmp/drive_telemetry"``.
-        axis: Drive axis to test: ``"forward"`` or ``"lateral"``. Default
-            ``"forward"``.
-        settle_time: Seconds to wait between runs for the robot to come to
-            rest. Default 1.5.
-        timeout: Maximum seconds per run before the drive is aborted.
-            Default 15.0.
-
-    Returns:
-        A ``TuneDrive`` step that executes the test matrix and writes CSV
-        files.
-
-    Example::
-
-        from libstp.step.motion import tune_drive
-
-        # Quick test at a single distance and speed
-        step = tune_drive(
-            distances_cm=[50],
-            speeds=[0.5],
-            csv_dir="/tmp/quick_test",
-        )
-
-        # Full sweep for forward axis tuning
-        step = tune_drive(
-            distances_cm=[10, 25, 50, 100],
-            speeds=[0.3, 0.6, 1.0],
-        )
-
-        # Lateral axis characterization
-        step = tune_drive(
-            distances_cm=[20, 40],
-            speeds=[0.3, 0.6],
-            axis="lateral",
-        )
-    """
-    if distances_cm is None:
-        distances_cm = [10, 25, 50, 100]
-    if speeds is None:
-        speeds = [0.3, 0.6, 1.0]
-
-    lin_axis = LinearAxis.Lateral if axis.lower().startswith("l") else LinearAxis.Forward
-
-    return TuneDrive(
-        distances_cm=distances_cm,
-        speeds=speeds,
-        csv_dir=csv_dir,
-        axis=lin_axis,
-        settle_time=settle_time,
-        timeout=timeout,
-    )

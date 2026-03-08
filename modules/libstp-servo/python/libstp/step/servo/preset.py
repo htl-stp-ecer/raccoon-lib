@@ -6,7 +6,7 @@ for each named position. It is the recommended way to interact with servos
 that have well-defined positions (e.g., "open", "closed", "up", "down").
 
 Calling a position without ``speed`` uses an instant ``servo()`` command.
-Calling with ``speed`` uses ``slow_servo()`` for eased motion.
+Calling with ``speed`` uses ``SlowServo`` for eased motion.
 
 The optional ``offset`` shifts all positions by a fixed amount — useful
 when a servo is remounted slightly off from its original alignment.
@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from libstp.hal import Servo
 
-from .steps import servo as _servo_step, slow_servo as _slow_servo_step
+from .steps import servo as _servo_step, SlowServo
 
 
 class ServoPreset:
@@ -78,7 +78,7 @@ class ServoPreset:
         def make_step(speed=None):
             if speed is None:
                 return _servo_step(self._servo, actual)
-            return _slow_servo_step(self._servo, actual, speed)
+            return SlowServo(self._servo, actual, speed)
 
         make_step.__name__ = name
         make_step.__doc__ = f"Move to {name} ({angle}{'%+g' % self._offset if self._offset else ''} deg)"

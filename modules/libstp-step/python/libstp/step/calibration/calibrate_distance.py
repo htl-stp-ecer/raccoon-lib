@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING, Sequence
 
 import yaml
 
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl_step
 from libstp.ui.step import UIStep
 from libstp.ui.screens.distance import (
     DistancePrepareScreen,
@@ -157,43 +157,65 @@ def _find_motor_name_by_port(config: Dict, port: int) -> Optional[str]:
     return None
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["calibration", "distance"])
 class CalibrateDistance(UIStep):
-    """
-    Step for calibrating robot distance estimation via per-wheel ticks_to_rad adjustment.
+    """Calibrate per-wheel distance estimation via encoder measurement.
 
-    Two calibration mechanisms:
-    1. Runtime: Apply the measured ticks_to_rad directly for best accuracy this run
-    2. Persistent: Update YAML baseline using EMA so it converges over multiple runs
+    Drives the robot a known distance, then prompts the user to enter the
+    actual measured distance. The step computes a corrected ``ticks_to_rad``
+    value for each drive motor so that odometry matches real-world distances.
 
-    The EMA formula: new_baseline = old_baseline × α + measured × (1 - α)
-    With α=0.7, after ~5 calibrations the baseline absorbs ~83% of any systematic error.
+    The calibration operates in two modes simultaneously:
+
+    - **Runtime**: Applies the measured ``ticks_to_rad`` directly for best
+      accuracy during this run.
+    - **Persistent**: Updates the YAML baseline using an exponential moving
+      average (EMA) so the stored value converges toward the true value over
+      multiple calibration runs.
+
+    Args:
+        distance_cm: Distance (in cm) the robot drives during calibration.
+            Longer distances yield better accuracy.
+        calibrate_light_sensors: If ``True``, run IR sensor calibration
+            after the distance calibration is confirmed.
+        persist_to_yaml: If ``True``, write the EMA-filtered baseline to
+            ``raccoon.project.yml`` so it persists across program runs.
+        ema_alpha: EMA smoothing coefficient between 0.0 and 1.0. Higher
+            values produce slower convergence but a more stable baseline.
+        calibration_sets: List of named IR calibration surface sets (e.g.
+            ``["default", "transparent"]``). Only used when
+            ``calibrate_light_sensors`` is ``True``.
+        exclude_ir_sensors: List of ``IRSensor`` instances to skip during
+            IR calibration.
+
+    Example::
+
+        from libstp.step.calibration import calibrate_distance
+
+        # Distance-only calibration with defaults
+        calibrate_distance()
+
+        # Distance + IR sensor calibration
+        calibrate_distance(
+            distance_cm=50.0,
+            calibrate_light_sensors=True,
+            calibration_sets=["default", "transparent"],
+        )
     """
 
     _SENSOR_RETRY_SAMPLE_SECONDS = 5.0
 
     def __init__(
         self,
-        calibration_distance_cm: float = 30.0,
+        distance_cm: float = 30.0,
         calibrate_light_sensors: bool = False,
         persist_to_yaml: bool = True,
-        ema_alpha: float = DEFAULT_EMA_ALPHA,
+        ema_alpha: float = 0.7,
         calibration_sets: Optional[List[str]] = None,
         exclude_ir_sensors: Optional[List["IRSensor"]] = None,
     ) -> None:
-        """
-        Initialize the distance calibration step.
-
-        Args:
-            calibration_distance_cm: Distance to drive for calibration (default 30cm)
-            calibrate_light_sensors: If True, calibrate IR sensors after distance confirmation
-            persist_to_yaml: If True, update raccoon.project.yml with EMA-filtered baseline
-            ema_alpha: EMA coefficient for baseline updates (0.0-1.0, higher = slower convergence)
-            calibration_sets: Named IR calibration sets (e.g. ["default", "transparent"])
-            exclude_ir_sensors: IR sensor instances to exclude from calibration
-        """
         super().__init__()
-        self.calibration_distance_cm = calibration_distance_cm
+        self.calibration_distance_cm = distance_cm
         self.calibrate_light_sensors = calibrate_light_sensors
         self.persist_to_yaml = persist_to_yaml
         self.ema_alpha = ema_alpha
@@ -588,84 +610,3 @@ class CalibrateDistance(UIStep):
             # User wants to retry - loop continues
 
 
-@dsl(tags=["calibration", "distance"])
-def calibrate_distance(
-    distance_cm: float = 30.0,
-    calibrate_light_sensors: bool = False,
-    persist_to_yaml: bool = True,
-    ema_alpha: float = DEFAULT_EMA_ALPHA,
-    calibration_sets: Optional[List[str]] = None,
-    exclude_ir_sensors: Optional[List["IRSensor"]] = None,
-) -> CalibrateDistance:
-    """
-    Calibrate per-wheel distance estimation via encoder measurement.
-
-    Drives the robot a known distance, then prompts the user to enter the
-    actual measured distance. The step computes a corrected ``ticks_to_rad``
-    value for each drive motor so that odometry matches real-world distances.
-
-    The calibration operates in two modes simultaneously:
-
-    - **Runtime**: Applies the measured ``ticks_to_rad`` directly for best
-      accuracy during this run.
-    - **Persistent**: Updates the YAML baseline using an exponential moving
-      average (EMA) so the stored value converges toward the true value over
-      multiple calibration runs. The EMA formula is:
-      ``new_baseline = old * alpha + measured * (1 - alpha)``.
-
-    Convergence rates for different alpha values:
-
-    - ``alpha=0.5``: ~97% of error absorbed after 5 calibrations (responsive)
-    - ``alpha=0.7`` (default): ~83% after 5 calibrations (balanced)
-    - ``alpha=0.9``: ~41% after 5 calibrations (very stable)
-
-    Prerequisites:
-        The robot must have drive motors with encoder feedback and a
-        configured kinematics model providing wheel radius.
-
-    Args:
-        distance_cm: Distance (in cm) the robot drives during calibration.
-            Default is 30 cm. Longer distances yield better accuracy.
-        calibrate_light_sensors: If ``True``, run IR sensor calibration
-            after the distance calibration is confirmed. Sensors are
-            sampled during an additional drive over calibration surfaces.
-        persist_to_yaml: If ``True``, write the EMA-filtered baseline to
-            ``raccoon.project.yml`` so it persists across program runs.
-        ema_alpha: EMA smoothing coefficient between 0.0 and 1.0. Higher
-            values produce slower convergence but a more stable baseline.
-        calibration_sets: List of named IR calibration surface sets (e.g.
-            ``["default", "transparent"]``). Only used when
-            ``calibrate_light_sensors`` is ``True``.
-        exclude_ir_sensors: List of ``IRSensor`` instances to skip during
-            IR calibration.
-
-    Returns:
-        CalibrateDistance: A step that performs the interactive distance
-        calibration flow.
-
-    Example::
-
-        from libstp.step.calibration import calibrate_distance
-
-        # Distance-only calibration with defaults
-        seq([
-            calibrate_distance(),
-            drive_forward(100),
-        ])
-
-        # Distance + IR sensor calibration, slower EMA convergence
-        calibrate_distance(
-            distance_cm=50.0,
-            calibrate_light_sensors=True,
-            ema_alpha=0.9,
-            calibration_sets=["default", "transparent"],
-        )
-    """
-    return CalibrateDistance(
-        distance_cm,
-        calibrate_light_sensors,
-        persist_to_yaml,
-        ema_alpha,
-        calibration_sets=calibration_sets,
-        exclude_ir_sensors=exclude_ir_sensors,
-    )

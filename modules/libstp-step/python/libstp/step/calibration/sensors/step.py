@@ -4,7 +4,7 @@ from typing import Optional, List
 from libstp import calibration_store as CalibrationStore
 from libstp.calibration_store import CalibrationType
 from libstp.sensor_ir import IRSensor, IRSensorCalibration
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl_step
 from libstp.ui.step import UIStep
 
 from .dataclasses import IRSensorCalibrationResult, SensorCalibrationData
@@ -13,9 +13,37 @@ from .ir_overview_screen import IROverviewScreen
 from .ir_results_screen import IRResultsDashboardScreen
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["calibration", "sensor"])
 class CalibrateSensors(UIStep):
-    """Step for calibrating IR sensors (black/white thresholds)."""
+    """Calibrate IR sensors by sampling black and white surface readings.
+
+    Guides the operator through sampling each IR sensor over calibration
+    surfaces to establish black/white thresholds. The operator places the
+    robot on the calibration surface and the step samples readings for the
+    configured duration. Supports multiple named calibration sets (e.g.
+    ``"default"`` and ``"transparent"``) for surface-specific thresholds.
+
+    Args:
+        calibration_time: Duration for calibration sampling in seconds.
+        allow_use_existing: If ``True``, offer to reuse existing
+            calibration values instead of re-sampling.
+        calibration_sets: Named calibration sets to calibrate
+            (e.g. ``["default", "transparent"]``). Defaults to
+            ``["default"]``.
+
+    Example::
+
+        from libstp.step.calibration import calibrate_sensors
+
+        # Basic IR calibration
+        calibrate_sensors()
+
+        # Two surface sets with longer sampling
+        calibrate_sensors(
+            calibration_time=8.0,
+            calibration_sets=["default", "transparent"],
+        )
+    """
 
     def __init__(
         self,
@@ -23,14 +51,6 @@ class CalibrateSensors(UIStep):
         allow_use_existing: bool = True,
         calibration_sets: Optional[List[str]] = None,
     ) -> None:
-        """
-        Initialize the IR sensor calibration step.
-
-        Args:
-            calibration_time: Duration for calibration sampling (seconds)
-            allow_use_existing: If True, offer existing calibration values
-            calibration_sets: Named calibration sets to calibrate. Defaults to ["default"].
-        """
         super().__init__()
         self.calibration_time = calibration_time
         self.allow_use_existing = allow_use_existing
@@ -187,25 +207,3 @@ class CalibrateSensors(UIStep):
                 return
 
 
-@dsl(tags=["calibration", "sensor"])
-def calibrate_sensors(
-    calibration_time: float = 5.0,
-    allow_use_existing: bool = True,
-    calibration_sets: Optional[List[str]] = None,
-) -> CalibrateSensors:
-    """
-    Create an IR sensor calibration step.
-
-    Args:
-        calibration_time: Duration for calibration sampling (seconds)
-        allow_use_existing: If True, offer existing calibration values
-        calibration_sets: Named calibration sets to calibrate (e.g. ["default", "transparent"])
-
-    Returns:
-        CalibrateSensors step instance
-    """
-    return CalibrateSensors(
-        calibration_time,
-        allow_use_existing=allow_use_existing,
-        calibration_sets=calibration_sets,
-    )

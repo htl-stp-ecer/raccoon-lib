@@ -9,7 +9,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl_step
 from libstp.ui.step import UIStep
 from libstp.ui.screens.basic import MessageScreen
 
@@ -39,14 +39,34 @@ class DeadzoneCalibrationResult:
         return max(self.start_percent_forward, self.start_percent_reverse)
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["calibration", "motor", "deadzone"])
 class CalibrateDeadzone(UIStep):
-    """
-    Step for calibrating motor deadzone via UI-based human observation.
+    """Calibrate motor deadzone via UI-based human observation.
 
     The deadzone is the minimum power percentage required to overcome
     static friction and start the motor turning. BEMF readings are
-    unreliable at low RPM, so we use human observation instead.
+    unreliable at low RPM, so this step ramps motor power from
+    ``start_percent`` upward and asks the operator to confirm when
+    the wheel starts spinning. The result is stored as the motor's
+    ``ff.kS`` (static friction) feedforward value.
+
+    Args:
+        motor_ports: List of motor ports to calibrate. ``None``
+            calibrates all drive motors.
+        start_percent: Starting power percentage to test.
+        max_percent: Maximum power percentage before giving up.
+        settle_time: Seconds to wait after setting power before asking
+            the operator.
+
+    Example::
+
+        from libstp.step.calibration import calibrate_deadzone
+
+        # Calibrate all motors with defaults
+        calibrate_deadzone()
+
+        # Calibrate only motors 0 and 1
+        calibrate_deadzone(motor_ports=[0, 1])
     """
 
     def __init__(
@@ -56,15 +76,6 @@ class CalibrateDeadzone(UIStep):
         max_percent: int = 30,
         settle_time: float = 0.3,
     ):
-        """
-        Initialize the deadzone calibration step.
-
-        Args:
-            motor_ports: List of motor ports to calibrate (None = all motors)
-            start_percent: Starting power percentage to test
-            max_percent: Maximum power percentage before giving up
-            settle_time: Seconds to wait after setting power before asking
-        """
         super().__init__()
         self.motor_ports = motor_ports
         self.start_percent = start_percent
@@ -273,32 +284,3 @@ class CalibrateDeadzone(UIStep):
             self.info("ff.kS calibration cancelled by user")
 
 
-@dsl(tags=["calibration", "motor", "deadzone"])
-def calibrate_deadzone(
-    motor_ports: Optional[List[int]] = None,
-    start_percent: int = 1,
-    max_percent: int = 30,
-    settle_time: float = 0.3,
-) -> CalibrateDeadzone:
-    """
-    Create a deadzone calibration step.
-
-    BEMF readings are unreliable at low RPM, so this step uses human
-    observation via the UI to find the exact motor percentage where
-    the wheel starts turning.
-
-    Args:
-        motor_ports: List of motor ports to calibrate (None = all motors)
-        start_percent: Starting power percentage to test (default: 1)
-        max_percent: Maximum power percentage before giving up (default: 30)
-        settle_time: Seconds to wait after setting power before asking (default: 0.3)
-
-    Returns:
-        CalibrateDeadzone step instance
-    """
-    return CalibrateDeadzone(
-        motor_ports=motor_ports,
-        start_percent=start_percent,
-        max_percent=max_percent,
-        settle_time=settle_time,
-    )

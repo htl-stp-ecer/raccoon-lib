@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, Union
+from typing import Optional
 
 from libstp.hal import Servo
 from libstp.robot.api import GenericRobot
 from libstp.step import Step
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl, dsl_step
 
 from .constants import SERVO_MAX_ANGLE, SERVO_MIN_ANGLE
 from .resolver import resolve_servo
@@ -95,9 +95,32 @@ def servo(servo: Servo, angle: float) -> SetServoPosition:
 
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["servo", "actuator"])
 class ShakeServo(Step):
-    """Oscillate a servo between two angles for a fixed amount of time."""
+    """Oscillate a servo back and forth between two angles for a set time.
+
+    Rapidly alternates the servo between ``angle_a`` and ``angle_b`` for
+    the given duration. The dwell time at each angle is automatically
+    estimated from the angular distance so the servo has time to
+    physically reach each endpoint before reversing. Useful for shaking
+    objects loose or signalling the operator.
+
+    The valid angle range is 0 to 170 degrees.
+
+    Args:
+        servo: The servo to control, obtained from the robot hardware map
+            (e.g. ``robot.servo(1)``).
+        duration: Total oscillation time in seconds. Must be >= 0.
+        angle_a: First oscillation endpoint in degrees (0.0 -- 170.0).
+        angle_b: Second oscillation endpoint in degrees (0.0 -- 170.0).
+
+    Example::
+
+        from libstp.step.servo import shake_servo
+
+        # Shake a sorting tray for 3 seconds between 60 and 120 degrees
+        shake_servo(robot.servo(1), duration=3.0, angle_a=60.0, angle_b=120.0)
+    """
 
     def __init__(
         self, servo: Servo, duration: float, angle_a: float, angle_b: float
@@ -154,38 +177,6 @@ class ShakeServo(Step):
             await asyncio.sleep(move_time)
 
 
-@dsl(tags=["servo", "actuator"])
-def shake_servo(servo: Servo, duration: float, angle_a: float, angle_b: float) -> ShakeServo:
-    """Oscillate a servo back and forth between two angles for a set time.
-
-    Rapidly alternates the servo between ``angle_a`` and ``angle_b`` for
-    the given duration. The dwell time at each angle is automatically
-    estimated from the angular distance so the servo has time to
-    physically reach each endpoint before reversing. Useful for shaking
-    objects loose or signalling the operator.
-
-    The valid angle range is 0 to 170 degrees.
-
-    Args:
-        servo: The servo to control, obtained from the robot hardware map
-            (e.g. ``robot.servo(1)``).
-        duration: Total oscillation time in seconds. Must be >= 0.
-        angle_a: First oscillation endpoint in degrees (0.0 -- 170.0).
-        angle_b: Second oscillation endpoint in degrees (0.0 -- 170.0).
-
-    Returns:
-        A ``ShakeServo`` step ready to be scheduled in a step sequence.
-
-    Example::
-
-        from libstp.step.servo import shake_servo
-
-        # Shake a sorting tray for 3 seconds between 60 and 120 degrees
-        shake_servo(robot.servo(1), duration=3.0, angle_a=60.0, angle_b=120.0)
-    """
-    return ShakeServo(servo=servo, duration=duration, angle_a=angle_a, angle_b=angle_b)
-
-
 def _ease_in_out(t: float) -> float:
     """Smoothstep ease-in-ease-out: 3t^2 - 2t^3."""
     t = max(0.0, min(1.0, t))
@@ -195,14 +186,44 @@ def _ease_in_out(t: float) -> float:
 _EASE_SERVO_TICK = 1 / 10
 
 
-@dsl(hidden=True)
-class EaseServo(Step):
-    """Move a servo to a target angle with ease-in/ease-out timing."""
+@dsl_step(tags=["servo", "actuator"])
+class SlowServo(Step):
+    """Move a servo to an angle with smooth ease-in/ease-out motion.
 
-    def __init__(self, servo: Servo, target_angle: float, speed: float) -> None:
+    Instead of commanding the servo to jump straight to the target (as
+    ``servo()`` does), this step interpolates through intermediate
+    positions using a smoothstep curve (3t^2 - 2t^3). The result is a
+    gentle acceleration and deceleration that avoids mechanical shock and
+    reduces jerk on the mechanism.
+
+    The total move duration is derived from the angular distance divided
+    by ``speed``. Intermediate positions are updated at ~10 Hz.
+
+    The valid angle range is 0 to 170 degrees.
+
+    Args:
+        servo: The servo to control, obtained from the robot hardware map
+            (e.g. ``robot.servo(0)``).
+        angle: Target angle in degrees (0.0 -- 170.0).
+        speed: Movement speed in degrees per second. Must be positive.
+            Defaults to 60.0 deg/s, which moves the full range in about
+            2.8 seconds.
+
+    Example::
+
+        from libstp.step.servo import slow_servo
+
+        # Gently lower the arm servo to 20 degrees at 45 deg/s
+        slow_servo(robot.servo(0), angle=20.0, speed=45.0)
+
+        # Use default speed for a smooth open
+        slow_servo(robot.servo(0), angle=150.0)
+    """
+
+    def __init__(self, servo: Servo, angle: float, speed: float = 60.0) -> None:
         super().__init__()
         self._servo_ref = servo
-        self._target_angle = float(target_angle)
+        self._target_angle = float(angle)
         self._speed = float(speed)
         self._validate_inputs()
 
@@ -217,7 +238,7 @@ class EaseServo(Step):
 
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
-        return f"EaseServo(servo={servo_label},angle={self._target_angle},speed={self._speed})"
+        return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed})"
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         self._servo_ref.enable()
@@ -249,58 +270,8 @@ class EaseServo(Step):
         self._servo_ref.set_position(angle_to_position(self._target_angle))
 
 
-@dsl(tags=["servo", "actuator"])
-def slow_servo(servo: Servo, angle: float, speed: float = 60.0) -> EaseServo:
-    """Move a servo to an angle with smooth ease-in/ease-out motion.
-
-    Instead of commanding the servo to jump straight to the target (as
-    ``servo()`` does), this step interpolates through intermediate
-    positions using a smoothstep curve (3t^2 - 2t^3). The result is a
-    gentle acceleration and deceleration that avoids mechanical shock and
-    reduces jerk on the mechanism.
-
-    The total move duration is derived from the angular distance divided
-    by ``speed``. Intermediate positions are updated at ~10 Hz.
-
-    The valid angle range is 0 to 170 degrees.
-
-    Args:
-        servo: The servo to control, obtained from the robot hardware map
-            (e.g. ``robot.servo(0)``).
-        angle: Target angle in degrees (0.0 -- 170.0).
-        speed: Movement speed in degrees per second. Must be positive.
-            Defaults to 60.0 deg/s, which moves the full range in about
-            2.8 seconds.
-
-    Returns:
-        An ``EaseServo`` step ready to be scheduled in a step sequence.
-
-    Example::
-
-        from libstp.step.servo import slow_servo
-
-        # Gently lower the arm servo to 20 degrees at 45 deg/s
-        slow_servo(robot.servo(0), angle=20.0, speed=45.0)
-
-        # Use default speed for a smooth open
-        slow_servo(robot.servo(0), angle=150.0)
-    """
-    return EaseServo(servo=servo, target_angle=angle, speed=speed)
-
-
-@dsl(hidden=True)
+@dsl_step(tags=["servo", "actuator"])
 class FullyDisableServos(Step):
-    """Fully disable all servo outputs, removing all power."""
-
-    def _generate_signature(self) -> str:
-        return "FullyDisableServos()"
-
-    async def _execute_step(self, robot: GenericRobot) -> None:
-        Servo.fully_disable_all()
-
-
-@dsl(tags=["servo", "actuator"])
-def fully_disable_servos() -> FullyDisableServos:
     """Fully disable all servo outputs, removing all power from the servo pins.
 
     Commands the firmware to enter the fully-disabled servo mode for every
@@ -311,9 +282,6 @@ def fully_disable_servos() -> FullyDisableServos:
     Servos will automatically re-enable when a new position command is
     sent (e.g. via ``servo()`` or ``slow_servo()``).
 
-    Returns:
-        A ``FullyDisableServos`` step.
-
     Example::
 
         from libstp.step.servo import fully_disable_servos
@@ -321,16 +289,18 @@ def fully_disable_servos() -> FullyDisableServos:
         # Release all servos at the end of a mission
         fully_disable_servos()
     """
-    return FullyDisableServos()
+
+    def _generate_signature(self) -> str:
+        return "FullyDisableServos()"
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        Servo.fully_disable_all()
 
 
 __all__ = [
     "SetServoPosition",
-    "EaseServo",
+    "SlowServo",
     "ShakeServo",
     "FullyDisableServos",
     "servo",
-    "slow_servo",
-    "shake_servo",
-    "fully_disable_servos",
 ]

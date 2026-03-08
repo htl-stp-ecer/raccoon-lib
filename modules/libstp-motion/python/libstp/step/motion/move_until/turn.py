@@ -1,8 +1,8 @@
-"""Factory functions for turning in place until an IR sensor detects a surface color."""
+"""Turn in place until an IR sensor detects a surface color."""
 from libstp.sensor_ir import IRSensor
 from typing import Union
 
-from ... import dsl
+from ... import dsl, dsl_step
 from .core import MoveUntil, MoveUntilConfig, SurfaceColor
 
 
@@ -96,12 +96,8 @@ def turn_until_white(
     ))
 
 
-@dsl(tags=["motion", "sensor"])
-def turn_left_until_black(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class TurnLeftUntilBlack(MoveUntil):
     """Turn left (counter-clockwise) until any sensor detects a black surface.
 
     Commands a constant counter-clockwise angular velocity and polls the given
@@ -123,32 +119,41 @@ def turn_left_until_black(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that turns left and stops when
-        black is detected.
+        TurnLeftUntilBlack: A configured motion step that turns left and stops
+        when black is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import TurnLeftUntilBlack
 
         right_ir = IRSensor(3)
 
         # Sweep left at 0.8 rad/s until the right sensor crosses a black line
-        step = turn_left_until_black(right_ir, speed=0.8)
+        TurnLeftUntilBlack(right_ir, speed=0.8)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.BLACK,
-        angular_speed=abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.BLACK,
+            angular_speed=abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"TurnLeftUntilBlack(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def turn_left_until_white(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class TurnLeftUntilWhite(MoveUntil):
     """Turn left (counter-clockwise) until any sensor detects a white surface.
 
     Commands a constant counter-clockwise angular velocity and polls the given
@@ -167,32 +172,41 @@ def turn_left_until_white(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that turns left and stops when
-        white is detected.
+        TurnLeftUntilWhite: A configured motion step that turns left and stops
+        when white is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import TurnLeftUntilWhite
 
         right_ir = IRSensor(3)
 
         # Sweep left at 0.6 rad/s until white surface is found
-        step = turn_left_until_white(right_ir, speed=0.6)
+        TurnLeftUntilWhite(right_ir, speed=0.6)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.WHITE,
-        angular_speed=abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.WHITE,
+            angular_speed=abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"TurnLeftUntilWhite(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def turn_right_until_black(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class TurnRightUntilBlack(MoveUntil):
     """Turn right (clockwise) until any sensor detects a black surface.
 
     Commands a constant clockwise angular velocity and polls the given IR
@@ -215,32 +229,41 @@ def turn_right_until_black(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that turns right and stops when
-        black is detected.
+        TurnRightUntilBlack: A configured motion step that turns right and
+        stops when black is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import TurnRightUntilBlack
 
         left_ir = IRSensor(1)
 
         # Sweep right at 0.8 rad/s until the left sensor crosses a black line
-        step = turn_right_until_black(left_ir, speed=0.8)
+        TurnRightUntilBlack(left_ir, speed=0.8)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.BLACK,
-        angular_speed=-abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.BLACK,
+            angular_speed=-abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"TurnRightUntilBlack(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def turn_right_until_white(
-        sensor: Union[IRSensor, list[IRSensor]],
-        speed: float = 1.0,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class TurnRightUntilWhite(MoveUntil):
     """Turn right (clockwise) until any sensor detects a white surface.
 
     Commands a constant clockwise angular velocity and polls the given IR
@@ -260,21 +283,34 @@ def turn_right_until_white(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that turns right and stops when
-        white is detected.
+        TurnRightUntilWhite: A configured motion step that turns right and
+        stops when white is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import TurnRightUntilWhite
 
         left_ir = IRSensor(1)
 
         # Sweep right slowly until the left sensor finds white
-        step = turn_right_until_white(left_ir, speed=0.5)
+        TurnRightUntilWhite(left_ir, speed=0.5)
     """
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.WHITE,
-        angular_speed=-abs(speed),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            speed: float = 1.0,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.WHITE,
+            angular_speed=-abs(speed),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"TurnRightUntilWhite(speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"

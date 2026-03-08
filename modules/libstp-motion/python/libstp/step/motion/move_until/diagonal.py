@@ -1,4 +1,4 @@
-"""Factory functions for driving at an arbitrary angle until an IR sensor detects a surface color.
+"""Drive at an arbitrary angle until an IR sensor detects a surface color.
 
 Prerequisites:
     Diagonal driving decomposes the velocity into forward and strafe components,
@@ -9,22 +9,17 @@ import math
 from libstp.sensor_ir import IRSensor
 from typing import Union
 
-from ... import dsl
+from ... import dsl_step
 from .core import MoveUntil, MoveUntilConfig, SurfaceColor
 
 
-@dsl(tags=["motion", "sensor"])
-def drive_angle_until_black(
-        sensor: Union[IRSensor, list[IRSensor]],
-        angle_deg: float,
-        speed: float = 0.3,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class DriveAngleUntilBlack(MoveUntil):
     """Drive at an arbitrary angle until any sensor detects a black surface.
 
-    Decomposes the desired travel direction into forward and strafe velocity
+    Decompose the desired travel direction into forward and strafe velocity
     components using trigonometry (``cos`` for forward, ``sin`` for strafe) and
-    commands them simultaneously. The robot's heading does not change -- only
+    command them simultaneously. The robot's heading does not change -- only
     its translational direction of travel. Each control cycle, the given IR
     sensor(s) are polled and the step completes as soon as any sensor's
     ``probabilityOfBlack()`` meets or exceeds ``confidence_threshold``.
@@ -49,43 +44,53 @@ def drive_angle_until_black(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that drives at the specified angle
-        and stops when black is detected.
+        DriveAngleUntilBlack: A configured motion step that drives at the
+        specified angle and stops when black is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import DriveAngleUntilBlack
 
         front_ir = IRSensor(0)
 
         # Drive diagonally forward-right (45 deg) until black is detected
-        step = drive_angle_until_black(front_ir, angle_deg=45, speed=0.3)
+        DriveAngleUntilBlack(front_ir, angle_deg=45, speed=0.3)
 
         # Drive purely left (-90 deg) until black -- equivalent to strafe left
-        step = drive_angle_until_black(front_ir, angle_deg=-90, speed=0.2)
+        DriveAngleUntilBlack(front_ir, angle_deg=-90, speed=0.2)
     """
-    angle_rad = math.radians(angle_deg)
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.BLACK,
-        forward_speed=speed * math.cos(angle_rad),
-        strafe_speed=speed * math.sin(angle_rad),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            angle_deg: float,
+            speed: float = 0.3,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._angle_deg = angle_deg
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        angle_rad = math.radians(angle_deg)
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.BLACK,
+            forward_speed=speed * math.cos(angle_rad),
+            strafe_speed=speed * math.sin(angle_rad),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"DriveAngleUntilBlack(angle={self._angle_deg:.1f}deg, speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"
 
 
-@dsl(tags=["motion", "sensor"])
-def drive_angle_until_white(
-        sensor: Union[IRSensor, list[IRSensor]],
-        angle_deg: float,
-        speed: float = 0.3,
-        confidence_threshold: float = 0.7,
-) -> MoveUntil:
+@dsl_step(tags=["motion", "sensor"])
+class DriveAngleUntilWhite(MoveUntil):
     """Drive at an arbitrary angle until any sensor detects a white surface.
 
-    Decomposes the desired travel direction into forward and strafe velocity
+    Decompose the desired travel direction into forward and strafe velocity
     components using trigonometry (``cos`` for forward, ``sin`` for strafe) and
-    commands them simultaneously. The robot's heading does not change -- only
+    command them simultaneously. The robot's heading does not change -- only
     its translational direction of travel. Each control cycle, the given IR
     sensor(s) are polled and the step completes as soon as any sensor's
     ``probabilityOfWhite()`` meets or exceeds ``confidence_threshold``.
@@ -110,26 +115,41 @@ def drive_angle_until_white(
             Defaults to 0.7.
 
     Returns:
-        MoveUntil: A configured motion step that drives at the specified angle
-        and stops when white is detected.
+        DriveAngleUntilWhite: A configured motion step that drives at the
+        specified angle and stops when white is detected.
 
     Example::
 
         from libstp.sensor_ir import IRSensor
+        from libstp.step.motion.move_until import DriveAngleUntilWhite
 
         front_ir = IRSensor(0)
 
         # Drive diagonally forward-left (-45 deg) until white is detected
-        step = drive_angle_until_white(front_ir, angle_deg=-45, speed=0.3)
+        DriveAngleUntilWhite(front_ir, angle_deg=-45, speed=0.3)
 
         # Drive backward (180 deg) until white -- equivalent to drive backward
-        step = drive_angle_until_white(front_ir, angle_deg=180, speed=0.2)
+        DriveAngleUntilWhite(front_ir, angle_deg=180, speed=0.2)
     """
-    angle_rad = math.radians(angle_deg)
-    return MoveUntil(MoveUntilConfig(
-        sensor=sensor,
-        target=SurfaceColor.WHITE,
-        forward_speed=speed * math.cos(angle_rad),
-        strafe_speed=speed * math.sin(angle_rad),
-        confidence_threshold=confidence_threshold,
-    ))
+
+    def __init__(
+            self,
+            sensor: Union[IRSensor, list[IRSensor]],
+            angle_deg: float,
+            speed: float = 0.3,
+            confidence_threshold: float = 0.7,
+    ) -> None:
+        self._angle_deg = angle_deg
+        self._speed = speed
+        self._confidence_threshold = confidence_threshold
+        angle_rad = math.radians(angle_deg)
+        super().__init__(MoveUntilConfig(
+            sensor=sensor,
+            target=SurfaceColor.WHITE,
+            forward_speed=speed * math.cos(angle_rad),
+            strafe_speed=speed * math.sin(angle_rad),
+            confidence_threshold=confidence_threshold,
+        ))
+
+    def _generate_signature(self) -> str:
+        return f"DriveAngleUntilWhite(angle={self._angle_deg:.1f}deg, speed={self._speed:.2f}, threshold={self._confidence_threshold:.2f})"

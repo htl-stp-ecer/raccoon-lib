@@ -24,20 +24,40 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from .. import Step
-from ..annotation import dsl
+from ..annotation import dsl_step
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "wait"])
 class WaitUntilDistance(Step):
-    """Block until odometry straight-line distance exceeds a threshold."""
+    """Wait until the robot has driven at least the given distance.
 
-    def __init__(self, distance_cm: float, hz: int = 100) -> None:
+    Polls odometry straight-line distance from the origin at 100 Hz.
+    Designed to run inside a ``parallel()`` branch alongside a drive step,
+    enabling actions to trigger at specific distances during a drive.
+
+    Args:
+        cm: Distance threshold in centimeters.
+
+    Example::
+
+        from libstp.step import parallel, seq
+        from libstp.step.motion import drive_forward, wait_until_distance
+        from libstp.step.servo import servo
+
+        # Open a servo after driving 30 cm into a 50 cm drive
+        parallel([
+            drive_forward(50),
+            seq([wait_until_distance(30), servo(claw, 90)]),
+        ])
+    """
+
+    def __init__(self, cm: float) -> None:
         super().__init__()
-        self._distance_m = abs(distance_cm) / 100.0
-        self._hz = hz
+        self._distance_m = abs(cm) / 100.0
+        self._hz = 100
 
     def _generate_signature(self) -> str:
         return f"WaitUntilDistance(distance_m={self._distance_m:.3f})"
@@ -54,33 +74,3 @@ class WaitUntilDistance(Step):
                 )
                 return
             await asyncio.sleep(interval)
-
-
-@dsl(tags=["motion", "wait"])
-def wait_until_distance(cm: float) -> WaitUntilDistance:
-    """
-    Wait until the robot has driven at least the given distance.
-
-    Polls odometry straight-line distance from the origin at 100 Hz.
-    Designed to run inside a ``parallel()`` branch alongside a drive step,
-    enabling actions to trigger at specific distances during a drive.
-
-    Args:
-        cm: Distance threshold in centimeters.
-
-    Returns:
-        A WaitUntilDistance step.
-
-    Example::
-
-        from libstp.step import parallel, seq
-        from libstp.step.motion import drive_forward, wait_until_distance
-        from libstp.step.servo import servo
-
-        # Open a servo after driving 30 cm into a 50 cm drive
-        parallel([
-            drive_forward(50),
-            seq([wait_until_distance(30), servo(claw, 90)]),
-        ])
-    """
-    return WaitUntilDistance(distance_cm=cm)

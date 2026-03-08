@@ -1,20 +1,36 @@
 from typing import Any
 from .. import Step, StepProtocol
-from ..annotation import dsl
+from ..annotation import dsl_step
 
 
-@dsl(hidden=True)
-class LoopForeverStep(Step):
+@dsl_step(tags=["control", "loop"])
+class LoopForever(Step):
+    """Repeat a step indefinitely until externally cancelled.
+
+    Wraps the given step in an infinite loop. Each iteration awaits the
+    child step to completion before starting the next. The loop only
+    terminates when the enclosing context cancels it (e.g. via
+    ``do_while_active`` or ``do_until_checkpoint``).
+
+    Args:
+        step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
+
+    Example::
+
+        from libstp.step.logic import loop_forever
+        from libstp.step.timing import do_until_checkpoint
+
+        # Continuously toggle a motor on and off until T=30s
+        toggle = seq([
+            motor_power(robot.motor(0), 100),
+            wait(0.5),
+            motor_off(robot.motor(0)),
+            wait(0.5),
+        ])
+        do_until_checkpoint(30.0, loop_forever(toggle))
+    """
+
     def __init__(self, step: StepProtocol):
-        """
-        Initialize a LoopForeverStep that runs another step indefinitely.
-
-        Args:
-            step: The step to execute in a loop.
-
-        Raises:
-            TypeError: If step is not a Step instance.
-        """
         super().__init__()
 
         if not isinstance(step, StepProtocol):
@@ -22,30 +38,36 @@ class LoopForeverStep(Step):
 
         self.step = step
 
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        """
-        Run the step indefinitely.
+    def _generate_signature(self) -> str:
+        return "LoopForever()"
 
-        Args:
-            robot: The robot to run on.
-        """
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         while True:
             await self.step.run_step(robot)
 
-@dsl(hidden=True)
-class LoopForStep(Step):
+
+@dsl_step(tags=["control", "loop"])
+class LoopFor(Step):
+    """Repeat a step a fixed number of times.
+
+    Wraps the given step in a counted loop. Each iteration awaits the
+    child step to completion before starting the next. After all
+    iterations complete, the step finishes normally.
+
+    Args:
+        step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
+        iterations: Number of times to run the step. Must be a positive
+            integer.
+
+    Example::
+
+        from libstp.step.logic import loop_for
+
+        # Drive forward and back 3 times
+        loop_for(seq([drive_forward(20), drive_backward(20)]), iterations=3)
+    """
+
     def __init__(self, step: StepProtocol, iterations: int):
-        """
-        Initialize a LoopForStep that runs another step a specified number of times.
-
-        Args:
-            step: The step to execute in a loop.
-            iterations: Number of times to run the step.
-
-        Raises:
-            TypeError: If step is not a Step instance.
-            ValueError: If iterations is not a positive integer.
-        """
         super().__init__()
 
         if not isinstance(step, StepProtocol):
@@ -57,77 +79,9 @@ class LoopForStep(Step):
         self.step = step
         self.iterations = iterations
 
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        """
-        Run the step for the specified number of iterations.
+    def _generate_signature(self) -> str:
+        return f"LoopFor(iterations={self.iterations})"
 
-        Args:
-            robot: The robot to run on.
-        """
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         for _ in range(self.iterations):
             await self.step.run_step(robot)
-
-@dsl(tags=["control", "loop"])
-def loop_forever(step: StepProtocol) -> LoopForeverStep:
-    """
-    Repeat a step indefinitely until externally cancelled.
-
-    Wraps the given step in an infinite loop. Each iteration awaits the
-    child step to completion before starting the next. The loop only
-    terminates when the enclosing context cancels it (e.g. via
-    ``do_while_active`` or ``do_until_checkpoint``).
-
-    Args:
-        step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
-
-    Returns:
-        LoopForeverStep: A step that runs ``step`` in an infinite loop.
-
-    Example::
-
-        from libstp.step.logic import loop_forever
-        from libstp.step.motor import set_motor_speed
-
-        # Continuously toggle a motor on and off (until parent cancels)
-        toggle = seq([
-            set_motor_speed(0, 1000),
-            wait(0.5),
-            set_motor_speed(0, 0),
-            wait(0.5),
-        ])
-        do_until_checkpoint(30.0, loop_forever(toggle))
-    """
-    return LoopForeverStep(step=step)
-
-@dsl(tags=["control", "loop"])
-def loop_for(step: StepProtocol, iterations: int) -> LoopForStep:
-    """
-    Repeat a step a fixed number of times.
-
-    Wraps the given step in a counted loop. Each iteration awaits the
-    child step to completion before starting the next. After all
-    iterations complete, the step finishes normally.
-
-    Args:
-        step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
-        iterations: Number of times to run the step. Must be a positive
-            integer.
-
-    Returns:
-        LoopForStep: A step that runs ``step`` exactly ``iterations`` times.
-
-    Example::
-
-        from libstp.step.logic import loop_for
-        from libstp.step.motor import set_motor_speed
-
-        # Drive forward in three short bursts
-        burst = seq([
-            set_motor_speed(0, 800),
-            wait(0.3),
-            set_motor_speed(0, 0),
-            wait(0.2),
-        ])
-        loop_for(burst, 3)
-    """
-    return LoopForStep(step=step, iterations=iterations)

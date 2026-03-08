@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
 
 from libstp.hal import AnalogSensor
-from libstp.step.annotation import dsl
+from libstp.step.annotation import dsl_step
 from libstp.ui.step import UIStep
 from libstp.ui.screens.wfl import (
     WFLMeasureScreen,
@@ -26,17 +26,29 @@ class WFLCalibrationResult:
     threshold: float
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["calibration", "light"])
 class CalibrateWaitForLight(UIStep):
-    """Step for calibrating a wait-for-light sensor."""
+    """Calibrate a wait-for-light sensor via interactive measurement.
+
+    Guides the operator through a two-step measurement flow: first cover
+    the sensor (dark reading), then expose it to the start lamp (light
+    reading). The midpoint threshold is computed and stored so the
+    ``wait_for_light_legacy`` step can detect the lamp signal.
+
+    The operator can retry measurements if the values look wrong before
+    confirming the calibration.
+
+    Args:
+        sensor: The AnalogSensor instance to calibrate.
+
+    Example::
+
+        from libstp.step.calibration import calibrate_wait_for_light
+
+        calibrate_wait_for_light(robot.defs.wait_for_light_sensor)
+    """
 
     def __init__(self, sensor: AnalogSensor) -> None:
-        """
-        Initialize the wait-for-light calibration step.
-
-        Args:
-            sensor: The AnalogSensor instance to calibrate
-        """
         super().__init__()
         self.sensor = sensor
         self.calibration_result: Optional[WFLCalibrationResult] = None
@@ -46,18 +58,6 @@ class CalibrateWaitForLight(UIStep):
         return f"CalibrateWaitForLight(port={port})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        """
-        Execute the wait-for-light calibration.
-
-        The calibration flow:
-        1. User covers sensor (dark reading)
-        2. User exposes sensor to light (bright reading)
-        3. User confirms the calibration values
-        4. Threshold is computed and stored
-
-        Args:
-            robot: The robot instance
-        """
         port = getattr(self.sensor, 'port', 0)
 
         while True:
@@ -93,17 +93,3 @@ class CalibrateWaitForLight(UIStep):
                 return
 
             # User wants to retry - loop continues
-
-
-@dsl(tags=["calibration", "light"])
-def calibrate_wait_for_light(sensor: AnalogSensor) -> CalibrateWaitForLight:
-    """
-    Create a wait-for-light calibration step.
-
-    Args:
-        sensor: The AnalogSensor to calibrate
-
-    Returns:
-        CalibrateWaitForLight step instance
-    """
-    return CalibrateWaitForLight(sensor)
