@@ -1,103 +1,107 @@
 import math
-from libstp.motion import TurnMotion, TurnConfig
-from typing import TYPE_CHECKING
 
-from .. import SimulationStep, SimulationStepDelta, dsl
+from libstp.foundation import ChassisVelocity
+from libstp.motion import TurnMotion, TurnConfig
+from typing import TYPE_CHECKING, Optional
+
+from .. import dsl
+from ..annotation import dsl_step
+from ..condition import StopCondition
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
+class _ConditionalTurn(MotionStep):
+    """Base for directional turn steps with optional stop conditions.
 
-@dsl(hidden=True)
-class Turn(MotionStep):
-    """Step wrapper around the native `TurnMotion` controller."""
+    Supports two modes:
+    - Angle-based: profiled TurnMotion (PID heading control)
+    - Condition-based: constant angular velocity until condition triggers
+    """
 
-    def __init__(self, config: TurnConfig):
+    _sign: float = 1.0  # +1 = CCW (left), -1 = CW (right)
+
+    def __init__(self, degrees: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
         super().__init__()
-        self.config = config
-        self._motion: TurnMotion | None = None
+        if degrees is None and until is None:
+            raise ValueError(
+                f"{self.__class__.__name__} requires either 'degrees' or 'until'"
+            )
+        self._degrees = degrees
+        self._speed = speed
+        self._until = until
+        self._motion: Optional[TurnMotion] = None
 
     def _generate_signature(self) -> str:
-        return (
-            f"Turn(angle_deg={math.degrees(self.config.target_angle_rad):.1f}, "
-            f"speed_scale={self.config.speed_scale:.2f})"
-        )
-
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        base.delta = SimulationStepDelta(
-            forward=0.0,
-            strafe=0.0,
-            angular=self.config.target_angle_rad,
-        )
-        return base
+        mode = f"{self._degrees:.1f}deg" if self._degrees else "until"
+        return f"{self.__class__.__name__}(mode={mode}, speed={self._speed:.2f})"
 
     def on_start(self, robot: "GenericRobot") -> None:
-        self._motion = TurnMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
-        self._motion.start()
+        if self._degrees is not None:
+            config = TurnConfig()
+            config.target_angle_rad = self._sign * math.radians(self._degrees)
+            config.speed_scale = self._speed
+            self._motion = TurnMotion(
+                robot.drive, robot.odometry,
+                robot.motion_pid_config, config,
+            )
+            self._motion.start()
+        else:
+            max_w = robot.motion_pid_config.angular.max_velocity
+            vel = ChassisVelocity(0, 0, self._sign * self._speed * max_w)
+            robot.drive.set_velocity(vel)
+
+        if self._until:
+            self._until.start(robot)
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
-        self._motion.update(dt)
-        return self._motion.is_finished()
+        if self._until and self._until.check(robot):
+            return True
+        if self._motion:
+            self._motion.update(dt)
+            return self._motion.is_finished()
+        else:
+            robot.drive.update(dt)
+            return False
 
 
-@dsl(tags=["motion", "turn"])
-def turn_left(degrees: float, speed: float = 1.0) -> Turn:
-    """
-    Turn counter-clockwise (left) by a specified angle.
+@dsl_step(tags=["motion", "turn"])
+class TurnLeft(_ConditionalTurn):
+    """Turn left (counter-clockwise) with angle or condition-based termination.
 
     Uses a PID controller on the IMU heading to rotate the robot in place.
     The controller saturates output at the configured max angular rate,
     producing an implicit trapezoidal velocity profile.
 
-    Args:
-        degrees: Angle to turn in degrees (positive = counter-clockwise).
-        speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A Turn step configured for counter-clockwise rotation.
-
     Example::
 
-        from libstp.step.motion import turn_left
-
-        # Turn 90 degrees to the left
         turn_left(90)
-
-        # Gentle 45-degree turn at half speed
-        turn_left(45, speed=0.5)
+        turn_left(speed=0.5).until(on_black(s))
     """
-    config = TurnConfig()
-    config.target_angle_rad = math.radians(degrees)  # Positive for CCW
-    config.speed_scale = speed
-    return Turn(config)
+    _sign = 1.0
+
+    def __init__(self, degrees: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
+        super().__init__(degrees=degrees, speed=speed, until=until)
 
 
-@dsl(tags=["motion", "turn"])
-def turn_right(degrees: float, speed: float = 1.0) -> Turn:
-    """
-    Turn clockwise (right) by a specified angle.
+@dsl_step(tags=["motion", "turn"])
+class TurnRight(_ConditionalTurn):
+    """Turn right (clockwise) with angle or condition-based termination.
 
     Uses a PID controller on the IMU heading to rotate the robot in place.
     The controller saturates output at the configured max angular rate,
     producing an implicit trapezoidal velocity profile.
 
-    Args:
-        degrees: Angle to turn in degrees (positive = clockwise).
-        speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A Turn step configured for clockwise rotation.
-
     Example::
 
-        from libstp.step.motion import turn_right
-
-        # Turn 90 degrees to the right
         turn_right(90)
+        turn_right(speed=0.5).until(on_black(s))
     """
-    config = TurnConfig()
-    config.target_angle_rad = -math.radians(degrees)  # Negative for CW
-    config.speed_scale = speed
-    return Turn(config)
+    _sign = -1.0
+
+    def __init__(self, degrees: float = None, speed: float = 1.0,
+                 until: StopCondition = None):
+        super().__init__(degrees=degrees, speed=speed, until=until)

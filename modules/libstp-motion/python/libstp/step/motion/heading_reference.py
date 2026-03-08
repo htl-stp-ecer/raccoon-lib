@@ -4,7 +4,7 @@ from libstp.robot.heading_reference import HeadingReferenceService
 
 from .. import Step, dsl
 from ..logic.defer import Defer
-from .turn import turn_left, turn_right
+from .turn_dsl import turn_left, turn_right
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot

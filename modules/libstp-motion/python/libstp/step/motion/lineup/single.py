@@ -17,7 +17,7 @@ from libstp.foundation import ChassisVelocity
 from libstp.sensor_ir import IRSensor
 from libstp.step import Sequential, seq, defer
 
-from ..turn import turn_left, turn_right
+from ..turn_dsl import turn_left, turn_right
 from ... import SimulationStep, SimulationStepDelta, dsl
 from ..motion_step import MotionStep
 

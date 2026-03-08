@@ -20,6 +20,68 @@ F = TypeVar("F", bound=Callable[..., StepProtocol])
 
 
 @overload
+def dsl_step(cls: T) -> T: ...
+@overload
+def dsl_step(
+    cls: None = None,
+    *,
+    tags: Optional[list[str] | tuple[str, ...]] = None,
+) -> Callable[[T], T]: ...
+
+
+def dsl_step(
+    cls: Optional[T] = None,
+    *,
+    tags: Optional[list[str] | tuple[str, ...]] = None,
+) -> Union[T, Callable[[T], T]]:
+    """Mark a Step class for builder + DSL function generation.
+
+    Codegen scans for classes decorated with ``@dsl_step``,
+    introspects their ``__init__`` parameters, and generates:
+
+    - A ``<ClassName>Builder(StepBuilder)`` with fluent setter methods
+    - A ``snake_case()`` factory function decorated with ``@dsl(tags=...)``
+
+    The marker also applies ``@dsl(hidden=True)`` so the raw class is
+    hidden from the UI (users interact via the generated DSL function).
+
+    Usage::
+
+        @dsl_step(tags=["motion", "drive"])
+        class DriveForward(MotionStep):
+            def __init__(self, cm: float = None, speed: float = 1.0,
+                         until: StopCondition = None):
+                ...
+
+    Codegen produces ``DriveForwardBuilder`` and ``drive_forward()``.
+    Tags are propagated to the generated ``@dsl(tags=...)`` factory.
+    """
+    tags_tuple = tuple(tags) if tags else ()
+
+    def _apply(cls: T) -> T:
+        if not isinstance(cls, type) or not issubclass(cls, Step):
+            raise TypeError(f"@dsl_step requires a Step subclass; got {cls}")
+
+        # Mark for codegen discovery
+        setattr(cls, "__dsl_step__", True)
+        setattr(cls, "__dsl_step_tags__", tags_tuple)
+
+        # Also apply @dsl(hidden=True) — the generated function is the public API
+        meta = DslMeta(hidden=True, name=cls.__name__, tags=tags_tuple)
+        setattr(cls, "__dsl__", meta)
+        setattr(cls, "__dsl_hidden__", True)
+        setattr(cls, "__dsl_name__", cls.__name__)
+        setattr(cls, "__dsl_tags__", tags_tuple)
+
+        return cls
+
+    if cls is not None:
+        # Bare @dsl_step without arguments
+        return _apply(cls)
+    return _apply
+
+
+@overload
 def dsl(_target: T) -> T: ...
 @overload
 def dsl(_target: F) -> F: ...

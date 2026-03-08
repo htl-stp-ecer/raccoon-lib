@@ -157,6 +157,9 @@ else
   echo "• Skipping tests (SKIP_TESTS=1)"
 fi
 
+echo "• Generating step builder DSL code..."
+docker_exec "python tools/generate_step_builders.py"
+
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
 docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args=-DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
 
