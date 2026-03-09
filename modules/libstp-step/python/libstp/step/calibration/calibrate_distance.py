@@ -138,7 +138,9 @@ def _find_motor_name_by_port(config: Dict, port: int) -> Optional[str]:
             definitions = read_project_value(project_root, ["definitions"], {})
 
     for name, definition in definitions.items():
-        if isinstance(definition, dict) and definition.get('port') == port:
+        if (isinstance(definition, dict)
+                and definition.get('type') == 'Motor'
+                and definition.get('port') == port):
             return name
     return None
 
