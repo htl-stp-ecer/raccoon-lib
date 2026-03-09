@@ -50,7 +50,7 @@ def wait_for_checkpoint(checkpoint_seconds: Union[float, int] = _UNSET):
         checkpoint_seconds: The mission-relative time (in seconds) to wait for. Must be non-negative.
 
     Returns:
-        A WaitForCheckpointBuilder (chainable via ``.checkpoint_seconds()``).
+        A WaitForCheckpointBuilder (chainable via ``.checkpoint_seconds()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

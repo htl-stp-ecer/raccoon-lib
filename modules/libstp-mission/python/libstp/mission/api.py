@@ -19,6 +19,12 @@ class MissionProtocol(Protocol):
 class Mission(ClassNameLogger, MissionProtocol):
     """Base mission that delegates execution to a root step sequence."""
 
+    def __str__(self):
+        return self.__class__.__name__
+
+    def __repr__(self):
+        return self.__class__.__name__
+
     async def run(self, robot):
         """Build the mission sequence and execute it on the provided robot."""
         self.debug(f"Executing {self.__class__.__name__}")
@@ -29,19 +35,3 @@ class Mission(ClassNameLogger, MissionProtocol):
     def sequence(self) -> "Step":
         """Return the root step tree for this mission."""
         raise NotImplementedError("Method sequence() not implemented")
-
-
-class MissionController:
-    """Placeholder controller API for future mission orchestration work."""
-
-    def __init__(self, robot):
-        """Store the robot instance that mission execution would target."""
-        self.robot = robot
-
-    async def execute_missions(self, missions: List[Mission]):
-        """Reserved entry point for batch mission execution; not implemented yet."""
-        initialize_timer()
-        raise NotImplementedError("Method execute_missions() not implemented")
-        # sequence = seq([mission.sequence() for mission in missions])
-        # await sequence.run_step(self.device, self.definitions)
-        # sequence.call_on_exit(None)

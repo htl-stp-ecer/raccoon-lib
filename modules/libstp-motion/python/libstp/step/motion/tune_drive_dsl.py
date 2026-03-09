@@ -90,7 +90,7 @@ def tune_drive(distances_cm: list[float] = None, speeds: list[float] = None, csv
         timeout: Maximum seconds per run before the drive is aborted. Default 15.0.
 
     Returns:
-        A TuneDriveBuilder (chainable via ``.distances_cm()``, ``.speeds()``, ``.csv_dir()``, ``.axis()``, ``.settle_time()``, ``.timeout()``).
+        A TuneDriveBuilder (chainable via ``.distances_cm()``, ``.speeds()``, ``.csv_dir()``, ``.axis()``, ``.settle_time()``, ``.timeout()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

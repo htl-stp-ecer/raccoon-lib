@@ -64,7 +64,7 @@ def drive_angle(angle_deg: float = _UNSET, cm: float = _UNSET, speed: float = 1.
         speed: Fraction of max speed, 0.0 to 1.0.
 
     Returns:
-        A DriveAngleBuilder (chainable via ``.angle_deg()``, ``.cm()``, ``.speed()``).
+        A DriveAngleBuilder (chainable via ``.angle_deg()``, ``.cm()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

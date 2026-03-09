@@ -20,7 +20,7 @@ class CharacterizeDriveBuilder(StepBuilder):
         super().__init__()
         self._axes = None
         self._trials = 3
-        self._command_speed = 1.0
+        self._power_percent = 100
         self._accel_timeout = 3.0
         self._decel_timeout = 3.0
         self._persist = True
@@ -33,8 +33,8 @@ class CharacterizeDriveBuilder(StepBuilder):
         self._trials = value
         return self
 
-    def command_speed(self, value: float):
-        self._command_speed = value
+    def power_percent(self, value: int):
+        self._power_percent = value
         return self
 
     def accel_timeout(self, value: float):
@@ -53,7 +53,7 @@ class CharacterizeDriveBuilder(StepBuilder):
         kwargs = {}
         kwargs['axes'] = self._axes
         kwargs['trials'] = self._trials
-        kwargs['command_speed'] = self._command_speed
+        kwargs['power_percent'] = self._power_percent
         kwargs['accel_timeout'] = self._accel_timeout
         kwargs['decel_timeout'] = self._decel_timeout
         kwargs['persist'] = self._persist
@@ -61,49 +61,51 @@ class CharacterizeDriveBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'calibration', 'characterize'])
-def characterize_drive(axes: list[str] = None, trials: int = 3, command_speed: float = 1.0, accel_timeout: float = 3.0, decel_timeout: float = 3.0, persist: bool = True):
+def characterize_drive(axes: list[str] = None, trials: int = 3, power_percent: int = 100, accel_timeout: float = 3.0, decel_timeout: float = 3.0, persist: bool = True):
     """
-    Characterize the robot's physical drive limits by commanding raw velocities.
+    Characterize the robot's physical drive limits at full motor power.
 
-    Bypasses the profile and PID systems entirely to discover the true hardware
-    capabilities of each drive axis. For each axis, the step runs multiple
-    independent trials consisting of two phases:
+    Drives each axis at 100 %% raw PWM (open-loop ``setSpeed``) via the
+    kinematics layer, completely bypassing both the library velocity PID and
+    the firmware BEMF PID.  This reveals the true hardware ceiling for each
+    degree of freedom.
 
-    1. **Acceleration phase** -- commands the specified velocity and records
-       odometry at ~100 Hz until a velocity plateau is detected or the timeout
-       expires. From this data, max velocity and acceleration are extracted
-       using 10%--90% rise-time analysis.
+    For each axis the step runs multiple independent trials consisting of two
+    phases:
 
-    2. **Deceleration phase** -- ramps the robot back up to speed, then
-       commands zero velocity and records the coast-down. Deceleration is
-       computed from 90%--10% fall-time analysis.
+    1. **Acceleration phase** -- commands 100 %% power and records odometry at
+       ~100 Hz until a velocity plateau is detected or the timeout expires.
+       Max velocity and acceleration are extracted with 10 %%--90 %% rise-time
+       analysis.
+
+    2. **Deceleration phase** -- ramps back to full speed, then cuts power and
+       records the coast-down.  Deceleration is computed from 90 %%--10 %%
+       fall-time analysis.
 
     The median of all valid trials for each metric is taken as the final
-    result. Measured values are applied to the in-memory
+    result.  Measured values are applied to the in-memory
     ``motion_pid_config`` immediately and, if ``persist`` is enabled, written
-    to the ``robot.motion_pid`` section of ``raccoon.project.yml`` so they
-    survive restarts.
+    to ``raccoon.project.yml`` under ``robot.motion_pid``.
 
     This step is intended for initial robot setup and should be run on a flat
-    surface with enough room for the robot to accelerate to full speed. It is
-    typically the first phase of the full ``auto_tune()`` pipeline.
+    surface with enough room for the robot to accelerate to full speed.
 
     Args:
         axes: Which axes to characterize. Options are ``"forward"``, ``"lateral"``, and ``"angular"``. Default ``["forward"]``.
         trials: Number of trials per axis. The median is used for robustness against outliers. Default 3.
-        command_speed: Raw velocity command magnitude sent to the motors. For forward/lateral this is in m/s; for angular it is in rad/s. Should be at or near the maximum the robot can sustain. Default 1.0.
+        power_percent: Motor power percentage (1--100). Default 100 for true maximum characterization.
         accel_timeout: Maximum time in seconds to wait for the acceleration phase before giving up. Default 3.0.
         decel_timeout: Maximum time in seconds to record the deceleration (coast-down) phase. Default 3.0.
         persist: If ``True``, write the measured limits to ``raccoon.project.yml`` under ``robot.motion_pid``. Default ``True``.
 
     Returns:
-        A CharacterizeDriveBuilder (chainable via ``.axes()``, ``.trials()``, ``.command_speed()``, ``.accel_timeout()``, ``.decel_timeout()``, ``.persist()``).
+        A CharacterizeDriveBuilder (chainable via ``.axes()``, ``.trials()``, ``.power_percent()``, ``.accel_timeout()``, ``.decel_timeout()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import characterize_drive
 
-        # Characterize forward axis with default settings
+        # Characterize forward axis at full power
         characterize_drive()
 
         # Characterize forward and angular axes with 5 trials each
@@ -112,16 +114,17 @@ def characterize_drive(axes: list[str] = None, trials: int = 3, command_speed: f
             trials=5,
         )
 
-        # Characterize without saving to disk (dry run)
+        # Characterize at 80% power without saving to disk (dry run)
         characterize_drive(
             axes=["forward", "lateral", "angular"],
+            power_percent=80,
             persist=False,
         )
     """
     b = CharacterizeDriveBuilder()
     b._axes = axes
     b._trials = trials
-    b._command_speed = command_speed
+    b._power_percent = power_percent
     b._accel_timeout = accel_timeout
     b._decel_timeout = decel_timeout
     b._persist = persist

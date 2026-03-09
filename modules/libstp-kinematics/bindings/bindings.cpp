@@ -24,6 +24,9 @@ PYBIND11_MODULE(kinematics, m)
              py::arg("cmd"), py::arg("dt"))
         .def("estimate_state", &libstp::kinematics::IKinematics::estimateState)
         .def("hard_stop", &libstp::kinematics::IKinematics::hardStop)
+        .def("apply_power_command", &libstp::kinematics::IKinematics::applyPowerCommand,
+             py::arg("direction"), py::arg("power_percent"),
+             "Command motors at raw open-loop power using kinematics for direction")
         .def_property_readonly("motors", &libstp::kinematics::IKinematics::getMotors,
              "List of motors managed by this kinematics model");
 }

@@ -60,7 +60,7 @@ def drive_forward(cm: float = None, speed: float = 1.0, until: StopCondition = N
         until: Stop condition for early termination (e.g., ``on_black(sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A DriveForwardBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``).
+        A DriveForwardBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -119,7 +119,7 @@ def drive_backward(cm: float = None, speed: float = 1.0, until: StopCondition = 
         until: Stop condition for early termination (e.g., ``on_black(sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A DriveBackwardBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``).
+        A DriveBackwardBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -176,7 +176,7 @@ def strafe_left(cm: float = None, speed: float = 1.0, until: StopCondition = Non
         until: Stop condition for early termination (e.g., ``on_black(sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A StrafeLeftBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``).
+        A StrafeLeftBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -233,7 +233,7 @@ def strafe_right(cm: float = None, speed: float = 1.0, until: StopCondition = No
         until: Stop condition for early termination (e.g., ``on_black(sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A StrafeRightBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``).
+        A StrafeRightBuilder (chainable via ``.cm()``, ``.speed()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

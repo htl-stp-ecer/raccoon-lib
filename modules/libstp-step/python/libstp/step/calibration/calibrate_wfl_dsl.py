@@ -48,7 +48,7 @@ def calibrate_wait_for_light(sensor: AnalogSensor = _UNSET):
         sensor: The AnalogSensor instance to calibrate.
 
     Returns:
-        A CalibrateWaitForLightBuilder (chainable via ``.sensor()``).
+        A CalibrateWaitForLightBuilder (chainable via ``.sensor()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

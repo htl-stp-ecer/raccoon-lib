@@ -67,7 +67,7 @@ def calibrate_deadzone(motor_ports: Optional[List[int]] = None, start_percent: i
         settle_time: Seconds to wait after setting power before asking the operator.
 
     Returns:
-        A CalibrateDeadzoneBuilder (chainable via ``.motor_ports()``, ``.start_percent()``, ``.max_percent()``, ``.settle_time()``).
+        A CalibrateDeadzoneBuilder (chainable via ``.motor_ports()``, ``.start_percent()``, ``.max_percent()``, ``.settle_time()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

@@ -41,7 +41,7 @@ def mark_heading_reference():
     Multiple calls overwrite the previous reference.
 
     Returns:
-        A MarkHeadingReferenceBuilder (chainable via ).
+        A MarkHeadingReferenceBuilder (chainable via , ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

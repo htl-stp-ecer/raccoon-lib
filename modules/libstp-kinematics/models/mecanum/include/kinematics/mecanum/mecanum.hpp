@@ -86,5 +86,9 @@ namespace libstp::kinematics::mecanum
 
         /** Return the underlying motors in front-left, front-right, back-left, back-right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
+
+        /** Command motors at raw open-loop power using mecanum inverse kinematics for direction. */
+        void applyPowerCommand(const foundation::ChassisVelocity& direction,
+                               int power_percent) override;
     };
 }

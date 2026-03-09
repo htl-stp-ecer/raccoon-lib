@@ -180,6 +180,12 @@ class CalibrateSensors(UIStep):
                 return True
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping sensor calibration, using stored values")
+            return
+
         sensors = robot.defs.analog_sensors
         ir_sensors: List[IRSensor] = [s for s in sensors if isinstance(s, IRSensor)]
 

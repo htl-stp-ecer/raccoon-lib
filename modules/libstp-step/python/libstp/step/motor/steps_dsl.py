@@ -53,7 +53,7 @@ def set_motor_power(motor: IMotor = _UNSET, percent: int = _UNSET):
         percent: Duty-cycle power from -100 (full reverse) to 100 (full forward). Values outside this range raise ``ValueError``.
 
     Returns:
-        A SetMotorPowerBuilder (chainable via ``.motor()``, ``.percent()``).
+        A SetMotorPowerBuilder (chainable via ``.motor()``, ``.percent()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -116,7 +116,7 @@ def set_motor_velocity(motor: IMotor = _UNSET, velocity: int = _UNSET):
         velocity: Target velocity in firmware BEMF units (ticks per BEMF sample period). Positive values drive forward; negative values drive in reverse.
 
     Returns:
-        A SetMotorVelocityBuilder (chainable via ``.motor()``, ``.velocity()``).
+        A SetMotorVelocityBuilder (chainable via ``.motor()``, ``.velocity()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -182,7 +182,7 @@ def set_motor_dps(motor: IMotor = _UNSET, dps: float = _UNSET):
         dps: Target angular velocity in degrees per second. Positive values drive forward; negative values drive in reverse.
 
     Returns:
-        A SetMotorDpsBuilder (chainable via ``.motor()``, ``.dps()``).
+        A SetMotorDpsBuilder (chainable via ``.motor()``, ``.dps()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -257,7 +257,7 @@ def move_motor_to(motor: IMotor = _UNSET, position: int = _UNSET, velocity: int 
         timeout: Maximum seconds to wait for the move to finish. ``None`` (the default) means wait indefinitely. If the timeout fires a warning is logged and the step returns without stopping the motor.
 
     Returns:
-        A MoveMotorToBuilder (chainable via ``.motor()``, ``.position()``, ``.velocity()``, ``.timeout()``).
+        A MoveMotorToBuilder (chainable via ``.motor()``, ``.position()``, ``.velocity()``, ``.timeout()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -330,7 +330,7 @@ def move_motor_relative(motor: IMotor = _UNSET, delta: int = _UNSET, velocity: i
         timeout: Maximum seconds to wait for the move to finish. ``None`` (the default) means wait indefinitely. If the timeout fires a warning is logged and the step returns without stopping the motor.
 
     Returns:
-        A MoveMotorRelativeBuilder (chainable via ``.motor()``, ``.delta()``, ``.velocity()``, ``.timeout()``).
+        A MoveMotorRelativeBuilder (chainable via ``.motor()``, ``.delta()``, ``.velocity()``, ``.timeout()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -384,7 +384,7 @@ def motor_off(motor: IMotor = _UNSET):
         motor: The motor to turn off, obtained from the robot hardware map (e.g. ``robot.motor(0)``).
 
     Returns:
-        A MotorOffBuilder (chainable via ``.motor()``).
+        A MotorOffBuilder (chainable via ``.motor()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -435,7 +435,7 @@ def motor_passive_brake(motor: IMotor = _UNSET):
         motor: The motor to brake, obtained from the robot hardware map (e.g. ``robot.motor(0)``).
 
     Returns:
-        A MotorPassiveBrakeBuilder (chainable via ``.motor()``).
+        A MotorPassiveBrakeBuilder (chainable via ``.motor()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -487,7 +487,7 @@ def motor_brake(motor: IMotor = _UNSET):
         motor: The motor to brake, obtained from the robot hardware map (e.g. ``robot.motor(2)``).
 
     Returns:
-        A MotorBrakeBuilder (chainable via ``.motor()``).
+        A MotorBrakeBuilder (chainable via ``.motor()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

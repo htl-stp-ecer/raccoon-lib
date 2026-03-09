@@ -7,7 +7,9 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <algorithm>
 #include <unordered_map>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -26,6 +28,7 @@ namespace logging {
         // Runtime filtering state
         std::mutex filter_mutex_;
         std::unordered_map<std::string, Level> file_filters_;
+        std::vector<std::pair<std::string, Level>> package_filters_;
         Level global_runtime_level_ = Level::info;
 
         // Thread-local source filename for the custom formatter
@@ -319,20 +322,35 @@ namespace logging {
             init();
         }
 
-        // First check spdlog's level (still useful as a baseline)
         auto logger = spdlog::default_logger_raw();
         if (!logger) {
             return false;
         }
-        // Determine effective level for this file
+
+        // Determine effective level: basename exact match → package prefix → global
         Level effective_level;
-        bool found_filter = false;
         {
             std::lock_guard<std::mutex> lock(filter_mutex_);
-            auto it = file_filters_.find(file);
+
+            // 1. Exact basename match (fast path)
+            const char* base = detail::basename(file);
+            auto it = file_filters_.find(base);
             if (it != file_filters_.end()) {
                 effective_level = it->second;
-                found_filter = true;
+            }
+            // 2. Package prefix match against the full path
+            else if (!package_filters_.empty()) {
+                bool matched = false;
+                for (const auto& [prefix, pkg_level] : package_filters_) {
+                    if (strstr(file, prefix.c_str()) != nullptr) {
+                        effective_level = pkg_level;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    effective_level = global_runtime_level_;
+                }
             } else {
                 effective_level = global_runtime_level_;
             }
@@ -356,9 +374,30 @@ namespace logging {
         file_filters_.erase(filename);
     }
 
+    void set_package_level(const std::string& package, Level level) {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        // Update existing entry if present
+        for (auto& [prefix, lvl] : package_filters_) {
+            if (prefix == package) {
+                lvl = level;
+                return;
+            }
+        }
+        package_filters_.emplace_back(package, level);
+    }
+
+    void clear_package_level(const std::string& package) {
+        std::lock_guard<std::mutex> lock(filter_mutex_);
+        package_filters_.erase(
+            std::remove_if(package_filters_.begin(), package_filters_.end(),
+                           [&](const auto& entry) { return entry.first == package; }),
+            package_filters_.end());
+    }
+
     void clear_filters() {
         std::lock_guard<std::mutex> lock(filter_mutex_);
         file_filters_.clear();
+        package_filters_.clear();
         global_runtime_level_ = Level::info;
     }
 

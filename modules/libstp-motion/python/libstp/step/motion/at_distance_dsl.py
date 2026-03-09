@@ -44,7 +44,7 @@ def wait_until_distance(cm: float = _UNSET):
         cm: Distance threshold in centimeters.
 
     Returns:
-        A WaitUntilDistanceBuilder (chainable via ``.cm()``).
+        A WaitUntilDistanceBuilder (chainable via ``.cm()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

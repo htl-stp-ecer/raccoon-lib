@@ -100,5 +100,28 @@ namespace libstp::kinematics
          * @return Vector of motor pointers (non-owning)
          */
         [[nodiscard]] virtual std::vector<hal::motor::IMotor*> getMotors() const = 0;
+
+        /**
+         * Command motors at raw open-loop power using the inverse kinematics
+         * to determine per-wheel direction signs.
+         *
+         * The `direction` vector is passed through the same inverse kinematics
+         * as `applyCommand`, but instead of converting to velocity targets, the
+         * resulting wheel speed ratios are normalized so the largest wheel
+         * receives exactly `power_percent` and every other wheel is scaled
+         * proportionally.  Each motor is then driven via `setSpeed()` (raw PWM).
+         *
+         * This bypasses all firmware velocity PID and library velocity control,
+         * giving direct open-loop access to the motors while still respecting
+         * the drivetrain geometry.
+         *
+         * @param direction Desired chassis-space motion direction.  Only the
+         *        ratios between `vx`, `vy`, and `wz` matter; the magnitude
+         *        is normalized away.
+         * @param power_percent Motor power from -100 to 100.  Sign is combined
+         *        with the direction to determine final per-wheel sign.
+         */
+        virtual void applyPowerCommand(const foundation::ChassisVelocity& direction,
+                                       int power_percent) = 0;
     };
 }

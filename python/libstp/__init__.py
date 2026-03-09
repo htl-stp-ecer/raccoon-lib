@@ -12,7 +12,10 @@ try:
 except Exception:
     _raccoon_version = "unknown"
 
-print(f"libstp v{__version__} | raccoon-transport v{_raccoon_version}")
+from libstp.no_calibrate import is_no_calibrate as _is_no_calibrate
+
+_no_cal_label = " | --no-calibrate" if _is_no_calibrate() else ""
+print(f"libstp v{__version__} | raccoon-transport v{_raccoon_version}{_no_cal_label}")
 
 from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger

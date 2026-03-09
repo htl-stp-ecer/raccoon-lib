@@ -1,20 +1,22 @@
 """
-Characterize drive limits by commanding raw velocities and measuring response.
+Characterize drive limits by commanding raw motor power and measuring response.
 
-Bypasses the profile/PID system to discover the robot's true physical limits:
-max velocity, acceleration, and deceleration for each axis. Runs multiple
-trials per axis for statistical robustness. Results are persisted to
-raccoon.project.yml under robot.motion_pid and applied in-memory.
+Bypasses ALL velocity control (library PID and firmware BEMF PID) to discover
+the robot's true physical limits: max velocity, acceleration, and deceleration
+for each axis.  Motors are driven at 100% PWM via the kinematics layer's
+``applyPowerCommand``, which uses inverse kinematics to compute per-wheel
+direction signs while commanding raw open-loop power.
+
+Results are persisted to raccoon.project.yml under robot.motion_pid and applied
+in-memory.
 """
 import asyncio
 import statistics
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-import yaml
-
 from libstp.foundation import ChassisVelocity
+from libstp.project_yaml import find_project_root, update_project_value
 
 from .. import Step
 from ..annotation import dsl_step
@@ -36,6 +38,13 @@ _STOPPED_THRESHOLD_MPS = 0.005
 # Ramp-up region: 10%-90% of max velocity for linear regression
 _RAMP_LOW_FRAC = 0.10
 _RAMP_HIGH_FRAC = 0.90
+
+# Direction vectors for each axis (only ratios matter)
+_AXIS_DIRECTION = {
+    "forward": ChassisVelocity(1.0, 0.0, 0.0),
+    "lateral": ChassisVelocity(0.0, 1.0, 0.0),
+    "angular": ChassisVelocity(0.0, 0.0, 1.0),
+}
 
 
 @dataclass
@@ -154,55 +163,44 @@ def _analyze_decel(samples: list[_Sample]) -> float:
     return (high - low) / (t_low - t_high)
 
 
-def _find_project_root() -> Optional[Path]:
-    """Find project root by searching upward for raccoon.project.yml."""
-    try:
-        current = Path.cwd().resolve()
-    except (FileNotFoundError, OSError):
-        return None
-    while current != current.parent:
-        if (current / "raccoon.project.yml").exists():
-            return current
-        current = current.parent
-    return None
 
 
 @dsl_step(tags=["motion", "calibration", "characterize"])
 class CharacterizeDrive(Step):
-    """Characterize the robot's physical drive limits by commanding raw velocities.
+    """Characterize the robot's physical drive limits at full motor power.
 
-    Bypasses the profile and PID systems entirely to discover the true hardware
-    capabilities of each drive axis. For each axis, the step runs multiple
-    independent trials consisting of two phases:
+    Drives each axis at 100 %% raw PWM (open-loop ``setSpeed``) via the
+    kinematics layer, completely bypassing both the library velocity PID and
+    the firmware BEMF PID.  This reveals the true hardware ceiling for each
+    degree of freedom.
 
-    1. **Acceleration phase** -- commands the specified velocity and records
-       odometry at ~100 Hz until a velocity plateau is detected or the timeout
-       expires. From this data, max velocity and acceleration are extracted
-       using 10%--90% rise-time analysis.
+    For each axis the step runs multiple independent trials consisting of two
+    phases:
 
-    2. **Deceleration phase** -- ramps the robot back up to speed, then
-       commands zero velocity and records the coast-down. Deceleration is
-       computed from 90%--10% fall-time analysis.
+    1. **Acceleration phase** -- commands 100 %% power and records odometry at
+       ~100 Hz until a velocity plateau is detected or the timeout expires.
+       Max velocity and acceleration are extracted with 10 %%--90 %% rise-time
+       analysis.
+
+    2. **Deceleration phase** -- ramps back to full speed, then cuts power and
+       records the coast-down.  Deceleration is computed from 90 %%--10 %%
+       fall-time analysis.
 
     The median of all valid trials for each metric is taken as the final
-    result. Measured values are applied to the in-memory
+    result.  Measured values are applied to the in-memory
     ``motion_pid_config`` immediately and, if ``persist`` is enabled, written
-    to the ``robot.motion_pid`` section of ``raccoon.project.yml`` so they
-    survive restarts.
+    to ``raccoon.project.yml`` under ``robot.motion_pid``.
 
     This step is intended for initial robot setup and should be run on a flat
-    surface with enough room for the robot to accelerate to full speed. It is
-    typically the first phase of the full ``auto_tune()`` pipeline.
+    surface with enough room for the robot to accelerate to full speed.
 
     Args:
         axes: Which axes to characterize. Options are ``"forward"``,
             ``"lateral"``, and ``"angular"``. Default ``["forward"]``.
         trials: Number of trials per axis. The median is used for
             robustness against outliers. Default 3.
-        command_speed: Raw velocity command magnitude sent to the motors.
-            For forward/lateral this is in m/s; for angular it is in rad/s.
-            Should be at or near the maximum the robot can sustain.
-            Default 1.0.
+        power_percent: Motor power percentage (1--100). Default 100
+            for true maximum characterization.
         accel_timeout: Maximum time in seconds to wait for the acceleration
             phase before giving up. Default 3.0.
         decel_timeout: Maximum time in seconds to record the deceleration
@@ -215,7 +213,7 @@ class CharacterizeDrive(Step):
 
         from libstp.step.motion import characterize_drive
 
-        # Characterize forward axis with default settings
+        # Characterize forward axis at full power
         characterize_drive()
 
         # Characterize forward and angular axes with 5 trials each
@@ -224,9 +222,10 @@ class CharacterizeDrive(Step):
             trials=5,
         )
 
-        # Characterize without saving to disk (dry run)
+        # Characterize at 80% power without saving to disk (dry run)
         characterize_drive(
             axes=["forward", "lateral", "angular"],
+            power_percent=80,
             persist=False,
         )
     """
@@ -235,7 +234,7 @@ class CharacterizeDrive(Step):
         self,
         axes: list[str] = None,
         trials: int = 3,
-        command_speed: float = 1.0,
+        power_percent: int = 100,
         accel_timeout: float = 3.0,
         decel_timeout: float = 3.0,
         persist: bool = True,
@@ -245,7 +244,7 @@ class CharacterizeDrive(Step):
             axes = ["forward"]
         self.axes = axes
         self.trials = max(1, trials)
-        self.command_speed = command_speed
+        self.power_percent = max(1, min(100, power_percent))
         self.accel_timeout = accel_timeout
         self.decel_timeout = decel_timeout
         self.persist = persist
@@ -254,17 +253,9 @@ class CharacterizeDrive(Step):
     def _generate_signature(self) -> str:
         return (
             f"CharacterizeDrive(axes={self.axes}, "
-            f"trials={self.trials}, persist={self.persist})"
+            f"trials={self.trials}, power={self.power_percent}%, "
+            f"persist={self.persist})"
         )
-
-    def _make_velocity(self, axis: str, speed: float) -> ChassisVelocity:
-        if axis == "forward":
-            return ChassisVelocity(speed, 0.0, 0.0)
-        elif axis == "lateral":
-            return ChassisVelocity(0.0, speed, 0.0)
-        elif axis == "angular":
-            return ChassisVelocity(0.0, 0.0, speed)
-        raise ValueError(f"Unknown axis: {axis}")
 
     def _get_position(self, robot: "GenericRobot", axis: str) -> float:
         if axis == "angular":
@@ -274,19 +265,27 @@ class CharacterizeDrive(Step):
             return dist.forward
         return dist.lateral
 
-    async def _record_samples(
+    def _command_power(self, robot: "GenericRobot", axis: str, power: int) -> None:
+        """Command raw motor power for the given axis via kinematics."""
+        direction = _AXIS_DIRECTION[axis]
+        robot.drive.apply_power_command(direction, power)
+
+    def _stop_motors(self, robot: "GenericRobot") -> None:
+        """Brake all drive motors."""
+        for motor in robot.drive.get_motors():
+            motor.brake()
+
+    async def _record_accel_samples(
         self,
         robot: "GenericRobot",
         axis: str,
-        velocity: ChassisVelocity,
         timeout: float,
-        stop_on_plateau: bool,
     ) -> list[_Sample]:
-        """Command velocity and record position at ~100 Hz."""
+        """Command full power and record position at ~100 Hz until plateau or timeout."""
         rate = 1 / 100
         samples: list[_Sample] = []
 
-        robot.drive.set_velocity(velocity)
+        self._command_power(robot, axis, self.power_percent)
 
         loop = asyncio.get_event_loop()
         t0 = loop.time()
@@ -308,13 +307,12 @@ class CharacterizeDrive(Step):
                 continue
 
             robot.odometry.update(dt)
-            robot.drive.update(dt)
 
             pos = self._get_position(robot, axis)
             samples.append(_Sample(time=elapsed, position=pos))
 
-            # Early plateau detection for accel phase
-            if stop_on_plateau and len(samples) >= 2:
+            # Early plateau detection
+            if len(samples) >= 2:
                 raw_vel = (samples[-1].position - samples[-2].position) / dt
                 filtered = _VEL_EMA_ALPHA * raw_vel + (1 - _VEL_EMA_ALPHA) * prev_vel
                 prev_vel = filtered
@@ -333,24 +331,60 @@ class CharacterizeDrive(Step):
 
         return samples
 
+    async def _record_decel_samples(
+        self,
+        robot: "GenericRobot",
+        axis: str,
+        timeout: float,
+    ) -> list[_Sample]:
+        """Cut power and record coast-down at ~100 Hz."""
+        rate = 1 / 100
+        samples: list[_Sample] = []
+
+        # Cut power — brake to get active deceleration
+        self._stop_motors(robot)
+
+        loop = asyncio.get_event_loop()
+        t0 = loop.time()
+        last = t0 - rate
+
+        while True:
+            now = loop.time()
+            elapsed = now - t0
+            if elapsed > timeout:
+                break
+
+            dt = now - last
+            last = now
+            if dt < 1e-4:
+                await asyncio.sleep(rate)
+                continue
+
+            robot.odometry.update(dt)
+
+            pos = self._get_position(robot, axis)
+            samples.append(_Sample(time=elapsed, position=pos))
+
+            await asyncio.sleep(rate)
+
+        return samples
+
     async def _run_single_trial(
         self, robot: "GenericRobot", axis: str
     ) -> AxisResult:
         """Run one accel + decel trial for a single axis."""
         result = AxisResult()
-        speed = self.command_speed
-        vel_cmd = self._make_velocity(axis, speed)
 
         # Reset odometry
         robot.odometry.reset()
         await asyncio.sleep(0.05)
         robot.odometry.update(0.05)
 
-        # Phase 1: Acceleration + max velocity
-        accel_samples = await self._record_samples(
-            robot, axis, vel_cmd, self.accel_timeout, stop_on_plateau=True
+        # Phase 1: Acceleration at full power
+        accel_samples = await self._record_accel_samples(
+            robot, axis, self.accel_timeout
         )
-        robot.drive.hard_stop()
+        self._stop_motors(robot)
 
         _compute_velocities(accel_samples)
 
@@ -365,23 +399,30 @@ class CharacterizeDrive(Step):
                 accel_samples, plateau_idx
             )
         else:
-            result.max_velocity = max(
-                abs(s.velocity) for s in accel_samples
+            # No plateau found — use 90th percentile instead of max to
+            # reject noise spikes from finite-difference jitter.
+            sorted_vels = sorted(abs(s.velocity) for s in accel_samples)
+            p90_idx = int(len(sorted_vels) * 0.90)
+            result.max_velocity = sorted_vels[min(p90_idx, len(sorted_vels) - 1)]
+            self.warn(
+                f"    No velocity plateau detected — using p90 "
+                f"({result.max_velocity:.4f}) instead of max "
+                f"({sorted_vels[-1]:.4f})"
             )
 
         # Compute acceleration
         result.acceleration = _analyze_accel(accel_samples, result.max_velocity)
 
         # Brief pause before decel test
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.3)
 
-        # Phase 2: Deceleration (coast-down from max velocity)
+        # Phase 2: Deceleration (coast-down from full speed)
         robot.odometry.reset()
         await asyncio.sleep(0.05)
         robot.odometry.update(0.05)
 
-        # Ramp up to speed first
-        robot.drive.set_velocity(vel_cmd)
+        # Ramp up to full speed first
+        self._command_power(robot, axis, self.power_percent)
         loop = asyncio.get_event_loop()
         ramp_start = loop.time()
         last = ramp_start - 0.01
@@ -393,15 +434,13 @@ class CharacterizeDrive(Step):
                 await asyncio.sleep(0.01)
                 continue
             robot.odometry.update(dt)
-            robot.drive.update(dt)
             await asyncio.sleep(0.01)
 
-        # Command zero and record coast-down
-        zero_vel = ChassisVelocity(0.0, 0.0, 0.0)
-        decel_samples = await self._record_samples(
-            robot, axis, zero_vel, self.decel_timeout, stop_on_plateau=False
+        # Cut power and record coast-down
+        decel_samples = await self._record_decel_samples(
+            robot, axis, self.decel_timeout
         )
-        robot.drive.hard_stop()
+        self._stop_motors(robot)
 
         _compute_velocities(decel_samples)
         result.deceleration = _analyze_decel(decel_samples)
@@ -419,7 +458,7 @@ class CharacterizeDrive(Step):
         for trial_num in range(1, self.trials + 1):
             self.info(
                 f"  [{axis}] Trial {trial_num}/{self.trials} "
-                f"(cmd={self.command_speed:.2f} {unit})"
+                f"(power={self.power_percent}%)"
             )
             result = await self._run_single_trial(robot, axis)
             trial_results.append(result)
@@ -431,7 +470,7 @@ class CharacterizeDrive(Step):
             )
 
             # Settle between trials
-            robot.drive.hard_stop()
+            self._stop_motors(robot)
             await asyncio.sleep(0.5)
 
         # Filter out zero results (failed trials)
@@ -466,62 +505,31 @@ class CharacterizeDrive(Step):
     }
 
     def _persist_to_yaml(self) -> bool:
-        """Write per-axis results to robot.motion_pid in raccoon.project.yml."""
-        project_root = _find_project_root()
+        """Write per-axis results to robot.motion_pid, following !include refs."""
+        project_root = find_project_root()
         if project_root is None:
             return False
 
-        config_path = project_root / "raccoon.project.yml"
-
-        try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f) or {}
-            else:
-                config = {}
-        except (yaml.YAMLError, OSError):
-            return False
-
-        if not isinstance(config, dict):
-            return False
-
-        robot_cfg = config.setdefault("robot", {})
-        if not isinstance(robot_cfg, dict):
-            return False
-        motion_pid = robot_cfg.setdefault("motion_pid", {})
-        if not isinstance(motion_pid, dict):
-            return False
-
         updated = False
-
         for axis, result in self.results.items():
             attr = self._AXIS_ATTR.get(axis)
             if attr is None:
                 continue
-            axis_cfg = motion_pid.setdefault(attr, {})
-            if not isinstance(axis_cfg, dict):
-                continue
+            base = ("robot", "motion_pid", attr)
             if result.acceleration > 0:
-                axis_cfg["acceleration"] = round(result.acceleration, 4)
+                update_project_value(project_root, [*base, "acceleration"],
+                                     round(result.acceleration, 4))
                 updated = True
             if result.deceleration > 0:
-                axis_cfg["deceleration"] = round(result.deceleration, 4)
+                update_project_value(project_root, [*base, "deceleration"],
+                                     round(result.deceleration, 4))
                 updated = True
             if result.max_velocity > 0:
-                axis_cfg["max_velocity"] = round(result.max_velocity, 4)
+                update_project_value(project_root, [*base, "max_velocity"],
+                                     round(result.max_velocity, 4))
                 updated = True
 
-        if not updated:
-            return False
-
-        try:
-            with open(config_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(
-                    config, f, sort_keys=False, default_flow_style=False
-                )
-            return True
-        except OSError:
-            return False
+        return updated
 
     def _apply_to_config(self, robot: "GenericRobot") -> None:
         """Update in-memory motion_pid_config with measured values."""
@@ -539,18 +547,28 @@ class CharacterizeDrive(Step):
                 axis_constraints.max_velocity = result.max_velocity
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping drive characterization, using stored values")
+            return
+
         self.info("=" * 60)
-        self.info("  DRIVE CHARACTERIZATION")
-        self.info(f"  Axes: {', '.join(self.axes)}, Trials: {self.trials}")
+        self.info("  DRIVE CHARACTERIZATION (raw motor power)")
+        self.info(f"  Axes: {', '.join(self.axes)}, Trials: {self.trials}, "
+                  f"Power: {self.power_percent}%")
         self.info("=" * 60)
 
         for axis in self.axes:
+            if axis not in _AXIS_DIRECTION:
+                self.warn(f"  Unknown axis '{axis}' — skipping")
+                continue
             self.info(f"\n--- {axis.upper()} axis ---")
             result = await self._run_axis(robot, axis)
             self.results[axis] = result
 
             # Stop and settle between axes
-            robot.drive.hard_stop()
+            self._stop_motors(robot)
             await asyncio.sleep(1.0)
 
         # Summary
@@ -583,5 +601,3 @@ class CharacterizeDrive(Step):
                 self.warn("  Failed to save to raccoon.project.yml")
 
         self.info("=" * 60)
-
-

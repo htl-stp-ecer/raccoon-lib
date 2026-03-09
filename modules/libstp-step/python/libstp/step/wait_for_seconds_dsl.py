@@ -46,7 +46,7 @@ def wait_for_seconds(seconds: Union[float, int] = _UNSET):
         seconds: Duration to pause in seconds. Must be non-negative. Passing 0 yields control to the event loop for one tick without any meaningful delay.
 
     Returns:
-        A WaitForSecondsBuilder (chainable via ``.seconds()``).
+        A WaitForSecondsBuilder (chainable via ``.seconds()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

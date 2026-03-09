@@ -94,7 +94,7 @@ def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET,
         kd: Derivative gain for steering PID. Damps oscillation around the line. Default 0.5.
 
     Returns:
-        A FollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A FollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -214,7 +214,7 @@ def follow_line_until_both_black(left_sensor: IRSensor = _UNSET, right_sensor: I
         both_black_threshold: The ``probabilityOfBlack()`` value that both sensors must exceed to trigger the stop. Default 0.7.
 
     Returns:
-        A FollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``).
+        A FollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -331,7 +331,7 @@ def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, s
         kd: Derivative gain for steering PID. Default 0.3.
 
     Returns:
-        A FollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A FollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -457,7 +457,7 @@ def follow_line_single_until_black(sensor: IRSensor = _UNSET, stop_sensor: IRSen
         kd: Derivative gain for steering PID. Default 0.3.
 
     Returns:
-        A FollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A FollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -587,7 +587,7 @@ def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSens
         kd: Derivative gain for steering PID.  Default 0.5.
 
     Returns:
-        A DirectionalFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A DirectionalFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -711,7 +711,7 @@ def directional_follow_line_until_both_black(left_sensor: IRSensor = _UNSET, rig
         both_black_threshold: ``probabilityOfBlack()`` value that both sensors must exceed to trigger the stop.  Default 0.7.
 
     Returns:
-        A DirectionalFollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``).
+        A DirectionalFollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -816,7 +816,7 @@ def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = 
         kd: Derivative gain for steering PID.  Default 0.5.
 
     Returns:
-        A StrafeFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A StrafeFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -928,7 +928,7 @@ def strafe_follow_line_until_both_black(left_sensor: IRSensor = _UNSET, right_se
         both_black_threshold: ``probabilityOfBlack()`` value that both sensors must exceed to trigger the stop.  Default 0.7.
 
     Returns:
-        A StrafeFollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``).
+        A StrafeFollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -1031,7 +1031,7 @@ def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _U
         kd: Derivative gain for steering PID.  Default 0.3.
 
     Returns:
-        A StrafeFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A StrafeFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -1149,7 +1149,7 @@ def strafe_follow_line_single_until_black(sensor: IRSensor = _UNSET, stop_sensor
         kd: Derivative gain for steering PID.  Default 0.3.
 
     Returns:
-        A StrafeFollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A StrafeFollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -1263,7 +1263,7 @@ def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float
         kd: Derivative gain for steering PID.  Default 0.3.
 
     Returns:
-        A DirectionalFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A DirectionalFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -1382,7 +1382,7 @@ def directional_follow_line_single_until_black(sensor: IRSensor = _UNSET, stop_s
         kd: Derivative gain for steering PID.  Default 0.3.
 
     Returns:
-        A DirectionalFollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``).
+        A DirectionalFollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

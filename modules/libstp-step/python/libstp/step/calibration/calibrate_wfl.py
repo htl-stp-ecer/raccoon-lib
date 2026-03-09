@@ -58,6 +58,12 @@ class CalibrateWaitForLight(UIStep):
         return f"CalibrateWaitForLight(port={port})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping wait-for-light calibration, using stored values")
+            return
+
         port = getattr(self.sensor, 'port', 0)
 
         while True:

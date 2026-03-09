@@ -47,7 +47,7 @@ def switch_calibration_set(set_name: str = 'default'):
         set_name: Name of the calibration set to apply (e.g. ``"default"``, ``"transparent"``).
 
     Returns:
-        A SwitchCalibrationSetBuilder (chainable via ``.set_name()``).
+        A SwitchCalibrationSetBuilder (chainable via ``.set_name()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

@@ -49,6 +49,9 @@ PYBIND11_MODULE(kinematics_differential, m)
              "Returns False since differential drives cannot strafe")
         .def("get_wheel_radius", &libstp::kinematics::differential::DifferentialKinematics::getWheelRadius,
              "Get the wheel radius in meters")
+        .def("apply_power_command", &libstp::kinematics::differential::DifferentialKinematics::applyPowerCommand,
+             py::arg("direction"), py::arg("power_percent"),
+             "Command motors at raw open-loop power using kinematics for direction")
         .def_property_readonly("motors", &libstp::kinematics::differential::DifferentialKinematics::getMotors,
              "List of motors managed by this kinematics model");
 }

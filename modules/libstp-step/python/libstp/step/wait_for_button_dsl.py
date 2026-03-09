@@ -37,7 +37,7 @@ def wait_for_button():
     human approval.
 
     Returns:
-        A WaitForButtonBuilder (chainable via ).
+        A WaitForButtonBuilder (chainable via , ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

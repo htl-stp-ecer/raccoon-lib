@@ -12,9 +12,9 @@ and a snake_case factory function is generated alongside.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from .base import Step
+from .base import Step, StepAnomalyCallback
 
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
@@ -32,6 +32,30 @@ class StepBuilder(Step):
 
     def __init__(self) -> None:
         super().__init__()
+        self._builder_anomaly_callback: Optional[StepAnomalyCallback] = None
+        self._builder_skip_timing: bool = False
+
+    def on_anomaly(self, callback: StepAnomalyCallback) -> "StepBuilder":
+        """Register a callback invoked when a timing anomaly is detected.
+
+        The callback receives the step instance and robot::
+
+            drive_forward(25).on_anomaly(my_handler)
+
+            async def my_handler(step, robot):
+                ...
+        """
+        self._builder_anomaly_callback = callback
+        return self
+
+    def skip_timing(self) -> "StepBuilder":
+        """Exclude this step from timing anomaly tracking.
+
+        Use for steps whose duration is inherently variable
+        (e.g., condition-only drives, user-input waits).
+        """
+        self._builder_skip_timing = True
+        return self
 
     @abstractmethod
     def _build(self) -> Step:
@@ -39,8 +63,12 @@ class StepBuilder(Step):
         raise NotImplementedError
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        """Build the step and execute it."""
+        """Build the step, transfer builder options, and execute it."""
         step = self._build()
+        if self._builder_anomaly_callback is not None:
+            step._anomaly_callback = self._builder_anomaly_callback
+        if self._builder_skip_timing:
+            step._skip_timing = True
         await step.run_step(robot)
 
     def _generate_signature(self) -> str:

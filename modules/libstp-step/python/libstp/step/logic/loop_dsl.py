@@ -45,7 +45,7 @@ def loop_forever(step: StepProtocol = _UNSET):
         step: The step to execute repeatedly. Must satisfy ``StepProtocol``.
 
     Returns:
-        A LoopForeverBuilder (chainable via ``.step()``).
+        A LoopForeverBuilder (chainable via ``.step()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -106,7 +106,7 @@ def loop_for(step: StepProtocol = _UNSET, iterations: int = _UNSET):
         iterations: Number of times to run the step. Must be a positive integer.
 
     Returns:
-        A LoopForBuilder (chainable via ``.step()``, ``.iterations()``).
+        A LoopForBuilder (chainable via ``.step()``, ``.iterations()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

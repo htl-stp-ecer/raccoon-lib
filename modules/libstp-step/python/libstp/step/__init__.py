@@ -1,4 +1,4 @@
-from .base import Step
+from .base import Step, StepAnomalyCallback
 from .annotation import dsl, dsl_step, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .step_builder import StepBuilder
@@ -29,6 +29,7 @@ from .motor import __all__ as _motor_all
 
 __all__ = [
     "Step",
+    "StepAnomalyCallback",
     "StepProtocol",
     "StepBuilder",
     "SimulationStepDelta",

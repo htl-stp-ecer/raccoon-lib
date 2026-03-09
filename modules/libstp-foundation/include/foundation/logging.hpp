@@ -67,12 +67,16 @@ namespace logging {
     void set_global_level(Level level);
     void set_file_level(const std::string& filename, Level level);
     void clear_file_level(const std::string& filename);
+    void set_package_level(const std::string& package, Level level);
+    void clear_package_level(const std::string& package);
     void clear_filters();
 
     /// Query whether a log level is enabled by the current runtime filter state.
     bool is_enabled(Level level);
 
-    /// Query whether a log level is enabled for a specific source-file basename.
+    /// Query whether a log level is enabled for a source file.
+    /// Accepts either a basename ("drive.cpp") or a full/repo-relative path.
+    /// Checks exact basename match first, then package prefix filters.
     bool is_enabled_for(Level level, const char* file);
 
     /// Log a preformatted message without source-file context.
@@ -129,7 +133,7 @@ namespace logging {
 #define LIBSTP_LOG_CALL(level_enum, fmt, ...)                                                      \
     do {                                                                                           \
         if constexpr (::logging::detail::level_value(level_enum) >= FOUNDATION_LOG_ACTIVE_LEVEL) { \
-            ::logging::logf_file(level_enum, ::logging::detail::basename(__FILE__),                \
+            ::logging::logf_file(level_enum, __FILE__,                                            \
                                  __FILE__,                                                         \
                                  fmt __VA_OPT__(, __VA_ARGS__));                                   \
         }                                                                                          \
