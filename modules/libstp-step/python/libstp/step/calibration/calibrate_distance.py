@@ -11,7 +11,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, TYPE_CHECKING, Sequence
 
-import yaml
+from libstp.project_yaml import (
+    find_project_root as _find_project_root_util,
+    read_project_value,
+    update_project_value,
+)
 
 from libstp.step.annotation import dsl_step
 from libstp.ui.step import UIStep
@@ -84,18 +88,7 @@ class PerWheelCalibration:
 
 def _find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
     """Find project root by searching upward for raccoon.project.yml."""
-    if start_path is None:
-        try:
-            start_path = Path.cwd()
-        except (FileNotFoundError, OSError):
-            return None
-
-    current = start_path.resolve()
-    while current != current.parent:
-        if (current / "raccoon.project.yml").exists():
-            return current
-        current = current.parent
-    return None
+    return _find_project_root_util(start_path)
 
 
 def _update_yaml_calibration(
@@ -103,7 +96,7 @@ def _update_yaml_calibration(
     project_root: Optional[Path] = None,
 ) -> bool:
     """
-    Update ticks_to_rad values in raccoon.project.yml using EMA baselines.
+    Update ticks_to_rad values, following !include refs.
 
     Args:
         results: List of calibration results with ema_baseline and motor_name set
@@ -118,39 +111,32 @@ def _update_yaml_calibration(
     if project_root is None:
         return False
 
-    config_path = project_root / "raccoon.project.yml"
-    if not config_path.exists():
-        return False
+    updated = False
+    for result in results:
+        if result.motor_name:
+            if update_project_value(
+                project_root,
+                ["definitions", result.motor_name, "calibration", "ticks_to_rad"],
+                result.ema_baseline,
+            ):
+                updated = True
 
-    try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-
-        if not isinstance(config, dict):
-            return False
-
-        definitions = config.get('definitions', {})
-        updated = False
-
-        for result in results:
-            if result.motor_name and result.motor_name in definitions:
-                motor_def = definitions[result.motor_name]
-                if 'calibration' in motor_def:
-                    motor_def['calibration']['ticks_to_rad'] = result.ema_baseline
-                    updated = True
-
-        if updated:
-            with open(config_path, 'w', encoding='utf-8') as f:
-                yaml.safe_dump(config, f, sort_keys=False, default_flow_style=False)
-
-        return updated
-    except (yaml.YAMLError, OSError, KeyError):
-        return False
+    return updated
 
 
 def _find_motor_name_by_port(config: Dict, port: int) -> Optional[str]:
-    """Find motor definition name by port number."""
+    """Find motor definition name by port number.
+
+    When *config* has a 'definitions' key, searches there.  Falls back to
+    reading definitions from the project YAML (following !include refs) when
+    the in-memory dict is empty or missing.
+    """
     definitions = config.get('definitions', {})
+    if not definitions:
+        project_root = _find_project_root()
+        if project_root is not None:
+            definitions = read_project_value(project_root, ["definitions"], {})
+
     for name, definition in definitions.items():
         if isinstance(definition, dict) and definition.get('port') == port:
             return name
@@ -422,6 +408,14 @@ class CalibrateDistance(UIStep):
         Args:
             robot: The robot instance for driving
         """
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            global _calibrated
+            _calibrated = True
+            self.info("--no-calibrate: skipping distance calibration, using stored values")
+            return
+
         from libstp.step.motion.drive import _drive_forward_uncalibrated
         from libstp.foundation import MotorCalibration
         from libstp.sensor_ir import IRSensor
@@ -541,17 +535,12 @@ class CalibrateDistance(UIStep):
             )
 
             if confirm_result.confirmed:
-                # Load YAML config for motor name lookup and persistence
-                yaml_config: Optional[Dict] = None
+                # Find project root for motor name lookup and persistence
                 project_root: Optional[Path] = None
                 if self.persist_to_yaml:
                     project_root = _find_project_root()
-                    if project_root:
-                        try:
-                            with open(project_root / "raccoon.project.yml", 'r') as f:
-                                yaml_config = yaml.safe_load(f)
-                        except (yaml.YAMLError, OSError):
-                            self.warn("Could not load raccoon.project.yml for persistence")
+                    if not project_root:
+                        self.warn("Could not find raccoon.project.yml for persistence")
 
                 # Apply calibration to each motor
                 for result in self.per_wheel_results:
@@ -561,9 +550,9 @@ class CalibrateDistance(UIStep):
                         result.new_ticks_to_rad * (1 - self.ema_alpha)
                     )
 
-                    # Find motor name for YAML persistence
-                    if yaml_config:
-                        result.motor_name = _find_motor_name_by_port(yaml_config, result.motor_port)
+                    # Find motor name for YAML persistence (follows !include refs)
+                    if project_root:
+                        result.motor_name = _find_motor_name_by_port({}, result.motor_port)
 
                     for motor in drive_motors:
                         if motor.port == result.motor_port:
@@ -588,7 +577,6 @@ class CalibrateDistance(UIStep):
                         self.warn("Failed to persist calibration to raccoon.project.yml")
 
                 # Mark as calibrated
-                global _calibrated
                 _calibrated = True
 
                 self.result = DistanceCalibrationResult(

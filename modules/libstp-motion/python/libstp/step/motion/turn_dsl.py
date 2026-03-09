@@ -57,7 +57,7 @@ def turn_left(degrees: float = None, speed: float = 1.0, until: StopCondition = 
         until: Stop condition for early termination (e.g., ``on_black(sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A TurnLeftBuilder (chainable via ``.degrees()``, ``.speed()``, ``.until()``).
+        A TurnLeftBuilder (chainable via ``.degrees()``, ``.speed()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -115,7 +115,7 @@ def turn_right(degrees: float = None, speed: float = 1.0, until: StopCondition =
         until: Stop condition for early termination (e.g., ``on_black(sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A TurnRightBuilder (chainable via ``.degrees()``, ``.speed()``, ``.until()``).
+        A TurnRightBuilder (chainable via ``.degrees()``, ``.speed()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

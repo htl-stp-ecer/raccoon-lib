@@ -19,6 +19,8 @@ namespace libstp::test
                     (const calibration::CalibrationConfig&), (override));
         MOCK_METHOD(double, getWheelRadius, (), (const, override));
         MOCK_METHOD(std::vector<hal::motor::IMotor*>, getMotors, (), (const, override));
+        MOCK_METHOD(void, applyPowerCommand,
+                    (const foundation::ChassisVelocity&, int), (override));
 
         // Configurable behavior helpers
         void setSupportsLateral(bool supports) {

@@ -59,7 +59,7 @@ def timeout(step: Step = _UNSET, seconds: Union[float, int] = _UNSET):
         seconds: Maximum allowed execution time in seconds. Must be positive.
 
     Returns:
-        A TimeoutBuilder (chainable via ``.step()``, ``.seconds()``).
+        A TimeoutBuilder (chainable via ``.step()``, ``.seconds()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

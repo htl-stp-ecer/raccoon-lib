@@ -72,7 +72,7 @@ def shake_servo(servo: Servo = _UNSET, duration: float = _UNSET, angle_a: float 
         angle_b: Second oscillation endpoint in degrees (0.0 -- 170.0).
 
     Returns:
-        A ShakeServoBuilder (chainable via ``.servo()``, ``.duration()``, ``.angle_a()``, ``.angle_b()``).
+        A ShakeServoBuilder (chainable via ``.servo()``, ``.duration()``, ``.angle_a()``, ``.angle_b()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -146,7 +146,7 @@ def slow_servo(servo: Servo = _UNSET, angle: float = _UNSET, speed: float = 60.0
         speed: Movement speed in degrees per second. Must be positive. Defaults to 60.0 deg/s, which moves the full range in about 2.8 seconds.
 
     Returns:
-        A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``).
+        A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -192,7 +192,7 @@ def fully_disable_servos():
     sent (e.g. via ``servo()`` or ``slow_servo()``).
 
     Returns:
-        A FullyDisableServosBuilder (chainable via ).
+        A FullyDisableServosBuilder (chainable via , ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

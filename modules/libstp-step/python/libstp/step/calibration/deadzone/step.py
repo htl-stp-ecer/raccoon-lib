@@ -201,6 +201,12 @@ class CalibrateDeadzone(UIStep):
         5. Show results, allow retry
         6. After all motors, show summary and apply
         """
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping deadzone calibration, using stored values")
+            return
+
         from libstp.hal import Motor
 
         # Find motors to calibrate

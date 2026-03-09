@@ -46,7 +46,7 @@ def defer(factory: Callable[['GenericRobot'], Step] = _UNSET):
         factory: A callable that takes a ``GenericRobot`` and returns a ``Step`` to execute. Called exactly once when the deferred step runs.
 
     Returns:
-        A DeferBuilder (chainable via ``.factory()``).
+        A DeferBuilder (chainable via ``.factory()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -100,7 +100,7 @@ def run(action: Callable[['GenericRobot'], Union[None, Awaitable[None]]] = _UNSE
         action: A callable that takes a ``GenericRobot`` and optionally returns an awaitable. Sync and async callables are both supported.
 
     Returns:
-        A RunBuilder (chainable via ``.action()``).
+        A RunBuilder (chainable via ``.action()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

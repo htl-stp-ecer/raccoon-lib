@@ -71,5 +71,9 @@ namespace libstp::kinematics::differential
 
         /** Return the underlying motors in left, right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
+
+        /** Command motors at raw open-loop power using differential inverse kinematics for direction. */
+        void applyPowerCommand(const foundation::ChassisVelocity& direction,
+                               int power_percent) override;
     };
 }

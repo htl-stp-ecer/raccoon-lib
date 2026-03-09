@@ -83,6 +83,10 @@ namespace libstp::drive
         /** Convenience wrapper around `IKinematics::getMotors()`. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const { return kinematics_->getMotors(); }
 
+        /** Convenience wrapper around `IKinematics::applyPowerCommand()`. */
+        void applyPowerCommand(const foundation::ChassisVelocity& direction, int power_percent)
+        { kinematics_->applyPowerCommand(direction, power_percent); }
+
     private:
         void initControllers();
 

@@ -59,7 +59,7 @@ def calibrate_sensors(calibration_time: float = 5.0, allow_use_existing: bool = 
         calibration_sets: Named calibration sets to calibrate (e.g. ``["default", "transparent"]``). Defaults to ``["default"]``.
 
     Returns:
-        A CalibrateSensorsBuilder (chainable via ``.calibration_time()``, ``.allow_use_existing()``, ``.calibration_sets()``).
+        A CalibrateSensorsBuilder (chainable via ``.calibration_time()``, ``.allow_use_existing()``, ``.calibration_sets()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

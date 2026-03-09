@@ -40,10 +40,16 @@ class StepTimingTracker(ClassNameLogger):
         """Register an async callback to run when an anomaly is detected."""
         self.anomaly_callbacks.append(callback)
 
-    async def record_execution(self, signature: str, duration: float) -> None:
-        """Persist execution and evaluate for anomalies."""
+    async def record_execution(
+        self, signature: str, duration: float
+    ) -> Optional[AnomalyDetection]:
+        """Persist execution and evaluate for anomalies.
+
+        Returns:
+            The detected anomaly, or ``None`` if the execution was normal.
+        """
         if not self.config.enabled:
-            return
+            return None
 
         async with self._lock:
             durations = await self.database.fetch_recent_durations(
@@ -68,12 +74,27 @@ class StepTimingTracker(ClassNameLogger):
                 self._log_baseline_progress(signature, len(durations))
 
             await self.database.insert_execution(signature, duration, anomaly)
+            return anomaly
+
+    async def get_upper_bound(self, signature: str) -> Optional[float]:
+        """Return the anomaly upper bound for a signature, or ``None`` if no baseline.
+
+        This is the duration above which an execution would be flagged as
+        SLOWER than expected.  Used by the live watchdog in ``Step.run_step``.
+        """
+        durations = await self.database.fetch_recent_durations(
+            signature, self.config.window_size
+        )
+        stats = self._compute_statistics(durations)
+        if stats is None:
+            return None
+        return stats.mean + self.config.threshold_multiplier * stats.stddev
 
     def _log_baseline_progress(self, signature: str, prior_samples: int) -> None:
         """Emit cold-start info while collecting the first few samples."""
         recorded = prior_samples + 1  # include the sample being recorded
         if recorded <= 2:
-            self.info(f"Establishing timing baseline for {signature} ({recorded}/2)")
+            self.debug(f"Establishing timing baseline for {signature} ({recorded}/2)")
 
     def _detect_anomaly(
         self,

@@ -86,7 +86,7 @@ def calibrate_distance(distance_cm: float = 30.0, calibrate_light_sensors: bool 
         exclude_ir_sensors: List of ``IRSensor`` instances to skip during IR calibration.
 
     Returns:
-        A CalibrateDistanceBuilder (chainable via ``.distance_cm()``, ``.calibrate_light_sensors()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``).
+        A CalibrateDistanceBuilder (chainable via ``.distance_cm()``, ``.calibrate_light_sensors()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

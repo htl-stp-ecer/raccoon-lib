@@ -95,7 +95,7 @@ class TimingBasedLineUp(MotionStep):
 
         distance_info = robot.odometry.get_distance_from_origin()
         current_distance = distance_info.forward
-        self.info(f"Left conf: {left_conf:.3f}, Right conf: {right_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}")
+        self.trace(f"Left conf: {left_conf:.3f}, Right conf: {right_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}")
 
         if not self._left_triggered and left_conf >= self.threshold:
             self._left_triggered = True
@@ -103,11 +103,11 @@ class TimingBasedLineUp(MotionStep):
                 self._t_first = now
                 self._first_sensor = "left"
                 self._first_hit_distance = current_distance
-                self.info("Left sensor hit line at t = 0.000s")
+                self.debug("Left sensor hit line at t = 0.000s")
             else:
                 elapsed = now - self._t_first
                 self.distance_between_hits_m = abs(current_distance - self._first_hit_distance)
-                self.info(f"Left sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
+                self.debug(f"Left sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
                 return True
 
         if not self._right_triggered and right_conf >= self.threshold:
@@ -116,18 +116,18 @@ class TimingBasedLineUp(MotionStep):
                 self._t_first = now
                 self._first_sensor = "right"
                 self._first_hit_distance = current_distance
-                self.info("Right sensor hit line at t = 0.000s")
+                self.debug("Right sensor hit line at t = 0.000s")
             else:
                 elapsed = now - self._t_first
                 self.distance_between_hits_m = abs(current_distance - self._first_hit_distance)
-                self.info(f"Right sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
+                self.debug(f"Right sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
                 return True
 
         return self._left_triggered and self._right_triggered
 
     def on_stop(self, robot: "GenericRobot") -> None:
         robot.drive.hard_stop()
-        self.info(f"Distance between sensor hits: {self.distance_between_hits_m * 100:.2f}cm")
+        self.debug(f"Distance between sensor hits: {self.distance_between_hits_m * 100:.2f}cm")
         self.results = (self._first_sensor, self.distance_between_hits_m)
 
 

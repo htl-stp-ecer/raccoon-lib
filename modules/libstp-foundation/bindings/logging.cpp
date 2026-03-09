@@ -74,20 +74,38 @@ void init_logger(py::module_& m)
         Log a message with severity level error
     )pbdoc", py::arg("message"));
 
+    m.def("set_package_level", &logging::set_package_level, R"pbdoc(
+        Set the log level for all source files whose path contains the given substring.
+
+        Package filters are checked after file-specific filters (set_file_level).
+        Use path fragments like "libstp-motion" (C++ module) or "libstp/step/motion"
+        (Python package) to match groups of files.
+
+        Args:
+            package: A substring to match against the full source file path
+            level: The minimum log level for matching files
+    )pbdoc", py::arg("package"), py::arg("level"));
+
+    m.def("clear_package_level", &logging::clear_package_level, R"pbdoc(
+        Remove the log level filter for a package substring.
+
+        Args:
+            package: The package substring to clear
+    )pbdoc", py::arg("package"));
+
     m.def("_log_filtered", [](logging::Level level, const char* filepath, const char* message) {
-        const char* filter_name = logging::detail::basename(filepath);
-        if (logging::is_enabled_for(level, filter_name)) {
+        if (logging::is_enabled_for(level, filepath)) {
             logging::log(level, filepath, message);
         }
     }, R"pbdoc(
         Log a message with file-based filtering (internal use).
 
-        Checks is_enabled_for(level, basename(filepath)) before logging, enabling
-        per-file filtering for Python sources via set_file_level().
+        Checks is_enabled_for(level, filepath) before logging, supporting both
+        per-file filtering (set_file_level) and package filtering (set_package_level).
 
         Args:
             level: The log level
-            filepath: The full source file path (package name extracted for display)
+            filepath: The full source file path (used for filtering and display)
             message: The log message
     )pbdoc", py::arg("level"), py::arg("filepath"), py::arg("message"));
 }

@@ -59,7 +59,7 @@ def drive_arc_left(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: fl
         speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
 
     Returns:
-        A DriveArcLeftBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``).
+        A DriveArcLeftBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -126,7 +126,7 @@ def drive_arc_right(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: f
         speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
 
     Returns:
-        A DriveArcRightBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``).
+        A DriveArcRightBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -188,7 +188,7 @@ def drive_arc(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float =
         speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
 
     Returns:
-        A DriveArcBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``).
+        A DriveArcBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

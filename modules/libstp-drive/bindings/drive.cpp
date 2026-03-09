@@ -53,6 +53,9 @@ void init_drive(const py::module& m)
         .def("reset_velocity_controllers", &libstp::drive::Drive::resetVelocityControllers)
         .def("get_wheel_radius", &libstp::drive::Drive::getWheelRadius,
              "Get the wheel radius from kinematics in meters")
+        .def("apply_power_command", &libstp::drive::Drive::applyPowerCommand,
+             py::arg("direction"), py::arg("power_percent"),
+             "Command motors at raw open-loop power using kinematics for direction")
         .def("get_motors", [](libstp::drive::Drive& self) {
             auto motors = self.getMotors();
             std::vector<libstp::hal::motor::Motor*> result;

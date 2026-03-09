@@ -31,10 +31,9 @@ import csv
 import math
 import os
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-import yaml
+from libstp.project_yaml import find_project_root, update_project_value
 
 from libstp.foundation import (
     ChassisVelocity,
@@ -479,126 +478,52 @@ def _write_step_csv(
 # YAML persistence (follows characterize_drive.py pattern)
 # ---------------------------------------------------------------------------
 
-def _find_project_root() -> Optional[Path]:
-    """Find project root by searching upward for raccoon.project.yml."""
-    try:
-        current = Path.cwd().resolve()
-    except (FileNotFoundError, OSError):
-        return None
-    while current != current.parent:
-        if (current / "raccoon.project.yml").exists():
-            return current
-        current = current.parent
-    return None
-
-
 def _persist_velocity_config(
     results: dict[str, VelocityTuneResult],
 ) -> bool:
-    """Write velocity control gains to robot.drive.vel_config in raccoon.project.yml."""
-    project_root = _find_project_root()
+    """Write velocity control gains, following !include refs."""
+    project_root = find_project_root()
     if project_root is None:
-        return False
-
-    config_path = project_root / "raccoon.project.yml"
-    try:
-        if config_path.exists():
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-        else:
-            config = {}
-    except (yaml.YAMLError, OSError):
-        return False
-
-    if not isinstance(config, dict):
-        return False
-
-    robot_cfg = config.setdefault("robot", {})
-    if not isinstance(robot_cfg, dict):
-        return False
-    drive_cfg = robot_cfg.setdefault("drive", {})
-    if not isinstance(drive_cfg, dict):
-        return False
-    vel_cfg = drive_cfg.setdefault("vel_config", {})
-    if not isinstance(vel_cfg, dict):
         return False
 
     updated = False
     for axis_name, result in results.items():
         if not result.accepted:
             continue
-        axis_cfg = vel_cfg.setdefault(axis_name, {})
-        if not isinstance(axis_cfg, dict):
-            continue
-        axis_cfg["pid"] = {
+        base = ["robot", "drive", "vel_config", axis_name]
+        update_project_value(project_root, [*base, "pid"], {
             "kp": round(result.pid.kp, 6),
             "ki": round(result.pid.ki, 6),
             "kd": round(result.pid.kd, 6),
-        }
-        axis_cfg["ff"] = {
+        })
+        update_project_value(project_root, [*base, "ff"], {
             "kS": round(result.ff.kS, 6),
             "kV": round(result.ff.kV, 6),
             "kA": round(result.ff.kA, 6),
-        }
+        })
         updated = True
 
-    if not updated:
-        return False
-
-    try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f, sort_keys=False, default_flow_style=False)
-        return True
-    except OSError:
-        return False
+    return updated
 
 
 def _persist_motion_config(
     results: dict[str, MotionTuneResult],
 ) -> bool:
-    """Write motion PID gains to raccoon.project.yml."""
-    project_root = _find_project_root()
+    """Write motion PID gains, following !include refs."""
+    project_root = find_project_root()
     if project_root is None:
-        return False
-
-    config_path = project_root / "raccoon.project.yml"
-    try:
-        if config_path.exists():
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f) or {}
-        else:
-            config = {}
-    except (yaml.YAMLError, OSError):
-        return False
-
-    if not isinstance(config, dict):
-        return False
-
-    robot_cfg = config.setdefault("robot", {})
-    if not isinstance(robot_cfg, dict):
-        return False
-    motion_pid = robot_cfg.setdefault("motion_pid", {})
-    if not isinstance(motion_pid, dict):
         return False
 
     updated = False
     for param_name, result in results.items():
-        pid_cfg = motion_pid.setdefault(param_name, {})
-        if not isinstance(pid_cfg, dict):
-            continue
-        pid_cfg["kp"] = round(result.final_kp, 4)
-        pid_cfg["kd"] = round(result.final_kd, 4)
+        base = ["robot", "motion_pid", param_name]
+        update_project_value(project_root, [*base, "kp"],
+                             round(result.final_kp, 4))
+        update_project_value(project_root, [*base, "kd"],
+                             round(result.final_kd, 4))
         updated = True
 
-    if not updated:
-        return False
-
-    try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(config, f, sort_keys=False, default_flow_style=False)
-        return True
-    except OSError:
-        return False
+    return updated
 
 
 # ---------------------------------------------------------------------------
@@ -1150,6 +1075,12 @@ class AutoTuneVelocity(Step):
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping velocity auto-tune, using stored values")
+            return
+
         if self.csv_dir:
             os.makedirs(self.csv_dir, exist_ok=True)
 
@@ -1275,6 +1206,12 @@ class AutoTuneMotion(Step):
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping motion auto-tune, using stored values")
+            return
+
         self.info("=" * 60)
         self.info("  AUTO-TUNE: MOTION CONTROLLERS (Phase 3)")
         self.info(f"  Parameters: {', '.join(self.axes)}")
@@ -1463,6 +1400,12 @@ class AutoTune(Step):
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping full auto-tune, using stored values")
+            return
+
         self.info("=" * 60)
         self.info("  AUTO-TUNE PID CONTROLLERS")
         phases = []

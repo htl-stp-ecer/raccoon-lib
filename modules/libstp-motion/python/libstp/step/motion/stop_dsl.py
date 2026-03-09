@@ -42,7 +42,7 @@ def stop(hard: bool = True):
         hard: If ``True`` (default), immediately zero motor output. If ``False``, decelerate smoothly using the drive controller.
 
     Returns:
-        A StopBuilder (chainable via ``.hard()``).
+        A StopBuilder (chainable via ``.hard()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

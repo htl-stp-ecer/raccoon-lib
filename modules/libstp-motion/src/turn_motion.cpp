@@ -153,10 +153,14 @@ namespace libstp::motion
             raw_velocity, filtered_velocity_, drive_state.wz);
 
         // Warn on anomalous conditions that likely indicate bugs
-        if (std::abs(tracking_error) > 0.5) {
+        // Note: large tracking error during profile acceleration is expected when
+        // the robot's actual max angular velocity is lower than the profile's.
+        // Only warn if the profile is done but tracking error is still large,
+        // which would indicate the robot overshot or is stuck.
+        if (profile_done && std::abs(tracking_error) > 0.5) {
             LIBSTP_LOG_WARN(
-                "TURN [c={}] LARGE TRACKING ERROR: {:.3f}rad ({:.1f}deg) - "
-                "setpoint={:.3f} heading={:.3f} (profile running away from robot?)",
+                "TURN [c={}] LARGE TRACKING ERROR after profile done: {:.3f}rad ({:.1f}deg) - "
+                "setpoint={:.3f} heading={:.3f} (overshoot or stuck?)",
                 cycle_, tracking_error, tracking_error / kDegToRad,
                 sp.position, current_heading);
         }
@@ -167,10 +171,16 @@ namespace libstp::motion
                 cycle_, raw_velocity, 3.0, current_heading, current_heading - raw_velocity * dt);
         }
         if (std::abs(omega_cmd) >= max_velocity_ * 0.99 && std::abs(error) > 0.1) {
-            LIBSTP_LOG_WARN(
-                "TURN [c={}] SATURATED: omega={:.3f} (max={:.3f}) while error={:.1f}deg - "
-                "gyro_wz={:.3f} (sign mismatch? drive not tracking?)",
-                cycle_, omega_cmd, max_velocity_, error / kDegToRad, drive_state.wz);
+            // Only warn if gyro indicates wrong direction or no movement
+            bool sign_mismatch = (omega_cmd * drive_state.wz < 0);
+            bool not_moving = (std::abs(drive_state.wz) < 0.05);
+            if (sign_mismatch || not_moving) {
+                LIBSTP_LOG_WARN(
+                    "TURN [c={}] SATURATED: omega={:.3f} (max={:.3f}) while error={:.1f}deg - "
+                    "gyro_wz={:.3f} ({})",
+                    cycle_, omega_cmd, max_velocity_, error / kDegToRad, drive_state.wz,
+                    sign_mismatch ? "sign mismatch!" : "drive not responding!");
+            }
         }
     }
 

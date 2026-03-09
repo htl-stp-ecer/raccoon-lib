@@ -58,7 +58,7 @@ def do_until_checkpoint(checkpoint: float = _UNSET, step = _UNSET):
         step: The step to run. Will be cancelled if still active when the checkpoint time is reached.
 
     Returns:
-        A DoUntilCheckpointBuilder (chainable via ``.checkpoint()``, ``.step()``).
+        A DoUntilCheckpointBuilder (chainable via ``.checkpoint()``, ``.step()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

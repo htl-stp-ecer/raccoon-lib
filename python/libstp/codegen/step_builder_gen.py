@@ -187,7 +187,8 @@ def _build_factory_docstring(info: StepClassInfo) -> str:
     sections.append("")
     sections.append("Returns:")
     sections.append(
-        f"    A {builder} (chainable via {fluent_methods})."
+        f"    A {builder} (chainable via {fluent_methods},"
+        f" ``.on_anomaly()``, ``.skip_timing()``)."
     )
 
     # Example

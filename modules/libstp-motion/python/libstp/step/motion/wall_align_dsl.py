@@ -79,7 +79,7 @@ def wall_align_forward(speed: float = 1.0, accel_threshold: float = 0.5, settle_
         grace_period: Seconds to ignore acceleration after starting, so the robot's own acceleration doesn't trigger detection (default 0.3).
 
     Returns:
-        A WallAlignForwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``).
+        A WallAlignForwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -158,7 +158,7 @@ def wall_align_backward(speed: float = 1.0, accel_threshold: float = 0.5, settle
         grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlignBackwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``).
+        A WallAlignBackwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -235,7 +235,7 @@ def wall_align_strafe_left(speed: float = 0.5, accel_threshold: float = 0.5, set
         grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlignStrafeLeftBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``).
+        A WallAlignStrafeLeftBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -312,7 +312,7 @@ def wall_align_strafe_right(speed: float = 0.5, accel_threshold: float = 0.5, se
         grace_period: Seconds to ignore acceleration at start (default 0.3).
 
     Returns:
-        A WallAlignStrafeRightBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``).
+        A WallAlignStrafeRightBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

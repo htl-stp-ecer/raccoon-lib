@@ -83,7 +83,7 @@ def calibrate(distance_cm: float = 30.0, persist_to_yaml: bool = True, ema_alpha
         exclude_ir_sensors: List of ``IRSensor`` instances to skip during IR calibration.
 
     Returns:
-        A CalibrateBuilder (chainable via ``.distance_cm()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``).
+        A CalibrateBuilder (chainable via ``.distance_cm()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

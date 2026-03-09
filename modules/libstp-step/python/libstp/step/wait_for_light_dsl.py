@@ -84,7 +84,7 @@ def wait_for_light(sensor: AnalogSensor = _UNSET, drop_fraction: float = 0.15, c
         poll_interval: Seconds between sensor reads. 0.005 gives ~200 Hz.
 
     Returns:
-        A WaitForLightBuilder (chainable via ``.sensor()``, ``.drop_fraction()``, ``.confirm_count()``, ``.warmup_seconds()``, ``.poll_interval()``).
+        A WaitForLightBuilder (chainable via ``.sensor()``, ``.drop_fraction()``, ``.confirm_count()``, ``.warmup_seconds()``, ``.poll_interval()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -144,7 +144,7 @@ def wait_for_light_legacy(sensor: AnalogSensor = _UNSET):
         sensor: The AnalogSensor instance for the light sensor.
 
     Returns:
-        A WaitForLightLegacyBuilder (chainable via ``.sensor()``).
+        A WaitForLightLegacyBuilder (chainable via ``.sensor()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

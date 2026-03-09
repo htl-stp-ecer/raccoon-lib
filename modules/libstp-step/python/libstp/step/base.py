@@ -1,7 +1,7 @@
 import asyncio
 import time
 from abc import abstractmethod
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
 
 from .model import SimulationStep, SimulationStepDelta
 from libstp.class_name_logger import ClassNameLogger
@@ -10,16 +10,24 @@ from libstp.timing import StepTimingTracker
 if TYPE_CHECKING:
     from libstp.robot.api import GenericRobot
 
+StepAnomalyCallback = Callable[["Step", "GenericRobot"], Awaitable[Any]]
+
 
 class Step(ClassNameLogger):
     """Base async action executed by missions and higher-level step combinators."""
 
     def __init__(self) -> None:
-        pass
+        self._skip_timing: bool = False
+        self._anomaly_callback: Optional[StepAnomalyCallback] = None
 
     async def run_step(self, robot: "GenericRobot") -> None:
         """
         Execute the step with logging and optional timing instrumentation.
+
+        When a per-step ``_anomaly_callback`` is set and a timing baseline
+        exists, a background watchdog fires the callback as soon as the
+        elapsed time exceeds the anomaly upper bound — even while the step
+        is still running.
         """
         self.debug(f"Executing {self.__class__.__name__} step")
 
@@ -27,25 +35,68 @@ class Step(ClassNameLogger):
         start_time: Optional[float] = None
 
         tracker = StepTimingTracker.get_instance()
-        if tracker.config.enabled:
+        track_timing = tracker.config.enabled and not self._skip_timing
+        if track_timing:
             signature = self._generate_signature()
             start_time = time.perf_counter()
+
+        # Launch a live watchdog if there is a per-step anomaly callback.
+        watchdog_task: Optional[asyncio.Task[None]] = None
+        if track_timing and self._anomaly_callback and signature is not None:
+            upper = await tracker.get_upper_bound(signature)
+            if upper is not None and start_time is not None:
+                watchdog_task = asyncio.create_task(
+                    self._anomaly_watchdog(upper, start_time, robot)
+                )
 
         step_start = time.perf_counter()
         try:
             await self._execute_step(robot)
         finally:
+            if watchdog_task is not None:
+                watchdog_task.cancel()
+                try:
+                    await watchdog_task
+                except asyncio.CancelledError:
+                    pass
+
             elapsed = time.perf_counter() - step_start
             self.debug(f"Finished {self.__class__.__name__} step in {elapsed:.3f}s")
 
-            if tracker and tracker.config.enabled and signature is not None and start_time is not None:
+            if track_timing and signature is not None and start_time is not None:
                 duration = time.perf_counter() - start_time
                 try:
-                    await tracker.record_execution(signature, duration)
+                    anomaly = await tracker.record_execution(signature, duration)
+                    if anomaly and self._anomaly_callback:
+                        try:
+                            await self._anomaly_callback(self, robot)
+                        except Exception as exc:
+                            self.error(f"Step anomaly callback error: {exc}")
                 except asyncio.CancelledError:
                     self.debug("Timing recording cancelled - skipping")
                 except Exception as exc:
                     self.error(f"Failed to record step timing: {exc}")
+
+    async def _anomaly_watchdog(
+        self,
+        upper_bound: float,
+        start_time: float,
+        robot: "GenericRobot",
+    ) -> None:
+        """Sleep until upper_bound elapsed, then fire the anomaly callback.
+
+        Runs as a background task alongside ``_execute_step``.  Cancelled
+        automatically when the step finishes in time.
+        """
+        remaining = upper_bound - (time.perf_counter() - start_time)
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+        # Step is still running — fire the callback
+        assert self._anomaly_callback is not None
+        try:
+            await self._anomaly_callback(self, robot)
+        except Exception as exc:
+            self.error(f"Live anomaly callback error: {exc}")
 
     def _generate_signature(self) -> str:
         """

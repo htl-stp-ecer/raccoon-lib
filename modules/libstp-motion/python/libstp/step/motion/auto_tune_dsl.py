@@ -81,7 +81,7 @@ def auto_tune_velocity(axes: list[str] = None, persist: bool = True, csv_dir: Op
         csv_dir: Directory for step-response CSV files (baseline and tuned recordings per axis). Default ``"/tmp/auto_tune"``.
 
     Returns:
-        A AutoTuneVelocityBuilder (chainable via ``.axes()``, ``.persist()``, ``.csv_dir()``).
+        A AutoTuneVelocityBuilder (chainable via ``.axes()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -172,7 +172,7 @@ def auto_tune_motion(axes: list[str] = None, persist: bool = True, csv_dir: Opti
         csv_dir: Directory for diagnostic CSV output. Default ``"/tmp/auto_tune"``.
 
     Returns:
-        A AutoTuneMotionBuilder (chainable via ``.axes()``, ``.persist()``, ``.csv_dir()``).
+        A AutoTuneMotionBuilder (chainable via ``.axes()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -313,7 +313,7 @@ def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, m
         csv_dir: Directory for diagnostic CSV output (step-response recordings, etc.). Default ``"/tmp/auto_tune"``.
 
     Returns:
-        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.characterize_trials()``, ``.characterize_command_speed()``, ``.persist()``, ``.csv_dir()``).
+        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.characterize_trials()``, ``.characterize_command_speed()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 

@@ -151,4 +151,26 @@ namespace libstp::kinematics::differential
             &const_cast<hal::motor::IMotor&>(right_motor_.motor())
         };
     }
+
+    void DifferentialKinematics::applyPowerCommand(const foundation::ChassisVelocity& direction,
+                                                    int power_percent)
+    {
+        // Same IK as applyCommand but only ratios matter.
+        double w_left  = direction.vx - direction.wz * m_wheelbase / 2.0;
+        double w_right = direction.vx + direction.wz * m_wheelbase / 2.0;
+
+        const double max_abs = std::max(std::abs(w_left), std::abs(w_right));
+        if (max_abs < 1e-9) return;
+
+        const double scale = static_cast<double>(power_percent) / max_abs;
+        const int p_left  = static_cast<int>(std::round(w_left * scale));
+        const int p_right = static_cast<int>(std::round(w_right * scale));
+
+        LIBSTP_LOG_DEBUG(
+            "DifferentialKinematics::applyPowerCommand power={}% -> left={} right={}",
+            power_percent, p_left, p_right);
+
+        left_motor_.motor().setSpeed(p_left);
+        right_motor_.motor().setSpeed(p_right);
+    }
 }

@@ -221,4 +221,36 @@ namespace libstp::kinematics::mecanum
             &const_cast<hal::motor::IMotor&>(back_right_motor_.motor())
         };
     }
+
+    void MecanumKinematics::applyPowerCommand(const foundation::ChassisVelocity& direction,
+                                               int power_percent)
+    {
+        const double L = (m_wheelbase + m_trackWidth) / 2.0;
+
+        // Same IK as applyCommand but we only care about ratios, not absolute speeds.
+        // Dividing by wheelRadius is unnecessary since it cancels in normalization.
+        double w_fl = direction.vx + direction.vy - L * direction.wz;
+        double w_fr = direction.vx - direction.vy + L * direction.wz;
+        double w_bl = direction.vx - direction.vy - L * direction.wz;
+        double w_br = direction.vx + direction.vy + L * direction.wz;
+
+        const double max_abs = std::max({std::abs(w_fl), std::abs(w_fr),
+                                         std::abs(w_bl), std::abs(w_br)});
+        if (max_abs < 1e-9) return;  // zero command
+
+        const double scale = static_cast<double>(power_percent) / max_abs;
+        const int p_fl = static_cast<int>(std::round(w_fl * scale));
+        const int p_fr = static_cast<int>(std::round(w_fr * scale));
+        const int p_bl = static_cast<int>(std::round(w_bl * scale));
+        const int p_br = static_cast<int>(std::round(w_br * scale));
+
+        LIBSTP_LOG_DEBUG(
+            "MecanumKinematics::applyPowerCommand power={}% -> fl={} fr={} bl={} br={}",
+            power_percent, p_fl, p_fr, p_bl, p_br);
+
+        front_left_motor_.motor().setSpeed(p_fl);
+        front_right_motor_.motor().setSpeed(p_fr);
+        back_left_motor_.motor().setSpeed(p_bl);
+        back_right_motor_.motor().setSpeed(p_br);
+    }
 }

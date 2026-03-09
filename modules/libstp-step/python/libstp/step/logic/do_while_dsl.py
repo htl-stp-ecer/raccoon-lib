@@ -57,7 +57,7 @@ def do_while_active(reference_step: Step = _UNSET, task: Step = _UNSET):
         task: The secondary step that runs concurrently and is cancelled once ``reference_step`` completes.
 
     Returns:
-        A DoWhileActiveBuilder (chainable via ``.reference_step()``, ``.task()``).
+        A DoWhileActiveBuilder (chainable via ``.reference_step()``, ``.task()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
