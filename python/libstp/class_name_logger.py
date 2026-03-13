@@ -1,4 +1,4 @@
-from libstp.log import debug, info, error, warn
+from libstp.log import debug, info, error, warn, trace
 
 class ClassNameLogger:
     def debug(self, msg: str) -> None:
@@ -37,3 +37,12 @@ class ClassNameLogger:
             msg: The message to print
         """
         error(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
+
+    def trace(self, msg: str) -> None:
+        """
+        Print a trace message.
+
+        Args:
+            msg: The message to print
+        """
+        trace(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)

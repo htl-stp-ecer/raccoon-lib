@@ -31,3 +31,7 @@ def warn(message: str, *, _stacklevel: int = 1) -> None:
 
 def error(message: str, *, _stacklevel: int = 1) -> None:
     _log_filtered(Level.error, _caller_filename(_stacklevel), message)
+
+
+def trace(message: str, *, _stacklevel: int = 1) -> None:
+    _log_filtered(Level.debug, _caller_filename(_stacklevel), f"[TRACE] {message}")

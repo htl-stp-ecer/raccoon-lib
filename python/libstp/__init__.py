@@ -20,7 +20,7 @@ print(f"libstp v{__version__} | raccoon-transport v{_raccoon_version}{_no_cal_la
 from libstp import hal as _hal
 from libstp.class_name_logger import ClassNameLogger
 from libstp.foundation import initialize_logging
-from libstp.log import error, info, debug, warn
+from libstp.log import error, info, debug, warn, trace
 from libstp.sensor_ir import IRSensor, IRSensorCalibration
 from libstp.sensor_et import ETSensor
 # Core hardware
