@@ -3,7 +3,7 @@ from .annotation import dsl, dsl_step, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .step_builder import StepBuilder
 from .condition import (
-    StopCondition, on_black, on_white, after_seconds, after_cm, custom,
+    StopCondition, on_black, on_white, after_seconds, after_cm, after_degrees, custom,
 )
 from .sequential import Sequential, seq
 from .parallel import parallel
@@ -59,6 +59,7 @@ __all__ = [
     "on_white",
     "after_seconds",
     "after_cm",
+    "after_degrees",
     "custom",
     *_calibration_all,
     *_logic_all,

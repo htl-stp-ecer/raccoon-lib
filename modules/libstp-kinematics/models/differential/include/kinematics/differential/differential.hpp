@@ -26,6 +26,7 @@ namespace libstp::kinematics::differential
     private:
         double m_wheelbase;
         double m_wheelRadius;
+        double m_maxWheelSpeed{0.0}; // 0 = no limiting
 
         drive::MotorAdapter left_motor_;
         drive::MotorAdapter right_motor_;
@@ -75,5 +76,8 @@ namespace libstp::kinematics::differential
         /** Command motors at raw open-loop power using differential inverse kinematics for direction. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction,
                                int power_percent) override;
+
+        void setMaxWheelSpeed(double max_wheel_speed) { m_maxWheelSpeed = max_wheel_speed; }
+        [[nodiscard]] double getMaxWheelSpeed() const { return m_maxWheelSpeed; }
     };
 }

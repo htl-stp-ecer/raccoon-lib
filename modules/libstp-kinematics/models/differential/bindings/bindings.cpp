@@ -52,6 +52,11 @@ PYBIND11_MODULE(kinematics_differential, m)
         .def("apply_power_command", &libstp::kinematics::differential::DifferentialKinematics::applyPowerCommand,
              py::arg("direction"), py::arg("power_percent"),
              "Command motors at raw open-loop power using kinematics for direction")
+        .def("set_max_wheel_speed", &libstp::kinematics::differential::DifferentialKinematics::setMaxWheelSpeed,
+             py::arg("max_wheel_speed"),
+             "Set max wheel speed (rad/s) for desaturation. 0 = disabled.")
+        .def("get_max_wheel_speed", &libstp::kinematics::differential::DifferentialKinematics::getMaxWheelSpeed,
+             "Get the max wheel speed (rad/s) for desaturation. 0 = disabled.")
         .def_property_readonly("motors", &libstp::kinematics::differential::DifferentialKinematics::getMotors,
              "List of motors managed by this kinematics model");
 }

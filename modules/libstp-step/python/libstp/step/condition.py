@@ -13,6 +13,7 @@ Example::
 
 from __future__ import annotations
 
+import math
 import time
 from typing import TYPE_CHECKING, Callable, Union
 
@@ -119,8 +120,30 @@ class after_cm(StopCondition):
     def check(self, robot: "GenericRobot") -> bool:
         if not self._started:
             return False
-        info = robot.odometry.getDistanceFromOrigin()
-        return info.euclidean >= self._target_m
+        info = robot.odometry.get_distance_from_origin()
+        return info.straight_line >= self._target_m
+
+
+class after_degrees(StopCondition):
+    """Stop after turning a given angle (degrees).
+
+    Uses the absolute IMU heading so it is unaffected by odometry resets.
+    Tracks total unsigned rotation — works regardless of turn direction.
+    """
+
+    def __init__(self, degrees: float):
+        self._target_rad = math.radians(abs(degrees))
+        self._start_heading: float = 0.0
+
+    def start(self, robot: "GenericRobot") -> None:
+        self._start_heading = robot.odometry.get_absolute_heading()
+
+    def check(self, robot: "GenericRobot") -> bool:
+        current = robot.odometry.get_absolute_heading()
+        delta = abs(current - self._start_heading)
+        if delta > math.pi:
+            delta = 2 * math.pi - delta
+        return delta >= self._target_rad
 
 
 class custom(StopCondition):

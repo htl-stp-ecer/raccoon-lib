@@ -45,13 +45,28 @@ namespace libstp::kinematics::differential
             cmd.vx,
             cmd.wz);
 
-        const double v_left = (cmd.vx - cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
-        const double v_right = (cmd.vx + cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
+        double v_left = (cmd.vx - cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
+        double v_right = (cmd.vx + cmd.wz * m_wheelbase / 2.0) / m_wheelRadius;
+
+        // Desaturate: if either wheel exceeds max, scale BOTH proportionally to preserve vx/wz ratio
+        double max_abs = std::max(std::abs(v_left), std::abs(v_right));
+        bool saturated = false;
+        if (m_maxWheelSpeed > 0.0 && max_abs > m_maxWheelSpeed)
+        {
+            const double scale = m_maxWheelSpeed / max_abs;
+            v_left *= scale;
+            v_right *= scale;
+            saturated = true;
+            LIBSTP_LOG_DEBUG(
+                "DifferentialKinematics desaturated: scale={:.3f} (max_abs={:.2f}, limit={:.2f})",
+                scale, max_abs, m_maxWheelSpeed);
+        }
 
         LIBSTP_LOG_TRACE(
-            "DifferentialKinematics wheel speeds left={} right={}",
+            "DifferentialKinematics wheel speeds left={} right={}{}",
             v_left,
-            v_right);
+            v_right,
+            saturated ? " [desaturated]" : "");
 
         left_motor_.setVelocity(v_left, dt);
         right_motor_.setVelocity(v_right, dt);
@@ -64,6 +79,7 @@ namespace libstp::kinematics::differential
 
         MotorCommands result;
         result.wheel_velocities = {v_left, v_right};
+        result.saturated_any = saturated;
 
         return result;
     }

@@ -182,15 +182,13 @@ class SensorGroup:
         )
 
     def follow_right_until_black(self, speed=None):
-        from .line_follow_dsl import follow_line_single_until_black
+        from .line_follow_dsl import follow_line_single
         from .line_follow import LineSide
-        return follow_line_single_until_black(
+        return follow_line_single(
             self.right,
-            self.left,
-            speed or self._follow_speed,
+            speed=speed or self._follow_speed,
             side=LineSide.RIGHT,
-            stop_threshold=1.0,
             kp=self._follow_kp,
             ki=self._follow_ki,
             kd=self._follow_kd,
-        )
+        ).until(on_black(self.left, threshold=1.0))

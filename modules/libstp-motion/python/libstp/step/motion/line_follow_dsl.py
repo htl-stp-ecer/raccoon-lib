@@ -10,7 +10,7 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .line_follow import FollowLine, FollowLineUntilBothBlack, FollowLineSingle, FollowLineSingleUntilBlack, DirectionalFollowLine, DirectionalFollowLineUntilBothBlack, StrafeFollowLine, StrafeFollowLineUntilBothBlack, StrafeFollowLineSingle, StrafeFollowLineSingleUntilBlack, DirectionalFollowLineSingle, DirectionalFollowLineSingleUntilBlack, LineSide
+from .line_follow import FollowLine, FollowLineSingle, DirectionalFollowLine, StrafeFollowLine, StrafeFollowLineSingle, DirectionalFollowLineSingle, LineSide
 
 
 class FollowLineBuilder(StepBuilder):
@@ -20,11 +20,12 @@ class FollowLineBuilder(StepBuilder):
         super().__init__()
         self._left_sensor = _UNSET
         self._right_sensor = _UNSET
-        self._distance_cm = _UNSET
+        self._distance_cm = None
         self._speed = 0.5
         self._kp = 0.75
         self._ki = 0.0
         self._kd = 0.5
+        self._until = None
 
     def left_sensor(self, value: IRSensor):
         self._left_sensor = value
@@ -34,7 +35,7 @@ class FollowLineBuilder(StepBuilder):
         self._right_sensor = value
         return self
 
-    def distance_cm(self, value: float):
+    def distance_cm(self, value: float | None):
         self._distance_cm = value
         return self
 
@@ -54,25 +55,29 @@ class FollowLineBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def until(self, value: StopCondition | None):
+        self._until = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._left_sensor is not _UNSET:
             kwargs['left_sensor'] = self._left_sensor
         if self._right_sensor is not _UNSET:
             kwargs['right_sensor'] = self._right_sensor
-        if self._distance_cm is not _UNSET:
-            kwargs['distance_cm'] = self._distance_cm
+        kwargs['distance_cm'] = self._distance_cm
         kwargs['speed'] = self._speed
         kwargs['kp'] = self._kp
         kwargs['ki'] = self._ki
         kwargs['kd'] = self._kd
+        kwargs['until'] = self._until
         return FollowLine(**kwargs)
 
 
 @dsl(tags=['motion', 'line-follow'])
-def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5):
+def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
     """
-    Follow a line for a specified distance using two IR sensors for steering.
+    Follow a line using two IR sensors for steering.
 
     Drives forward while a PID controller steers the robot to keep it centered
     on a line. The error signal is the difference between the left and right
@@ -82,169 +87,50 @@ def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET,
     distance tracking, while the PID output overrides the heading command
     as an angular velocity (omega).
 
+    Supports distance-based termination, composable ``StopCondition`` via
+    ``.until()``, or both (whichever triggers first). At least one of
+    ``distance_cm`` or ``until`` must be provided.
+
     Both sensors must be calibrated (white/black thresholds set) before use.
 
     Args:
         left_sensor: Left IR sensor instance, positioned to the left of the line.
         right_sensor: Right IR sensor instance, positioned to the right of the line.
-        distance_cm: Distance to follow in centimeters. The step finishes when this distance has been traveled according to odometry.
+        distance_cm: Distance to follow in centimeters. The step finishes when this distance has been traveled according to odometry. Optional if ``until`` is provided.
         speed: Fraction of max velocity (0.0--1.0). Lower speeds give the PID more time to correct but are slower overall. Default 0.5.
         kp: Proportional gain for steering PID. Higher values produce sharper corrections. Default 0.75.
         ki: Integral gain for steering PID. Typically left at 0.0 unless there is a persistent drift. Default 0.0.
         kd: Derivative gain for steering PID. Damps oscillation around the line. Default 0.5.
+        until: Composable stop condition (e.g., ``on_black(left) & on_black(right)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A FollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A FollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import FollowLine
+        from libstp.step.condition import on_black
 
         # Follow a line for 80 cm at half speed
-        FollowLine(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            distance_cm=80.0,
-            speed=0.5,
-        )
+        follow_line(left_sensor=left, right_sensor=right, distance_cm=80, speed=0.5)
 
-        # Tighter tracking with higher kp
-        FollowLine(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            distance_cm=120.0,
-            speed=0.3,
-            kp=1.2,
-            kd=0.8,
-        )
+        # Follow until both sensors see black (intersection)
+        follow_line(left, right, speed=0.5).until(on_black(left) & on_black(right))
+
+        # Distance + early termination
+        follow_line(left, right, distance_cm=100, speed=0.5).until(on_black(third))
     """
     b = FollowLineBuilder()
     if left_sensor is not _UNSET:
         b._left_sensor = left_sensor
     if right_sensor is not _UNSET:
         b._right_sensor = right_sensor
-    if distance_cm is not _UNSET:
-        b._distance_cm = distance_cm
+    b._distance_cm = distance_cm
     b._speed = speed
     b._kp = kp
     b._ki = ki
     b._kd = kd
-    return b
-
-
-class FollowLineUntilBothBlackBuilder(StepBuilder):
-    """Builder for FollowLineUntilBothBlack. Auto-generated — do not edit."""
-
-    def __init__(self):
-        super().__init__()
-        self._left_sensor = _UNSET
-        self._right_sensor = _UNSET
-        self._speed = 0.5
-        self._kp = 0.75
-        self._ki = 0.0
-        self._kd = 0.5
-        self._both_black_threshold = 0.7
-
-    def left_sensor(self, value: IRSensor):
-        self._left_sensor = value
-        return self
-
-    def right_sensor(self, value: IRSensor):
-        self._right_sensor = value
-        return self
-
-    def speed(self, value: float):
-        self._speed = value
-        return self
-
-    def kp(self, value: float):
-        self._kp = value
-        return self
-
-    def ki(self, value: float):
-        self._ki = value
-        return self
-
-    def kd(self, value: float):
-        self._kd = value
-        return self
-
-    def both_black_threshold(self, value: float):
-        self._both_black_threshold = value
-        return self
-
-    def _build(self):
-        kwargs = {}
-        if self._left_sensor is not _UNSET:
-            kwargs['left_sensor'] = self._left_sensor
-        if self._right_sensor is not _UNSET:
-            kwargs['right_sensor'] = self._right_sensor
-        kwargs['speed'] = self._speed
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['both_black_threshold'] = self._both_black_threshold
-        return FollowLineUntilBothBlack(**kwargs)
-
-
-@dsl(tags=['motion', 'line-follow'])
-def follow_line_until_both_black(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, both_black_threshold: float = 0.7):
-    """
-    Follow a line until both sensors detect black, indicating an intersection.
-
-    Drives forward with PID-based steering (same as ``FollowLine``) but instead
-    of stopping after a fixed distance, the step monitors both sensors each
-    cycle. When *both* ``probabilityOfBlack()`` readings exceed
-    ``both_black_threshold`` simultaneously, the robot has reached a
-    perpendicular line or intersection and the step finishes.
-
-    Internally the distance target is set very large so ``LinearMotion`` never
-    finishes on its own -- the both-black condition is the sole termination
-    criterion.
-
-    Both sensors must be calibrated (white/black thresholds set) before use.
-
-    Args:
-        left_sensor: Left IR sensor instance, positioned to the left of the line.
-        right_sensor: Right IR sensor instance, positioned to the right of the line.
-        speed: Fraction of max velocity (0.0--1.0). Default 0.5.
-        kp: Proportional gain for steering PID. Default 0.75.
-        ki: Integral gain for steering PID. Default 0.0.
-        kd: Derivative gain for steering PID. Default 0.5.
-        both_black_threshold: The ``probabilityOfBlack()`` value that both sensors must exceed to trigger the stop. Default 0.7.
-
-    Returns:
-        A FollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``, ``.on_anomaly()``, ``.skip_timing()``).
-
-    Example::
-
-        from libstp.step.motion import FollowLineUntilBothBlack
-
-        # Follow a line until hitting a cross-line
-        FollowLineUntilBothBlack(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            speed=0.4,
-        )
-
-        # More sensitive intersection detection
-        FollowLineUntilBothBlack(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            speed=0.3,
-            both_black_threshold=0.6,
-        )
-    """
-    b = FollowLineUntilBothBlackBuilder()
-    if left_sensor is not _UNSET:
-        b._left_sensor = left_sensor
-    if right_sensor is not _UNSET:
-        b._right_sensor = right_sensor
-    b._speed = speed
-    b._kp = kp
-    b._ki = ki
-    b._kd = kd
-    b._both_black_threshold = both_black_threshold
+    b._until = until
     return b
 
 
@@ -254,18 +140,19 @@ class FollowLineSingleBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._sensor = _UNSET
-        self._distance_cm = _UNSET
+        self._distance_cm = None
         self._speed = 0.5
         self._side = LineSide.LEFT
         self._kp = 1.0
         self._ki = 0.0
         self._kd = 0.3
+        self._until = None
 
     def sensor(self, value: IRSensor):
         self._sensor = value
         return self
 
-    def distance_cm(self, value: float):
+    def distance_cm(self, value: float | None):
         self._distance_cm = value
         return self
 
@@ -289,24 +176,28 @@ class FollowLineSingleBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def until(self, value: StopCondition | None):
+        self._until = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
             kwargs['sensor'] = self._sensor
-        if self._distance_cm is not _UNSET:
-            kwargs['distance_cm'] = self._distance_cm
+        kwargs['distance_cm'] = self._distance_cm
         kwargs['speed'] = self._speed
         kwargs['side'] = self._side
         kwargs['kp'] = self._kp
         kwargs['ki'] = self._ki
         kwargs['kd'] = self._kd
+        kwargs['until'] = self._until
         return FollowLineSingle(**kwargs)
 
 
 @dsl(tags=['motion', 'line-follow'])
-def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3):
+def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
     """
-    Follow a line edge using a single IR sensor for a specified distance.
+    Follow a line edge using a single IR sensor.
 
     The sensor tracks the boundary between the line and the background, where
     ``probabilityOfBlack()`` is approximately 0.5. The PID controller drives
@@ -319,178 +210,49 @@ def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, s
     is too narrow for two sensors. The underlying ``LinearMotion`` handles
     profiled velocity and odometry-based distance tracking.
 
+    Supports distance-based termination, composable ``StopCondition`` via
+    ``.until()``, or both (whichever triggers first). At least one of
+    ``distance_cm`` or ``until`` must be provided.
+
     The sensor must be calibrated (white/black thresholds set) before use.
 
     Args:
         sensor: The IR sensor instance used for edge tracking.
-        distance_cm: Distance to follow in centimeters. The step finishes when this distance has been traveled.
+        distance_cm: Distance to follow in centimeters. The step finishes when this distance has been traveled. Optional if ``until`` is provided.
         speed: Fraction of max velocity (0.0--1.0). Default 0.5.
         side: Which edge of the line to track. ``LineSide.LEFT`` (default) or ``LineSide.RIGHT``.
         kp: Proportional gain for steering PID. Default 1.0.
         ki: Integral gain for steering PID. Default 0.0.
         kd: Derivative gain for steering PID. Default 0.3.
+        until: Composable stop condition (e.g., ``on_black(stop_sensor)``). Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A FollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A FollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import FollowLineSingle, LineSide
+        from libstp.step.condition import on_black
 
-        # Follow the left edge of a line for 60 cm
-        FollowLineSingle(
-            sensor=robot.front_ir,
-            distance_cm=60.0,
-            speed=0.4,
-            side=LineSide.LEFT,
-        )
+        # Follow left edge for 60 cm
+        follow_line_single(sensor=front_ir, distance_cm=60, speed=0.4)
 
-        # Follow the right edge with custom PID gains
-        FollowLineSingle(
-            sensor=robot.front_ir,
-            distance_cm=100.0,
-            speed=0.5,
-            side=LineSide.RIGHT,
-            kp=1.5,
-            kd=0.5,
-        )
+        # Follow until stop sensor sees black
+        follow_line_single(front_ir, speed=0.4, side=LineSide.LEFT).until(on_black(stop))
+
+        # Distance + early termination with timeout
+        follow_line_single(front_ir, distance_cm=100).until(on_black(stop) | after_seconds(10))
     """
     b = FollowLineSingleBuilder()
     if sensor is not _UNSET:
         b._sensor = sensor
-    if distance_cm is not _UNSET:
-        b._distance_cm = distance_cm
+    b._distance_cm = distance_cm
     b._speed = speed
     b._side = side
     b._kp = kp
     b._ki = ki
     b._kd = kd
-    return b
-
-
-class FollowLineSingleUntilBlackBuilder(StepBuilder):
-    """Builder for FollowLineSingleUntilBlack. Auto-generated — do not edit."""
-
-    def __init__(self):
-        super().__init__()
-        self._sensor = _UNSET
-        self._stop_sensor = _UNSET
-        self._speed = 0.5
-        self._side = LineSide.LEFT
-        self._stop_threshold = 0.7
-        self._kp = 1.0
-        self._ki = 0.0
-        self._kd = 0.3
-
-    def sensor(self, value: IRSensor):
-        self._sensor = value
-        return self
-
-    def stop_sensor(self, value: IRSensor):
-        self._stop_sensor = value
-        return self
-
-    def speed(self, value: float):
-        self._speed = value
-        return self
-
-    def side(self, value: LineSide):
-        self._side = value
-        return self
-
-    def stop_threshold(self, value: float):
-        self._stop_threshold = value
-        return self
-
-    def kp(self, value: float):
-        self._kp = value
-        return self
-
-    def ki(self, value: float):
-        self._ki = value
-        return self
-
-    def kd(self, value: float):
-        self._kd = value
-        return self
-
-    def _build(self):
-        kwargs = {}
-        if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        if self._stop_sensor is not _UNSET:
-            kwargs['stop_sensor'] = self._stop_sensor
-        kwargs['speed'] = self._speed
-        kwargs['side'] = self._side
-        kwargs['stop_threshold'] = self._stop_threshold
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        return FollowLineSingleUntilBlack(**kwargs)
-
-
-@dsl(tags=['motion', 'line-follow'])
-def follow_line_single_until_black(sensor: IRSensor = _UNSET, stop_sensor: IRSensor = _UNSET, speed: float = 0.5, side: LineSide = LineSide.LEFT, stop_threshold: float = 0.7, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3):
-    """
-    Follow a line edge using one sensor, stopping when a second sensor sees black.
-
-    Combines single-sensor edge tracking with an event-based stop condition.
-    The ``sensor`` tracks the line edge (targeting ``probabilityOfBlack() ~
-    0.5``) using PID control, while the ``stop_sensor`` is polled each cycle.
-    When the stop sensor's ``probabilityOfBlack()`` exceeds
-    ``stop_threshold``, the step finishes immediately.
-
-    This is useful for following a line until the robot reaches a perpendicular
-    marker or a specific position detected by a second sensor (e.g., a side-
-    mounted sensor that crosses a branch line).
-
-    Both sensors must be calibrated (white/black thresholds set) before use.
-
-    Args:
-        sensor: The IR sensor used for edge-tracking along the line.
-        stop_sensor: A second IR sensor monitored for the stop condition. The step finishes when this sensor's ``probabilityOfBlack()`` exceeds ``stop_threshold``.
-        speed: Fraction of max velocity (0.0--1.0). Default 0.5.
-        side: Which edge of the line to track. ``LineSide.LEFT`` (default) or ``LineSide.RIGHT``.
-        stop_threshold: The ``probabilityOfBlack()`` value the stop sensor must exceed to trigger the stop. Default 0.7.
-        kp: Proportional gain for steering PID. Default 1.0.
-        ki: Integral gain for steering PID. Default 0.0.
-        kd: Derivative gain for steering PID. Default 0.3.
-
-    Returns:
-        A FollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
-
-    Example::
-
-        from libstp.step.motion import FollowLineSingleUntilBlack, LineSide
-
-        # Follow left edge until the right sensor hits a cross-line
-        FollowLineSingleUntilBlack(
-            sensor=robot.left_ir,
-            stop_sensor=robot.right_ir,
-            speed=0.4,
-            side=LineSide.LEFT,
-        )
-
-        # Lower stop threshold for earlier detection
-        FollowLineSingleUntilBlack(
-            sensor=robot.front_ir,
-            stop_sensor=robot.side_ir,
-            speed=0.3,
-            stop_threshold=0.5,
-            kp=1.2,
-        )
-    """
-    b = FollowLineSingleUntilBlackBuilder()
-    if sensor is not _UNSET:
-        b._sensor = sensor
-    if stop_sensor is not _UNSET:
-        b._stop_sensor = stop_sensor
-    b._speed = speed
-    b._side = side
-    b._stop_threshold = stop_threshold
-    b._kp = kp
-    b._ki = ki
-    b._kd = kd
+    b._until = until
     return b
 
 
@@ -501,12 +263,13 @@ class DirectionalFollowLineBuilder(StepBuilder):
         super().__init__()
         self._left_sensor = _UNSET
         self._right_sensor = _UNSET
-        self._distance_cm = _UNSET
+        self._distance_cm = None
         self._heading_speed = 0.0
         self._strafe_speed = 0.0
         self._kp = 0.75
         self._ki = 0.0
         self._kd = 0.5
+        self._until = None
 
     def left_sensor(self, value: IRSensor):
         self._left_sensor = value
@@ -516,7 +279,7 @@ class DirectionalFollowLineBuilder(StepBuilder):
         self._right_sensor = value
         return self
 
-    def distance_cm(self, value: float):
+    def distance_cm(self, value: float | None):
         self._distance_cm = value
         return self
 
@@ -540,26 +303,30 @@ class DirectionalFollowLineBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def until(self, value: StopCondition | None):
+        self._until = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._left_sensor is not _UNSET:
             kwargs['left_sensor'] = self._left_sensor
         if self._right_sensor is not _UNSET:
             kwargs['right_sensor'] = self._right_sensor
-        if self._distance_cm is not _UNSET:
-            kwargs['distance_cm'] = self._distance_cm
+        kwargs['distance_cm'] = self._distance_cm
         kwargs['heading_speed'] = self._heading_speed
         kwargs['strafe_speed'] = self._strafe_speed
         kwargs['kp'] = self._kp
         kwargs['ki'] = self._ki
         kwargs['kd'] = self._kd
+        kwargs['until'] = self._until
         return DirectionalFollowLine(**kwargs)
 
 
 @dsl(tags=['motion', 'line-follow'])
-def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, heading_speed: float = 0.0, strafe_speed: float = 0.0, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5):
+def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
     """
-    Follow a line for a distance with independent heading and strafe speeds.
+    Follow a line with independent heading and strafe speeds.
 
     Drive along a line using any combination of forward and lateral velocity
     while a PID controller steers the robot via angular velocity.  The error
@@ -572,6 +339,10 @@ def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSens
     as independent fractions of max velocity, enabling line following while
     strafing or driving diagonally.
 
+    Supports distance-based termination, composable ``StopCondition`` via
+    ``.until()``, or both (whichever triggers first). At least one of
+    ``distance_cm`` or ``until`` must be provided.
+
     Both sensors must be calibrated (white/black thresholds set) before use.
     Requires a mecanum or omni-wheel drivetrain if ``strafe_speed`` is
     nonzero.
@@ -579,35 +350,28 @@ def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSens
     Args:
         left_sensor: Left IR sensor instance, positioned to the left of the line.
         right_sensor: Right IR sensor instance, positioned to the right of the line.
-        distance_cm: Distance to follow in centimeters.  The step finishes when this euclidean distance has been traveled.
+        distance_cm: Distance to follow in centimeters.  The step finishes when this euclidean distance has been traveled. Optional if ``until`` is provided.
         heading_speed: Forward/backward speed as a fraction of max velocity (-1.0 to 1.0).  Positive = forward, negative = backward. Default 0.0.
         strafe_speed: Lateral speed as a fraction of max velocity (-1.0 to 1.0).  Positive = right, negative = left.  Default 0.0.
         kp: Proportional gain for steering PID.  Default 0.75.
         ki: Integral gain for steering PID.  Default 0.0.
         kd: Derivative gain for steering PID.  Default 0.5.
+        until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A DirectionalFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A DirectionalFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import DirectionalFollowLine
+        from libstp.step.condition import on_black
 
         # Strafe right while following a line for 50 cm
-        DirectionalFollowLine(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            distance_cm=50.0,
-            strafe_speed=0.5,
-        )
+        directional_follow_line(left, right, distance_cm=50, strafe_speed=0.5)
 
-        # Drive diagonally forward-right along a line
-        DirectionalFollowLine(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            distance_cm=80.0,
-            heading_speed=0.3,
-            strafe_speed=0.4,
+        # Follow until both sensors see black
+        directional_follow_line(left, right, strafe_speed=0.4).until(
+            on_black(left) & on_black(right)
         )
     """
     b = DirectionalFollowLineBuilder()
@@ -615,126 +379,13 @@ def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSens
         b._left_sensor = left_sensor
     if right_sensor is not _UNSET:
         b._right_sensor = right_sensor
-    if distance_cm is not _UNSET:
-        b._distance_cm = distance_cm
+    b._distance_cm = distance_cm
     b._heading_speed = heading_speed
     b._strafe_speed = strafe_speed
     b._kp = kp
     b._ki = ki
     b._kd = kd
-    return b
-
-
-class DirectionalFollowLineUntilBothBlackBuilder(StepBuilder):
-    """Builder for DirectionalFollowLineUntilBothBlack. Auto-generated — do not edit."""
-
-    def __init__(self):
-        super().__init__()
-        self._left_sensor = _UNSET
-        self._right_sensor = _UNSET
-        self._heading_speed = 0.0
-        self._strafe_speed = 0.0
-        self._kp = 0.75
-        self._ki = 0.0
-        self._kd = 0.5
-        self._both_black_threshold = 0.7
-
-    def left_sensor(self, value: IRSensor):
-        self._left_sensor = value
-        return self
-
-    def right_sensor(self, value: IRSensor):
-        self._right_sensor = value
-        return self
-
-    def heading_speed(self, value: float):
-        self._heading_speed = value
-        return self
-
-    def strafe_speed(self, value: float):
-        self._strafe_speed = value
-        return self
-
-    def kp(self, value: float):
-        self._kp = value
-        return self
-
-    def ki(self, value: float):
-        self._ki = value
-        return self
-
-    def kd(self, value: float):
-        self._kd = value
-        return self
-
-    def both_black_threshold(self, value: float):
-        self._both_black_threshold = value
-        return self
-
-    def _build(self):
-        kwargs = {}
-        if self._left_sensor is not _UNSET:
-            kwargs['left_sensor'] = self._left_sensor
-        if self._right_sensor is not _UNSET:
-            kwargs['right_sensor'] = self._right_sensor
-        kwargs['heading_speed'] = self._heading_speed
-        kwargs['strafe_speed'] = self._strafe_speed
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['both_black_threshold'] = self._both_black_threshold
-        return DirectionalFollowLineUntilBothBlack(**kwargs)
-
-
-@dsl(tags=['motion', 'line-follow'])
-def directional_follow_line_until_both_black(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, heading_speed: float = 0.0, strafe_speed: float = 0.0, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, both_black_threshold: float = 0.7):
-    """
-    Follow a line with heading and strafe until both sensors detect black.
-
-    Same as ``DirectionalFollowLine`` but instead of stopping after a
-    fixed distance, the step monitors both sensors each cycle and finishes
-    when both ``probabilityOfBlack()`` readings exceed
-    ``both_black_threshold`` simultaneously, indicating an intersection.
-
-    Both sensors must be calibrated (white/black thresholds set) before use.
-    Requires a mecanum or omni-wheel drivetrain if ``strafe_speed`` is
-    nonzero.
-
-    Args:
-        left_sensor: Left IR sensor instance.
-        right_sensor: Right IR sensor instance.
-        heading_speed: Forward/backward speed fraction (-1.0 to 1.0). Default 0.0.
-        strafe_speed: Lateral speed fraction (-1.0 to 1.0).  Default 0.0.
-        kp: Proportional gain for steering PID.  Default 0.75.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.5.
-        both_black_threshold: ``probabilityOfBlack()`` value that both sensors must exceed to trigger the stop.  Default 0.7.
-
-    Returns:
-        A DirectionalFollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.heading_speed()``, ``.strafe_speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``, ``.on_anomaly()``, ``.skip_timing()``).
-
-    Example::
-
-        from libstp.step.motion import DirectionalFollowLineUntilBothBlack
-
-        # Strafe right along a line until hitting a cross-line
-        DirectionalFollowLineUntilBothBlack(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            strafe_speed=0.4,
-        )
-    """
-    b = DirectionalFollowLineUntilBothBlackBuilder()
-    if left_sensor is not _UNSET:
-        b._left_sensor = left_sensor
-    if right_sensor is not _UNSET:
-        b._right_sensor = right_sensor
-    b._heading_speed = heading_speed
-    b._strafe_speed = strafe_speed
-    b._kp = kp
-    b._ki = ki
-    b._kd = kd
-    b._both_black_threshold = both_black_threshold
+    b._until = until
     return b
 
 
@@ -745,11 +396,12 @@ class StrafeFollowLineBuilder(StepBuilder):
         super().__init__()
         self._left_sensor = _UNSET
         self._right_sensor = _UNSET
-        self._distance_cm = _UNSET
+        self._distance_cm = None
         self._speed = 0.5
         self._kp = 0.75
         self._ki = 0.0
         self._kd = 0.5
+        self._until = None
 
     def left_sensor(self, value: IRSensor):
         self._left_sensor = value
@@ -759,7 +411,7 @@ class StrafeFollowLineBuilder(StepBuilder):
         self._right_sensor = value
         return self
 
-    def distance_cm(self, value: float):
+    def distance_cm(self, value: float | None):
         self._distance_cm = value
         return self
 
@@ -779,29 +431,37 @@ class StrafeFollowLineBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def until(self, value: StopCondition | None):
+        self._until = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._left_sensor is not _UNSET:
             kwargs['left_sensor'] = self._left_sensor
         if self._right_sensor is not _UNSET:
             kwargs['right_sensor'] = self._right_sensor
-        if self._distance_cm is not _UNSET:
-            kwargs['distance_cm'] = self._distance_cm
+        kwargs['distance_cm'] = self._distance_cm
         kwargs['speed'] = self._speed
         kwargs['kp'] = self._kp
         kwargs['ki'] = self._ki
         kwargs['kd'] = self._kd
+        kwargs['until'] = self._until
         return StrafeFollowLine(**kwargs)
 
 
 @dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5):
+def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
     """
-    Follow a line by strafing right for a specified distance.
+    Follow a line by strafing right.
 
     Convenience wrapper around ``DirectionalFollowLine`` for pure lateral
     line following.  The robot strafes right at the given speed while PID
     steering keeps it centered on the line using two sensors.
+
+    Supports distance-based termination, composable ``StopCondition`` via
+    ``.until()``, or both (whichever triggers first). At least one of
+    ``distance_cm`` or ``until`` must be provided.
 
     Both sensors must be calibrated.  Requires a mecanum or omni-wheel
     drivetrain.
@@ -809,33 +469,27 @@ def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = 
     Args:
         left_sensor: Left IR sensor instance.
         right_sensor: Right IR sensor instance.
-        distance_cm: Distance to strafe in centimeters.
+        distance_cm: Distance to strafe in centimeters. Optional if ``until`` is provided.
         speed: Strafe speed as fraction of max lateral velocity (0.0 to 1.0).  Default 0.5.  Use negative values to strafe left.
         kp: Proportional gain for steering PID.  Default 0.75.
         ki: Integral gain for steering PID.  Default 0.0.
         kd: Derivative gain for steering PID.  Default 0.5.
+        until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A StrafeFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A StrafeFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import StrafeFollowLine
+        from libstp.step.condition import on_black
 
         # Strafe right along a line for 40 cm
-        StrafeFollowLine(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            distance_cm=40.0,
-            speed=0.4,
-        )
+        strafe_follow_line(left, right, distance_cm=40, speed=0.4)
 
-        # Strafe left along a line for 30 cm
-        StrafeFollowLine(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            distance_cm=30.0,
-            speed=-0.4,
+        # Strafe until both sensors see black
+        strafe_follow_line(left, right, speed=0.4).until(
+            on_black(left) & on_black(right)
         )
     """
     b = StrafeFollowLineBuilder()
@@ -843,114 +497,12 @@ def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = 
         b._left_sensor = left_sensor
     if right_sensor is not _UNSET:
         b._right_sensor = right_sensor
-    if distance_cm is not _UNSET:
-        b._distance_cm = distance_cm
+    b._distance_cm = distance_cm
     b._speed = speed
     b._kp = kp
     b._ki = ki
     b._kd = kd
-    return b
-
-
-class StrafeFollowLineUntilBothBlackBuilder(StepBuilder):
-    """Builder for StrafeFollowLineUntilBothBlack. Auto-generated — do not edit."""
-
-    def __init__(self):
-        super().__init__()
-        self._left_sensor = _UNSET
-        self._right_sensor = _UNSET
-        self._speed = 0.5
-        self._kp = 0.75
-        self._ki = 0.0
-        self._kd = 0.5
-        self._both_black_threshold = 0.7
-
-    def left_sensor(self, value: IRSensor):
-        self._left_sensor = value
-        return self
-
-    def right_sensor(self, value: IRSensor):
-        self._right_sensor = value
-        return self
-
-    def speed(self, value: float):
-        self._speed = value
-        return self
-
-    def kp(self, value: float):
-        self._kp = value
-        return self
-
-    def ki(self, value: float):
-        self._ki = value
-        return self
-
-    def kd(self, value: float):
-        self._kd = value
-        return self
-
-    def both_black_threshold(self, value: float):
-        self._both_black_threshold = value
-        return self
-
-    def _build(self):
-        kwargs = {}
-        if self._left_sensor is not _UNSET:
-            kwargs['left_sensor'] = self._left_sensor
-        if self._right_sensor is not _UNSET:
-            kwargs['right_sensor'] = self._right_sensor
-        kwargs['speed'] = self._speed
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['both_black_threshold'] = self._both_black_threshold
-        return StrafeFollowLineUntilBothBlack(**kwargs)
-
-
-@dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line_until_both_black(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, both_black_threshold: float = 0.7):
-    """
-    Follow a line by strafing right until both sensors detect black.
-
-    Convenience wrapper around ``DirectionalFollowLineUntilBothBlack``
-    for pure lateral line following until an intersection is reached.
-
-    Both sensors must be calibrated.  Requires a mecanum or omni-wheel
-    drivetrain.
-
-    Args:
-        left_sensor: Left IR sensor instance.
-        right_sensor: Right IR sensor instance.
-        speed: Strafe speed as fraction of max lateral velocity (0.0 to 1.0).  Default 0.5.  Use negative values to strafe left.
-        kp: Proportional gain for steering PID.  Default 0.75.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.5.
-        both_black_threshold: ``probabilityOfBlack()`` value that both sensors must exceed to trigger the stop.  Default 0.7.
-
-    Returns:
-        A StrafeFollowLineUntilBothBlackBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.both_black_threshold()``, ``.on_anomaly()``, ``.skip_timing()``).
-
-    Example::
-
-        from libstp.step.motion import StrafeFollowLineUntilBothBlack
-
-        # Strafe right along a line until a cross-line
-        StrafeFollowLineUntilBothBlack(
-            left_sensor=robot.left_ir,
-            right_sensor=robot.right_ir,
-            speed=0.4,
-        )
-    """
-    b = StrafeFollowLineUntilBothBlackBuilder()
-    if left_sensor is not _UNSET:
-        b._left_sensor = left_sensor
-    if right_sensor is not _UNSET:
-        b._right_sensor = right_sensor
-    b._speed = speed
-    b._kp = kp
-    b._ki = ki
-    b._kd = kd
-    b._both_black_threshold = both_black_threshold
+    b._until = until
     return b
 
 
@@ -960,18 +512,19 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._sensor = _UNSET
-        self._distance_cm = _UNSET
+        self._distance_cm = None
         self._speed = 0.5
         self._side = LineSide.LEFT
         self._kp = 1.0
         self._ki = 0.0
         self._kd = 0.3
+        self._until = None
 
     def sensor(self, value: IRSensor):
         self._sensor = value
         return self
 
-    def distance_cm(self, value: float):
+    def distance_cm(self, value: float | None):
         self._distance_cm = value
         return self
 
@@ -995,22 +548,26 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def until(self, value: StopCondition | None):
+        self._until = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
             kwargs['sensor'] = self._sensor
-        if self._distance_cm is not _UNSET:
-            kwargs['distance_cm'] = self._distance_cm
+        kwargs['distance_cm'] = self._distance_cm
         kwargs['speed'] = self._speed
         kwargs['side'] = self._side
         kwargs['kp'] = self._kp
         kwargs['ki'] = self._ki
         kwargs['kd'] = self._kd
+        kwargs['until'] = self._until
         return StrafeFollowLineSingle(**kwargs)
 
 
 @dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3):
+def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
     """
     Follow a line edge by strafing right using a single sensor.
 
@@ -1018,162 +575,47 @@ def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _U
     lateral single-sensor line following.  The robot strafes at the given
     speed while PID edge-tracking keeps the sensor on the line boundary.
 
+    Supports distance-based termination, composable ``StopCondition`` via
+    ``.until()``, or both (whichever triggers first). At least one of
+    ``distance_cm`` or ``until`` must be provided.
+
     The sensor must be calibrated.  Requires a mecanum or omni-wheel
     drivetrain.
 
     Args:
         sensor: IR sensor for edge tracking.
-        distance_cm: Distance to strafe in centimeters.
+        distance_cm: Distance to strafe in centimeters. Optional if ``until`` is provided.
         speed: Strafe speed as fraction of max lateral velocity (0.0 to 1.0).  Default 0.5.  Use negative values to strafe left.
         side: Which edge of the line to track.  Default ``LineSide.LEFT``.
         kp: Proportional gain for steering PID.  Default 1.0.
         ki: Integral gain for steering PID.  Default 0.0.
         kd: Derivative gain for steering PID.  Default 0.3.
+        until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A StrafeFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A StrafeFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import StrafeFollowLineSingle, LineSide
+        from libstp.step.condition import on_black
 
         # Strafe right along a line edge for 40 cm
-        StrafeFollowLineSingle(
-            sensor=robot.front_ir,
-            distance_cm=40.0,
-            speed=0.4,
-            side=LineSide.LEFT,
-        )
+        strafe_follow_line_single(front_ir, distance_cm=40, speed=0.4)
 
-        # Strafe left along a line edge for 30 cm
-        StrafeFollowLineSingle(
-            sensor=robot.front_ir,
-            distance_cm=30.0,
-            speed=-0.4,
-            side=LineSide.RIGHT,
-        )
+        # Strafe until stop sensor sees black
+        strafe_follow_line_single(front_ir, speed=0.4).until(on_black(stop))
     """
     b = StrafeFollowLineSingleBuilder()
     if sensor is not _UNSET:
         b._sensor = sensor
-    if distance_cm is not _UNSET:
-        b._distance_cm = distance_cm
+    b._distance_cm = distance_cm
     b._speed = speed
     b._side = side
     b._kp = kp
     b._ki = ki
     b._kd = kd
-    return b
-
-
-class StrafeFollowLineSingleUntilBlackBuilder(StepBuilder):
-    """Builder for StrafeFollowLineSingleUntilBlack. Auto-generated — do not edit."""
-
-    def __init__(self):
-        super().__init__()
-        self._sensor = _UNSET
-        self._stop_sensor = _UNSET
-        self._speed = 0.5
-        self._side = LineSide.LEFT
-        self._stop_threshold = 0.7
-        self._kp = 1.0
-        self._ki = 0.0
-        self._kd = 0.3
-
-    def sensor(self, value: IRSensor):
-        self._sensor = value
-        return self
-
-    def stop_sensor(self, value: IRSensor):
-        self._stop_sensor = value
-        return self
-
-    def speed(self, value: float):
-        self._speed = value
-        return self
-
-    def side(self, value: LineSide):
-        self._side = value
-        return self
-
-    def stop_threshold(self, value: float):
-        self._stop_threshold = value
-        return self
-
-    def kp(self, value: float):
-        self._kp = value
-        return self
-
-    def ki(self, value: float):
-        self._ki = value
-        return self
-
-    def kd(self, value: float):
-        self._kd = value
-        return self
-
-    def _build(self):
-        kwargs = {}
-        if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        if self._stop_sensor is not _UNSET:
-            kwargs['stop_sensor'] = self._stop_sensor
-        kwargs['speed'] = self._speed
-        kwargs['side'] = self._side
-        kwargs['stop_threshold'] = self._stop_threshold
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        return StrafeFollowLineSingleUntilBlack(**kwargs)
-
-
-@dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line_single_until_black(sensor: IRSensor = _UNSET, stop_sensor: IRSensor = _UNSET, speed: float = 0.5, side: LineSide = LineSide.LEFT, stop_threshold: float = 0.7, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3):
-    """
-    Follow a line edge by strafing, stopping when a second sensor sees black.
-
-    Convenience wrapper around ``DirectionalFollowLineSingleUntilBlack``
-    for pure lateral single-sensor line following with a stop-sensor trigger.
-
-    Both sensors must be calibrated.  Requires a mecanum or omni-wheel
-    drivetrain.
-
-    Args:
-        sensor: IR sensor for edge tracking.
-        stop_sensor: Second IR sensor for the stop condition.
-        speed: Strafe speed as fraction of max lateral velocity (0.0 to 1.0).  Default 0.5.  Use negative values to strafe left.
-        side: Which edge of the line to track.  Default ``LineSide.LEFT``.
-        stop_threshold: ``probabilityOfBlack()`` the stop sensor must exceed.  Default 0.7.
-        kp: Proportional gain for steering PID.  Default 1.0.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.3.
-
-    Returns:
-        A StrafeFollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
-
-    Example::
-
-        from libstp.step.motion import StrafeFollowLineSingleUntilBlack, LineSide
-
-        # Strafe right along a line edge until the stop sensor hits a cross-line
-        StrafeFollowLineSingleUntilBlack(
-            sensor=robot.left_ir,
-            stop_sensor=robot.right_ir,
-            speed=0.4,
-            side=LineSide.LEFT,
-        )
-    """
-    b = StrafeFollowLineSingleUntilBlackBuilder()
-    if sensor is not _UNSET:
-        b._sensor = sensor
-    if stop_sensor is not _UNSET:
-        b._stop_sensor = stop_sensor
-    b._speed = speed
-    b._side = side
-    b._stop_threshold = stop_threshold
-    b._kp = kp
-    b._ki = ki
-    b._kd = kd
+    b._until = until
     return b
 
 
@@ -1183,19 +625,20 @@ class DirectionalFollowLineSingleBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._sensor = _UNSET
-        self._distance_cm = _UNSET
+        self._distance_cm = None
         self._heading_speed = 0.0
         self._strafe_speed = 0.0
         self._side = LineSide.LEFT
         self._kp = 1.0
         self._ki = 0.0
         self._kd = 0.3
+        self._until = None
 
     def sensor(self, value: IRSensor):
         self._sensor = value
         return self
 
-    def distance_cm(self, value: float):
+    def distance_cm(self, value: float | None):
         self._distance_cm = value
         return self
 
@@ -1223,23 +666,27 @@ class DirectionalFollowLineSingleBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def until(self, value: StopCondition | None):
+        self._until = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
             kwargs['sensor'] = self._sensor
-        if self._distance_cm is not _UNSET:
-            kwargs['distance_cm'] = self._distance_cm
+        kwargs['distance_cm'] = self._distance_cm
         kwargs['heading_speed'] = self._heading_speed
         kwargs['strafe_speed'] = self._strafe_speed
         kwargs['side'] = self._side
         kwargs['kp'] = self._kp
         kwargs['ki'] = self._ki
         kwargs['kd'] = self._kd
+        kwargs['until'] = self._until
         return DirectionalFollowLineSingle(**kwargs)
 
 
 @dsl(tags=['motion', 'line-follow'])
-def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float = _UNSET, heading_speed: float = 0.0, strafe_speed: float = 0.0, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3):
+def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
     """
     Follow a line edge with a single sensor and independent heading/strafe speeds.
 
@@ -1248,167 +695,51 @@ def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float
     selects which edge to track.  The PID output controls angular velocity
     while heading and strafe velocities are set independently.
 
+    Supports distance-based termination, composable ``StopCondition`` via
+    ``.until()``, or both (whichever triggers first). At least one of
+    ``distance_cm`` or ``until`` must be provided.
+
     The sensor must be calibrated (white/black thresholds set) before use.
     Requires a mecanum or omni-wheel drivetrain if ``strafe_speed`` is
     nonzero.
 
     Args:
         sensor: IR sensor for edge tracking.
-        distance_cm: Distance to follow in centimeters.
+        distance_cm: Distance to follow in centimeters. Optional if ``until`` is provided.
         heading_speed: Forward/backward speed fraction (-1.0 to 1.0). Default 0.0.
         strafe_speed: Lateral speed fraction (-1.0 to 1.0).  Default 0.0.
         side: Which edge of the line to track.  Default ``LineSide.LEFT``.
         kp: Proportional gain for steering PID.  Default 1.0.
         ki: Integral gain for steering PID.  Default 0.0.
         kd: Derivative gain for steering PID.  Default 0.3.
+        until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A DirectionalFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A DirectionalFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from libstp.step.motion import DirectionalFollowLineSingle, LineSide
+        from libstp.step.condition import on_black
 
-        # Strafe right while tracking the left edge of a line
-        DirectionalFollowLineSingle(
-            sensor=robot.front_ir,
-            distance_cm=50.0,
-            strafe_speed=0.4,
-            side=LineSide.LEFT,
-        )
+        # Strafe right while tracking the left edge for 50 cm
+        directional_follow_line_single(front_ir, distance_cm=50, strafe_speed=0.4)
+
+        # Follow until stop sensor sees black
+        directional_follow_line_single(front_ir, strafe_speed=0.4).until(on_black(stop))
     """
     b = DirectionalFollowLineSingleBuilder()
     if sensor is not _UNSET:
         b._sensor = sensor
-    if distance_cm is not _UNSET:
-        b._distance_cm = distance_cm
+    b._distance_cm = distance_cm
     b._heading_speed = heading_speed
     b._strafe_speed = strafe_speed
     b._side = side
     b._kp = kp
     b._ki = ki
     b._kd = kd
+    b._until = until
     return b
 
 
-class DirectionalFollowLineSingleUntilBlackBuilder(StepBuilder):
-    """Builder for DirectionalFollowLineSingleUntilBlack. Auto-generated — do not edit."""
-
-    def __init__(self):
-        super().__init__()
-        self._sensor = _UNSET
-        self._stop_sensor = _UNSET
-        self._heading_speed = 0.0
-        self._strafe_speed = 0.0
-        self._side = LineSide.LEFT
-        self._stop_threshold = 0.7
-        self._kp = 1.0
-        self._ki = 0.0
-        self._kd = 0.3
-
-    def sensor(self, value: IRSensor):
-        self._sensor = value
-        return self
-
-    def stop_sensor(self, value: IRSensor):
-        self._stop_sensor = value
-        return self
-
-    def heading_speed(self, value: float):
-        self._heading_speed = value
-        return self
-
-    def strafe_speed(self, value: float):
-        self._strafe_speed = value
-        return self
-
-    def side(self, value: LineSide):
-        self._side = value
-        return self
-
-    def stop_threshold(self, value: float):
-        self._stop_threshold = value
-        return self
-
-    def kp(self, value: float):
-        self._kp = value
-        return self
-
-    def ki(self, value: float):
-        self._ki = value
-        return self
-
-    def kd(self, value: float):
-        self._kd = value
-        return self
-
-    def _build(self):
-        kwargs = {}
-        if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        if self._stop_sensor is not _UNSET:
-            kwargs['stop_sensor'] = self._stop_sensor
-        kwargs['heading_speed'] = self._heading_speed
-        kwargs['strafe_speed'] = self._strafe_speed
-        kwargs['side'] = self._side
-        kwargs['stop_threshold'] = self._stop_threshold
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        return DirectionalFollowLineSingleUntilBlack(**kwargs)
-
-
-@dsl(tags=['motion', 'line-follow'])
-def directional_follow_line_single_until_black(sensor: IRSensor = _UNSET, stop_sensor: IRSensor = _UNSET, heading_speed: float = 0.0, strafe_speed: float = 0.0, side: LineSide = LineSide.LEFT, stop_threshold: float = 0.7, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3):
-    """
-    Follow a line edge with heading/strafe, stopping when a second sensor sees black.
-
-    Combines single-sensor edge tracking with an event-based stop condition.
-    The ``sensor`` tracks the line edge using PID control while the
-    ``stop_sensor`` is polled each cycle.
-
-    Both sensors must be calibrated before use.  Requires a mecanum or
-    omni-wheel drivetrain if ``strafe_speed`` is nonzero.
-
-    Args:
-        sensor: IR sensor for edge tracking.
-        stop_sensor: Second IR sensor for the stop condition.
-        heading_speed: Forward/backward speed fraction (-1.0 to 1.0). Default 0.0.
-        strafe_speed: Lateral speed fraction (-1.0 to 1.0).  Default 0.0.
-        side: Which edge of the line to track.  Default ``LineSide.LEFT``.
-        stop_threshold: ``probabilityOfBlack()`` the stop sensor must exceed.  Default 0.7.
-        kp: Proportional gain for steering PID.  Default 1.0.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.3.
-
-    Returns:
-        A DirectionalFollowLineSingleUntilBlackBuilder (chainable via ``.sensor()``, ``.stop_sensor()``, ``.heading_speed()``, ``.strafe_speed()``, ``.side()``, ``.stop_threshold()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.on_anomaly()``, ``.skip_timing()``).
-
-    Example::
-
-        from libstp.step.motion import DirectionalFollowLineSingleUntilBlack, LineSide
-
-        # Strafe right along a line edge until the stop sensor hits a cross-line
-        DirectionalFollowLineSingleUntilBlack(
-            sensor=robot.left_ir,
-            stop_sensor=robot.right_ir,
-            strafe_speed=0.4,
-            side=LineSide.LEFT,
-        )
-    """
-    b = DirectionalFollowLineSingleUntilBlackBuilder()
-    if sensor is not _UNSET:
-        b._sensor = sensor
-    if stop_sensor is not _UNSET:
-        b._stop_sensor = stop_sensor
-    b._heading_speed = heading_speed
-    b._strafe_speed = strafe_speed
-    b._side = side
-    b._stop_threshold = stop_threshold
-    b._kp = kp
-    b._ki = ki
-    b._kd = kd
-    return b
-
-
-__all__ = ['FollowLineBuilder', 'follow_line', 'FollowLineUntilBothBlackBuilder', 'follow_line_until_both_black', 'FollowLineSingleBuilder', 'follow_line_single', 'FollowLineSingleUntilBlackBuilder', 'follow_line_single_until_black', 'DirectionalFollowLineBuilder', 'directional_follow_line', 'DirectionalFollowLineUntilBothBlackBuilder', 'directional_follow_line_until_both_black', 'StrafeFollowLineBuilder', 'strafe_follow_line', 'StrafeFollowLineUntilBothBlackBuilder', 'strafe_follow_line_until_both_black', 'StrafeFollowLineSingleBuilder', 'strafe_follow_line_single', 'StrafeFollowLineSingleUntilBlackBuilder', 'strafe_follow_line_single_until_black', 'DirectionalFollowLineSingleBuilder', 'directional_follow_line_single', 'DirectionalFollowLineSingleUntilBlackBuilder', 'directional_follow_line_single_until_black']
+__all__ = ['FollowLineBuilder', 'follow_line', 'FollowLineSingleBuilder', 'follow_line_single', 'DirectionalFollowLineBuilder', 'directional_follow_line', 'StrafeFollowLineBuilder', 'strafe_follow_line', 'StrafeFollowLineSingleBuilder', 'strafe_follow_line_single', 'DirectionalFollowLineSingleBuilder', 'directional_follow_line_single']
