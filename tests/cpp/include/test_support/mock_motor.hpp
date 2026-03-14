@@ -19,6 +19,7 @@ namespace libstp::test
         MOCK_METHOD(bool, isDone, (), (const, override));
         MOCK_METHOD(void, brake, (), (override));
         MOCK_METHOD(void, off, (), (override));
+        MOCK_METHOD(void, resetPositionCounter, (), (override));
         MOCK_METHOD(const foundation::MotorCalibration&, getCalibration, (), (const, override));
         MOCK_METHOD(int, getBemf, (), (const, override));
 

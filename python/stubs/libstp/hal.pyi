@@ -54,6 +54,9 @@ class Motor:
     def off(self) -> None:
         """Disable motor completely (no power, no brake — free-spinning)"""
         ...
+    def reset_position_counter(self) -> None:
+        """Reset the position counter to zero"""
+        ...
     def get_calibration(self) -> libstp.foundation.MotorCalibration:
         ...
     def get_position(self) -> int:

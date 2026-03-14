@@ -28,6 +28,8 @@ void init_motor(const py::module& m)
         .def("brake", &libstp::hal::motor::IMotor::brake)
         .def("off", &libstp::hal::motor::IMotor::off,
              "Disable motor completely (no power, no brake — free-spinning)")
+        .def("reset_position_counter", &libstp::hal::motor::IMotor::resetPositionCounter,
+             "Reset the position counter to zero")
         .def_property_readonly("port", &libstp::hal::motor::IMotor::getPort)
         .def_property_readonly("inverted", &libstp::hal::motor::IMotor::isInverted)
         .def("get_calibration", &libstp::hal::motor::IMotor::getCalibration)
@@ -52,6 +54,8 @@ void init_motor(const py::module& m)
         .def("brake", &libstp::hal::motor::Motor::brake)
         .def("off", &libstp::hal::motor::Motor::off,
              "Disable motor completely (no power, no brake — free-spinning)")
+        .def("reset_position_counter", &libstp::hal::motor::Motor::resetPositionCounter,
+             "Reset the position counter to zero")
         .def_property_readonly("port", &libstp::hal::motor::Motor::getPort)
         .def_property_readonly("inverted", &libstp::hal::motor::Motor::isInverted)
         .def("get_calibration", &libstp::hal::motor::Motor::getCalibration)

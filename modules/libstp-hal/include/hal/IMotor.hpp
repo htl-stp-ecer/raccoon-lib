@@ -32,6 +32,8 @@ namespace libstp::hal::motor
         virtual void brake() = 0;
         /// Disable this motor completely (no power, no brake — free-spinning).
         virtual void off() = 0;
+        /// Reset the position counter to zero.
+        virtual void resetPositionCounter() = 0;
 
         [[nodiscard]] virtual const foundation::MotorCalibration& getCalibration() const = 0;
         virtual void setCalibration(const foundation::MotorCalibration& calibration) = 0;

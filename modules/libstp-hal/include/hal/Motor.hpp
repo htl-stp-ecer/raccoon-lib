@@ -59,6 +59,8 @@ namespace libstp::hal::motor
         void brake() override;
         /// Disable this motor completely (no power, no brake — free-spinning).
         void off() override;
+        /// Reset the position counter to zero.
+        void resetPositionCounter() override;
 
         [[nodiscard]] const foundation::MotorCalibration& getCalibration() const override;
         void setCalibration(const foundation::MotorCalibration& calibration) override;
