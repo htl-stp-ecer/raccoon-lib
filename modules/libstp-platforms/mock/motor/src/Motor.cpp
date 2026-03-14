@@ -104,6 +104,12 @@ void libstp::hal::motor::Motor::off()
     LIBSTP_LOG_INFO("Mock Motor port={} off", port_);
 }
 
+void libstp::hal::motor::Motor::resetPositionCounter()
+{
+    LIBSTP_LOG_INFO("Mock Motor port={} resetPositionCounter", port_);
+    // Mock: no-op, position comes from bemf() which is simulated
+}
+
 void libstp::hal::motor::Motor::disableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)

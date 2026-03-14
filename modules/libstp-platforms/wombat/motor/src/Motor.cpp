@@ -108,6 +108,12 @@ void libstp::hal::motor::Motor::off()
     LIBSTP_LOG_DEBUG("Wombat Motor port={} off (motor disabled, free-spinning)", port_);
 }
 
+void libstp::hal::motor::Motor::resetPositionCounter()
+{
+    platform::wombat::core::LcmDataWriter::instance().resetMotorPosition(port_);
+    LIBSTP_LOG_DEBUG("Wombat Motor port={} resetPositionCounter", port_);
+}
+
 void libstp::hal::motor::Motor::disableAll()
 {
     // First, set the STM32 shutdown flag - this is the safest way to ensure
