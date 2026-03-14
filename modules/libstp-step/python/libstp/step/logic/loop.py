@@ -38,6 +38,9 @@ class LoopForever(Step):
 
         self.step = step
 
+    def collected_resources(self) -> frozenset[str]:
+        return self.step.collected_resources()
+
     def _generate_signature(self) -> str:
         return "LoopForever()"
 
@@ -78,6 +81,9 @@ class LoopFor(Step):
 
         self.step = step
         self.iterations = iterations
+
+    def collected_resources(self) -> frozenset[str]:
+        return self.step.collected_resources()
 
     def _generate_signature(self) -> str:
         return f"LoopFor(iterations={self.iterations})"

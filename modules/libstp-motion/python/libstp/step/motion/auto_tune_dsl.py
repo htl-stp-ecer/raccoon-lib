@@ -76,7 +76,7 @@ def auto_tune_velocity(axes: list[str] = None, persist: bool = True, csv_dir: Op
     magnitude.
 
     Args:
-        axes: Velocity axes to tune. Each entry is a velocity component name: ``"vx"`` (forward linear) or ``"wz"`` (angular). Default ``["vx", "wz"]``.
+        axes: Velocity axes to tune. Each entry is a velocity component name: ``"vx"`` (forward), ``"vy"`` (lateral/strafe), or ``"wz"`` (angular). Default ``["vx", "vy", "wz"]``.
         persist: If ``True``, write accepted gains to ``raccoon.project.yml``. Default ``True``.
         csv_dir: Directory for step-response CSV files (baseline and tuned recordings per axis). Default ``"/tmp/auto_tune"``.
 
@@ -167,7 +167,7 @@ def auto_tune_motion(axes: list[str] = None, persist: bool = True, csv_dir: Opti
     enough space for 0.5 m drives and 90-degree turns.
 
     Args:
-        axes: Motion parameters to optimize. Options are ``"distance"`` (linear drive kp/kd) and ``"heading"`` (turn kp/kd). Default ``["distance", "heading"]``.
+        axes: Motion parameters to optimize. Options are ``"distance"`` (forward drive kp/kd), ``"lateral"`` (strafe kp/kd — shares the distance PID but optimizes with lateral trials), and ``"heading"`` (turn kp/kd). Default ``["distance", "lateral", "heading"]``.
         persist: If ``True``, write final gains to ``raccoon.project.yml`` under ``robot.motion_pid``. Default ``True``.
         csv_dir: Directory for diagnostic CSV output. Default ``"/tmp/auto_tune"``.
 
@@ -281,7 +281,7 @@ def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, m
     generation.
 
     **Phase 2 -- Velocity controller tuning.** For each velocity axis (e.g.,
-    ``vx``, ``wz``), a step-response is recorded at 100 Hz, plant parameters
+    ``vx``, ``vy``, ``wz``), a step-response is recorded at 100 Hz, plant parameters
     (gain Ks, dead time Tu, time constant Tg) are identified via the
     inflection tangent method, and PID gains are computed using CHR
     set-point-follow formulas. A validation step-response is run with the
@@ -289,10 +289,11 @@ def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, m
     are accepted, otherwise the baseline is kept.
 
     **Phase 3 -- Motion controller tuning.** Uses Hooke-Jeeves coordinate
-    descent to optimize the high-level distance and heading PID controllers.
-    Real test drives and turns are executed, scored on a weighted combination
-    of settling time, overshoot, and final error. The optimizer adjusts
-    kp/kd iteratively, halving the search delta when no improvement is found.
+    descent to optimize the high-level distance, lateral, and heading PID
+    controllers. Real test drives, strafes, and turns are executed, scored
+    on a weighted combination of settling time, overshoot, and final error.
+    The optimizer adjusts kp/kd iteratively, halving the search delta when
+    no improvement is found.
 
     All results are applied in-memory immediately and, if ``persist`` is
     enabled, written to ``raccoon.project.yml`` so they survive restarts.
@@ -301,9 +302,9 @@ def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, m
     complete. It is intended for initial robot setup, not competition runs.
 
     Args:
-        vel_axes: Velocity axes to tune in Phase 2. Each entry is a velocity component name (``"vx"`` for forward, ``"wz"`` for angular). Default ``["vx", "wz"]``.
-        characterize_axes: Axes to characterize in Phase 1. Options are ``"forward"``, ``"lateral"``, ``"angular"``. Default ``["forward", "angular"]``.
-        motion_axes: Motion parameters to optimize in Phase 3. Options are ``"distance"`` and ``"heading"``. Default ``["distance", "heading"]``.
+        vel_axes: Velocity axes to tune in Phase 2. Each entry is a velocity component name (``"vx"`` for forward, ``"vy"`` for lateral/strafe, ``"wz"`` for angular). Default ``["vx", "vy", "wz"]``.
+        characterize_axes: Axes to characterize in Phase 1. Options are ``"forward"``, ``"lateral"``, ``"angular"``. Default ``["forward", "lateral", "angular"]``.
+        motion_axes: Motion parameters to optimize in Phase 3. Options are ``"distance"``, ``"lateral"`` (shares the distance PID but optimizes with lateral trials), and ``"heading"``. Default ``["distance", "lateral", "heading"]``.
         tune_characterize: Whether to run Phase 1. Set to ``False`` if the robot's limits are already known. Default ``True``.
         tune_velocity: Whether to run Phase 2. Default ``True``.
         tune_motion: Whether to run Phase 3. Default ``True``.

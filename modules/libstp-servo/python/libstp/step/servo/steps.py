@@ -26,6 +26,9 @@ class SetServoPosition(Step):
         if self._duration is not None and self._duration < 0:
             raise ValueError("Duration must be >= 0")
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"servo:{self._servo_ref.port}"})
+
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
         return f"SetServoPosition(servo={servo_label},angle={self._target_angle},duration={self._duration})"
@@ -113,6 +116,9 @@ class ShakeServo(Step):
         if self._duration < 0:
             raise ValueError("Duration must be >= 0")
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"servo:{self._servo_ref.port}"})
+
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
         return (
@@ -193,6 +199,9 @@ class SlowServo(Step):
         if self._speed <= 0:
             raise ValueError(f"Speed must be > 0, got {self._speed}")
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"servo:{self._servo_ref.port}"})
+
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
         return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed})"
@@ -246,6 +255,9 @@ class FullyDisableServos(Step):
         # Release all servos at the end of a mission
         fully_disable_servos()
     """
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"servo:*"})
 
     def _generate_signature(self) -> str:
         return "FullyDisableServos()"

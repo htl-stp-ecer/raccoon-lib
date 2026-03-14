@@ -1,6 +1,7 @@
 from .base import Step, StepAnomalyCallback
 from .annotation import dsl, dsl_step, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
+from .resource import ResourceConflictError
 from .step_builder import StepBuilder
 from .condition import (
     StopCondition, on_black, on_white, after_seconds, after_cm, after_degrees,
@@ -34,6 +35,7 @@ __all__ = [
     "Step",
     "StepAnomalyCallback",
     "StepProtocol",
+    "ResourceConflictError",
     "StepBuilder",
     "SimulationStepDelta",
     "SimulationStep",

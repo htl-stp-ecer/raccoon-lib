@@ -44,6 +44,9 @@ class DoUntilCheckpoint(Step):
         self.checkpoint = checkpoint
         self.step = step
 
+    def collected_resources(self) -> frozenset[str]:
+        return self.step.collected_resources()
+
     def _generate_signature(self) -> str:
         return f"DoUntilCheckpoint(checkpoint={self.checkpoint:.1f})"
 

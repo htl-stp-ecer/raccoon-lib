@@ -6,6 +6,7 @@ from libstp.robot.api import GenericRobot
 from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
 from .sequential import seq, Sequential
 from .annotation import dsl
+from .resource import validate_no_overlap
 
 
 @dsl(hidden=True)
@@ -35,6 +36,15 @@ class Parallel(Step):
 
         self.steps: List[Step] = steps
         self._last_completed_step: Optional[Step] = None
+
+        # Pre-execution resource conflict check
+        validate_no_overlap(self.steps, context="Parallel")
+
+    def collected_resources(self) -> frozenset[str]:
+        result: set[str] = set()
+        for step in self.steps:
+            result |= step.collected_resources()
+        return frozenset(result)
 
     def _generate_signature(self) -> str:
         return f"Parallel(groups={len(self.steps)})"

@@ -4,6 +4,7 @@ from typing import Any
 
 from .. import Step
 from ..annotation import dsl_step
+from ..resource import validate_no_overlap
 
 
 @dsl_step(tags=["control", "concurrent"])
@@ -43,6 +44,14 @@ class DoWhileActive(Step):
         super().__init__()
         self.reference_step = reference_step
         self.task = task
+
+        # Pre-execution resource conflict check
+        validate_no_overlap(
+            [self.reference_step, self.task], context="DoWhileActive"
+        )
+
+    def collected_resources(self) -> frozenset[str]:
+        return self.reference_step.collected_resources() | self.task.collected_resources()
 
     def _generate_signature(self) -> str:
         return "DoWhileActive()"

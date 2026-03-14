@@ -453,11 +453,13 @@ class StrafeFollowLineBuilder(StepBuilder):
 @dsl(tags=['motion', 'line-follow'])
 def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
     """
-    Follow a line by strafing right.
+    Follow a line forward, correcting position by strafing left/right.
 
-    Convenience wrapper around ``DirectionalFollowLine`` for pure lateral
-    line following.  The robot strafes right at the given speed while PID
-    steering keeps it centered on the line using two sensors.
+    The robot drives forward at the given speed while a PID controller
+    corrects lateral position using two sensors.  Unlike ``FollowLine``
+    which steers by rotating, this step keeps the robot's heading constant
+    and corrects by strafing, which is useful when the robot must maintain
+    a fixed orientation (e.g. to keep a side-mounted mechanism aligned).
 
     Supports distance-based termination, composable ``StopCondition`` via
     ``.until()``, or both (whichever triggers first). At least one of
@@ -469,11 +471,11 @@ def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = 
     Args:
         left_sensor: Left IR sensor instance.
         right_sensor: Right IR sensor instance.
-        distance_cm: Distance to strafe in centimeters. Optional if ``until`` is provided.
-        speed: Strafe speed as fraction of max lateral velocity (0.0 to 1.0).  Default 0.5.  Use negative values to strafe left.
-        kp: Proportional gain for steering PID.  Default 0.75.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.5.
+        distance_cm: Distance to follow in centimeters. Optional if ``until`` is provided.
+        speed: Forward speed as fraction of max velocity (0.0 to 1.0). Default 0.5.  Use negative values to drive backward.
+        kp: Proportional gain for lateral PID.  Default 0.75.
+        ki: Integral gain for lateral PID.  Default 0.0.
+        kd: Derivative gain for lateral PID.  Default 0.5.
         until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
@@ -484,10 +486,10 @@ def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = 
         from libstp.step.motion import StrafeFollowLine
         from libstp.step.condition import on_black
 
-        # Strafe right along a line for 40 cm
+        # Follow a line for 40 cm, correcting via strafe
         strafe_follow_line(left, right, distance_cm=40, speed=0.4)
 
-        # Strafe until both sensors see black
+        # Follow until both sensors see black
         strafe_follow_line(left, right, speed=0.4).until(
             on_black(left) & on_black(right)
         )
@@ -569,11 +571,12 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
 @dsl(tags=['motion', 'line-follow'])
 def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
     """
-    Follow a line edge by strafing right using a single sensor.
+    Follow a line edge forward, correcting position by strafing.
 
-    Convenience wrapper around ``DirectionalFollowLineSingle`` for pure
-    lateral single-sensor line following.  The robot strafes at the given
-    speed while PID edge-tracking keeps the sensor on the line boundary.
+    The robot drives forward at the given speed while a PID controller
+    corrects lateral position using a single sensor tracking the line edge.
+    Unlike ``FollowLineSingle`` which steers by rotating, this step keeps
+    the robot's heading constant and corrects by strafing.
 
     Supports distance-based termination, composable ``StopCondition`` via
     ``.until()``, or both (whichever triggers first). At least one of
@@ -584,12 +587,12 @@ def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | No
 
     Args:
         sensor: IR sensor for edge tracking.
-        distance_cm: Distance to strafe in centimeters. Optional if ``until`` is provided.
-        speed: Strafe speed as fraction of max lateral velocity (0.0 to 1.0).  Default 0.5.  Use negative values to strafe left.
+        distance_cm: Distance to follow in centimeters. Optional if ``until`` is provided.
+        speed: Forward speed as fraction of max velocity (0.0 to 1.0). Default 0.5.  Use negative values to drive backward.
         side: Which edge of the line to track.  Default ``LineSide.LEFT``.
-        kp: Proportional gain for steering PID.  Default 1.0.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.3.
+        kp: Proportional gain for lateral PID.  Default 1.0.
+        ki: Integral gain for lateral PID.  Default 0.0.
+        kd: Derivative gain for lateral PID.  Default 0.3.
         until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
@@ -600,10 +603,10 @@ def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | No
         from libstp.step.motion import StrafeFollowLineSingle, LineSide
         from libstp.step.condition import on_black
 
-        # Strafe right along a line edge for 40 cm
+        # Follow a line edge for 40 cm, correcting via strafe
         strafe_follow_line_single(front_ir, distance_cm=40, speed=0.4)
 
-        # Strafe until stop sensor sees black
+        # Follow until stop sensor sees black
         strafe_follow_line_single(front_ir, speed=0.4).until(on_black(stop))
     """
     b = StrafeFollowLineSingleBuilder()

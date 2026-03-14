@@ -56,6 +56,9 @@ class Timeout(Step):
         self.seconds = float(seconds)
         self.result = None
 
+    def collected_resources(self) -> frozenset[str]:
+        return self.step.collected_resources()
+
     def _generate_signature(self) -> str:
         return (
             f"Timeout(step={self.step.__class__.__name__}, "

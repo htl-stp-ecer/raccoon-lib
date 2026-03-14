@@ -409,6 +409,8 @@ async def _run_step_response(
     # Build velocity command
     if axis == "vx":
         vel = ChassisVelocity(command, 0.0, 0.0)
+    elif axis == "vy":
+        vel = ChassisVelocity(0.0, command, 0.0)
     elif axis == "wz":
         vel = ChassisVelocity(0.0, 0.0, command)
     else:
@@ -437,6 +439,8 @@ async def _run_step_response(
         state = robot.drive.estimate_state()
         if axis == "vx":
             meas = state.vx
+        elif axis == "vy":
+            meas = state.vy
         else:
             meas = state.wz
 
@@ -516,7 +520,9 @@ def _persist_motion_config(
 
     updated = False
     for param_name, result in results.items():
-        base = ["robot", "motion_pid", param_name]
+        # "lateral" shares the distance PID
+        yaml_key = "distance" if param_name == "lateral" else param_name
+        base = ["robot", "motion_pid", yaml_key]
         update_project_value(project_root, [*base, "kp"],
                              round(result.final_kp, 4))
         update_project_value(project_root, [*base, "kd"],
@@ -544,6 +550,8 @@ def _apply_velocity_gains(
         axis_cfg = AxisVelocityControlConfig(result.pid, result.ff)
         if axis_name == "vx":
             cfg.vx = axis_cfg
+        elif axis_name == "vy":
+            cfg.vy = axis_cfg
         elif axis_name == "wz":
             cfg.wz = axis_cfg
     robot.drive.set_velocity_control_config(cfg)
@@ -556,7 +564,9 @@ def _apply_motion_gains(
     """Apply tuned motion PID gains to the in-memory config."""
     cfg = robot.motion_pid_config
     for param_name, result in results.items():
-        pid_cfg = getattr(cfg, param_name, None)
+        # "lateral" shares the distance PID
+        pid_attr = "distance" if param_name == "lateral" else param_name
+        pid_cfg = getattr(cfg, pid_attr, None)
         if pid_cfg is None:
             continue
         pid_cfg.kp = result.final_kp
@@ -572,6 +582,9 @@ def _get_max_velocity(robot: "GenericRobot", axis: str) -> float:
     cfg = robot.motion_pid_config
     if axis == "vx":
         v = cfg.linear.max_velocity
+        return v if v > 0 else 0.3  # conservative fallback m/s
+    elif axis == "vy":
+        v = cfg.lateral.max_velocity
         return v if v > 0 else 0.3  # conservative fallback m/s
     elif axis == "wz":
         v = cfg.angular.max_velocity
@@ -590,7 +603,7 @@ async def _tune_velocity_axis(
 
     max_vel = _get_max_velocity(robot, axis)
     command = max_vel * _STEP_COMMAND_FRAC
-    unit = "m/s" if axis == "vx" else "rad/s"
+    unit = "rad/s" if axis == "wz" else "m/s"
 
     log_fn(f"  [{axis}] Step response: cmd={command:.3f} {unit} "
            f"(max={max_vel:.3f}, frac={_STEP_COMMAND_FRAC})")
@@ -645,6 +658,8 @@ async def _tune_velocity_axis(
     axis_cfg = AxisVelocityControlConfig(pid, ff)
     if axis == "vx":
         test_cfg.vx = axis_cfg
+    elif axis == "vy":
+        test_cfg.vy = axis_cfg
     elif axis == "wz":
         test_cfg.wz = axis_cfg
     robot.drive.set_velocity_control_config(test_cfg)
@@ -687,12 +702,13 @@ async def _run_linear_trial(
     robot: "GenericRobot",
     distance_m: float,
     speed_scale: float = _MOTION_PRIMARY_SPEED_SCALE,
+    axis: "LinearAxis" = None,
 ) -> tuple[float, float, float]:
     """
     Run a linear drive trial. Returns (settling_time, overshoot, final_error).
     """
     config = LinearMotionConfig()
-    config.axis = LinearAxis.Forward
+    config.axis = axis if axis is not None else LinearAxis.Forward
     config.distance_m = distance_m
     config.speed_scale = speed_scale
 
@@ -833,7 +849,7 @@ def _score_motion_trial(
     """
     score = _score_trial(settle_time, overshoot, final_error)
 
-    if param_name == "distance":
+    if param_name in ("distance", "lateral"):
         overshoot_soft = _LINEAR_OVERSHOOT_SOFT_M
         error_soft = _LINEAR_FINAL_ERROR_SOFT_M
         overshoot_penalty_per_unit = _SCORE_LINEAR_OVERSHOOT_BREACH_PER_M
@@ -868,7 +884,9 @@ async def _evaluate_gains(
     Set gains, run alternating fwd/bwd or CW/CCW trials, return average score.
     """
     cfg = robot.motion_pid_config
-    pid_cfg = getattr(cfg, param_name)
+    # "lateral" uses the same distance PID (shared by LinearMotion for both axes)
+    pid_attr = "distance" if param_name == "lateral" else param_name
+    pid_cfg = getattr(cfg, pid_attr)
     pid_cfg.kp = kp
     pid_cfg.kd = kd
 
@@ -876,7 +894,13 @@ async def _evaluate_gains(
     if param_name == "distance":
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
         settle, overshoot, error = await _run_linear_trial(
-            robot, sign * _LINEAR_TEST_DISTANCE_M, speed_scale=speed_scale
+            robot, sign * _LINEAR_TEST_DISTANCE_M, speed_scale=speed_scale,
+        )
+    elif param_name == "lateral":
+        sign = 1.0 if trial_idx % 2 == 0 else -1.0
+        settle, overshoot, error = await _run_linear_trial(
+            robot, sign * _LINEAR_TEST_DISTANCE_M, speed_scale=speed_scale,
+            axis=LinearAxis.Lateral,
         )
     else:  # heading
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
@@ -1034,8 +1058,8 @@ class AutoTuneVelocity(Step):
 
     Args:
         axes: Velocity axes to tune. Each entry is a velocity component
-            name: ``"vx"`` (forward linear) or ``"wz"`` (angular). Default
-            ``["vx", "wz"]``.
+            name: ``"vx"`` (forward), ``"vy"`` (lateral/strafe), or
+            ``"wz"`` (angular). Default ``["vx", "vy", "wz"]``.
         persist: If ``True``, write accepted gains to
             ``raccoon.project.yml``. Default ``True``.
         csv_dir: Directory for step-response CSV files (baseline and tuned
@@ -1063,7 +1087,7 @@ class AutoTuneVelocity(Step):
     ):
         super().__init__()
         if axes is None:
-            axes = ["vx", "wz"]
+            axes = ["vx", "vy", "wz"]
         self.axes = axes
         self.persist = persist
         self.csv_dir = csv_dir
@@ -1164,8 +1188,10 @@ class AutoTuneMotion(Step):
 
     Args:
         axes: Motion parameters to optimize. Options are ``"distance"``
-            (linear drive kp/kd) and ``"heading"`` (turn kp/kd). Default
-            ``["distance", "heading"]``.
+            (forward drive kp/kd), ``"lateral"`` (strafe kp/kd — shares
+            the distance PID but optimizes with lateral trials), and
+            ``"heading"`` (turn kp/kd). Default
+            ``["distance", "lateral", "heading"]``.
         persist: If ``True``, write final gains to
             ``raccoon.project.yml`` under ``robot.motion_pid``. Default
             ``True``.
@@ -1194,7 +1220,7 @@ class AutoTuneMotion(Step):
     ):
         super().__init__()
         if axes is None:
-            axes = ["distance", "heading"]
+            axes = ["distance", "lateral", "heading"]
         self.axes = axes
         self.persist = persist
         self.csv_dir = csv_dir
@@ -1225,7 +1251,9 @@ class AutoTuneMotion(Step):
         cfg = robot.motion_pid_config
 
         for param_name in self.axes:
-            pid_cfg = getattr(cfg, param_name, None)
+            # "lateral" shares the distance PID
+            pid_attr = "distance" if param_name == "lateral" else param_name
+            pid_cfg = getattr(cfg, pid_attr, None)
             if pid_cfg is None:
                 self.warn(f"  [{param_name}] Not found in motion config")
                 continue
@@ -1298,7 +1326,7 @@ class AutoTune(Step):
     generation.
 
     **Phase 2 -- Velocity controller tuning.** For each velocity axis (e.g.,
-    ``vx``, ``wz``), a step-response is recorded at 100 Hz, plant parameters
+    ``vx``, ``vy``, ``wz``), a step-response is recorded at 100 Hz, plant parameters
     (gain Ks, dead time Tu, time constant Tg) are identified via the
     inflection tangent method, and PID gains are computed using CHR
     set-point-follow formulas. A validation step-response is run with the
@@ -1306,10 +1334,11 @@ class AutoTune(Step):
     are accepted, otherwise the baseline is kept.
 
     **Phase 3 -- Motion controller tuning.** Uses Hooke-Jeeves coordinate
-    descent to optimize the high-level distance and heading PID controllers.
-    Real test drives and turns are executed, scored on a weighted combination
-    of settling time, overshoot, and final error. The optimizer adjusts
-    kp/kd iteratively, halving the search delta when no improvement is found.
+    descent to optimize the high-level distance, lateral, and heading PID
+    controllers. Real test drives, strafes, and turns are executed, scored
+    on a weighted combination of settling time, overshoot, and final error.
+    The optimizer adjusts kp/kd iteratively, halving the search delta when
+    no improvement is found.
 
     All results are applied in-memory immediately and, if ``persist`` is
     enabled, written to ``raccoon.project.yml`` so they survive restarts.
@@ -1319,14 +1348,15 @@ class AutoTune(Step):
 
     Args:
         vel_axes: Velocity axes to tune in Phase 2. Each entry is a velocity
-            component name (``"vx"`` for forward, ``"wz"`` for angular).
-            Default ``["vx", "wz"]``.
+            component name (``"vx"`` for forward, ``"vy"`` for lateral/strafe,
+            ``"wz"`` for angular). Default ``["vx", "vy", "wz"]``.
         characterize_axes: Axes to characterize in Phase 1. Options are
             ``"forward"``, ``"lateral"``, ``"angular"``. Default
-            ``["forward", "angular"]``.
+            ``["forward", "lateral", "angular"]``.
         motion_axes: Motion parameters to optimize in Phase 3. Options are
-            ``"distance"`` and ``"heading"``. Default
-            ``["distance", "heading"]``.
+            ``"distance"``, ``"lateral"`` (shares the distance PID but
+            optimizes with lateral trials), and ``"heading"``. Default
+            ``["distance", "lateral", "heading"]``.
         tune_characterize: Whether to run Phase 1. Set to ``False`` if the
             robot's limits are already known. Default ``True``.
         tune_velocity: Whether to run Phase 2. Default ``True``.
@@ -1376,11 +1406,11 @@ class AutoTune(Step):
     ):
         super().__init__()
         if vel_axes is None:
-            vel_axes = ["vx", "wz"]
+            vel_axes = ["vx", "vy", "wz"]
         if characterize_axes is None:
-            characterize_axes = ["forward", "angular"]
+            characterize_axes = ["forward", "lateral", "angular"]
         if motion_axes is None:
-            motion_axes = ["distance", "heading"]
+            motion_axes = ["distance", "lateral", "heading"]
         self.characterize_axes = characterize_axes
         self.vel_axes = vel_axes
         self.motion_axes = motion_axes

@@ -492,6 +492,10 @@ class DirectionalLineFollowConfig:
     Allows independent heading (forward/backward) and strafe (left/right)
     speed components.  The PID controller steers via angular velocity based
     on the difference between left and right sensor readings.
+
+    When ``lateral_correction`` is True, the PID output controls lateral
+    velocity (vy) instead of angular velocity (wz), keeping the robot's
+    heading constant while correcting position by strafing.
     """
     left_sensor: IRSensor
     right_sensor: IRSensor
@@ -501,6 +505,7 @@ class DirectionalLineFollowConfig:
     kp: float = 0.75
     ki: float = 0.0
     kd: float = 0.5
+    lateral_correction: bool = False
 
 
 @dsl(hidden=True)
@@ -524,8 +529,11 @@ class DirectionalLineFollow(MotionStep):
         self.config = config
         self._until = until
         self._pid: PidController | None = None
+        self._heading_pid: PidController | None = None
         self._vx: float = 0.0
         self._vy: float = 0.0
+        self._max_lateral: float = 0.0
+        self._initial_heading: float = 0.0
         self._target_distance_m: float | None = None
 
     def _generate_signature(self) -> str:
@@ -535,8 +543,9 @@ class DirectionalLineFollow(MotionStep):
         if self._until is not None:
             parts.append("until")
         mode = "+".join(parts) if parts else "indefinite"
+        corr = "lateral" if self.config.lateral_correction else "angular"
         return (
-            f"DirectionalLineFollow(mode={mode}, "
+            f"DirectionalLineFollow(mode={mode}, corr={corr}, "
             f"heading={self.config.heading_speed:.2f}, "
             f"strafe={self.config.strafe_speed:.2f})"
         )
@@ -565,6 +574,7 @@ class DirectionalLineFollow(MotionStep):
         pid_cfg = robot.motion_pid_config
         self._vx = cfg.heading_speed * pid_cfg.linear.max_velocity
         self._vy = cfg.strafe_speed * pid_cfg.lateral.max_velocity
+        self._max_lateral = pid_cfg.lateral.max_velocity
 
         if cfg.distance_cm is not None:
             self._target_distance_m = cfg.distance_cm / 100.0
@@ -576,6 +586,15 @@ class DirectionalLineFollow(MotionStep):
             integral_max=1.0, output_min=-1.0, output_max=1.0,
         ))
 
+        # Heading hold PID for lateral correction mode
+        if cfg.lateral_correction:
+            self._initial_heading = robot.odometry.get_heading()
+            h = pid_cfg.heading
+            self._heading_pid = PidController(PidConfig(
+                kp=h.kp, ki=h.ki, kd=h.kd,
+                integral_max=1.0, output_min=-1.0, output_max=1.0,
+            ))
+
         if self._until:
             self._until.start(robot)
 
@@ -585,9 +604,10 @@ class DirectionalLineFollow(MotionStep):
         if self._until is not None:
             parts.append("until")
         mode = "+".join(parts) if parts else "indefinite"
+        corr_str = "lateral" if cfg.lateral_correction else "angular"
         self.debug(
             f"on_start: mode={mode}, vx={self._vx:.3f}m/s, vy={self._vy:.3f}m/s, "
-            f"PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+            f"correction={corr_str}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
         )
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
@@ -610,15 +630,23 @@ class DirectionalLineFollow(MotionStep):
                 )
                 return True
 
-        # PID steering: sensor error -> omega
+        # PID steering: sensor error -> correction
         error = left_conf - right_conf
-        wz = self._pid.update(error, dt)
+        correction = self._pid.update(error, dt)
 
-        robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, wz))
+        if cfg.lateral_correction:
+            # Correct by strafing left/right; gyro PID holds heading
+            vy = self._vy + correction * self._max_lateral
+            heading_error = self._initial_heading - robot.odometry.get_heading()
+            wz = self._heading_pid.update(heading_error, dt)
+            robot.drive.set_velocity(ChassisVelocity(self._vx, vy, wz))
+        else:
+            # Standard angular correction
+            robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, correction))
         robot.drive.update(dt)
 
         self.debug(
-            f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+            f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}"
         )
 
         return False
@@ -630,6 +658,10 @@ class DirectionalSingleLineFollowConfig:
 
     The sensor tracks the edge of a line using PID control while the robot
     moves with the given heading and strafe velocity components.
+
+    When ``lateral_correction`` is True, the PID output controls lateral
+    velocity (vy) instead of angular velocity (wz), keeping the robot's
+    heading constant while correcting position by strafing.
     """
     sensor: IRSensor
     heading_speed: float    # -1..1 fraction of max forward velocity
@@ -639,6 +671,7 @@ class DirectionalSingleLineFollowConfig:
     kp: float = 1.0
     ki: float = 0.0
     kd: float = 0.3
+    lateral_correction: bool = False
 
 
 @dsl(hidden=True)
@@ -660,8 +693,11 @@ class DirectionalSingleLineFollow(MotionStep):
         self.config = config
         self._until = until
         self._pid: PidController | None = None
+        self._heading_pid: PidController | None = None
         self._vx: float = 0.0
         self._vy: float = 0.0
+        self._max_lateral: float = 0.0
+        self._initial_heading: float = 0.0
         self._target_distance_m: float | None = None
 
     def _generate_signature(self) -> str:
@@ -671,8 +707,9 @@ class DirectionalSingleLineFollow(MotionStep):
         if self._until is not None:
             parts.append("until")
         mode = "+".join(parts) if parts else "indefinite"
+        corr = "lateral" if self.config.lateral_correction else "angular"
         return (
-            f"DirectionalSingleLineFollow(mode={mode}, "
+            f"DirectionalSingleLineFollow(mode={mode}, corr={corr}, "
             f"side={self.config.side.value}, "
             f"heading={self.config.heading_speed:.2f}, "
             f"strafe={self.config.strafe_speed:.2f})"
@@ -700,6 +737,7 @@ class DirectionalSingleLineFollow(MotionStep):
         pid_cfg = robot.motion_pid_config
         self._vx = cfg.heading_speed * pid_cfg.linear.max_velocity
         self._vy = cfg.strafe_speed * pid_cfg.lateral.max_velocity
+        self._max_lateral = pid_cfg.lateral.max_velocity
 
         if cfg.distance_cm is not None:
             self._target_distance_m = cfg.distance_cm / 100.0
@@ -711,12 +749,22 @@ class DirectionalSingleLineFollow(MotionStep):
             integral_max=1.0, output_min=-1.0, output_max=1.0,
         ))
 
+        # Heading hold PID for lateral correction mode
+        if cfg.lateral_correction:
+            self._initial_heading = robot.odometry.get_heading()
+            h = pid_cfg.heading
+            self._heading_pid = PidController(PidConfig(
+                kp=h.kp, ki=h.ki, kd=h.kd,
+                integral_max=1.0, output_min=-1.0, output_max=1.0,
+            ))
+
         if self._until:
             self._until.start(robot)
 
+        corr_str = "lateral" if cfg.lateral_correction else "angular"
         self.debug(
             f"on_start: side={cfg.side.value}, vx={self._vx:.3f}m/s, vy={self._vy:.3f}m/s, "
-            f"PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+            f"correction={corr_str}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
         )
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
@@ -742,13 +790,21 @@ class DirectionalSingleLineFollow(MotionStep):
         if cfg.side == LineSide.RIGHT:
             error = -error
 
-        wz = self._pid.update(error, dt)
+        correction = self._pid.update(error, dt)
 
-        robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, wz))
+        if cfg.lateral_correction:
+            # Correct by strafing left/right; gyro PID holds heading
+            vy = self._vy + correction * self._max_lateral
+            heading_error = self._initial_heading - robot.odometry.get_heading()
+            wz = self._heading_pid.update(heading_error, dt)
+            robot.drive.set_velocity(ChassisVelocity(self._vx, vy, wz))
+        else:
+            # Standard angular correction
+            robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, correction))
         robot.drive.update(dt)
 
         self.debug(
-            f"black={reading:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
+            f"black={reading:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}"
         )
 
         return False
@@ -866,11 +922,13 @@ class DirectionalFollowLine(DirectionalLineFollow):
 
 @dsl_step(tags=["motion", "line-follow"])
 class StrafeFollowLine(DirectionalLineFollow):
-    """Follow a line by strafing right.
+    """Follow a line forward, correcting position by strafing left/right.
 
-    Convenience wrapper around ``DirectionalFollowLine`` for pure lateral
-    line following.  The robot strafes right at the given speed while PID
-    steering keeps it centered on the line using two sensors.
+    The robot drives forward at the given speed while a PID controller
+    corrects lateral position using two sensors.  Unlike ``FollowLine``
+    which steers by rotating, this step keeps the robot's heading constant
+    and corrects by strafing, which is useful when the robot must maintain
+    a fixed orientation (e.g. to keep a side-mounted mechanism aligned).
 
     Supports distance-based termination, composable ``StopCondition`` via
     ``.until()``, or both (whichever triggers first). At least one of
@@ -882,28 +940,28 @@ class StrafeFollowLine(DirectionalLineFollow):
     Args:
         left_sensor: Left IR sensor instance.
         right_sensor: Right IR sensor instance.
-        distance_cm: Distance to strafe in centimeters. Optional if
+        distance_cm: Distance to follow in centimeters. Optional if
             ``until`` is provided.
-        speed: Strafe speed as fraction of max lateral velocity (0.0 to
-            1.0).  Default 0.5.  Use negative values to strafe left.
-        kp: Proportional gain for steering PID.  Default 0.75.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.5.
+        speed: Forward speed as fraction of max velocity (0.0 to 1.0).
+            Default 0.5.  Use negative values to drive backward.
+        kp: Proportional gain for lateral PID.  Default 0.75.
+        ki: Integral gain for lateral PID.  Default 0.0.
+        kd: Derivative gain for lateral PID.  Default 0.5.
         until: Composable stop condition. Can also be chained via the
             ``.until()`` builder method.
 
     Returns:
-        A ``StrafeFollowLine`` step configured for lateral motion.
+        A ``StrafeFollowLine`` step configured for lateral correction.
 
     Example::
 
         from libstp.step.motion import StrafeFollowLine
         from libstp.step.condition import on_black
 
-        # Strafe right along a line for 40 cm
+        # Follow a line for 40 cm, correcting via strafe
         strafe_follow_line(left, right, distance_cm=40, speed=0.4)
 
-        # Strafe until both sensors see black
+        # Follow until both sensors see black
         strafe_follow_line(left, right, speed=0.4).until(
             on_black(left) & on_black(right)
         )
@@ -931,15 +989,15 @@ class StrafeFollowLine(DirectionalLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
-        super().__init__(
+        super().__init__(DirectionalLineFollowConfig(
             left_sensor=left_sensor,
             right_sensor=right_sensor,
+            heading_speed=speed,
+            strafe_speed=0.0,
             distance_cm=distance_cm,
-            heading_speed=0.0,
-            strafe_speed=speed,
             kp=kp, ki=ki, kd=kd,
-            until=until,
-        )
+            lateral_correction=True,
+        ), until=until)
 
     def _generate_signature(self) -> str:
         parts = []
@@ -955,11 +1013,12 @@ class StrafeFollowLine(DirectionalLineFollow):
 
 @dsl_step(tags=["motion", "line-follow"])
 class StrafeFollowLineSingle(DirectionalSingleLineFollow):
-    """Follow a line edge by strafing right using a single sensor.
+    """Follow a line edge forward, correcting position by strafing.
 
-    Convenience wrapper around ``DirectionalFollowLineSingle`` for pure
-    lateral single-sensor line following.  The robot strafes at the given
-    speed while PID edge-tracking keeps the sensor on the line boundary.
+    The robot drives forward at the given speed while a PID controller
+    corrects lateral position using a single sensor tracking the line edge.
+    Unlike ``FollowLineSingle`` which steers by rotating, this step keeps
+    the robot's heading constant and corrects by strafing.
 
     Supports distance-based termination, composable ``StopCondition`` via
     ``.until()``, or both (whichever triggers first). At least one of
@@ -970,29 +1029,29 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
 
     Args:
         sensor: IR sensor for edge tracking.
-        distance_cm: Distance to strafe in centimeters. Optional if
+        distance_cm: Distance to follow in centimeters. Optional if
             ``until`` is provided.
-        speed: Strafe speed as fraction of max lateral velocity (0.0 to
-            1.0).  Default 0.5.  Use negative values to strafe left.
+        speed: Forward speed as fraction of max velocity (0.0 to 1.0).
+            Default 0.5.  Use negative values to drive backward.
         side: Which edge of the line to track.  Default ``LineSide.LEFT``.
-        kp: Proportional gain for steering PID.  Default 1.0.
-        ki: Integral gain for steering PID.  Default 0.0.
-        kd: Derivative gain for steering PID.  Default 0.3.
+        kp: Proportional gain for lateral PID.  Default 1.0.
+        ki: Integral gain for lateral PID.  Default 0.0.
+        kd: Derivative gain for lateral PID.  Default 0.3.
         until: Composable stop condition. Can also be chained via the
             ``.until()`` builder method.
 
     Returns:
-        A ``StrafeFollowLineSingle`` step configured for lateral motion.
+        A ``StrafeFollowLineSingle`` step configured for lateral correction.
 
     Example::
 
         from libstp.step.motion import StrafeFollowLineSingle, LineSide
         from libstp.step.condition import on_black
 
-        # Strafe right along a line edge for 40 cm
+        # Follow a line edge for 40 cm, correcting via strafe
         strafe_follow_line_single(front_ir, distance_cm=40, speed=0.4)
 
-        # Strafe until stop sensor sees black
+        # Follow until stop sensor sees black
         strafe_follow_line_single(front_ir, speed=0.4).until(on_black(stop))
     """
 
@@ -1020,11 +1079,12 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         self._kd = kd
         super().__init__(DirectionalSingleLineFollowConfig(
             sensor=sensor,
-            heading_speed=0.0,
-            strafe_speed=speed,
+            heading_speed=speed,
+            strafe_speed=0.0,
             distance_cm=distance_cm,
             side=side,
             kp=kp, ki=ki, kd=kd,
+            lateral_correction=True,
         ), until=until)
 
     def _generate_signature(self) -> str:

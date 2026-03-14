@@ -32,6 +32,12 @@ class Sequential(Step):
         self.steps: List[Step] = steps
         self._last_internal_step: Optional[Step] = steps[-1] if steps else None
 
+    def collected_resources(self) -> frozenset[str]:
+        result: set[str] = set()
+        for step in self.steps:
+            result |= step.collected_resources()
+        return frozenset(result)
+
     def _generate_signature(self) -> str:
         first = self.steps[0].__class__.__name__ if self.steps else "None"
         last = self.steps[-1].__class__.__name__ if self.steps else "None"
