@@ -30,6 +30,9 @@ class Stop(Step):
         super().__init__()
         self.hard = hard
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive"})
+
     def _generate_signature(self) -> str:
         return f"Stop(hard={self.hard})"
 

@@ -31,6 +31,9 @@ class MotionStep(Step):
 
     hz: int = 100
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive"})
+
     def on_start(self, robot: "GenericRobot") -> None:
         """Called once before the loop. Override to set up motion/velocity."""
         pass

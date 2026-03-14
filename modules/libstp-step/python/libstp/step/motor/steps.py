@@ -70,6 +70,9 @@ class SetMotorPower(Step):
         if not (-100 <= self._percent <= 100):
             raise ValueError(f"percent must be -100..100, got {self._percent}")
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
+
     def _generate_signature(self) -> str:
         return f"SetMotorPower(port={self._motor.port},percent={self._percent})"
 
@@ -111,6 +114,9 @@ class SetMotorVelocity(Step):
         super().__init__()
         self._motor = motor
         self._velocity = int(velocity)
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
 
     def _generate_signature(self) -> str:
         return f"SetMotorVelocity(port={self._motor.port},velocity={self._velocity})"
@@ -155,6 +161,9 @@ class SetMotorDps(Step):
         super().__init__()
         self._motor = motor
         self._dps = float(dps)
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
 
     def _generate_signature(self) -> str:
         return f"SetMotorDps(port={self._motor.port},dps={self._dps})"
@@ -211,6 +220,9 @@ class MoveMotorTo(Step):
         self._timeout = timeout
         if self._velocity <= 0:
             raise ValueError(f"velocity must be > 0, got {self._velocity}")
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
 
     def _generate_signature(self) -> str:
         return (
@@ -279,6 +291,9 @@ class MoveMotorRelative(Step):
         if self._velocity <= 0:
             raise ValueError(f"velocity must be > 0, got {self._velocity}")
 
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
+
     def _generate_signature(self) -> str:
         return (
             f"MoveMotorRelative(port={self._motor.port},"
@@ -309,6 +324,9 @@ class StopMotor(Step):
         super().__init__()
         self._motor = motor
         self._mode = mode
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
 
     def _generate_signature(self) -> str:
         return f"StopMotor(port={self._motor.port},mode={self._mode.value})"

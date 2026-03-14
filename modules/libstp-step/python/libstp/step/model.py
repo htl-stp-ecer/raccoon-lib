@@ -11,6 +11,10 @@ class StepProtocol(Protocol):
 
     async def run_step(self, robot: "GenericRobot") -> None: ...
 
+    def required_resources(self) -> frozenset[str]: ...
+
+    def collected_resources(self) -> frozenset[str]: ...
+
 @dataclass
 class SimulationStepDelta:
     """Estimated pose change caused by a step in simulation space."""

@@ -4,6 +4,7 @@ from abc import abstractmethod
 from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
 
 from .model import SimulationStep, SimulationStepDelta
+from .resource import get_resource_manager
 from libstp.class_name_logger import ClassNameLogger
 from libstp.timing import StepTimingTracker
 
@@ -19,6 +20,26 @@ class Step(ClassNameLogger):
     def __init__(self) -> None:
         self._skip_timing: bool = False
         self._anomaly_callback: Optional[StepAnomalyCallback] = None
+
+    def required_resources(self) -> frozenset[str]:
+        """Return the hardware resources this step requires exclusive access to.
+
+        For leaf steps (drive, motor, servo), return the resources this step
+        directly uses.  Composite steps override ``collected_resources``
+        instead to include children — ``required_resources`` stays empty for
+        composites because they don't touch hardware themselves.
+        """
+        return frozenset()
+
+    def collected_resources(self) -> frozenset[str]:
+        """Return all resources this step *and its children* require.
+
+        Used by ``validate_no_overlap`` for static conflict detection at
+        construction time.  Leaf steps don't need to override this — the
+        default delegates to ``required_resources``.  Composite steps
+        override to union their children's collected resources.
+        """
+        return self.required_resources()
 
     async def run_step(self, robot: "GenericRobot") -> None:
         """
@@ -49,10 +70,18 @@ class Step(ClassNameLogger):
                     self._anomaly_watchdog(upper, start_time, robot)
                 )
 
+        # Runtime resource guard (safety net for Defer / Run)
+        resources = self.required_resources()
+        mgr = get_resource_manager(robot) if resources else None
+        if mgr is not None:
+            mgr.acquire(resources, self._generate_signature())
+
         step_start = time.perf_counter()
         try:
             await self._execute_step(robot)
         finally:
+            if mgr is not None:
+                mgr.release(resources)
             if watchdog_task is not None:
                 watchdog_task.cancel()
                 try:
