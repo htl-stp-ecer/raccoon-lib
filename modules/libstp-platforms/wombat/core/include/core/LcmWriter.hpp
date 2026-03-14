@@ -37,8 +37,8 @@ namespace platform::wombat::core
         void setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition);
         /// Publish a relative position move command.
         void setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition);
-        /// Publish a servo position command.
-        void setServo(uint8_t port, int valueData);
+        /// Publish a servo position command in degrees (0-180).
+        void setServo(uint8_t port, float degrees);
         /// Publish a servo mode update.
         void setServoMode(uint8_t port, uint8_t mode);
         /// Publish per-port PID gains.
