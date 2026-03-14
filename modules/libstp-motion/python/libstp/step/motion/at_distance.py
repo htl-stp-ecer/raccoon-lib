@@ -64,13 +64,36 @@ class WaitUntilDistance(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         interval = 1.0 / self._hz
+        stall_threshold_m = 0.001  # 1 mm
+        stall_timeout_s = 0.5
+
+        loop = asyncio.get_event_loop()
+        last_progress_dist = 0.0
+        last_progress_time = loop.time()
 
         while True:
             dist = robot.odometry.get_distance_from_origin()
+            now = loop.time()
+
             if dist.straight_line >= self._distance_m:
                 self.debug(
                     f"Distance {dist.straight_line:.3f}m >= "
                     f"{self._distance_m:.3f}m — done"
                 )
                 return
+
+            # Stall detection: if distance hasn't meaningfully changed,
+            # the driving motion has likely finished or stalled.
+            if dist.straight_line - last_progress_dist > stall_threshold_m:
+                last_progress_dist = dist.straight_line
+                last_progress_time = now
+            elif now - last_progress_time > stall_timeout_s:
+                self.error(
+                    f"Stall detected: distance stuck at "
+                    f"{dist.straight_line:.3f}m for {stall_timeout_s}s, "
+                    f"target was {self._distance_m:.3f}m — "
+                    f"the concurrent motion likely ended early"
+                )
+                return
+
             await asyncio.sleep(interval)
