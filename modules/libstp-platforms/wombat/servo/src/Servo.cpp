@@ -3,16 +3,11 @@
 //
 #include "hal/Servo.hpp"
 
-#include <spdlog/fmt/bundled/format.h>
-#include <stdexcept>
-
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 4;
-constexpr int MIN_POSITION = 0;
-constexpr int MAX_POSITION = 2047;
 
 libstp::hal::servo::Servo::Servo(const int port): port(port)
 {
@@ -33,21 +28,13 @@ libstp::hal::servo::Servo::~Servo()
 #endif
 }
 
-void libstp::hal::servo::Servo::setPosition(const int position)
+void libstp::hal::servo::Servo::setPosition(const float position)
 {
-#ifdef SAFETY_CHECKS_ENABLED
-    if (position < MIN_POSITION || position > MAX_POSITION)
-    {
-        throw std::out_of_range(fmt::format("Position must be between {} and {} degrees.", MIN_POSITION, MAX_POSITION));
-    }
-#endif
-    
     storedPosition = position;
-    platform::wombat::core::LcmDataWriter::instance().setServo(port,
-                                     position);
+    platform::wombat::core::LcmDataWriter::instance().setServo(port, position);
 }
 
-int libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
+float libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
 
 void libstp::hal::servo::Servo::enable() const
 {
@@ -81,13 +68,13 @@ libstp::async::AsyncAlgorithm<int> libstp::servo::Servo::slowlySetPosition(const
         throw std::invalid_argument(
             "The target position is the same as the current position or the duration is invalid.");
     }
-    
+
     const int clampedTarget = math::clampInt(targetPosition, MIN_POSITION, MAX_POSITION);
-    
+
     using clock = std::chrono::steady_clock;
     const auto startTime = clock::now();
     const auto endTime = startTime + duration;
-    
+
     const std::chrono::duration<double> total = endTime - startTime;
     while (true)
     {
@@ -96,20 +83,20 @@ libstp::async::AsyncAlgorithm<int> libstp::servo::Servo::slowlySetPosition(const
         {
             break;
         }
-    
+
         std::chrono::duration<double> elapsed = now - startTime;
         double normalizedTime = elapsed.count() / total.count();
         normalizedTime = std::clamp(normalizedTime, 0.0, 1.0);
-    
+
         const float interpolatedPosition = interpolationFunction(
             static_cast<float>(startPosition),
             static_cast<float>(clampedTarget),
             static_cast<float>(normalizedTime)
         );
-    
+
         const int newPosition = static_cast<int>(std::round(interpolatedPosition));
         setPosition(newPosition);
-    
+
         co_yield 1;
     }
 

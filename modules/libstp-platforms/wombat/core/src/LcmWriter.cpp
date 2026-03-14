@@ -50,11 +50,11 @@ void LcmDataWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t del
     transport_.publish(Channels::motorRelativeCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setServo(uint8_t port, int valueData)
+void LcmDataWriter::setServo(uint8_t port, float degrees)
 {
-    raccoon::scalar_i32_t publishedValue{};
+    raccoon::scalar_f_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
-    publishedValue.value = valueData;
+    publishedValue.value = degrees;
     transport_.publish(Channels::servoPositionCommand(port), publishedValue, reliableOpts);
 }
 

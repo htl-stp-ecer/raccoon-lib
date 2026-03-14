@@ -63,13 +63,13 @@ def shake_servo(servo: Servo = _UNSET, duration: float = _UNSET, angle_a: float 
     physically reach each endpoint before reversing. Useful for shaking
     objects loose or signalling the operator.
 
-    The valid angle range is 0 to 170 degrees.
+    The valid angle range is 0 to 180 degrees.
 
     Args:
         servo: The servo to control, obtained from the robot hardware map (e.g. ``robot.servo(1)``).
         duration: Total oscillation time in seconds. Must be >= 0.
-        angle_a: First oscillation endpoint in degrees (0.0 -- 170.0).
-        angle_b: Second oscillation endpoint in degrees (0.0 -- 170.0).
+        angle_a: First oscillation endpoint in degrees (0.0 -- 180.0).
+        angle_b: Second oscillation endpoint in degrees (0.0 -- 180.0).
 
     Returns:
         A ShakeServoBuilder (chainable via ``.servo()``, ``.duration()``, ``.angle_a()``, ``.angle_b()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -138,12 +138,12 @@ def slow_servo(servo: Servo = _UNSET, angle: float = _UNSET, speed: float = 60.0
     The total move duration is derived from the angular distance divided
     by ``speed``. Intermediate positions are updated at ~10 Hz.
 
-    The valid angle range is 0 to 170 degrees.
+    The valid angle range is 0 to 180 degrees.
 
     Args:
         servo: The servo to control, obtained from the robot hardware map (e.g. ``robot.servo(0)``).
-        angle: Target angle in degrees (0.0 -- 170.0).
-        speed: Movement speed in degrees per second. Must be positive. Defaults to 60.0 deg/s, which moves the full range in about 2.8 seconds.
+        angle: Target angle in degrees (0.0 -- 180.0).
+        speed: Movement speed in degrees per second. Must be positive. Defaults to 60.0 deg/s, which moves the full range in about 3 seconds.
 
     Returns:
         A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).

@@ -25,9 +25,9 @@ LcmReader::LcmReader()
                 servo_mode_cache_[port] = msg.dir;
             }, retainedOpts);
 
-        transport_.subscribe<raccoon::scalar_i32_t>(
+        transport_.subscribe<raccoon::scalar_f_t>(
             Channels::servoPosition(port),
-            [this, port](const raccoon::scalar_i32_t& msg) {
+            [this, port](const raccoon::scalar_f_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_value_cache_[port] = msg.value;
             }, retainedOpts);
@@ -227,11 +227,11 @@ raccoon::scalar_i8_t LcmReader::readServoMode(const int port) {
     return result;
 }
 
-raccoon::scalar_i32_t LcmReader::readServoValue(const int port) {
+raccoon::scalar_f_t LcmReader::readServoValue(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    raccoon::scalar_i32_t result;
+    raccoon::scalar_f_t result;
     auto it = servo_value_cache_.find(port);
-    result.value = (it != servo_value_cache_.end()) ? it->second : 1024;  // Default: middle position
+    result.value = (it != servo_value_cache_.end()) ? it->second : 90.0f;  // Default: middle position
     return result;
 }
 

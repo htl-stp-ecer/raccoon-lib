@@ -1,12 +1,8 @@
 #include "hal/Servo.hpp"
-#include <spdlog/fmt/bundled/format.h>
-#include <stdexcept>
 #include "core/MockPlatform.hpp"
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 4;
-constexpr int MIN_POSITION = 0;
-constexpr int MAX_POSITION = 180;
 
 libstp::hal::servo::Servo::Servo(const int port): port(port)
 {
@@ -29,22 +25,15 @@ libstp::hal::servo::Servo::~Servo()
 #endif
 }
 
-void libstp::hal::servo::Servo::setPosition(const int position)
+void libstp::hal::servo::Servo::setPosition(const float position)
 {
-#ifdef SAFETY_CHECKS_ENABLED
-    if (position < MIN_POSITION || position > MAX_POSITION)
-    {
-        throw std::out_of_range(fmt::format("Position must be between {} and {} degrees.", MIN_POSITION, MAX_POSITION));
-    }
-#endif
-    
     storedPosition = position;
     platform::mock::core::setServo(port,
                                    platform::mock::core::ServoMode::Enabled,
                                    static_cast<uint16_t>(position));
 }
 
-int libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
+float libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
 
 void libstp::hal::servo::Servo::enable() const
 {

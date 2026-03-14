@@ -18,7 +18,7 @@ namespace libstp::hal::servo
      */
     class Servo
     {
-        int storedPosition = 0;
+        float storedPosition = 0.0f;
 
 #ifdef SAFETY_CHECKS_ENABLED
         static inline std::set<int> used_servo_ports{};
@@ -36,10 +36,10 @@ namespace libstp::hal::servo
 
         ~Servo();
 
-        /// Command a new servo position using the active platform's units.
-        void setPosition(int position);
-        /// Return the last commanded position cached by the wrapper.
-        int getPosition() const;
+        /// Command a new servo position in degrees (0-180).
+        void setPosition(float position);
+        /// Return the last commanded position in degrees.
+        float getPosition() const;
 
         /// Enable output while preserving the last commanded position.
         void enable() const;

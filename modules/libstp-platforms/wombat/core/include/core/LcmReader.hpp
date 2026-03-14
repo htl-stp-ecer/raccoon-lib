@@ -34,7 +34,7 @@ namespace platform::wombat::core {
         }
 
         raccoon::scalar_i8_t readServoMode(int port);
-        raccoon::scalar_i32_t readServoValue(int port);
+        raccoon::scalar_f_t readServoValue(int port);
 
         /// Return the latest cached IMU vectors from raccoon subscriptions.
         raccoon::vector3f_t readGyro();
@@ -70,7 +70,7 @@ namespace platform::wombat::core {
         // Cached copies of the most recent transport data.
         std::mutex cache_mutex_;
         std::unordered_map<int, int8_t> servo_mode_cache_;
-        std::unordered_map<int, int32_t> servo_value_cache_;
+        std::unordered_map<int, float> servo_value_cache_;
         std::unordered_map<int, int32_t> bemf_cache_;
         std::unordered_map<int, int32_t> motor_position_cache_;
         std::unordered_map<int, int32_t> motor_done_cache_;
