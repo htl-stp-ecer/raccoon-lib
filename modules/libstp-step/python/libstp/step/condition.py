@@ -18,6 +18,7 @@ import time
 from typing import TYPE_CHECKING, Callable, Union
 
 if TYPE_CHECKING:
+    from libstp.hal import AnalogSensor, DigitalSensor, Motor
     from libstp.robot.api import GenericRobot
     from libstp.sensor_ir import IRSensor
 
@@ -144,6 +145,85 @@ class after_degrees(StopCondition):
         if delta > math.pi:
             delta = 2 * math.pi - delta
         return delta >= self._target_rad
+
+
+class on_digital(StopCondition):
+    """Stop when a digital sensor reads a given state.
+
+    By default stops when the sensor reads True (pressed). Set *pressed*
+    to False to stop when the sensor is released instead.
+    """
+
+    def __init__(self, sensor: "DigitalSensor", pressed: bool = True):
+        self._sensor = sensor
+        self._pressed = pressed
+
+    def check(self, robot: "GenericRobot") -> bool:
+        return self._sensor.read() == self._pressed
+
+
+class on_analog_above(StopCondition):
+    """Stop when an analog sensor reading exceeds a threshold."""
+
+    def __init__(self, sensor: "AnalogSensor", threshold: int):
+        self._sensor = sensor
+        self._threshold = threshold
+
+    def check(self, robot: "GenericRobot") -> bool:
+        return self._sensor.read() > self._threshold
+
+
+class on_analog_below(StopCondition):
+    """Stop when an analog sensor reading drops below a threshold."""
+
+    def __init__(self, sensor: "AnalogSensor", threshold: int):
+        self._sensor = sensor
+        self._threshold = threshold
+
+    def check(self, robot: "GenericRobot") -> bool:
+        return self._sensor.read() < self._threshold
+
+
+class stall_detected(StopCondition):
+    """Stop when a motor appears stalled.
+
+    A motor is considered stalled when its position changes by fewer than
+    *threshold_tps* ticks per second for at least *duration* seconds
+    continuously.
+    """
+
+    def __init__(
+        self, motor: "Motor", threshold_tps: int = 10, duration: float = 0.25
+    ):
+        self._motor = motor
+        self._threshold_tps = threshold_tps
+        self._duration = duration
+        self._last_position: int = 0
+        self._last_time: float = 0.0
+        self._stall_start: float | None = None
+
+    def start(self, robot: "GenericRobot") -> None:
+        self._last_position = self._motor.get_position()
+        self._last_time = time.monotonic()
+        self._stall_start = None
+
+    def check(self, robot: "GenericRobot") -> bool:
+        now = time.monotonic()
+        dt = now - self._last_time
+        if dt < 0.02:
+            return False
+        pos = self._motor.get_position()
+        speed = abs(pos - self._last_position) / dt
+        self._last_position = pos
+        self._last_time = now
+        if speed < self._threshold_tps:
+            if self._stall_start is None:
+                self._stall_start = now
+            elif now - self._stall_start >= self._duration:
+                return True
+        else:
+            self._stall_start = None
+        return False
 
 
 class custom(StopCondition):

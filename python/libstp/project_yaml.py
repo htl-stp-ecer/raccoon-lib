@@ -125,6 +125,27 @@ def _make_include_dumper():
 _IncludeDumper = _make_include_dumper()
 
 
+def _deep_merge_preserving_refs(original: dict, updates: dict) -> dict:
+    """Deep-merge *updates* into *original*, keeping ``_IncludeRef`` values.
+
+    For each key in *original* whose value is an ``_IncludeRef``, the ref is
+    preserved (the updated data for that subtree lives in the included file,
+    not here).  For nested dicts, the merge recurses so that inner include
+    refs are also preserved.
+    """
+    merged = dict(original)
+    for key, new_val in updates.items():
+        old_val = original.get(key, _SENTINEL)
+        if isinstance(old_val, _IncludeRef):
+            # Keep the include directive — the actual data lives elsewhere.
+            continue
+        if isinstance(old_val, dict) and isinstance(new_val, dict):
+            merged[key] = _deep_merge_preserving_refs(old_val, new_val)
+        else:
+            merged[key] = new_val
+    return merged
+
+
 def _save_yaml(path: Path, data: dict) -> bool:
     """Write *data* to *path*, preserving existing ``!include`` directives.
 
@@ -138,9 +159,7 @@ def _save_yaml(path: Path, data: dict) -> bool:
         # Load original to preserve _IncludeRef entries
         original = _load_with_includes(path)
         if isinstance(original, dict):
-            # Re-insert include refs that were stripped during _load_plain
-            merged = dict(original)
-            merged.update(data)
+            merged = _deep_merge_preserving_refs(original, data)
         else:
             merged = data
         with open(path, "w", encoding="utf-8") as f:
