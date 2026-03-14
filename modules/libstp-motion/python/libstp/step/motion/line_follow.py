@@ -643,6 +643,7 @@ class DirectionalLineFollow(MotionStep):
         else:
             # Standard angular correction
             robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, correction))
+        robot.odometry.update(dt)
         robot.drive.update(dt)
 
         self.debug(
@@ -801,6 +802,7 @@ class DirectionalSingleLineFollow(MotionStep):
         else:
             # Standard angular correction
             robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, correction))
+        robot.odometry.update(dt)
         robot.drive.update(dt)
 
         self.debug(
