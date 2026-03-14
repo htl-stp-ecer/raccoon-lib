@@ -3,7 +3,8 @@ from .annotation import dsl, dsl_step, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .step_builder import StepBuilder
 from .condition import (
-    StopCondition, on_black, on_white, after_seconds, after_cm, after_degrees, custom,
+    StopCondition, on_black, on_white, after_seconds, after_cm, after_degrees,
+    on_digital, on_analog_above, on_analog_below, stall_detected, custom,
 )
 from .sequential import Sequential, seq
 from .parallel import parallel
@@ -19,6 +20,8 @@ from .wait_for_seconds import WaitForSeconds
 from .wait_for_seconds_dsl import wait_for_seconds
 from .wait_for_button import WaitForButton
 from .wait_for_button_dsl import wait_for_button
+from .wait_for_digital import WaitForDigital
+from .wait_for_digital_dsl import wait_for_digital
 from .wait_for_light import WaitForLight, WaitForLightLegacy
 from .wait_for_light_dsl import wait_for_light, wait_for_light_legacy
 from .timeout_dsl import timeout
@@ -41,6 +44,8 @@ __all__ = [
     "wait_for_seconds",
     "WaitForButton",
     "wait_for_button",
+    "WaitForDigital",
+    "wait_for_digital",
     "WaitForLight",
     "wait_for_light",
     "WaitForLightLegacy",
@@ -60,6 +65,10 @@ __all__ = [
     "after_seconds",
     "after_cm",
     "after_degrees",
+    "on_digital",
+    "on_analog_above",
+    "on_analog_below",
+    "stall_detected",
     "custom",
     *_calibration_all,
     *_logic_all,

@@ -206,7 +206,7 @@ class AutoTuneBuilder(StepBuilder):
         self._tune_velocity = True
         self._tune_motion = True
         self._characterize_trials = 3
-        self._characterize_command_speed = 1.0
+        self._characterize_power_percent = 100
         self._persist = True
         self._csv_dir = '/tmp/auto_tune'
 
@@ -238,8 +238,8 @@ class AutoTuneBuilder(StepBuilder):
         self._characterize_trials = value
         return self
 
-    def characterize_command_speed(self, value: float):
-        self._characterize_command_speed = value
+    def characterize_power_percent(self, value: int):
+        self._characterize_power_percent = value
         return self
 
     def persist(self, value: bool):
@@ -259,14 +259,14 @@ class AutoTuneBuilder(StepBuilder):
         kwargs['tune_velocity'] = self._tune_velocity
         kwargs['tune_motion'] = self._tune_motion
         kwargs['characterize_trials'] = self._characterize_trials
-        kwargs['characterize_command_speed'] = self._characterize_command_speed
+        kwargs['characterize_power_percent'] = self._characterize_power_percent
         kwargs['persist'] = self._persist
         kwargs['csv_dir'] = self._csv_dir
         return AutoTune(**kwargs)
 
 
 @dsl(tags=['motion', 'calibration', 'auto-tune'])
-def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, motion_axes: list[str] = None, tune_characterize: bool = True, tune_velocity: bool = True, tune_motion: bool = True, characterize_trials: int = 3, characterize_command_speed: float = 1.0, persist: bool = True, csv_dir: Optional[str] = '/tmp/auto_tune'):
+def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, motion_axes: list[str] = None, tune_characterize: bool = True, tune_velocity: bool = True, tune_motion: bool = True, characterize_trials: int = 3, characterize_power_percent: int = 100, persist: bool = True, csv_dir: Optional[str] = '/tmp/auto_tune'):
     """
     Auto-tune the full drive system: characterize, velocity PID, motion PID.
 
@@ -308,12 +308,12 @@ def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, m
         tune_velocity: Whether to run Phase 2. Default ``True``.
         tune_motion: Whether to run Phase 3. Default ``True``.
         characterize_trials: Number of trials per axis in Phase 1. More trials improve robustness but take longer. Default 3.
-        characterize_command_speed: Raw velocity command magnitude for Phase 1, in m/s (linear) or rad/s (angular). Default 1.0.
+        characterize_power_percent: Motor power percentage (1--100) for Phase 1 drive characterization. Default 100.
         persist: If ``True``, write all results to ``raccoon.project.yml``. Default ``True``.
         csv_dir: Directory for diagnostic CSV output (step-response recordings, etc.). Default ``"/tmp/auto_tune"``.
 
     Returns:
-        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.characterize_trials()``, ``.characterize_command_speed()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.characterize_trials()``, ``.characterize_power_percent()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -343,7 +343,7 @@ def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, m
     b._tune_velocity = tune_velocity
     b._tune_motion = tune_motion
     b._characterize_trials = characterize_trials
-    b._characterize_command_speed = characterize_command_speed
+    b._characterize_power_percent = characterize_power_percent
     b._persist = persist
     b._csv_dir = csv_dir
     return b

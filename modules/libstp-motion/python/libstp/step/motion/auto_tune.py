@@ -1333,8 +1333,8 @@ class AutoTune(Step):
         tune_motion: Whether to run Phase 3. Default ``True``.
         characterize_trials: Number of trials per axis in Phase 1. More
             trials improve robustness but take longer. Default 3.
-        characterize_command_speed: Raw velocity command magnitude for
-            Phase 1, in m/s (linear) or rad/s (angular). Default 1.0.
+        characterize_power_percent: Motor power percentage (1--100) for
+            Phase 1 drive characterization. Default 100.
         persist: If ``True``, write all results to
             ``raccoon.project.yml``. Default ``True``.
         csv_dir: Directory for diagnostic CSV output (step-response
@@ -1370,7 +1370,7 @@ class AutoTune(Step):
         tune_velocity: bool = True,
         tune_motion: bool = True,
         characterize_trials: int = 3,
-        characterize_command_speed: float = 1.0,
+        characterize_power_percent: int = 100,
         persist: bool = True,
         csv_dir: Optional[str] = "/tmp/auto_tune",
     ):
@@ -1388,7 +1388,7 @@ class AutoTune(Step):
         self.tune_velocity = tune_velocity
         self.tune_motion = tune_motion
         self.characterize_trials = characterize_trials
-        self.characterize_command_speed = characterize_command_speed
+        self.characterize_power_percent = characterize_power_percent
         self.persist = persist
         self.csv_dir = csv_dir
 
@@ -1422,7 +1422,7 @@ class AutoTune(Step):
             char_step = CharacterizeDrive(
                 axes=self.characterize_axes,
                 trials=self.characterize_trials,
-                command_speed=self.characterize_command_speed,
+                power_percent=self.characterize_power_percent,
                 accel_timeout=3.0,
                 decel_timeout=3.0,
                 persist=self.persist,
