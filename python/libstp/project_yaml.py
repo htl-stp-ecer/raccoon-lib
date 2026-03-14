@@ -83,28 +83,68 @@ def _load_with_includes(path: Path) -> Any:
         return {}
 
 
-def _strip_refs(data: Any) -> Any:
-    """Recursively remove ``_IncludeRef`` values from a loaded YAML tree."""
+def _resolve_includes(data: Any, base_dir: Path, *, _depth: int = 0) -> Any:
+    """Recursively resolve ``_IncludeRef`` values in a loaded YAML tree.
+
+    - ``!include`` refs are replaced by the loaded content of the referenced file.
+    - ``!include-merge`` refs merge the referenced file's top-level keys into
+      the parent dict (the merge key itself is removed).
+
+    Plain (non-include) values are returned as-is.  Recursion is capped at 20
+    levels to prevent infinite loops.
+    """
+    if _depth > 20:
+        return data
+
     if isinstance(data, dict):
-        return {k: _strip_refs(v) for k, v in data.items()
-                if not isinstance(v, _IncludeRef)}
+        result: dict = {}
+        for k, v in data.items():
+            if isinstance(v, _IncludeRef) and v.merge:
+                # !include-merge — load and merge keys into parent dict
+                include_path = (base_dir / v.path).resolve()
+                merged = _load_with_includes(include_path)
+                if isinstance(merged, dict):
+                    resolved = _resolve_includes(
+                        merged, include_path.parent, _depth=_depth + 1,
+                    )
+                    if isinstance(resolved, dict):
+                        result.update(resolved)
+            elif isinstance(v, _IncludeRef):
+                # !include — replace with loaded content
+                include_path = (base_dir / v.path).resolve()
+                included = _load_with_includes(include_path)
+                result[k] = _resolve_includes(
+                    included, include_path.parent, _depth=_depth + 1,
+                )
+            else:
+                result[k] = _resolve_includes(
+                    v, base_dir, _depth=_depth + 1,
+                )
+        return result
+
     if isinstance(data, list):
-        return [_strip_refs(v) for v in data if not isinstance(v, _IncludeRef)]
+        return [
+            _resolve_includes(v, base_dir, _depth=_depth + 1)
+            for v in data
+            if not isinstance(v, _IncludeRef)
+        ]
+
     return data
 
 
 def _load_plain(path: Path) -> dict:
-    """Load a YAML file, stripping include refs, returning ``{}`` on failure.
+    """Load a YAML file, resolving all includes, returning ``{}`` on failure.
 
     Uses the include-aware loader so files containing ``!include`` tags don't
-    cause parse errors.  ``_IncludeRef`` values are dropped from the result.
+    cause parse errors.  ``!include`` refs are replaced by the loaded content
+    and ``!include-merge`` refs merge their keys into the parent dict.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.load(f, Loader=_IncludeLoader)  # noqa: S506
         if not isinstance(data, dict):
             return {}
-        return _strip_refs(data)
+        return _resolve_includes(data, path.parent)
     except (yaml.YAMLError, OSError):
         return {}
 
