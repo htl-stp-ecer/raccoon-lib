@@ -3,13 +3,10 @@
 //
 
 #include "kinematics/mecanum/mecanum.hpp"
-#include "calibration/motor/calibration.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
-#include <chrono>
 #include <stdexcept>
 #include <cmath>
-#include <thread>
 
 namespace libstp::kinematics::mecanum
 {
@@ -147,71 +144,6 @@ namespace libstp::kinematics::mecanum
         LIBSTP_LOG_TRACE("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
-    std::vector<calibration::CalibrationResult> MecanumKinematics::calibrateMotors(
-        const calibration::CalibrationConfig& config)
-    {
-        LIBSTP_LOG_INFO("=== Starting MecanumKinematics motor calibration ===");
-
-        std::vector<calibration::CalibrationResult> results;
-
-        // Calibrate front left motor
-        LIBSTP_LOG_INFO("Calibrating front left motor...");
-        calibration::CalibrationResult fl_result = front_left_motor_.calibrate(config);
-        results.push_back(fl_result);
-
-        if (fl_result.success) {
-            LIBSTP_LOG_INFO("Front left motor calibration successful");
-        } else {
-            LIBSTP_LOG_ERROR("Front left motor calibration failed: {}", fl_result.error_message);
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        // Calibrate front right motor
-        LIBSTP_LOG_INFO("Calibrating front right motor...");
-        calibration::CalibrationResult fr_result = front_right_motor_.calibrate(config);
-        results.push_back(fr_result);
-
-        if (fr_result.success) {
-            LIBSTP_LOG_INFO("Front right motor calibration successful");
-        } else {
-            LIBSTP_LOG_ERROR("Front right motor calibration failed: {}", fr_result.error_message);
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        // Calibrate back left motor
-        LIBSTP_LOG_INFO("Calibrating back left motor...");
-        calibration::CalibrationResult bl_result = back_left_motor_.calibrate(config);
-        results.push_back(bl_result);
-
-        if (bl_result.success) {
-            LIBSTP_LOG_INFO("Back left motor calibration successful");
-        } else {
-            LIBSTP_LOG_ERROR("Back left motor calibration failed: {}", bl_result.error_message);
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        // Calibrate back right motor
-        LIBSTP_LOG_INFO("Calibrating back right motor...");
-        calibration::CalibrationResult br_result = back_right_motor_.calibrate(config);
-        results.push_back(br_result);
-
-        if (br_result.success) {
-            LIBSTP_LOG_INFO("Back right motor calibration successful");
-        } else {
-            LIBSTP_LOG_ERROR("Back right motor calibration failed: {}", br_result.error_message);
-        }
-
-        LIBSTP_LOG_INFO("=== MecanumKinematics motor calibration completed ===");
-        int success_count = (fl_result.success ? 1 : 0) + (fr_result.success ? 1 : 0) +
-                           (bl_result.success ? 1 : 0) + (br_result.success ? 1 : 0);
-        LIBSTP_LOG_INFO("Success rate: {}/4 motors", success_count);
-
-        return results;
-    }
-
     std::vector<hal::motor::IMotor*> MecanumKinematics::getMotors() const
     {
         return {
@@ -220,6 +152,45 @@ namespace libstp::kinematics::mecanum
             &const_cast<hal::motor::IMotor&>(back_left_motor_.motor()),
             &const_cast<hal::motor::IMotor&>(back_right_motor_.motor())
         };
+    }
+
+    IKinematics::StmOdometryConfig MecanumKinematics::getStmOdometryConfig() const
+    {
+        const double R = m_wheelRadius;
+        const double L = (m_wheelbase + m_trackWidth) / 2.0;
+
+        StmOdometryConfig cfg{};
+
+        // vx = (w_fl + w_fr + w_bl + w_br) * R / 4
+        cfg.inv_matrix[0] = {
+            static_cast<float>(R / 4.0),
+            static_cast<float>(R / 4.0),
+            static_cast<float>(R / 4.0),
+            static_cast<float>(R / 4.0)
+        };
+
+        // vy = (w_fl - w_fr - w_bl + w_br) * R / 4
+        cfg.inv_matrix[1] = {
+            static_cast<float>(R / 4.0),
+            static_cast<float>(-R / 4.0),
+            static_cast<float>(-R / 4.0),
+            static_cast<float>(R / 4.0)
+        };
+
+        // wz = (-w_fl + w_fr - w_bl + w_br) * R / (4 * L)
+        cfg.inv_matrix[2] = {
+            static_cast<float>(-R / (4.0 * L)),
+            static_cast<float>(R / (4.0 * L)),
+            static_cast<float>(-R / (4.0 * L)),
+            static_cast<float>(R / (4.0 * L))
+        };
+
+        // Per-motor ticks_to_rad from calibration
+        const auto motors = getMotors();
+        for (std::size_t i = 0; i < 4; ++i)
+            cfg.ticks_to_rad[i] = static_cast<float>(motors[i]->getCalibration().ticks_to_rad);
+
+        return cfg;
     }
 
     void MecanumKinematics::applyPowerCommand(const foundation::ChassisVelocity& direction,

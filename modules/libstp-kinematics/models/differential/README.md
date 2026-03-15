@@ -6,7 +6,7 @@ This submodule implements the two-wheel differential-drive realization of `libst
 
 - Convert forward and turn-rate commands into left/right wheel angular velocities.
 - Recover forward velocity and yaw rate from the measured left/right wheel speeds.
-- Provide a model-local place for two-motor calibration and encoder reset handling.
+- Provide a model-local place for encoder reset handling.
 
 ## Math model
 
@@ -46,7 +46,6 @@ Header: `include/kinematics/differential/differential.hpp`
 Public behavior:
 
 - `supportsLateralMotion()` always returns `false`.
-- `calibrateMotors(...)` runs the left motor then the right motor with a 500 ms pause between them.
 - `getMotors()` returns `[left, right]` in constructor order.
 
 ## Python bindings
@@ -59,7 +58,6 @@ Exposed class:
 
 The binding also exposes:
 
-- `calibrate_motors()`
 - `reset_encoders()`
 - `supports_lateral_motion()`
 - `get_wheel_radius()`

@@ -7,6 +7,9 @@
 #include <raccoon/scalar_i32_t.hpp>
 #include <raccoon/scalar_f_t.hpp>
 #include <raccoon/orientation_matrix_t.hpp>
+#include <raccoon/kinematics_config_t.hpp>
+
+#include <array>
 
 #include <string>
 
@@ -48,6 +51,13 @@ namespace platform::wombat::core
 
         /// Toggle the STM32-wide shutdown flag for the safest available stop path.
         void setShutdown(bool enabled);
+
+        /// Send kinematics config to STM32 for on-board odometry.
+        void sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
+                                  const std::array<float, 4>& ticks_to_rad);
+
+        /// Request STM32 to reset its integrated odometry pose.
+        void resetOdometry();
     private:
         explicit LcmDataWriter();
         ~LcmDataWriter() = default;

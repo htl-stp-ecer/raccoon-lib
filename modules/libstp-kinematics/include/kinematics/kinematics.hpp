@@ -3,11 +3,10 @@
 //
 
 #pragma once
+#include <array>
 #include <cstddef>
 #include <vector>
 
-#include "calibration/motor/calibration_config.hpp"
-#include "calibration/motor/calibration_result.hpp"
 #include "foundation/types.hpp"
 #include "hal/IMotor.hpp"
 
@@ -79,17 +78,6 @@ namespace libstp::kinematics
         virtual void resetEncoders() = 0;
 
         /**
-         * Run the module's calibration flow for each managed drive motor.
-         *
-         * Implementations define ordering and any dwell time between motors.
-         */
-        virtual std::vector<calibration::CalibrationResult> calibrateMotors(
-            const calibration::CalibrationConfig& config) = 0;
-
-        /** Convenience overload that uses the default calibration config. */
-        virtual std::vector<calibration::CalibrationResult> calibrateMotors();
-
-        /**
          * @brief Get the wheel radius used by this kinematics model
          * @return Wheel radius in meters
          */
@@ -100,6 +88,25 @@ namespace libstp::kinematics
          * @return Vector of motor pointers (non-owning)
          */
         [[nodiscard]] virtual std::vector<hal::motor::IMotor*> getMotors() const = 0;
+
+        /**
+         * Pre-baked inverse kinematics matrix for STM32-side odometry.
+         *
+         * Returns a 3×4 row-major matrix that maps wheel angular velocities
+         * (rad/s) directly to body-frame [vx (m/s), vy (m/s), wz (rad/s)].
+         * Wheel radius and geometry constants are already folded into the
+         * coefficients. Unused wheel columns are zero (e.g. differential
+         * drive uses only columns 0 and 1).
+         *
+         * Also returns per-motor ticks_to_rad calibration values.
+         */
+        struct StmOdometryConfig
+        {
+            std::array<std::array<float, 4>, 3> inv_matrix{};
+            std::array<float, 4> ticks_to_rad{};
+        };
+
+        [[nodiscard]] virtual StmOdometryConfig getStmOdometryConfig() const = 0;
 
         /**
          * Command motors at raw open-loop power using the inverse kinematics

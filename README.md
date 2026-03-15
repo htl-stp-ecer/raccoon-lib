@@ -77,19 +77,6 @@ robot.drive.turn(90)
 robot.drive.strafe(200)
 ```
 
-### Motor Calibration
-
-```python
-from libstp.step.calibration import calibrate_motors
-
-# Run calibration with default settings
-results = calibrate_motors()
-
-# Results contain PID and feedforward gains
-print(f"Left motor - kP: {results.left.kp}, kV: {results.left.kv}")
-print(f"Right motor - kP: {results.right.kp}, kV: {results.right.kv}")
-```
-
 ### Step-Based Missions
 
 ```python

@@ -8,11 +8,6 @@
 #include "hal/IMotor.hpp"
 #include <vector>
 
-namespace libstp::calibration {
-    struct CalibrationConfig;
-    struct CalibrationResult;
-}
-
 namespace libstp::kinematics::differential
 {
     /**
@@ -62,16 +57,12 @@ namespace libstp::kinematics::differential
         /** Clear encoder history in both `MotorAdapter` instances. */
         void resetEncoders() override;
 
-        /** Forward the default calibration flow inherited from `IKinematics`. */
-        using kinematics::IKinematics::calibrateMotors;
-
-        /** Calibrate left then right motor with a short dwell in between. */
-        std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config) override;
-
         [[nodiscard]] double getWheelRadius() const override { return m_wheelRadius; }
 
         /** Return the underlying motors in left, right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
+
+        [[nodiscard]] StmOdometryConfig getStmOdometryConfig() const override;
 
         /** Command motors at raw open-loop power using differential inverse kinematics for direction. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction,

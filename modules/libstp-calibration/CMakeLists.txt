@@ -1,1 +1,0 @@
-register_libstp_module(calibration "FALSE" "foundation;drive;hal;motion;odometry;button")

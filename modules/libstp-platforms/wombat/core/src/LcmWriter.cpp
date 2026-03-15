@@ -100,6 +100,27 @@ void LcmDataWriter::setShutdown(bool enabled)
     transport_.publish(Channels::SHUTDOWN_CMD, shutdownCmd, reliableOpts);
 }
 
+void LcmDataWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
+                                          const std::array<float, 4>& ticks_to_rad)
+{
+    raccoon::kinematics_config_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 4; ++c)
+            msg.inv_matrix[r * 4 + c] = inv_matrix[r][c];
+    for (int i = 0; i < 4; ++i)
+        msg.ticks_to_rad[i] = ticks_to_rad[i];
+    transport_.publish(Channels::KINEMATICS_CONFIG_CMD, msg, reliableOpts);
+}
+
+void LcmDataWriter::resetOdometry()
+{
+    raccoon::scalar_i32_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.value = 1;
+    transport_.publish(Channels::ODOM_RESET_CMD, msg, reliableOpts);
+}
+
 LcmDataWriter::LcmDataWriter()
     : transport_(raccoon::Transport::create())
 {

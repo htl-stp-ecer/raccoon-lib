@@ -6,7 +6,7 @@
 
 - Convert body-frame velocity commands (`vx`, `vy`, `wz`) into per-wheel angular velocity targets.
 - Reconstruct body-frame velocity estimates from motor feedback for drive control and odometry.
-- Provide a common integration point for motor calibration and encoder reset behavior.
+- Provide a common integration point for encoder reset behavior.
 
 This module does not plan motion and does not estimate world-frame pose. It stays in chassis space.
 
@@ -42,7 +42,6 @@ Header: `include/kinematics/kinematics.hpp`
   - `hardStop()`: immediately brake the drivetrain.
   - `supportsLateralMotion()`: capability flag for higher layers.
   - `resetEncoders()`: clear encoder tracking after odometry resets.
-  - `calibrateMotors(...)`: run per-motor calibration through the model.
   - `getWheelRadius()` / `getMotors()`: expose model geometry and owned motors.
 
 ## Model submodules

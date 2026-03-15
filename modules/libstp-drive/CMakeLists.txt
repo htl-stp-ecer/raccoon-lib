@@ -1,1 +1,1 @@
-register_libstp_module(drive "FALSE" "foundation;hal;kinematics;calibration")
+register_libstp_module(drive "FALSE" "foundation;hal;kinematics")

@@ -54,6 +54,17 @@ namespace platform::wombat::core {
 
         raccoon::scalar_f_t readTemp();
 
+        /// STM32-computed odometry state.
+        struct OdometrySnapshot {
+            float pos_x{0.0f};
+            float pos_y{0.0f};
+            float heading{0.0f};
+            float vx{0.0f};
+            float vy{0.0f};
+            float wz{0.0f};
+        };
+        OdometrySnapshot readOdometry();
+
         /// Wait until heading data has been observed at least once.
         bool waitForImuReady(int timeout_ms = 1000);
 
@@ -85,6 +96,9 @@ namespace platform::wombat::core {
         raccoon::vector3f_t mag_cache_{};
         raccoon::scalar_f_t heading_cache_{};
         raccoon::scalar_f_t temp_cache_{};
+
+        // STM32 odometry cache
+        OdometrySnapshot odom_cache_{};
 
         // Track whether real IMU heading data has been received.
         std::atomic<bool> imu_heading_received_{false};

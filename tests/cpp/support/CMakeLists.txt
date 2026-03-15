@@ -11,6 +11,7 @@ target_link_libraries(libstp_test_support PUBLIC
     GTest::gtest
     GTest::gmock
     foundation
+    hal
     kinematics
     odometry
     Eigen3::Eigen

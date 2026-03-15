@@ -1086,9 +1086,7 @@ class AutoTuneVelocity(Step):
         csv_dir: Optional[str] = "/tmp/auto_tune",
     ):
         super().__init__()
-        if axes is None:
-            axes = ["vx", "vy", "wz"]
-        self.axes = axes
+        self.axes = axes  # None = auto-detect from kinematics
         self.persist = persist
         self.csv_dir = csv_dir
         self.results: dict[str, VelocityTuneResult] = {}
@@ -1105,15 +1103,23 @@ class AutoTuneVelocity(Step):
             self.info("--no-calibrate: skipping velocity auto-tune, using stored values")
             return
 
+        # Resolve default axes based on kinematics lateral support
+        axes = self.axes
+        if axes is None:
+            has_lateral = robot.drive.supports_lateral_motion()
+            axes = ["vx", "vy", "wz"] if has_lateral else ["vx", "wz"]
+            if not has_lateral:
+                self.info("  Kinematics does not support lateral motion — skipping vy")
+
         if self.csv_dir:
             os.makedirs(self.csv_dir, exist_ok=True)
 
         self.info("=" * 60)
         self.info("  AUTO-TUNE: VELOCITY CONTROLLERS (Phase 2)")
-        self.info(f"  Axes: {', '.join(self.axes)}")
+        self.info(f"  Axes: {', '.join(axes)}")
         self.info("=" * 60)
 
-        for axis in self.axes:
+        for axis in axes:
             self.info(f"\n--- {axis.upper()} ---")
             result = await _tune_velocity_axis(
                 robot, axis, self.csv_dir, self.info
@@ -1219,9 +1225,7 @@ class AutoTuneMotion(Step):
         csv_dir: Optional[str] = "/tmp/auto_tune",
     ):
         super().__init__()
-        if axes is None:
-            axes = ["distance", "lateral", "heading"]
-        self.axes = axes
+        self.axes = axes  # None = auto-detect from kinematics
         self.persist = persist
         self.csv_dir = csv_dir
         self.results: dict[str, MotionTuneResult] = {}
@@ -1238,9 +1242,17 @@ class AutoTuneMotion(Step):
             self.info("--no-calibrate: skipping motion auto-tune, using stored values")
             return
 
+        # Resolve default axes based on kinematics lateral support
+        axes = self.axes
+        if axes is None:
+            has_lateral = robot.drive.supports_lateral_motion()
+            axes = ["distance", "lateral", "heading"] if has_lateral else ["distance", "heading"]
+            if not has_lateral:
+                self.info("  Kinematics does not support lateral motion — skipping lateral")
+
         self.info("=" * 60)
         self.info("  AUTO-TUNE: MOTION CONTROLLERS (Phase 3)")
-        self.info(f"  Parameters: {', '.join(self.axes)}")
+        self.info(f"  Parameters: {', '.join(axes)}")
         self.info(f"  Primary objective speed_scale={_MOTION_PRIMARY_SPEED_SCALE:.2f} "
                   "(fastest)")
         if _MOTION_WATCH_SPEED_SCALES:
@@ -1250,7 +1262,7 @@ class AutoTuneMotion(Step):
 
         cfg = robot.motion_pid_config
 
-        for param_name in self.axes:
+        for param_name in axes:
             # "lateral" shares the distance PID
             pid_attr = "distance" if param_name == "lateral" else param_name
             pid_cfg = getattr(cfg, pid_attr, None)
@@ -1405,12 +1417,7 @@ class AutoTune(Step):
         csv_dir: Optional[str] = "/tmp/auto_tune",
     ):
         super().__init__()
-        if vel_axes is None:
-            vel_axes = ["vx", "vy", "wz"]
-        if characterize_axes is None:
-            characterize_axes = ["forward", "lateral", "angular"]
-        if motion_axes is None:
-            motion_axes = ["distance", "lateral", "heading"]
+        # None = auto-detect from kinematics at execution time
         self.characterize_axes = characterize_axes
         self.vel_axes = vel_axes
         self.motion_axes = motion_axes
@@ -1436,6 +1443,18 @@ class AutoTune(Step):
             self.info("--no-calibrate: skipping full auto-tune, using stored values")
             return
 
+        # Resolve default axes based on kinematics lateral support
+        has_lateral = robot.drive.supports_lateral_motion()
+        characterize_axes = self.characterize_axes
+        if characterize_axes is None:
+            characterize_axes = (
+                ["forward", "lateral", "angular"] if has_lateral
+                else ["forward", "angular"]
+            )
+            if not has_lateral:
+                self.info("  Kinematics does not support lateral motion — "
+                          "skipping lateral axes across all phases")
+
         self.info("=" * 60)
         self.info("  AUTO-TUNE PID CONTROLLERS")
         phases = []
@@ -1450,7 +1469,7 @@ class AutoTune(Step):
 
         if self.tune_characterize:
             char_step = CharacterizeDrive(
-                axes=self.characterize_axes,
+                axes=characterize_axes,
                 trials=self.characterize_trials,
                 power_percent=self.characterize_power_percent,
                 accel_timeout=3.0,
