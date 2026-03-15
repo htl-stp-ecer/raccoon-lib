@@ -1,2 +1,2 @@
-register_libstp_module(kinematics "FALSE" "foundation;calibration")
+register_libstp_module(kinematics "FALSE" "foundation")
 add_subdirectory(models)

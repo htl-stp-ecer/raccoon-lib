@@ -132,6 +132,44 @@ LcmReader::LcmReader()
             temp_cache_ = msg;
         });
 
+    // Subscribe to STM32 odometry topics — retained
+    transport_.subscribe<raccoon::scalar_f_t>(
+        Channels::ODOM_POS_X,
+        [this](const raccoon::scalar_f_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            odom_cache_.pos_x = msg.value;
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        Channels::ODOM_POS_Y,
+        [this](const raccoon::scalar_f_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            odom_cache_.pos_y = msg.value;
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        Channels::ODOM_HEADING,
+        [this](const raccoon::scalar_f_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            odom_cache_.heading = msg.value;
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        Channels::ODOM_VX,
+        [this](const raccoon::scalar_f_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            odom_cache_.vx = msg.value;
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        Channels::ODOM_VY,
+        [this](const raccoon::scalar_f_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            odom_cache_.vy = msg.value;
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        Channels::ODOM_WZ,
+        [this](const raccoon::scalar_f_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            odom_cache_.wz = msg.value;
+        }, retainedOpts);
+
     // Initialize default values
     gyro_cache_.x = 0.0f;
     gyro_cache_.y = 0.0f;
@@ -313,6 +351,11 @@ raccoon::vector3f_t LcmReader::readAccelVelocity() {
 void LcmReader::resetAccelVelocity() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     accel_velocity_offset_ = accel_velocity_cache_;
+}
+
+LcmReader::OdometrySnapshot LcmReader::readOdometry() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    return odom_cache_;
 }
 
 bool LcmReader::waitForImuReady(int timeout_ms) {

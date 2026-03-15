@@ -3,13 +3,10 @@
 //
 
 #include "kinematics/differential/differential.hpp"
-#include "calibration/motor/calibration.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
-#include <chrono>
 #include <stdexcept>
 #include <cmath>
-#include <thread>
 
 namespace libstp::kinematics::differential
 {
@@ -121,51 +118,43 @@ namespace libstp::kinematics::differential
         LIBSTP_LOG_TRACE("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
-    std::vector<calibration::CalibrationResult> DifferentialKinematics::calibrateMotors(
-        const calibration::CalibrationConfig& config)
-    {
-        LIBSTP_LOG_INFO("=== Starting DifferentialKinematics motor calibration ===");
-
-        std::vector<calibration::CalibrationResult> results;
-
-        // Calibrate left motor
-        LIBSTP_LOG_INFO("Calibrating left motor...");
-        calibration::CalibrationResult left_result = left_motor_.calibrate(config);
-        results.push_back(left_result);
-
-        if (left_result.success) {
-            LIBSTP_LOG_INFO("Left motor calibration successful");
-        } else {
-            LIBSTP_LOG_ERROR("Left motor calibration failed: {}", left_result.error_message);
-        }
-
-        // Wait a bit between calibrations
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-        // Calibrate right motor
-        LIBSTP_LOG_INFO("Calibrating right motor...");
-        calibration::CalibrationResult right_result = right_motor_.calibrate(config);
-        results.push_back(right_result);
-
-        if (right_result.success) {
-            LIBSTP_LOG_INFO("Right motor calibration successful");
-        } else {
-            LIBSTP_LOG_ERROR("Right motor calibration failed: {}", right_result.error_message);
-        }
-
-        LIBSTP_LOG_INFO("=== DifferentialKinematics motor calibration completed ===");
-        LIBSTP_LOG_INFO("Success rate: {}/2 motors",
-                    (left_result.success ? 1 : 0) + (right_result.success ? 1 : 0));
-
-        return results;
-    }
-
     std::vector<hal::motor::IMotor*> DifferentialKinematics::getMotors() const
     {
         return {
             &const_cast<hal::motor::IMotor&>(left_motor_.motor()),
             &const_cast<hal::motor::IMotor&>(right_motor_.motor())
         };
+    }
+
+    IKinematics::StmOdometryConfig DifferentialKinematics::getStmOdometryConfig() const
+    {
+        const double R = m_wheelRadius;
+
+        StmOdometryConfig cfg{};
+
+        // vx = (w_left + w_right) * R / 2
+        // Columns: [left, right, 0, 0]
+        cfg.inv_matrix[0] = {
+            static_cast<float>(R / 2.0),
+            static_cast<float>(R / 2.0),
+            0.0f, 0.0f
+        };
+
+        // vy = 0 (no lateral motion)
+        cfg.inv_matrix[1] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+        // wz = (w_right - w_left) * R / wheelbase
+        cfg.inv_matrix[2] = {
+            static_cast<float>(-R / m_wheelbase),
+            static_cast<float>(R / m_wheelbase),
+            0.0f, 0.0f
+        };
+
+        const auto motors = getMotors();
+        for (std::size_t i = 0; i < motors.size(); ++i)
+            cfg.ticks_to_rad[i] = static_cast<float>(motors[i]->getCalibration().ticks_to_rad);
+
+        return cfg;
     }
 
     void DifferentialKinematics::applyPowerCommand(const foundation::ChassisVelocity& direction,

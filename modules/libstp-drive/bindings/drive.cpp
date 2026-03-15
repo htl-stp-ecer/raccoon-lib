@@ -56,6 +56,9 @@ void init_drive(const py::module& m)
         .def("apply_power_command", &libstp::drive::Drive::applyPowerCommand,
              py::arg("direction"), py::arg("power_percent"),
              "Command motors at raw open-loop power using kinematics for direction")
+        .def("supports_lateral_motion", [](const libstp::drive::Drive& self) {
+            return self.getKinematics().supportsLateralMotion();
+        }, "Query whether the drivetrain can strafe sideways (delegates to kinematics)")
         .def("get_motors", [](libstp::drive::Drive& self) {
             auto motors = self.getMotors();
             std::vector<libstp::hal::motor::Motor*> result;

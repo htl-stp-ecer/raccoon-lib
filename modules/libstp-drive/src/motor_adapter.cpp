@@ -2,8 +2,6 @@
 // Created by tobias on 9/8/25.
 //
 #include "drive/motor_adapter.hpp"
-#include "calibration/motor/calibration.hpp"
-#include "calibration/motor/calibration_config.hpp"
 #include "foundation/config.hpp"
 #include <algorithm>
 #include <cmath>
@@ -153,37 +151,3 @@ void MotorAdapter::resetEncoderTracking()
 
 libstp::hal::motor::IMotor& MotorAdapter::motor() { return *motor_; }
 const libstp::hal::motor::IMotor& MotorAdapter::motor() const { return *motor_; }
-
-libstp::calibration::CalibrationResult MotorAdapter::calibrate()
-{
-    return calibrate(calibration::CalibrationConfig{});
-}
-
-libstp::calibration::CalibrationResult MotorAdapter::calibrate(const calibration::CalibrationConfig& config)
-{
-    if (!motor_)
-    {
-        calibration::CalibrationResult result;
-        result.success = false;
-        result.error_message = "Cannot calibrate: null motor pointer";
-        LIBSTP_LOG_ERROR("{}", result.error_message);
-        return result;
-    }
-
-    LIBSTP_LOG_DEBUG("Starting calibration for motor on port {}", motor_->getPort());
-
-    // Create calibrator and run calibration
-    calibration::MotorCalibrator calibrator(*motor_, config);
-    calibration::CalibrationResult result = calibrator.calibrate();
-
-    if (!result.success)
-    {
-        LIBSTP_LOG_ERROR("Calibration failed for motor on port {}: {}",
-                         motor_->getPort(), result.error_message);
-        return result;
-    }
-
-    LIBSTP_LOG_TRACE("Calibration completed successfully for motor on port {}", motor_->getPort());
-
-    return result;
-}

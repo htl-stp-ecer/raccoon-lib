@@ -6,7 +6,7 @@ This submodule implements the four-wheel mecanum realization of `libstp::kinemat
 
 - Convert body-frame translational and rotational commands into four wheel angular velocities.
 - Recover chassis velocity from the measured wheel speeds.
-- Centralize calibration and encoder reset behavior for a mecanum drivetrain.
+- Centralize encoder reset behavior for a mecanum drivetrain.
 
 ## Math model
 
@@ -60,7 +60,6 @@ Header: `include/kinematics/mecanum/mecanum.hpp`
 Public behavior:
 
 - `supportsLateralMotion()` always returns `true`.
-- `calibrateMotors(...)` calibrates all four motors in wheel order with 500 ms pauses between motors.
 - `getMotors()` preserves the same front-left, front-right, back-left, back-right ordering.
 
 ## Python bindings
@@ -73,7 +72,6 @@ Exposed class:
 
 Additional helpers exposed to Python:
 
-- `calibrate_motors()`
 - `reset_encoders()`
 - `supports_lateral_motion()`
 - `get_wheel_radius()`

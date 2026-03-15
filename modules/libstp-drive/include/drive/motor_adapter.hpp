@@ -4,12 +4,6 @@
 
 #pragma once
 #include "hal/IMotor.hpp"
-#include "calibration/motor/calibration_result.hpp"
-
-namespace libstp::calibration
-{
-    struct CalibrationConfig;
-}
 
 namespace libstp::drive
 {
@@ -56,12 +50,6 @@ namespace libstp::drive
 
         /** Refresh the filtered encoder-velocity estimate from the latest position delta. */
         void updateEncoderVelocity(double dt);
-
-        /** Run motor calibration with an explicit config. */
-        calibration::CalibrationResult calibrate(const calibration::CalibrationConfig& config);
-
-        /** Run motor calibration with the default config. */
-        calibration::CalibrationResult calibrate(); // Overload with default config
 
     private:
         hal::motor::IMotor* motor_{nullptr};

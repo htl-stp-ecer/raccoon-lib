@@ -9,11 +9,6 @@
 #include "hal/IMotor.hpp"
 #include <vector>
 
-namespace libstp::calibration {
-    struct CalibrationConfig;
-    struct CalibrationResult;
-}
-
 namespace libstp::kinematics::mecanum
 {
     /**
@@ -72,12 +67,6 @@ namespace libstp::kinematics::mecanum
         /** Clear encoder history in all four `MotorAdapter` instances. */
         void resetEncoders() override;
 
-        /** Forward the default calibration flow inherited from `IKinematics`. */
-        using kinematics::IKinematics::calibrateMotors;
-
-        /** Calibrate all four motors in wheel order with short pauses between motors. */
-        std::vector<calibration::CalibrationResult> calibrateMotors(const calibration::CalibrationConfig& config) override;
-
         [[nodiscard]] double getWheelRadius() const override { return m_wheelRadius; }
 
         /** Set max wheel speed (rad/s) for desaturation. 0 = disabled. */
@@ -86,6 +75,8 @@ namespace libstp::kinematics::mecanum
 
         /** Return the underlying motors in front-left, front-right, back-left, back-right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
+
+        [[nodiscard]] StmOdometryConfig getStmOdometryConfig() const override;
 
         /** Command motors at raw open-loop power using mecanum inverse kinematics for direction. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction,

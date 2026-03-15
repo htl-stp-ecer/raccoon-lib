@@ -45,6 +45,7 @@ from libstp.drive import Drive, AxisVelocityControlConfig, ChassisVelocityContro
 from libstp.motion import UnifiedMotionPidConfig
 from libstp.kinematics_mecanum import MecanumKinematics
 from libstp.odometry_fused import FusedOdometry, FusedOdometryConfig
+from libstp.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 from libstp.foundation import Feedforward, FeedforwardController, MotorCalibration, PidConfig, PidController, PidGains
 from libstp.motion import AxisConstraints
 from libstp.hal import IMU
@@ -85,6 +86,8 @@ __all__ = [
     "Drive",
     "FusedOdometry",
     "FusedOdometryConfig",
+    "Stm32Odometry",
+    "Stm32OdometryConfig",
     "MecanumKinematics",
     "DifferentialKinematics",
     "AxisVelocityControlConfig",
