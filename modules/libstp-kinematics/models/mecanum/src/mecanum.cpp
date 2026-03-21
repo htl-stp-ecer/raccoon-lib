@@ -187,8 +187,13 @@ namespace libstp::kinematics::mecanum
 
         // Per-motor ticks_to_rad from calibration
         const auto motors = getMotors();
-        for (std::size_t i = 0; i < 4; ++i)
-            cfg.ticks_to_rad[i] = static_cast<float>(motors[i]->getCalibration().ticks_to_rad);
+        for (std::size_t i = 0; i < 4; ++i) {
+            double t2r = motors[i]->getCalibration().ticks_to_rad;
+            // STM32 reads raw BEMF ticks — negate for inverted motors so
+            // the sign convention matches the kinematics matrix.
+            if (motors[i]->isInverted()) t2r = -t2r;
+            cfg.ticks_to_rad[i] = static_cast<float>(t2r);
+        }
 
         return cfg;
     }

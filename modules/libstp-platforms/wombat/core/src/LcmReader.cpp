@@ -358,6 +358,11 @@ LcmReader::OdometrySnapshot LcmReader::readOdometry() {
     return odom_cache_;
 }
 
+void LcmReader::resetOdometry() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    odom_cache_ = OdometrySnapshot{};
+}
+
 bool LcmReader::waitForImuReady(int timeout_ms) {
     const auto start = std::chrono::steady_clock::now();
     const auto timeout = std::chrono::milliseconds(timeout_ms);

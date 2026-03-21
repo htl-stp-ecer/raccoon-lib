@@ -22,9 +22,9 @@ class FollowLineBuilder(StepBuilder):
         self._right_sensor = _UNSET
         self._distance_cm = None
         self._speed = 0.5
-        self._kp = 0.75
+        self._kp = 0.4
         self._ki = 0.0
-        self._kd = 0.5
+        self._kd = 0.1
         self._until = None
 
     def left_sensor(self, value: IRSensor):
@@ -75,7 +75,7 @@ class FollowLineBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'line-follow'])
-def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
+def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
     """
     Follow a line using two IR sensors for steering.
 
@@ -143,9 +143,9 @@ class FollowLineSingleBuilder(StepBuilder):
         self._distance_cm = None
         self._speed = 0.5
         self._side = LineSide.LEFT
-        self._kp = 1.0
+        self._kp = 0.4
         self._ki = 0.0
-        self._kd = 0.3
+        self._kd = 0.1
         self._until = None
 
     def sensor(self, value: IRSensor):
@@ -195,7 +195,7 @@ class FollowLineSingleBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'line-follow'])
-def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
+def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
     """
     Follow a line edge using a single IR sensor.
 
@@ -266,9 +266,9 @@ class DirectionalFollowLineBuilder(StepBuilder):
         self._distance_cm = None
         self._heading_speed = 0.0
         self._strafe_speed = 0.0
-        self._kp = 0.75
+        self._kp = 0.4
         self._ki = 0.0
-        self._kd = 0.5
+        self._kd = 0.1
         self._until = None
 
     def left_sensor(self, value: IRSensor):
@@ -324,7 +324,7 @@ class DirectionalFollowLineBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'line-follow'])
-def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
+def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
     """
     Follow a line with independent heading and strafe speeds.
 
@@ -398,9 +398,9 @@ class StrafeFollowLineBuilder(StepBuilder):
         self._right_sensor = _UNSET
         self._distance_cm = None
         self._speed = 0.5
-        self._kp = 0.75
+        self._kp = 0.4
         self._ki = 0.0
-        self._kd = 0.5
+        self._kd = 0.1
         self._until = None
 
     def left_sensor(self, value: IRSensor):
@@ -451,7 +451,7 @@ class StrafeFollowLineBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.75, ki: float = 0.0, kd: float = 0.5, until: StopCondition | None = None):
+def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
     """
     Follow a line forward, correcting position by strafing left/right.
 
@@ -517,9 +517,9 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
         self._distance_cm = None
         self._speed = 0.5
         self._side = LineSide.LEFT
-        self._kp = 1.0
+        self._kp = 0.4
         self._ki = 0.0
-        self._kd = 0.3
+        self._kd = 0.1
         self._until = None
 
     def sensor(self, value: IRSensor):
@@ -569,7 +569,7 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
+def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
     """
     Follow a line edge forward, correcting position by strafing.
 
@@ -632,9 +632,9 @@ class DirectionalFollowLineSingleBuilder(StepBuilder):
         self._heading_speed = 0.0
         self._strafe_speed = 0.0
         self._side = LineSide.LEFT
-        self._kp = 1.0
+        self._kp = 0.4
         self._ki = 0.0
-        self._kd = 0.3
+        self._kd = 0.1
         self._until = None
 
     def sensor(self, value: IRSensor):
@@ -689,7 +689,7 @@ class DirectionalFollowLineSingleBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'line-follow'])
-def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, side: LineSide = LineSide.LEFT, kp: float = 1.0, ki: float = 0.0, kd: float = 0.3, until: StopCondition | None = None):
+def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, side: LineSide = LineSide.LEFT, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
     """
     Follow a line edge with a single sensor and independent heading/strafe speeds.
 

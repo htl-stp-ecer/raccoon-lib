@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from libstp.robot.heading_reference import HeadingReferenceService
 
@@ -16,53 +16,100 @@ class MarkHeadingReference(Step):
     """Mark the current IMU heading as a reference point for absolute turns.
 
     Captures the robot's current absolute IMU heading and stores it as
-    a reference. Subsequent calls to :func:`turn_to_heading` will compute
-    turn angles relative to this stored reference, enabling absolute
-    heading control even after the robot has moved and turned through
-    other motion steps.
+    a reference. Subsequent calls to :func:`turn_to_heading_right` and
+    :func:`turn_to_heading_left` will compute turn angles relative to
+    this stored reference, enabling absolute heading control even after
+    the robot has moved and turned through other motion steps.
 
     The reference uses the raw IMU heading which is unaffected by
     odometry resets that occur during normal motion steps.
 
     Multiple calls overwrite the previous reference.
 
+    Place this step right after ``wait_for_light()`` so the heading
+    origin is captured before the robot moves.
+
+    Args:
+        origin_offset_deg: Offset in degrees added to the captured
+            heading. Use this to define a consistent board-relative
+            origin regardless of the robot's physical starting rotation.
+            For example, if the robot always starts angled 30° clockwise
+            from "forward on the board", pass ``origin_offset_deg=-30``
+            so that 0° means "forward on the board".
+
     Example::
 
-        from libstp.step.motion import mark_heading_reference, turn_to_heading
+        from libstp.step.motion import mark_heading_reference, turn_to_heading_right
 
-        # Mark current heading as 0-degree reference
+        # Capture heading origin right after wait-for-light
         mark_heading_reference()
 
         # ... robot drives around ...
 
-        # Turn to face 180 degrees from where we marked
-        turn_to_heading(180)
+        # Turn to face 90 degrees clockwise from origin
+        turn_to_heading_right(90)
+
+        # With offset: robot starts 30° CW from board forward
+        mark_heading_reference(origin_offset_deg=-30)
     """
 
+    def __init__(self, origin_offset_deg: float = 0.0) -> None:
+        super().__init__()
+        self._origin_offset_deg = origin_offset_deg
+
     def _generate_signature(self) -> str:
+        if self._origin_offset_deg != 0.0:
+            return f"MarkHeadingReference(offset={self._origin_offset_deg:.1f}°)"
         return "MarkHeadingReference()"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        robot.get_service(HeadingReferenceService).mark()
+        robot.get_service(HeadingReferenceService).mark(self._origin_offset_deg)
+
+
+def _build_heading_turn(
+    robot: "GenericRobot",
+    target_deg: float,
+    speed: float,
+    force_direction: str | None,
+) -> Step:
+    """Shared logic for heading turn steps."""
+    service = robot.get_service(HeadingReferenceService)
+    relative_deg = service.compute_turn(target_deg, force_direction=force_direction)
+
+    if relative_deg >= 0:
+        return turn_left(relative_deg, speed=speed)
+    else:
+        return turn_right(-relative_deg, speed=speed)
 
 
 @dsl(tags=["motion", "turn"])
-def turn_to_heading(degrees: float, speed: float = 1.0) -> Defer:
-    """Turn to an absolute heading relative to the marked reference.
+def turn_to_heading_right(
+    degrees: float,
+    speed: float = 1.0,
+    force_direction: Literal["left", "right"] | None = None,
+) -> Defer:
+    """Turn to face a heading measured clockwise from the origin.
 
-    Computes the shortest rotation from the robot's current heading to
-    the target heading (reference + degrees) at execution time, then
-    delegates to :func:`turn_left` or :func:`turn_right` accordingly.
-    The turn direction is chosen automatically to minimize rotation.
+    Computes the absolute target heading as ``origin - degrees`` (since
+    clockwise is the negative direction), then turns via the shortest
+    path. The actual turn direction (left or right) is chosen
+    automatically to minimize rotation — only the target angle convention
+    is clockwise.
+
+    Use ``force_direction`` to override the automatic shortest-path
+    choice when obstacles prevent turning in one direction.
 
     Requires :func:`mark_heading_reference` to have been called earlier
     in the mission.
 
     Args:
-        degrees: Target heading in degrees relative to the reference.
-            0 returns to the reference heading, 90 faces 90 degrees
-            counter-clockwise from it, -90 faces 90 degrees clockwise, etc.
+        degrees: Angle in degrees clockwise from the heading origin.
+            Must be positive. For example, 90 means "face 90° to the
+            right of origin".
         speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
+        force_direction: ``"left"`` or ``"right"`` to force the physical
+            turn direction regardless of shortest path, or ``None``
+            (default) for automatic shortest-path selection.
 
     Returns:
         A deferred step that computes and executes the turn at runtime.
@@ -72,29 +119,82 @@ def turn_to_heading(degrees: float, speed: float = 1.0) -> Defer:
 
     Example::
 
-        from libstp.step.motion import mark_heading_reference, turn_to_heading
+        from libstp.step.motion import mark_heading_reference, turn_to_heading_right
 
-        # Mark heading at start of mission
+        # Capture origin after wait-for-light
         mark_heading_reference()
 
-        # Drive around, turn, etc.
         drive_forward(30)
-        turn_left(45)
-        drive_forward(20)
 
-        # Return to original heading
-        turn_to_heading(0)
+        # Face 90° clockwise from where we started (shortest path)
+        turn_to_heading_right(90)
 
-        # Face the opposite direction from reference
-        turn_to_heading(180)
+        # Force turning right even if left would be shorter
+        turn_to_heading_right(30, force_direction="right")
+
+        # Return to origin heading
+        turn_to_heading_right(0)
     """
     def _build(robot: "GenericRobot") -> Step:
-        service = robot.get_service(HeadingReferenceService)
-        relative_deg = service.compute_turn(degrees)
+        return _build_heading_turn(robot, -degrees, speed, force_direction)
 
-        if relative_deg >= 0:
-            return turn_left(relative_deg, speed=speed)
-        else:
-            return turn_right(-relative_deg, speed=speed)
+    return Defer(_build)
+
+
+@dsl(tags=["motion", "turn"])
+def turn_to_heading_left(
+    degrees: float,
+    speed: float = 1.0,
+    force_direction: Literal["left", "right"] | None = None,
+) -> Defer:
+    """Turn to face a heading measured counter-clockwise from the origin.
+
+    Computes the absolute target heading as ``origin + degrees`` (since
+    counter-clockwise is the positive direction), then turns via the
+    shortest path. The actual turn direction (left or right) is chosen
+    automatically to minimize rotation — only the target angle convention
+    is counter-clockwise.
+
+    Use ``force_direction`` to override the automatic shortest-path
+    choice when obstacles prevent turning in one direction.
+
+    Requires :func:`mark_heading_reference` to have been called earlier
+    in the mission.
+
+    Args:
+        degrees: Angle in degrees counter-clockwise from the heading
+            origin. Must be positive. For example, 90 means "face 90°
+            to the left of origin".
+        speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
+        force_direction: ``"left"`` or ``"right"`` to force the physical
+            turn direction regardless of shortest path, or ``None``
+            (default) for automatic shortest-path selection.
+
+    Returns:
+        A deferred step that computes and executes the turn at runtime.
+
+    Raises:
+        RuntimeError: If no heading reference has been set.
+
+    Example::
+
+        from libstp.step.motion import mark_heading_reference, turn_to_heading_left
+
+        # Capture origin after wait-for-light
+        mark_heading_reference()
+
+        drive_forward(30)
+
+        # Face 90° counter-clockwise from where we started
+        turn_to_heading_left(90)
+
+        # Force turning right to avoid obstacle on the left
+        turn_to_heading_left(45, force_direction="right")
+
+        # Return to origin heading
+        turn_to_heading_left(0)
+    """
+    def _build(robot: "GenericRobot") -> Step:
+        return _build_heading_turn(robot, degrees, speed, force_direction)
 
     return Defer(_build)

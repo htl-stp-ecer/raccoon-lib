@@ -8,6 +8,7 @@
 namespace libstp::calibration_store {
     /// Supported calibration families persisted by CalibrationStore.
     enum CalibrationType {
-        IR_SENSOR
+        IR_SENSOR,
+        CAM_SENSOR
     };
 }

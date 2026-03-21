@@ -26,11 +26,21 @@ class HeadingReferenceService(RobotService):
         super().__init__(robot)
         self._reference_rad: float | None = None
 
-    def mark(self) -> None:
-        """Capture the current absolute IMU heading as the reference."""
-        self._reference_rad = self.robot.odometry.get_absolute_heading()
+    def mark(self, origin_offset_deg: float = 0.0) -> None:
+        """Capture the current absolute IMU heading as the reference.
+
+        Args:
+            origin_offset_deg: Offset in degrees added to the captured heading.
+                Use this to define a consistent origin regardless of the robot's
+                physical starting rotation.  For example, if the robot is placed
+                at 30° to the board edge but you want 0° to mean "along the
+                board edge", pass ``origin_offset_deg=-30``.
+        """
+        raw = self.robot.odometry.get_absolute_heading()
+        self._reference_rad = raw + math.radians(origin_offset_deg)
         self.info(
-            f"Heading reference set to {math.degrees(self._reference_rad):.1f} deg (absolute)"
+            f"Heading reference set to {math.degrees(self._reference_rad):.1f} deg "
+            f"(absolute={math.degrees(raw):.1f}°, offset={origin_offset_deg:.1f}°)"
         )
 
     @property
@@ -40,15 +50,22 @@ class HeadingReferenceService(RobotService):
             return None
         return math.degrees(self._reference_rad)
 
-    def compute_turn(self, target_deg: float) -> float:
+    def compute_turn(
+        self,
+        target_deg: float,
+        force_direction: str | None = None,
+    ) -> float:
         """Compute the signed relative turn angle to reach *target_deg* from reference.
 
         Args:
             target_deg: Desired heading in degrees relative to the reference.
+            force_direction: ``"left"`` to force CCW, ``"right"`` to force CW,
+                or ``None`` (default) for shortest path.
 
         Returns:
             Signed angle in degrees (positive = CCW / left, negative = CW / right).
-            Normalized to [-180, 180] for the shortest path.
+            Normalized to [-180, 180] for shortest path, or adjusted to the
+            forced direction.
 
         Raises:
             RuntimeError: If no reference has been marked yet.
@@ -63,11 +80,17 @@ class HeadingReferenceService(RobotService):
         relative_rad = _normalize_angle(target_absolute - current_absolute)
         relative_deg = math.degrees(relative_rad)
 
+        if force_direction == "left" and relative_deg < 0:
+            relative_deg += 360.0
+        elif force_direction == "right" and relative_deg > 0:
+            relative_deg -= 360.0
+
         self.debug(
             f"ref={math.degrees(self._reference_rad):.1f}° "
             f"target_abs={math.degrees(target_absolute):.1f}° "
             f"current_abs={math.degrees(current_absolute):.1f}° "
             f"→ relative={relative_deg:.1f}°"
+            f"{f' (forced {force_direction})' if force_direction else ''}"
         )
 
         return relative_deg

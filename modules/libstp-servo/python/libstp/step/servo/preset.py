@@ -34,9 +34,38 @@ YAML definition::
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from libstp.hal import Servo
 
 from .steps import servo as _servo_step, SlowServo
+
+if TYPE_CHECKING:
+    from libstp.step import Step
+
+
+class _PresetPosition:
+    """Callable that returns a Step, with ``.value`` for the raw angle."""
+
+    __slots__ = ("_servo", "_actual", "__name__")
+
+    def __init__(self, servo: Servo, actual: float, name: str):
+        self._servo = servo
+        self._actual = actual
+        self.__name__ = name
+
+    @property
+    def value(self) -> float:
+        """The resolved servo angle in degrees (with offset applied)."""
+        return self._actual
+
+    def __call__(self, speed: float | None = None) -> Step:
+        if speed is None:
+            return _servo_step(self._servo, self._actual)
+        return SlowServo(self._servo, self._actual, speed)
+
+    def __repr__(self) -> str:
+        return f"<PresetPosition {self.__name__!r} angle={self._actual}>"
 
 
 class ServoPreset:
@@ -74,12 +103,4 @@ class ServoPreset:
 
     def _register(self, name: str, angle: float) -> None:
         actual = angle + self._offset
-
-        def make_step(speed=None):
-            if speed is None:
-                return _servo_step(self._servo, actual)
-            return SlowServo(self._servo, actual, speed)
-
-        make_step.__name__ = name
-        make_step.__doc__ = f"Move to {name} ({angle}{'%+g' % self._offset if self._offset else ''} deg)"
-        setattr(self, name, make_step)
+        setattr(self, name, _PresetPosition(self._servo, actual, name))

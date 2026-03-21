@@ -21,8 +21,9 @@ bool CalibrationStore::doesFileExist() const {
 
 static std::string typeKeyFor(CalibrationType type) {
     switch (type) {
-        case IR_SENSOR: return "ir-calibration";
-        default:        return "unknown-calibration";
+        case IR_SENSOR:  return "ir-calibration";
+        case CAM_SENSOR: return "cam-calibration";
+        default:         return "unknown-calibration";
     }
 }
 

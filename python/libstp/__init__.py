@@ -23,6 +23,7 @@ from libstp.foundation import initialize_logging
 from libstp.log import error, info, debug, warn, trace
 from libstp.sensor_ir import IRSensor, IRSensorCalibration
 from libstp.sensor_et import ETSensor
+from libstp.cam import CamSensor as CamSensor
 # Core hardware
 Motor = _hal.Motor
 Servo = _hal.Servo
@@ -77,6 +78,7 @@ __all__ = [
     "IRSensor",
     "IRSensorCalibration",
     "ETSensor",
+    "CamSensor",
     # Timing
     "StepTimingTracker",
     # UI
