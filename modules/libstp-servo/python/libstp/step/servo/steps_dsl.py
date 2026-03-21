@@ -10,7 +10,7 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .steps import ShakeServo, SlowServo, FullyDisableServos
+from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing, EasingFunc
 
 
 class ShakeServoBuilder(StepBuilder):
@@ -99,6 +99,7 @@ class SlowServoBuilder(StepBuilder):
         self._servo = _UNSET
         self._angle = _UNSET
         self._speed = 60.0
+        self._easing = Easing.EASE_IN_OUT
 
     def servo(self, value: Servo | ServoPreset):
         self._servo = value
@@ -112,6 +113,10 @@ class SlowServoBuilder(StepBuilder):
         self._speed = value
         return self
 
+    def easing(self, value: Easing | EasingFunc):
+        self._easing = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._servo is not _UNSET:
@@ -119,19 +124,21 @@ class SlowServoBuilder(StepBuilder):
         if self._angle is not _UNSET:
             kwargs['angle'] = self._angle
         kwargs['speed'] = self._speed
+        kwargs['easing'] = self._easing
         return SlowServo(**kwargs)
 
 
 @dsl(tags=['servo', 'actuator'])
-def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed: float = 60.0):
+def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed: float = 60.0, easing: Easing | EasingFunc = Easing.EASE_IN_OUT):
     """
-    Move a servo to an angle with smooth ease-in/ease-out motion.
+    Move a servo to an angle with smooth interpolated motion.
 
     Instead of commanding the servo to jump straight to the target (as
     ``servo()`` does), this step interpolates through intermediate
-    positions using a smoothstep curve (3t^2 - 2t^3). The result is a
-    gentle acceleration and deceleration that avoids mechanical shock and
-    reduces jerk on the mechanism.
+    positions using an easing curve. The default is smoothstep
+    ease-in-ease-out (3t² − 2t³), which gives gentle acceleration and
+    deceleration. Other curves can be selected via the ``easing``
+    parameter.
 
     The total move duration is derived from the angular distance divided
     by ``speed``. Intermediate positions are updated at ~10 Hz.
@@ -140,19 +147,25 @@ def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed
         servo: The servo to control, obtained from the robot hardware map (e.g. ``robot.servo(0)``).
         angle: Target angle in degrees.
         speed: Movement speed in degrees per second. Must be positive. Defaults to 60.0 deg/s.
+        easing: Interpolation curve. Pass an ``Easing`` member or any callable
+            ``(t: float) -> float`` mapping [0, 1] → [0, 1]. Defaults to
+            ``Easing.EASE_IN_OUT``.
 
     Returns:
-        A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.easing()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
-        from libstp.step.servo import slow_servo
+        from libstp.step.servo import slow_servo, Easing
 
         # Gently lower the arm servo to 20 degrees at 45 deg/s
         slow_servo(robot.servo(0), angle=20.0, speed=45.0)
 
-        # Use default speed for a smooth open
-        slow_servo(robot.servo(0), angle=150.0)
+        # Linear (constant-speed) motion
+        slow_servo(robot.servo(0), angle=150.0, easing=Easing.LINEAR)
+
+        # Ease-out only (fast start, slow stop)
+        slow_servo(robot.servo(0), angle=0.0, easing=Easing.EASE_OUT)
     """
     b = SlowServoBuilder()
     if servo is not _UNSET:
@@ -160,6 +173,7 @@ def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed
     if angle is not _UNSET:
         b._angle = angle
     b._speed = speed
+    b._easing = easing
     return b
 
 

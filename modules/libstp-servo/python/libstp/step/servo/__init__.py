@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from .preset import ServoPreset
 from .resolver import resolve_servo
-from .steps import FullyDisableServos, SetServoPosition, ShakeServo, SlowServo, servo
+from .steps import Easing, FullyDisableServos, SetServoPosition, ShakeServo, SlowServo, servo
 from .steps_dsl import shake_servo, slow_servo, fully_disable_servos
 from .utility import estimate_servo_move_time
 
 __all__ = [
+    "Easing",
     "ServoPreset",
     "SetServoPosition",
     "SlowServo",
