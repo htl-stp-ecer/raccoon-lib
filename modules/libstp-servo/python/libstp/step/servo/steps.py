@@ -12,15 +12,23 @@ from .resolver import resolve_servo
 from .utility import estimate_servo_move_time
 
 
+def _unwrap_servo(servo_or_preset):
+    """Extract the raw Servo from a ServoPreset, or return as-is if already a Servo."""
+    from .preset import ServoPreset
+    if isinstance(servo_or_preset, ServoPreset):
+        return servo_or_preset.device
+    return servo_or_preset
+
+
 @dsl(hidden=True)
 class SetServoPosition(Step):
     """Set a servo to a target angle and optionally wait for the move to finish."""
 
     def __init__(
-        self, servo: Servo, target_angle: float, duration: Optional[float] = None
+        self, servo: Servo | ServoPreset, target_angle: float, duration: Optional[float] = None
     ) -> None:
         super().__init__()
-        self._servo_ref = servo
+        self._servo_ref = _unwrap_servo(servo)
         self._target_angle = float(target_angle)
         self._duration = float(duration) if duration is not None else None
         if self._duration is not None and self._duration < 0:
@@ -106,10 +114,10 @@ class ShakeServo(Step):
     """
 
     def __init__(
-        self, servo: Servo, duration: float, angle_a: float, angle_b: float
+        self, servo: Servo | ServoPreset, duration: float, angle_a: float, angle_b: float
     ) -> None:
         super().__init__()
-        self._servo_ref = servo
+        self._servo_ref = _unwrap_servo(servo)
         self._duration = float(duration)
         self._angle_a = float(angle_a)
         self._angle_b = float(angle_b)
@@ -191,9 +199,9 @@ class SlowServo(Step):
         slow_servo(robot.servo(0), angle=150.0)
     """
 
-    def __init__(self, servo: Servo, angle: float, speed: float = 60.0) -> None:
+    def __init__(self, servo: Servo | ServoPreset, angle: float, speed: float = 60.0) -> None:
         super().__init__()
-        self._servo_ref = servo
+        self._servo_ref = _unwrap_servo(servo)
         self._target_angle = float(angle)
         self._speed = float(speed)
         if self._speed <= 0:

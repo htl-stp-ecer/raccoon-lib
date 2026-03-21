@@ -15,7 +15,9 @@ from .stop import Stop
 from .stop_dsl import stop
 from .turn import TurnLeft, TurnRight
 from .turn_dsl import turn_left, turn_right
-from .heading_reference import MarkHeadingReference, turn_to_heading
+from .heading_reference import (
+    MarkHeadingReference, turn_to_heading_right, turn_to_heading_left,
+)
 from .heading_reference_dsl import mark_heading_reference
 from .lineup import (
     SurfaceColor,
@@ -123,7 +125,8 @@ __all__ = [
     # Heading reference
     "MarkHeadingReference",
     "mark_heading_reference",
-    "turn_to_heading",
+    "turn_to_heading_right",
+    "turn_to_heading_left",
     # Lineup
     "SurfaceColor",
     "lineup",

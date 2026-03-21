@@ -65,6 +65,9 @@ namespace platform::wombat::core {
         };
         OdometrySnapshot readOdometry();
 
+        /// Zero the local odometry cache (call alongside STM32 reset command).
+        void resetOdometry();
+
         /// Wait until heading data has been observed at least once.
         bool waitForImuReady(int timeout_ms = 1000);
 

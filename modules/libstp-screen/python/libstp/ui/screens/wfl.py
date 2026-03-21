@@ -188,8 +188,16 @@ class WFLDetectScreen(UIScreen[None]):
     Status display for automatic wait-for-light detection.
 
     Shows the current sensor value, Kalman-filtered baseline, trigger
-    threshold, and detection status (WARMING UP / ARMED / GO!).
-    This screen is display-only — no user interaction needed.
+    threshold, and detection status. Supports an interactive test mode
+    where the user verifies the lamp would trigger before the system
+    is truly armed.
+
+    States:
+        WARMING UP — collecting baseline samples
+        TEST MODE — detects lamp but will NOT start the mission
+        TRIGGERED — lamp detected during test (big confirmation)
+        ARMED — fully armed, real trigger starts the mission
+        GO! — lamp detected for real, mission starting
     """
 
     title = "Wait for Light"
@@ -201,21 +209,65 @@ class WFLDetectScreen(UIScreen[None]):
         self.raw_value: int = 0
         self.baseline: float = 0.0
         self.threshold: float = 0.0
+        self.test_count: int = 0
+        self.hint: str = ""
+        self.request_test_mode: bool = False
 
     def build(self) -> Widget:
+        # Big full-screen TRIGGERED indicator
+        if self.status == "TRIGGERED":
+            return Center(children=[
+                Column(children=[
+                    StatusBadge(
+                        text="TRIGGERED",
+                        color="green",
+                        glow=True,
+                    ),
+                    Spacer(8),
+                    Text("Lamp detected!", size="xlarge"),
+                    Spacer(8),
+                    Text("Turn off lamp to continue", size="small", muted=True),
+                ], align="center", spacing=0),
+            ])
+
+        # Big full-screen GO! indicator
+        if self.status == "GO!":
+            return Center(children=[
+                Column(children=[
+                    StatusBadge(
+                        text="GO!",
+                        color="blue",
+                        glow=True,
+                    ),
+                ], align="center", spacing=0),
+            ])
+
+        children: list[Widget] = [
+            StatusBadge(
+                text=self.status,
+                color=self.status_color,
+                glow=self.status == "ARMED",
+            ),
+            Spacer(16),
+            Text(f"Sensor: {self.raw_value}", size="xlarge"),
+            Spacer(8),
+            ResultsTable(rows=[
+                ("Baseline", f"{self.baseline:.0f}", "grey"),
+                ("Threshold", f"{self.threshold:.0f}", "blue"),
+                ("Tests", f"{self.test_count}", "green" if self.test_count > 0 else "grey"),
+            ]),
+        ]
+
+        if self.hint:
+            children += [Spacer(12), HintBox(self.hint)]
+
+        if self.status == "ARMED":
+            children += [Spacer(12), Button("test", "Back to Test Mode", style="secondary")]
+
         return Center(children=[
-            Column(children=[
-                StatusBadge(
-                    text=self.status,
-                    color=self.status_color,
-                    glow=self.status == "ARMED",
-                ),
-                Spacer(16),
-                Text(f"Sensor: {self.raw_value}", size="xlarge"),
-                Spacer(8),
-                ResultsTable(rows=[
-                    ("Baseline", f"{self.baseline:.0f}", "grey"),
-                    ("Threshold", f"{self.threshold:.0f}", "blue"),
-                ]),
-            ], align="center", spacing=0),
+            Column(children=children, align="center", spacing=0),
         ])
+
+    @on_click("test")
+    async def on_test(self):
+        self.request_test_mode = True

@@ -126,6 +126,8 @@ class WaitForLight(UIStep):
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        from libstp.button import is_pressed
+
         sensor = self._sensor
         kf = _KalmanFilter(
             process_variance=0.01,
@@ -135,7 +137,9 @@ class WaitForLight(UIStep):
         screen = WFLDetectScreen()
         await self.display(screen)
 
-        # --- Warm-up: establish baseline ---
+        threshold_factor = 1.0 - self._drop_fraction
+
+        # --- Phase 1: Warm-up — establish baseline ---
         warmup_end = time.monotonic() + self._warmup_seconds
         self.info(f"WFL: warming up for {self._warmup_seconds}s...")
         last_ui = 0.0
@@ -150,63 +154,146 @@ class WaitForLight(UIStep):
                 screen.status_color = "amber"
                 screen.raw_value = raw
                 screen.baseline = kf.estimate
-                screen.threshold = kf.estimate * (1.0 - self._drop_fraction)
+                screen.threshold = kf.estimate * threshold_factor
+                screen.hint = ""
                 await screen.refresh()
                 last_ui = now
 
             await asyncio.sleep(self._poll_interval)
 
-        self.info(f"WFL: armed (baseline={kf.estimate:.0f})")
-
-        # --- Armed: detect flank ---
-        # Slow down Kalman adaptation so ambient drift is tracked over
-        # minutes but a sudden lamp step-change (hundreds of units in one
-        # sample) can never be absorbed. Only non-triggering samples are
-        # fed into the filter so the lamp signal never contaminates the
-        # baseline.
+        # --- Phase 2: Test mode + Armed loop ---
+        # Slow down Kalman adaptation now that baseline is established.
         kf.set_process_variance(0.001)
 
+        test_mode = True
+        test_count = 0
         consecutive = 0
-        threshold_factor = 1.0 - self._drop_fraction
+        # Gate: must see an above-threshold reading before allowing
+        # triggers. Prevents instant GO! when lamp is still on from test.
+        needs_clear = False
+        was_pressed = is_pressed()
 
-        screen.status = "ARMED"
-        screen.status_color = "green"
-        screen.baseline = kf.estimate
-        screen.threshold = kf.estimate * threshold_factor
-        await screen.refresh()
+        self.info(f"WFL: entering test mode (baseline={kf.estimate:.0f})")
 
         while True:
             raw = sensor.read()
             trigger_threshold = kf.estimate * threshold_factor
 
-            if raw < trigger_threshold:
-                consecutive += 1
-                if consecutive >= self._confirm_count:
-                    self.info(
-                        f"WFL: TRIGGERED! raw={raw}, "
-                        f"baseline={kf.estimate:.0f}, "
-                        f"threshold={trigger_threshold:.0f}"
-                    )
-                    screen.status = "GO!"
-                    screen.status_color = "blue"
-                    screen.raw_value = raw
-                    await screen.refresh()
-                    # Brief flash so the user sees "GO!"
-                    await asyncio.sleep(0.15)
-                    return
-            else:
-                consecutive = 0
-                # Only update baseline with non-triggering samples so the
-                # lamp signal can never creep into the baseline estimate.
-                kf.update(raw)
+            # Detect button rising edge (press)
+            pressed = is_pressed()
+            button_just_pressed = pressed and not was_pressed
+            was_pressed = pressed
 
-            now = time.monotonic()
-            if now - last_ui > 0.1:
-                screen.raw_value = raw
-                screen.baseline = kf.estimate
-                screen.threshold = kf.estimate * threshold_factor
-                await screen.refresh()
-                last_ui = now
+            # Pump UI events for the "Back to Test Mode" button
+            await self.pump_events()
+
+            # Check if screen requested test mode via UI button
+            if screen.request_test_mode:
+                screen.request_test_mode = False
+                if not test_mode:
+                    test_mode = True
+                    consecutive = 0
+                    self.info("WFL: returning to test mode via UI")
+
+            if test_mode:
+                # --- TEST MODE: detect but don't start ---
+                if button_just_pressed and test_count > 0:
+                    # Button press exits test mode → armed
+                    test_mode = False
+                    consecutive = 0
+                    needs_clear = True  # must see above-threshold before real trigger
+                    self.info(f"WFL: armed (baseline={kf.estimate:.0f})")
+                    screen.status = "ARMED"
+                    screen.status_color = "green"
+                    screen.baseline = kf.estimate
+                    screen.threshold = trigger_threshold
+                    screen.test_count = test_count
+                    screen.hint = ""
+                    await screen.refresh()
+                    last_ui = time.monotonic()
+                    await asyncio.sleep(self._poll_interval)
+                    continue
+
+                if raw < trigger_threshold:
+                    consecutive += 1
+                    if consecutive >= self._confirm_count:
+                        # Show big TRIGGERED screen
+                        test_count += 1
+                        screen.status = "TRIGGERED"
+                        screen.status_color = "green"
+                        screen.raw_value = raw
+                        screen.test_count = test_count
+                        screen.hint = ""
+                        await screen.refresh()
+                        self.info(f"WFL: test trigger #{test_count} (raw={raw})")
+
+                        # Stay triggered until sensor returns above threshold
+                        while True:
+                            raw = sensor.read()
+                            trigger_threshold = kf.estimate * threshold_factor
+                            if raw >= trigger_threshold:
+                                break
+                            await asyncio.sleep(self._poll_interval)
+
+                        consecutive = 0
+                        self.info("WFL: lamp off, back to test mode")
+                        # Don't continue — fall through to UI update below
+                else:
+                    consecutive = 0
+                    kf.update(raw)
+
+                now = time.monotonic()
+                if now - last_ui > 0.1:
+                    if test_count == 0:
+                        screen.status = "TEST MODE"
+                        screen.status_color = "orange"
+                        screen.hint = "Turn on lamp to test — WILL NOT start!"
+                    else:
+                        screen.status = "TEST MODE"
+                        screen.status_color = "purple"
+                        screen.hint = "Press button to arm"
+                    screen.raw_value = raw
+                    screen.baseline = kf.estimate
+                    screen.threshold = trigger_threshold
+                    screen.test_count = test_count
+                    await screen.refresh()
+                    last_ui = now
+            else:
+                # --- ARMED: real triggers start the mission ---
+                if raw >= trigger_threshold:
+                    needs_clear = False
+                    consecutive = 0
+                    kf.update(raw)
+                elif not needs_clear:
+                    consecutive += 1
+                    if consecutive >= self._confirm_count:
+                        self.info(
+                            f"WFL: TRIGGERED! raw={raw}, "
+                            f"baseline={kf.estimate:.0f}, "
+                            f"threshold={trigger_threshold:.0f}"
+                        )
+                        screen.status = "GO!"
+                        screen.status_color = "blue"
+                        screen.raw_value = raw
+                        screen.hint = ""
+                        await screen.refresh()
+                        await asyncio.sleep(0.15)
+                        return
+                else:
+                    # Still waiting for clear after entering armed mode
+                    consecutive = 0
+
+                now = time.monotonic()
+                if now - last_ui > 0.1:
+                    screen.status = "ARMED"
+                    screen.status_color = "green"
+                    screen.raw_value = raw
+                    screen.baseline = kf.estimate
+                    screen.threshold = trigger_threshold
+                    screen.test_count = test_count
+                    screen.hint = ""
+                    await screen.refresh()
+                    last_ui = now
 
             await asyncio.sleep(self._poll_interval)
 

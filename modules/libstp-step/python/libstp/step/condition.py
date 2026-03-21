@@ -1,14 +1,18 @@
 """Composable stop conditions for motion steps.
 
 A StopCondition determines when a motion step should terminate. Conditions
-can be combined with ``|`` (any/or) and ``&`` (all/and) operators.
+can be combined with ``|`` (any/or), ``&`` (all/and), and ``>`` (then/sequence)
+operators.
 
 Example::
 
-    from libstp.step.condition import on_black, after_seconds
+    from libstp.step.condition import on_black, after_seconds, after_cm
 
     # Stop when sensor sees black OR after 10 seconds
     drive_forward(speed=1.0).until(on_black(sensor) | after_seconds(10))
+
+    # Sequential: first wait for black, then travel 10 more cm
+    drive_forward(speed=1.0).until(on_black(sensor) > after_cm(10))
 """
 
 from __future__ import annotations
@@ -41,6 +45,34 @@ class StopCondition:
     def __and__(self, other: "StopCondition") -> "StopCondition":
         """Combine conditions: stop when BOTH are true."""
         return _AllOf(self, other)
+
+    def __gt__(self, other: "StopCondition") -> "StopCondition":
+        """Chain conditions: once *self* triggers, start checking *other*."""
+        return _Then(self, other)
+
+
+class _Then(StopCondition):
+    """Sequential chain: once *first* triggers, start and check *second*.
+
+    Supports chaining: ``a > b > c`` means wait for *a*, then *b*, then *c*.
+    """
+
+    def __init__(self, first: StopCondition, second: StopCondition):
+        self._first = first
+        self._second = second
+        self._first_done = False
+
+    def start(self, robot: "GenericRobot") -> None:
+        self._first_done = False
+        self._first.start(robot)
+
+    def check(self, robot: "GenericRobot") -> bool:
+        if not self._first_done:
+            if self._first.check(robot):
+                self._first_done = True
+                self._second.start(robot)
+            return False
+        return self._second.check(robot)
 
 
 class _AnyOf(StopCondition):

@@ -103,6 +103,10 @@ namespace libstp::odometry::stm32
 
         origin_heading_ = 0.0;
 
+        // Zero the local cache immediately so reads don't return stale data
+        // while the STM32 processes the reset command
+        platform::wombat::core::LcmReader::instance().resetOdometry();
+
         // Tell STM32 to zero its integrated pose
         platform::wombat::core::LcmDataWriter::instance().resetOdometry();
 

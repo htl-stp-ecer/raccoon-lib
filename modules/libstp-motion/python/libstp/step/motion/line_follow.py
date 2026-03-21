@@ -46,9 +46,9 @@ class LineFollowConfig:
     right_sensor: IRSensor
     speed_scale: float  # 0-1 fraction of max velocity
     distance_cm: float | None = None  # None = run until condition stops
-    kp: float = 0.75
+    kp: float = 0.4
     ki: float = 0.0
-    kd: float = 0.5
+    kd: float = 0.1
 
 
 class LineSide(Enum):
@@ -70,9 +70,9 @@ class SingleLineFollowConfig:
     speed_scale: float  # 0-1 fraction of max velocity
     distance_cm: float | None = None  # None = run until condition stops
     side: LineSide = LineSide.LEFT
-    kp: float = 1.0
+    kp: float = 0.4
     ki: float = 0.0
-    kd: float = 0.3
+    kd: float = 0.1
 
 
 _SENTINEL_DISTANCE_M = 100.0  # Large distance; condition stops early
@@ -346,9 +346,9 @@ class FollowLine(LineFollow):
         right_sensor: IRSensor,
         distance_cm: float | None = None,
         speed: float = 0.5,
-        kp: float = 0.75,
+        kp: float = 0.4,
         ki: float = 0.0,
-        kd: float = 0.5,
+        kd: float = 0.1,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -442,9 +442,9 @@ class FollowLineSingle(SingleSensorLineFollow):
         distance_cm: float | None = None,
         speed: float = 0.5,
         side: LineSide = LineSide.LEFT,
-        kp: float = 1.0,
+        kp: float = 0.4,
         ki: float = 0.0,
-        kd: float = 0.3,
+        kd: float = 0.1,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -502,9 +502,9 @@ class DirectionalLineFollowConfig:
     heading_speed: float    # -1..1 fraction of max forward velocity
     strafe_speed: float     # -1..1 fraction of max lateral velocity (positive = right)
     distance_cm: float | None = None  # None = run until condition stops
-    kp: float = 0.75
+    kp: float = 0.4
     ki: float = 0.0
-    kd: float = 0.5
+    kd: float = 0.1
     lateral_correction: bool = False
 
 
@@ -669,9 +669,9 @@ class DirectionalSingleLineFollowConfig:
     strafe_speed: float     # -1..1 fraction of max lateral velocity (positive = right)
     distance_cm: float | None = None  # None = run until condition stops
     side: LineSide = LineSide.LEFT
-    kp: float = 1.0
+    kp: float = 0.4
     ki: float = 0.0
-    kd: float = 0.3
+    kd: float = 0.1
     lateral_correction: bool = False
 
 
@@ -883,9 +883,9 @@ class DirectionalFollowLine(DirectionalLineFollow):
         distance_cm: float | None = None,
         heading_speed: float = 0.0,
         strafe_speed: float = 0.0,
-        kp: float = 0.75,
+        kp: float = 0.4,
         ki: float = 0.0,
-        kd: float = 0.5,
+        kd: float = 0.1,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -975,9 +975,9 @@ class StrafeFollowLine(DirectionalLineFollow):
         right_sensor: IRSensor,
         distance_cm: float | None = None,
         speed: float = 0.5,
-        kp: float = 0.75,
+        kp: float = 0.4,
         ki: float = 0.0,
-        kd: float = 0.5,
+        kd: float = 0.1,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -1063,9 +1063,9 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         distance_cm: float | None = None,
         speed: float = 0.5,
         side: LineSide = LineSide.LEFT,
-        kp: float = 1.0,
+        kp: float = 0.4,
         ki: float = 0.0,
-        kd: float = 0.3,
+        kd: float = 0.1,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -1155,9 +1155,9 @@ class DirectionalFollowLineSingle(DirectionalSingleLineFollow):
         heading_speed: float = 0.0,
         strafe_speed: float = 0.0,
         side: LineSide = LineSide.LEFT,
-        kp: float = 1.0,
+        kp: float = 0.4,
         ki: float = 0.0,
-        kd: float = 0.3,
+        kd: float = 0.1,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
