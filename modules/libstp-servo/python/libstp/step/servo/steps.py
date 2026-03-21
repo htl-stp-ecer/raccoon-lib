@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+import enum
+import math
+from typing import Callable, Optional
 
 from libstp.hal import Servo
 from libstp.robot.api import GenericRobot
@@ -10,6 +12,73 @@ from libstp.step.annotation import dsl, dsl_step
 
 from .resolver import resolve_servo
 from .utility import estimate_servo_move_time
+
+
+# ---------------------------------------------------------------------------
+# Easing / interpolation helpers
+# ---------------------------------------------------------------------------
+
+EasingFunc = Callable[[float], float]
+"""Signature for an easing function: maps t in [0, 1] → eased value in [0, 1]."""
+
+
+def _clamp01(t: float) -> float:
+    return max(0.0, min(1.0, t))
+
+
+def _ease_linear(t: float) -> float:
+    """No easing — constant speed."""
+    return _clamp01(t)
+
+
+def _ease_in(t: float) -> float:
+    """Quadratic ease-in — slow start, fast end."""
+    t = _clamp01(t)
+    return t * t
+
+
+def _ease_out(t: float) -> float:
+    """Quadratic ease-out — fast start, slow end."""
+    t = _clamp01(t)
+    return t * (2.0 - t)
+
+
+def _ease_in_out_smoothstep(t: float) -> float:
+    """Smoothstep ease-in-ease-out: 3t^2 - 2t^3."""
+    t = _clamp01(t)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _ease_in_out_cosine(t: float) -> float:
+    """Cosine-based ease-in-ease-out."""
+    t = _clamp01(t)
+    return (1.0 - math.cos(t * math.pi)) * 0.5
+
+
+class Easing(enum.Enum):
+    """Built-in easing functions for :class:`SlowServo`.
+
+    Each member wraps a callable ``(t: float) -> float`` that maps
+    normalised time *t* ∈ [0, 1] to an eased progress value in [0, 1].
+    """
+
+    LINEAR = _ease_linear
+    """Constant speed — no acceleration or deceleration."""
+
+    EASE_IN = _ease_in
+    """Quadratic ease-in — slow start, fast end."""
+
+    EASE_OUT = _ease_out
+    """Quadratic ease-out — fast start, slow end."""
+
+    EASE_IN_OUT = _ease_in_out_smoothstep
+    """Smoothstep (3t² − 2t³) — gentle acceleration *and* deceleration (default)."""
+
+    EASE_IN_OUT_COSINE = _ease_in_out_cosine
+    """Cosine-based ease-in-out — similar feel, slightly different curve shape."""
+
+    def __call__(self, t: float) -> float:  # noqa: D102 — makes ``Easing.XXX(t)`` work
+        return self.value(t)
 
 
 def _unwrap_servo(servo_or_preset):
@@ -159,24 +228,19 @@ class ShakeServo(Step):
             await asyncio.sleep(move_time)
 
 
-def _ease_in_out(t: float) -> float:
-    """Smoothstep ease-in-ease-out: 3t^2 - 2t^3."""
-    t = max(0.0, min(1.0, t))
-    return t * t * (3.0 - 2.0 * t)
-
-
 _EASE_SERVO_TICK = 1 / 10
 
 
 @dsl_step(tags=["servo", "actuator"])
 class SlowServo(Step):
-    """Move a servo to an angle with smooth ease-in/ease-out motion.
+    """Move a servo to an angle with smooth interpolated motion.
 
     Instead of commanding the servo to jump straight to the target (as
     ``servo()`` does), this step interpolates through intermediate
-    positions using a smoothstep curve (3t^2 - 2t^3). The result is a
-    gentle acceleration and deceleration that avoids mechanical shock and
-    reduces jerk on the mechanism.
+    positions using an easing curve. The default is smoothstep
+    ease-in-ease-out (3t² − 2t³), which gives gentle acceleration and
+    deceleration. Other curves can be selected via the ``easing``
+    parameter.
 
     The total move duration is derived from the angular distance divided
     by ``speed``. Intermediate positions are updated at ~10 Hz.
@@ -187,23 +251,36 @@ class SlowServo(Step):
         angle: Target angle in degrees.
         speed: Movement speed in degrees per second. Must be positive.
             Defaults to 60.0 deg/s.
+        easing: Interpolation curve. Pass an :class:`Easing` member or
+            any callable ``(t: float) -> float`` mapping [0, 1] → [0, 1].
+            Defaults to ``Easing.EASE_IN_OUT``.
 
     Example::
 
-        from libstp.step.servo import slow_servo
+        from libstp.step.servo import slow_servo, Easing
 
         # Gently lower the arm servo to 20 degrees at 45 deg/s
         slow_servo(robot.servo(0), angle=20.0, speed=45.0)
 
-        # Use default speed for a smooth open
-        slow_servo(robot.servo(0), angle=150.0)
+        # Linear (constant-speed) motion
+        slow_servo(robot.servo(0), angle=150.0, easing=Easing.LINEAR)
+
+        # Ease-out only (fast start, slow stop)
+        slow_servo(robot.servo(0), angle=0.0, easing=Easing.EASE_OUT)
     """
 
-    def __init__(self, servo: Servo | ServoPreset, angle: float, speed: float = 60.0) -> None:
+    def __init__(
+        self,
+        servo: Servo | ServoPreset,
+        angle: float,
+        speed: float = 60.0,
+        easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+    ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
         self._target_angle = float(angle)
         self._speed = float(speed)
+        self._easing: EasingFunc = easing if callable(easing) else easing.value
         if self._speed <= 0:
             raise ValueError(f"Speed must be > 0, got {self._speed}")
 
@@ -212,7 +289,8 @@ class SlowServo(Step):
 
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
-        return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed})"
+        easing_name = getattr(self._easing, '__name__', None) or getattr(self._easing, 'name', '?')
+        return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed},easing={easing_name})"
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         self._servo_ref.enable()
@@ -232,7 +310,7 @@ class SlowServo(Step):
         while True:
             elapsed = loop.time() - start_time
             t = min(elapsed / duration, 1.0)
-            eased = _ease_in_out(t)
+            eased = self._easing(t)
             current_angle = start_angle + delta * eased
             self._servo_ref.set_position(current_angle)
 
@@ -275,6 +353,7 @@ class FullyDisableServos(Step):
 
 
 __all__ = [
+    "Easing",
     "SetServoPosition",
     "SlowServo",
     "ShakeServo",

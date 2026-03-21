@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING
 
 from libstp.hal import Servo
 
-from .steps import servo as _servo_step, SlowServo
+from .steps import servo as _servo_step, SlowServo, Easing, EasingFunc
 
 if TYPE_CHECKING:
     from libstp.step import Step
@@ -59,10 +59,14 @@ class _PresetPosition:
         """The resolved servo angle in degrees (with offset applied)."""
         return self._actual
 
-    def __call__(self, speed: float | None = None) -> Step:
+    def __call__(
+        self,
+        speed: float | None = None,
+        easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+    ) -> Step:
         if speed is None:
             return _servo_step(self._servo, self._actual)
-        return SlowServo(self._servo, self._actual, speed)
+        return SlowServo(self._servo, self._actual, speed, easing=easing)
 
     def __repr__(self) -> str:
         return f"<PresetPosition {self.__name__!r} angle={self._actual}>"
