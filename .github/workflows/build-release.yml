@@ -29,10 +29,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # --- Build Wombat (ARM64) wheel ---
-      - name: Clean old wheels
+      - name: Clean old build artifacts
         run: |
           find build-docker -name '*.whl' -delete 2>/dev/null || true
-          find build-docker-mock -name '*.whl' -delete 2>/dev/null || true
+          # Clean mock build dirs completely to avoid cross-platform cache contamination
+          rm -rf build-docker-mock _skbuild-docker-mock .cmake-cache-docker-mock
 
       - name: Build ARM64 Wombat wheel
         run: |
