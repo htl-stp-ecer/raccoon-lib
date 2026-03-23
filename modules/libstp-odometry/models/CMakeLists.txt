@@ -1,2 +1,4 @@
 add_subdirectory(fused)
-add_subdirectory(stm32)
+if(DRIVER_BUNDLE STREQUAL "wombat")
+    add_subdirectory(stm32)
+endif()
