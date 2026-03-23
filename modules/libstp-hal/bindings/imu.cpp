@@ -6,7 +6,6 @@
 #include <pybind11/stl.h>
 #include <memory>
 #include "hal/IMU.hpp"
-#include "core/LcmWriter.hpp"
 
 namespace py = pybind11;
 
