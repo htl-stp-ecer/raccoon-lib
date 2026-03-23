@@ -50,14 +50,13 @@ jobs:
           echo "wombat_wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wombat_wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
 
-      # --- Build Mock (x86_64) wheel ---
-      - name: Build x86_64 Mock wheel
+      # --- Build Mock wheel (same platform, mock drivers) ---
+      - name: Build Mock wheel
         run: |
           SKIP_TESTS=1 \
           BUILD_NUMBER=${{ github.run_number }} \
           BUILD_JOBS=4 \
-          PLATFORM=linux/amd64 \
-          IMAGE_NAME=libstp-dev:amd64-mock \
+          IMAGE_NAME=libstp-dev:mock \
           BUILD_DIR=build-docker-mock \
           SKBUILD_DIR=_skbuild-docker-mock \
           FETCHCONTENT_DIR=.cmake-cache-docker-mock \
@@ -138,7 +137,7 @@ jobs:
             RPI_HOST=<your-pi-ip> python3 install.py
             ```
 
-            **Install on laptop (Mock platform — for codegen & indexing):**
+            **Install on laptop (Mock platform — codegen & indexing, no hardware needed):**
             ```bash
             pip install ${{ steps.mock.outputs.mock_wheel_name }}
             ```
