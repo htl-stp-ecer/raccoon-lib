@@ -21,6 +21,9 @@ BUILD_JOBS="${BUILD_JOBS:-${_cpu}}"
 FORCE_REBUILD="${FORCE_REBUILD:-0}"
 REBUILD_IMAGE="${REBUILD_IMAGE:-0}"
 CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
+EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS:-}"
+SKBUILD_DIR="${SKBUILD_DIR:-_skbuild-docker}"
+FETCHCONTENT_DIR="${FETCHCONTENT_DIR:-.cmake-cache-docker}"
 
 # -------- Version patching --------
 PYPROJECT="pyproject.toml"
@@ -118,8 +121,8 @@ docker_exec() {
     -e PYTHONDONTWRITEBYTECODE=1 \
     -e CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS" \
     -e MAKEFLAGS="-j$BUILD_JOBS" \
-    -e SKBUILD_BUILD_DIR=/src/_skbuild-docker \
-    -e FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker \
+    -e SKBUILD_BUILD_DIR=/src/$SKBUILD_DIR \
+    -e FETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR \
     "${extra_env[@]}" \
     --cpus="$BUILD_JOBS" \
     -w /src \
@@ -161,7 +164,11 @@ echo "• Generating step builder DSL code..."
 docker_exec "python tools/generate_step_builders.py"
 
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
-docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args=-DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker"
+CMAKE_ARGS="-DFETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR"
+if [[ -n "$EXTRA_CMAKE_ARGS" ]]; then
+  CMAKE_ARGS="$CMAKE_ARGS;$EXTRA_CMAKE_ARGS"
+fi
+docker_exec "CMAKE_BUILD_PARALLEL_LEVEL=$BUILD_JOBS python -m build --wheel --outdir /src/$BUILD_DIR --no-isolation -C cmake.args='$CMAKE_ARGS'"
 
 WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f -exec ls -t {} + | head -1)
 if [[ ! -f "$WHEEL_FILE" ]]; then

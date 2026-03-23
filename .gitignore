@@ -12,6 +12,7 @@ __pycache__/
 .Python
 build/
 build-docker/
+build-docker-mock/
 develop-eggs/
 dist/
 downloads/
@@ -146,6 +147,7 @@ cython_debug/
 
 _skbuild/
 _skbuild-docker/
+_skbuild-docker-mock/
 .pyodide-xbuildenv/
 cmake-build-debug
 .cmake-cache*
