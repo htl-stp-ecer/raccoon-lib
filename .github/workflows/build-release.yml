@@ -28,11 +28,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- Build library ---
+      # --- Build Wombat (ARM64) wheel ---
       - name: Clean old wheels
-        run: find build-docker -name '*.whl' -delete 2>/dev/null || true
+        run: |
+          find build-docker -name '*.whl' -delete 2>/dev/null || true
+          find build-docker-mock -name '*.whl' -delete 2>/dev/null || true
 
-      - name: Build ARM64 wheel
+      - name: Build ARM64 Wombat wheel
         run: |
           SKIP_TESTS=1 \
           BUILD_NUMBER=${{ github.run_number }} \
@@ -45,8 +47,33 @@ jobs:
           WHL=$(find build-docker -name '*.whl' -type f -exec ls -t {} + | head -1)
           VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
-          echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
+          echo "wombat_wheel=$WHL" >> "$GITHUB_OUTPUT"
+          echo "wombat_wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
+
+      # --- Build Mock (x86_64) wheel ---
+      - name: Build x86_64 Mock wheel
+        run: |
+          SKIP_TESTS=1 \
+          BUILD_NUMBER=${{ github.run_number }} \
+          BUILD_JOBS=4 \
+          PLATFORM=linux/amd64 \
+          IMAGE_NAME=libstp-dev:amd64-mock \
+          BUILD_DIR=build-docker-mock \
+          SKBUILD_DIR=_skbuild-docker-mock \
+          FETCHCONTENT_DIR=.cmake-cache-docker-mock \
+          EXTRA_CMAKE_ARGS="-DDRIVER_BUNDLE=mock" \
+          bash build.sh
+
+      - name: Locate mock wheel
+        id: mock
+        run: |
+          WHL=$(find build-docker-mock -name '*.whl' -type f -exec ls -t {} + | head -1)
+          BASENAME=$(basename "$WHL")
+          # Rename to include -mock suffix for clarity
+          MOCK_NAME="${BASENAME/libstp-/libstp_mock-}"
+          cp "$WHL" "build-docker-mock/$MOCK_NAME"
+          echo "mock_wheel=build-docker-mock/$MOCK_NAME" >> "$GITHUB_OUTPUT"
+          echo "mock_wheel_name=$MOCK_NAME" >> "$GITHUB_OUTPUT"
 
       # --- Build docs ---
       - name: Build documentation
@@ -92,7 +119,7 @@ jobs:
         run: |
           rm -rf release-bundle
           mkdir -p release-bundle
-          cp "${{ steps.version.outputs.wheel }}" release-bundle/
+          cp "${{ steps.version.outputs.wombat_wheel }}" release-bundle/
           cp install.py release-bundle/
           cd release-bundle
           tar czf ../libstp-${{ steps.version.outputs.version }}.tar.gz *
@@ -105,10 +132,15 @@ jobs:
           body: |
             Automated release from commit ${{ github.sha }}.
 
-            **Install on Raspberry Pi:**
+            **Install on Raspberry Pi (Wombat platform):**
             ```bash
             tar xzf libstp-${{ steps.version.outputs.version }}.tar.gz
             RPI_HOST=<your-pi-ip> python3 install.py
+            ```
+
+            **Install on laptop (Mock platform — for codegen & indexing):**
+            ```bash
+            pip install ${{ steps.mock.outputs.mock_wheel_name }}
             ```
 
             **View documentation:**
@@ -117,7 +149,8 @@ jobs:
             3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
           files: |
             libstp-${{ steps.version.outputs.version }}.tar.gz
-            ${{ steps.version.outputs.wheel }}
+            ${{ steps.version.outputs.wombat_wheel }}
+            ${{ steps.mock.outputs.mock_wheel }}
             libstp-docs-${{ steps.version.outputs.version }}.zip
 
       - name: Trigger documentation rebuild
