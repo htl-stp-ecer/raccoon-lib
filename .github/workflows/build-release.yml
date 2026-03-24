@@ -17,17 +17,17 @@ jobs:
 
     steps:
       - name: Checkout with submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           token: ${{ secrets.GH_PAT }}
           clean: false
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Clean old wheels
         run: find build-docker -name '*.whl' -delete 2>/dev/null || true
@@ -47,7 +47,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Upload wombat wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wombat-wheel
           path: build-docker/*.whl
@@ -91,7 +91,7 @@ jobs:
             '
 
       - name: Upload docs zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docs-zip
           path: libstp-docs-*.zip
@@ -109,13 +109,13 @@ jobs:
 
     steps:
       - name: Checkout with submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           token: ${{ secrets.GH_PAT }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -136,7 +136,7 @@ jobs:
           python tools/generate_step_builders.py
 
       - name: Build mock wheels
-        uses: pypa/cibuildwheel@v2.23
+        uses: pypa/cibuildwheel@v3.4
         env:
           CIBW_BUILD: "cp313-manylinux* cp313-macosx*"
           CIBW_ARCHS_LINUX: "x86_64"
@@ -148,7 +148,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND: ""
 
       - name: Upload mock wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mock-wheel-${{ matrix.os }}
           path: wheelhouse/*.whl
@@ -162,12 +162,12 @@ jobs:
 
     steps:
       - name: Checkout (for install.py)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           sparse-checkout: install.py
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
