@@ -20,8 +20,8 @@ class TuneDriveBuilder(StepBuilder):
         super().__init__()
         self._distances_cm = None
         self._speeds = None
-        self._csv_dir = '/tmp/drive_telemetry'
-        self._axis = 'forward'
+        self._csv_dir = "/tmp/drive_telemetry"
+        self._axis = "forward"
         self._settle_time = 1.5
         self._timeout = 15.0
 
@@ -51,17 +51,24 @@ class TuneDriveBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs['distances_cm'] = self._distances_cm
-        kwargs['speeds'] = self._speeds
-        kwargs['csv_dir'] = self._csv_dir
-        kwargs['axis'] = self._axis
-        kwargs['settle_time'] = self._settle_time
-        kwargs['timeout'] = self._timeout
+        kwargs["distances_cm"] = self._distances_cm
+        kwargs["speeds"] = self._speeds
+        kwargs["csv_dir"] = self._csv_dir
+        kwargs["axis"] = self._axis
+        kwargs["settle_time"] = self._settle_time
+        kwargs["timeout"] = self._timeout
         return TuneDrive(**kwargs)
 
 
-@dsl(tags=['motion', 'calibration', 'drive'])
-def tune_drive(distances_cm: list[float] = None, speeds: list[float] = None, csv_dir: str = '/tmp/drive_telemetry', axis: str = 'forward', settle_time: float = 1.5, timeout: float = 15.0):
+@dsl(tags=["motion", "calibration", "drive"])
+def tune_drive(
+    distances_cm: list[float] = None,
+    speeds: list[float] = None,
+    csv_dir: str = "/tmp/drive_telemetry",
+    axis: str = "forward",
+    settle_time: float = 1.5,
+    timeout: float = 15.0,
+):
     """
     Run test drives at various distances and speeds, saving telemetry to CSV.
 
@@ -126,4 +133,4 @@ def tune_drive(distances_cm: list[float] = None, speeds: list[float] = None, csv
     return b
 
 
-__all__ = ['TuneDriveBuilder', 'tune_drive']
+__all__ = ["TuneDriveBuilder", "tune_drive"]
