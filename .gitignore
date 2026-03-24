@@ -13,6 +13,8 @@ __pycache__/
 build/
 build-docker/
 build-docker-mock/
+build-docker-stubs/
+stubs-staging/
 develop-eggs/
 dist/
 downloads/
