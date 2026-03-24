@@ -138,7 +138,7 @@ jobs:
       - name: Build mock wheels
         uses: pypa/cibuildwheel@v2.23
         env:
-          CIBW_BUILD: "cp313-*"
+          CIBW_BUILD: "cp313-manylinux* cp313-macosx*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_MACOS: "auto"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
