@@ -185,6 +185,16 @@ namespace libstp::kinematics::mecanum
             static_cast<float>(R / (4.0 * L))
         };
 
+        // Forward kinematics: body velocity -> wheel speeds (rad/s)
+        // w_fl = (vx + vy - L*wz) / R
+        // w_fr = (vx - vy + L*wz) / R
+        // w_bl = (vx - vy - L*wz) / R
+        // w_br = (vx + vy + L*wz) / R
+        cfg.fwd_matrix[0] = {static_cast<float>(1.0/R), static_cast<float>( 1.0/R), static_cast<float>(-L/R)};
+        cfg.fwd_matrix[1] = {static_cast<float>(1.0/R), static_cast<float>(-1.0/R), static_cast<float>( L/R)};
+        cfg.fwd_matrix[2] = {static_cast<float>(1.0/R), static_cast<float>(-1.0/R), static_cast<float>(-L/R)};
+        cfg.fwd_matrix[3] = {static_cast<float>(1.0/R), static_cast<float>( 1.0/R), static_cast<float>( L/R)};
+
         // Per-motor ticks_to_rad from calibration
         const auto motors = getMotors();
         for (std::size_t i = 0; i < 4; ++i) {

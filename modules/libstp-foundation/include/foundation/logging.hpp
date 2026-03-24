@@ -126,6 +126,11 @@ namespace logging {
         }
     }
 
+    /// Flush and tear down the logger so that no further log calls touch spdlog.
+    /// Must be called before C++ static destruction begins (e.g. from a Python
+    /// atexit handler) to avoid use-after-free in cross-library static teardown.
+    void shutdown();
+
     /// Access the shared spdlog logger after initialization.
     std::shared_ptr<spdlog::logger> core();
 }

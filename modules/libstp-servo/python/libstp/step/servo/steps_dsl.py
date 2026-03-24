@@ -10,7 +10,7 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing, EasingFunc
+from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing
 
 
 class ShakeServoBuilder(StepBuilder):
@@ -147,9 +147,7 @@ def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed
         servo: The servo to control, obtained from the robot hardware map (e.g. ``robot.servo(0)``).
         angle: Target angle in degrees.
         speed: Movement speed in degrees per second. Must be positive. Defaults to 60.0 deg/s.
-        easing: Interpolation curve. Pass an ``Easing`` member or any callable
-            ``(t: float) -> float`` mapping [0, 1] → [0, 1]. Defaults to
-            ``Easing.EASE_IN_OUT``.
+        easing: Interpolation curve. Pass an :class:`Easing` member or any callable ``(t: float) -> float`` mapping [0, 1] → [0, 1]. Defaults to ``Easing.EASE_IN_OUT``.
 
     Returns:
         A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.easing()``, ``.on_anomaly()``, ``.skip_timing()``).

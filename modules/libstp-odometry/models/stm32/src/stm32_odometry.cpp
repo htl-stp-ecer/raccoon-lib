@@ -38,7 +38,7 @@ namespace libstp::odometry::stm32
     {
         auto cfg = kinematics_->getStmOdometryConfig();
         platform::wombat::core::LcmDataWriter::instance().sendKinematicsConfig(
-            cfg.inv_matrix, cfg.ticks_to_rad);
+            cfg.inv_matrix, cfg.ticks_to_rad, cfg.fwd_matrix);
     }
 
     void Stm32Odometry::update(double /*dt*/)
@@ -103,16 +103,22 @@ namespace libstp::odometry::stm32
 
         origin_heading_ = 0.0;
 
-        // Zero the local cache immediately so reads don't return stale data
-        // while the STM32 processes the reset command
-        platform::wombat::core::LcmReader::instance().resetOdometry();
-
         // Tell STM32 to zero its integrated pose
         platform::wombat::core::LcmDataWriter::instance().resetOdometry();
 
         // Re-send kinematics config (ensures STM32 encoder tracking is re-initialized)
         sendKinematicsConfig();
 
-        LIBSTP_LOG_TRACE("Stm32Odometry::reset — STM32 odometry reset requested");
+        // Block until the STM32 publishes near-zero odometry, confirming
+        // the reset was processed.  This prevents the motion controller
+        // from reading stale pre-reset position data.
+        if (!platform::wombat::core::LcmReader::instance().waitForOdometryReset(500)) {
+            LIBSTP_LOG_WARN("Stm32Odometry::reset — timed out waiting for STM32 reset confirmation");
+        }
+
+        // Zero the local cache once more to eliminate any sub-threshold residual
+        platform::wombat::core::LcmReader::instance().resetOdometry();
+
+        LIBSTP_LOG_TRACE("Stm32Odometry::reset — STM32 odometry reset confirmed");
     }
 }
