@@ -59,8 +59,8 @@ jobs:
             libstp-dev:arm64 bash -lc "
               set -euo pipefail
 
-              # Install the built wheel + stubgen
-              pip install --quiet pybind11-stubgen /src/build-docker/$WHL_NAME
+              # Install the built wheel + its runtime deps + stubgen
+              pip install --quiet pybind11-stubgen /src/raccoon-transport/python /src/build-docker/$WHL_NAME
 
               # Generate .pyi stubs from the compiled C++ bindings
               rm -rf /src/stubs-staging
