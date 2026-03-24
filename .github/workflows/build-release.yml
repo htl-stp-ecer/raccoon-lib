@@ -68,7 +68,7 @@ jobs:
 
               # Merge pure Python source into the stubs package so IDEs
               # can resolve the full API (DSL steps, helpers, etc.)
-              SITE=\$(python -c 'import libstp, pathlib; print(pathlib.Path(libstp.__file__).parent)')
+              SITE=\$(pip show libstp | grep '^Location:' | cut -d' ' -f2)/libstp
               find \"\$SITE\" -name '*.py' | while read py; do
                 REL=\${py#\$SITE/}
                 DEST=/src/stubs-staging/libstp/\$REL
