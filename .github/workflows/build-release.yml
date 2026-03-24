@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout with submodules
@@ -138,16 +138,13 @@ jobs:
       - name: Build mock wheels
         uses: pypa/cibuildwheel@v2.23
         env:
-          CIBW_BUILD: "cp313-manylinux* cp313-macosx* cp313-win*"
+          CIBW_BUILD: "cp313-manylinux* cp313-macosx*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_MACOS: "auto"
-          CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
           CIBW_CONFIG_SETTINGS: "cmake.args=-DDRIVER_BUNDLE=mock"
           CIBW_BEFORE_BUILD: "pip install scikit-build-core pybind11 cmake"
           CIBW_BEFORE_BUILD_LINUX: "yum install -y git && pip install scikit-build-core pybind11 cmake"
-          CIBW_BEFORE_BUILD_WINDOWS: "choco install -y pkgconfiglite && vcpkg install glib:x64-windows && pip install scikit-build-core pybind11 cmake"
-          CIBW_ENVIRONMENT_WINDOWS: 'CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake'
           CIBW_REPAIR_WHEEL_COMMAND: ""
 
       - name: Upload mock wheels
@@ -206,7 +203,8 @@ jobs:
             ```bash
             pip install libstp-${{ needs.build-wombat.outputs.version }}-cp313-cp313-<your-platform>.whl
             ```
-            Wheels are available for Linux x86_64, macOS ARM64, and Windows AMD64.
+            Wheels are available for Linux x86_64 and macOS ARM64.
+            Windows users: install via WSL (`wsl --install`, then use the Linux wheel).
             Use `raccoon update` to auto-detect and install the correct wheel.
 
             **View documentation:**
