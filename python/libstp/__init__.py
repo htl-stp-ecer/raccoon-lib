@@ -134,6 +134,14 @@ def _disable_all_motors() -> None:
         pass
 
 
+def _shutdown_logging() -> None:
+    """Tear down spdlog before C++ static destruction begins."""
+    try:
+        foundation.shutdown_logging()
+    except Exception:
+        pass
+
+
 def _forward_signal(signum: int, frame: FrameType | None) -> None:
     handler = _PREVIOUS_SIGNAL_HANDLERS.get(signum)
     if handler in (None, signal.SIG_IGN):
@@ -154,6 +162,7 @@ def _install_shutdown_hooks() -> None:
 
     _HOOKS_INSTALLED = True
 
+    atexit.register(_shutdown_logging)
     atexit.register(_disable_all_motors)
     print("Registered atexit shutdown hook to disable all motors")
 

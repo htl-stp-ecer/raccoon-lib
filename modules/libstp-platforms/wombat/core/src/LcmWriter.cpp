@@ -101,7 +101,8 @@ void LcmDataWriter::setShutdown(bool enabled)
 }
 
 void LcmDataWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
-                                          const std::array<float, 4>& ticks_to_rad)
+                                          const std::array<float, 4>& ticks_to_rad,
+                                          const std::array<std::array<float, 3>, 4>& fwd_matrix)
 {
     raccoon::kinematics_config_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -110,6 +111,9 @@ void LcmDataWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 
             msg.inv_matrix[r * 4 + c] = inv_matrix[r][c];
     for (int i = 0; i < 4; ++i)
         msg.ticks_to_rad[i] = ticks_to_rad[i];
+    for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 3; ++c)
+            msg.fwd_matrix[r * 3 + c] = fwd_matrix[r][c];
     transport_.publish(Channels::KINEMATICS_CONFIG_CMD, msg, reliableOpts);
 }
 

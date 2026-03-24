@@ -14,6 +14,7 @@
 #include <thread>
 #include <atomic>
 #include <functional>
+#include <condition_variable>
 
 namespace platform::wombat::core {
     /**
@@ -68,6 +69,10 @@ namespace platform::wombat::core {
         /// Zero the local odometry cache (call alongside STM32 reset command).
         void resetOdometry();
 
+        /// Block until the STM32 publishes near-zero odometry after a reset.
+        /// Returns true if confirmed, false on timeout.
+        bool waitForOdometryReset(int timeout_ms = 500);
+
         /// Wait until heading data has been observed at least once.
         bool waitForImuReady(int timeout_ms = 1000);
 
@@ -102,6 +107,7 @@ namespace platform::wombat::core {
 
         // STM32 odometry cache
         OdometrySnapshot odom_cache_{};
+        std::condition_variable odom_cv_;
 
         // Track whether real IMU heading data has been received.
         std::atomic<bool> imu_heading_received_{false};

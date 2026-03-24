@@ -117,6 +117,11 @@ void libstp::hal::motor::Motor::disableAll()
     LIBSTP_LOG_INFO("Mock Motor disableAll executed");
 }
 
+void libstp::hal::motor::Motor::enableAll()
+{
+    LIBSTP_LOG_INFO("Mock Motor enableAll executed (no-op on mock)");
+}
+
 const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibration() const
 {
     return calibration_;

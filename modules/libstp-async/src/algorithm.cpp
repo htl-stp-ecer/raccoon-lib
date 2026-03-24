@@ -113,3 +113,5 @@ T libstp::async::AsyncAlgorithm<T>::await_resume() noexcept
 {
     return current();
 }
+
+template class libstp::async::AsyncAlgorithm<int>;

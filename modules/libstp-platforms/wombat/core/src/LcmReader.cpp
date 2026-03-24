@@ -1,6 +1,7 @@
 #include "core/LcmReader.hpp"
 #include "core/LcmWriter.hpp"
 #include <chrono>
+#include <cmath>
 #include <thread>
 #include <unistd.h>
 #include "foundation/logging.hpp"
@@ -136,20 +137,23 @@ LcmReader::LcmReader()
     transport_.subscribe<raccoon::scalar_f_t>(
         Channels::ODOM_POS_X,
         [this](const raccoon::scalar_f_t& msg) {
-            std::lock_guard<std::mutex> lock(cache_mutex_);
-            odom_cache_.pos_x = msg.value;
+            { std::lock_guard<std::mutex> lock(cache_mutex_);
+              odom_cache_.pos_x = msg.value; }
+            odom_cv_.notify_all();
         }, retainedOpts);
     transport_.subscribe<raccoon::scalar_f_t>(
         Channels::ODOM_POS_Y,
         [this](const raccoon::scalar_f_t& msg) {
-            std::lock_guard<std::mutex> lock(cache_mutex_);
-            odom_cache_.pos_y = msg.value;
+            { std::lock_guard<std::mutex> lock(cache_mutex_);
+              odom_cache_.pos_y = msg.value; }
+            odom_cv_.notify_all();
         }, retainedOpts);
     transport_.subscribe<raccoon::scalar_f_t>(
         Channels::ODOM_HEADING,
         [this](const raccoon::scalar_f_t& msg) {
-            std::lock_guard<std::mutex> lock(cache_mutex_);
-            odom_cache_.heading = msg.value;
+            { std::lock_guard<std::mutex> lock(cache_mutex_);
+              odom_cache_.heading = msg.value; }
+            odom_cv_.notify_all();
         }, retainedOpts);
     transport_.subscribe<raccoon::scalar_f_t>(
         Channels::ODOM_VX,
@@ -361,6 +365,18 @@ LcmReader::OdometrySnapshot LcmReader::readOdometry() {
 void LcmReader::resetOdometry() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     odom_cache_ = OdometrySnapshot{};
+}
+
+bool LcmReader::waitForOdometryReset(int timeout_ms) {
+    constexpr float kThreshold = 0.002f;
+    auto deadline = std::chrono::steady_clock::now()
+                  + std::chrono::milliseconds(timeout_ms);
+    std::unique_lock<std::mutex> lock(cache_mutex_);
+    return odom_cv_.wait_until(lock, deadline, [&] {
+        return std::abs(odom_cache_.pos_x) < kThreshold
+            && std::abs(odom_cache_.pos_y) < kThreshold
+            && std::abs(odom_cache_.heading) < kThreshold;
+    });
 }
 
 bool LcmReader::waitForImuReady(int timeout_ms) {

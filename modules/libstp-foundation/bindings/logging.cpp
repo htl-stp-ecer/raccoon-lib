@@ -29,6 +29,8 @@ void init_logger(py::module_& m)
         .value("off", logging::Level::off);
 
     m.def("initialize_logging", &logging::init, "Initialize and enable the logging system");
+    m.def("shutdown_logging", &logging::shutdown,
+          "Flush and tear down the logger so that no further log calls touch spdlog");
     m.def("initialize_timer", &logging::initialize_timer, "Initialize the timer for elapsed time logging");
 
     // Runtime log level filtering API

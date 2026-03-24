@@ -150,6 +150,15 @@ namespace libstp::kinematics::differential
             0.0f, 0.0f
         };
 
+        // Forward kinematics: body velocity -> wheel speeds (rad/s)
+        // w_left  = (vx - wz * wheelbase/2) / R
+        // w_right = (vx + wz * wheelbase/2) / R
+        cfg.fwd_matrix[0] = {static_cast<float>(1.0/R), 0.0f, static_cast<float>(-m_wheelbase/(2.0*R))};
+        cfg.fwd_matrix[1] = {static_cast<float>(1.0/R), 0.0f, static_cast<float>( m_wheelbase/(2.0*R))};
+        // Wheels 2-3 unused in differential drive
+        cfg.fwd_matrix[2] = {0.0f, 0.0f, 0.0f};
+        cfg.fwd_matrix[3] = {0.0f, 0.0f, 0.0f};
+
         const auto motors = getMotors();
         for (std::size_t i = 0; i < motors.size(); ++i) {
             double t2r = motors[i]->getCalibration().ticks_to_rad;

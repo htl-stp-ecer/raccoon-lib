@@ -1,6 +1,7 @@
 //
 // Created by tobias on 11/27/25.
 //
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -24,6 +25,7 @@ namespace logging {
     namespace {
         std::optional<std::chrono::steady_clock::time_point> start_time;
         bool logger_initialized = false;
+        std::atomic<bool> logger_shutdown{false};
 
         // Runtime filtering state
         std::mutex filter_mutex_;
@@ -305,6 +307,9 @@ namespace logging {
     }
 
     bool is_enabled(Level level) {
+        if (logger_shutdown.load(std::memory_order_relaxed)) {
+            return false;
+        }
         // Auto-initialize if not done yet
         if (!logger_initialized) {
             init();
@@ -317,6 +322,9 @@ namespace logging {
     }
 
     bool is_enabled_for(Level level, const char* file) {
+        if (logger_shutdown.load(std::memory_order_relaxed)) {
+            return false;
+        }
         // Auto-initialize if not done yet
         if (!logger_initialized) {
             init();
@@ -402,6 +410,9 @@ namespace logging {
     }
 
     void log(Level level, std::string_view message) {
+        if (logger_shutdown.load(std::memory_order_relaxed)) {
+            return;
+        }
         // Auto-initialize if not done yet
         if (!logger_initialized) {
             init();
@@ -414,6 +425,9 @@ namespace logging {
     }
 
     void log(Level level, const char* source_file, std::string_view message) {
+        if (logger_shutdown.load(std::memory_order_relaxed)) {
+            return;
+        }
         if (!logger_initialized) {
             init();
         }
@@ -424,6 +438,12 @@ namespace logging {
         current_source_file_ = source_file ? source_file : "";
         logger->log(to_spdlog_level(level), message);
         current_source_file_ = "";
+    }
+
+    void shutdown() {
+        logger_shutdown.store(true, std::memory_order_relaxed);
+        spdlog::shutdown();
+        logger_initialized = false;
     }
 
 } // namespace logging

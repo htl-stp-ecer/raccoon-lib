@@ -54,7 +54,8 @@ namespace platform::wombat::core
 
         /// Send kinematics config to STM32 for on-board odometry.
         void sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
-                                  const std::array<float, 4>& ticks_to_rad);
+                                  const std::array<float, 4>& ticks_to_rad,
+                                  const std::array<std::array<float, 3>, 4>& fwd_matrix);
 
         /// Request STM32 to reset its integrated odometry pose.
         void resetOdometry();
