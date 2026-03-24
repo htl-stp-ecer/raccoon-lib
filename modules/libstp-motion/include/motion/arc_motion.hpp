@@ -26,6 +26,7 @@ namespace libstp::motion
         double radius_m{0.0};           // Turning radius (always positive)
         double arc_angle_rad{0.0};      // Total heading change (positive = CCW/left, negative = CW/right)
         double speed_scale{1.0};        // 0-1 fraction of max speed
+        bool lateral{false};            // true = strafe arc (vy), false = drive arc (vx)
     };
 
     /** Per-cycle diagnostics captured while an `ArcMotion` instance runs. */
@@ -44,6 +45,7 @@ namespace libstp::motion
         double filtered_velocity_radps{0.0};
         // Commands
         double cmd_vx_mps{0.0};
+        double cmd_vy_mps{0.0};
         double cmd_wz_radps{0.0};
         // PID internals
         double pid_raw{0.0};

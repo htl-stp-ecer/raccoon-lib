@@ -14,7 +14,8 @@ void init_arc_motion(py::module_& m)
         .def(py::init<>())
         .def_readwrite("radius_m", &ArcMotionConfig::radius_m)
         .def_readwrite("arc_angle_rad", &ArcMotionConfig::arc_angle_rad)
-        .def_readwrite("speed_scale", &ArcMotionConfig::speed_scale);
+        .def_readwrite("speed_scale", &ArcMotionConfig::speed_scale)
+        .def_readwrite("lateral", &ArcMotionConfig::lateral);
 
     py::class_<ArcMotionTelemetry>(m, "ArcMotionTelemetry")
         .def_readonly("time_s", &ArcMotionTelemetry::time_s)
@@ -26,6 +27,7 @@ void init_arc_motion(py::module_& m)
         .def_readonly("arc_target_m", &ArcMotionTelemetry::arc_target_m)
         .def_readonly("filtered_velocity_radps", &ArcMotionTelemetry::filtered_velocity_radps)
         .def_readonly("cmd_vx_mps", &ArcMotionTelemetry::cmd_vx_mps)
+        .def_readonly("cmd_vy_mps", &ArcMotionTelemetry::cmd_vy_mps)
         .def_readonly("cmd_wz_radps", &ArcMotionTelemetry::cmd_wz_radps)
         .def_readonly("pid_raw", &ArcMotionTelemetry::pid_raw)
         .def_readonly("setpoint_position_rad", &ArcMotionTelemetry::setpoint_position_rad)

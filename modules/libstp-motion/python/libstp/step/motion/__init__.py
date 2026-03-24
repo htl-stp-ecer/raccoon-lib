@@ -9,8 +9,8 @@ from .drive_dsl import (
 )
 from .drive_angle import DriveAngle
 from .drive_angle_dsl import drive_angle
-from .arc import Arc, DriveArcLeft, DriveArcRight, DriveArc
-from .arc_dsl import drive_arc_left, drive_arc_right, drive_arc
+from .arc import Arc, DriveArcLeft, DriveArcRight, DriveArc, StrafeArcLeft, StrafeArcRight, StrafeArc
+from .arc_dsl import drive_arc_left, drive_arc_right, drive_arc, strafe_arc_left, strafe_arc_right, strafe_arc
 from .stop import Stop
 from .stop_dsl import stop
 from .turn import TurnLeft, TurnRight
@@ -118,6 +118,12 @@ __all__ = [
     "drive_arc_right",
     "DriveArc",
     "drive_arc",
+    "StrafeArcLeft",
+    "strafe_arc_left",
+    "StrafeArcRight",
+    "strafe_arc_right",
+    "StrafeArc",
+    "strafe_arc",
     "TurnLeft",
     "turn_left",
     "TurnRight",

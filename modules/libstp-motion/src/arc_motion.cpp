@@ -75,11 +75,11 @@ namespace libstp::motion
         profiled_pid_.setGoal(cfg_.arc_angle_rad);
 
         LIBSTP_LOG_DEBUG("ArcMotion started: radius={:.3f} m, arc_angle={:.3f} rad ({:.1f} deg), "
-                    "max_omega={:.3f} rad/s, max_vx={:.3f} m/s (scale={:.2f})",
+                    "max_omega={:.3f} rad/s, max_v={:.3f} m/s (scale={:.2f}, lateral={})",
                     cfg_.radius_m,
                     cfg_.arc_angle_rad, cfg_.arc_angle_rad * 180.0 / std::numbers::pi,
                     max_angular_velocity_, max_angular_velocity_ * cfg_.radius_m,
-                    cfg_.speed_scale);
+                    cfg_.speed_scale, cfg_.lateral);
     }
 
     void ArcMotion::update(double dt)
@@ -127,11 +127,16 @@ namespace libstp::motion
         const double omega_cmd_raw = profiled_pid_.calculate(current_heading, dt);
         const double omega_cmd = std::clamp(omega_cmd_raw, -max_angular_velocity_, max_angular_velocity_);
 
-        // Derive forward velocity from angular velocity: vx = |omega| * radius
-        // This produces coordinated acceleration along the arc.
-        const double vx_cmd = std::abs(omega_cmd) * cfg_.radius_m;
+        // Derive linear velocity from angular velocity: v = |omega| * radius
+        // For lateral mode (strafe arc), velocity goes to vy; otherwise to vx.
+        const double linear_cmd = std::abs(omega_cmd) * cfg_.radius_m;
+        const double vx_cmd = cfg_.lateral ? 0.0 : linear_cmd;
+        // Strafe sign: positive arc_angle (CCW/left turn) => strafe right (+vy)
+        //              negative arc_angle (CW/right turn) => strafe left (-vy)
+        const double vy_sign = (cfg_.arc_angle_rad >= 0.0) ? 1.0 : -1.0;
+        const double vy_cmd = cfg_.lateral ? vy_sign * linear_cmd : 0.0;
 
-        drive().setVelocity(foundation::ChassisVelocity{vx_cmd, 0.0, omega_cmd});
+        drive().setVelocity(foundation::ChassisVelocity{vx_cmd, vy_cmd, omega_cmd});
         [[maybe_unused]] const auto mc = drive().update(dt);
 
         // Record telemetry
@@ -149,6 +154,7 @@ namespace libstp::motion
             .arc_target_m = arc_target,
             .filtered_velocity_radps = filtered_velocity_,
             .cmd_vx_mps = vx_cmd,
+            .cmd_vy_mps = vy_cmd,
             .cmd_wz_radps = omega_cmd,
             .pid_raw = omega_cmd_raw,
             .setpoint_position_rad = sp.position,
@@ -159,12 +165,12 @@ namespace libstp::motion
         LIBSTP_LOG_DEBUG(
             "ARC [c={} dt={:.4f}] hdg={:.1f}deg err={:.2f}deg | "
             "sp={:.3f}rad sp_vel={:.3f} | "
-            "omega={:.3f} vx={:.3f} | filt_vel={:.3f}",
+            "omega={:.3f} vx={:.3f} vy={:.3f} | filt_vel={:.3f}",
             cycle_, dt,
             current_heading * 180.0 / std::numbers::pi,
             heading_error * 180.0 / std::numbers::pi,
             sp.position, sp.velocity,
-            omega_cmd, vx_cmd, filtered_velocity_);
+            omega_cmd, vx_cmd, vy_cmd, filtered_velocity_);
     }
 
     bool ArcMotion::isFinished() const

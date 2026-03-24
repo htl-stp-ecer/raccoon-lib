@@ -10,7 +10,15 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .line_follow import FollowLine, FollowLineSingle, DirectionalFollowLine, StrafeFollowLine, StrafeFollowLineSingle, DirectionalFollowLineSingle, LineSide
+from .line_follow import (
+    FollowLine,
+    FollowLineSingle,
+    DirectionalFollowLine,
+    StrafeFollowLine,
+    StrafeFollowLineSingle,
+    DirectionalFollowLineSingle,
+    LineSide,
+)
 
 
 class FollowLineBuilder(StepBuilder):
@@ -62,20 +70,29 @@ class FollowLineBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._left_sensor is not _UNSET:
-            kwargs['left_sensor'] = self._left_sensor
+            kwargs["left_sensor"] = self._left_sensor
         if self._right_sensor is not _UNSET:
-            kwargs['right_sensor'] = self._right_sensor
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['speed'] = self._speed
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['until'] = self._until
+            kwargs["right_sensor"] = self._right_sensor
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["speed"] = self._speed
+        kwargs["kp"] = self._kp
+        kwargs["ki"] = self._ki
+        kwargs["kd"] = self._kd
+        kwargs["until"] = self._until
         return FollowLine(**kwargs)
 
 
-@dsl(tags=['motion', 'line-follow'])
-def follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
+@dsl(tags=["motion", "line-follow"])
+def follow_line(
+    left_sensor: IRSensor = _UNSET,
+    right_sensor: IRSensor = _UNSET,
+    distance_cm: float | None = None,
+    speed: float = 0.5,
+    kp: float = 0.4,
+    ki: float = 0.0,
+    kd: float = 0.1,
+    until: StopCondition | None = None,
+):
     """
     Follow a line using two IR sensors for steering.
 
@@ -183,19 +200,28 @@ class FollowLineSingleBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['speed'] = self._speed
-        kwargs['side'] = self._side
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['until'] = self._until
+            kwargs["sensor"] = self._sensor
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["speed"] = self._speed
+        kwargs["side"] = self._side
+        kwargs["kp"] = self._kp
+        kwargs["ki"] = self._ki
+        kwargs["kd"] = self._kd
+        kwargs["until"] = self._until
         return FollowLineSingle(**kwargs)
 
 
-@dsl(tags=['motion', 'line-follow'])
-def follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
+@dsl(tags=["motion", "line-follow"])
+def follow_line_single(
+    sensor: IRSensor = _UNSET,
+    distance_cm: float | None = None,
+    speed: float = 0.5,
+    side: LineSide = LineSide.LEFT,
+    kp: float = 0.4,
+    ki: float = 0.0,
+    kd: float = 0.1,
+    until: StopCondition | None = None,
+):
     """
     Follow a line edge using a single IR sensor.
 
@@ -310,21 +336,31 @@ class DirectionalFollowLineBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._left_sensor is not _UNSET:
-            kwargs['left_sensor'] = self._left_sensor
+            kwargs["left_sensor"] = self._left_sensor
         if self._right_sensor is not _UNSET:
-            kwargs['right_sensor'] = self._right_sensor
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['heading_speed'] = self._heading_speed
-        kwargs['strafe_speed'] = self._strafe_speed
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['until'] = self._until
+            kwargs["right_sensor"] = self._right_sensor
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["heading_speed"] = self._heading_speed
+        kwargs["strafe_speed"] = self._strafe_speed
+        kwargs["kp"] = self._kp
+        kwargs["ki"] = self._ki
+        kwargs["kd"] = self._kd
+        kwargs["until"] = self._until
         return DirectionalFollowLine(**kwargs)
 
 
-@dsl(tags=['motion', 'line-follow'])
-def directional_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
+@dsl(tags=["motion", "line-follow"])
+def directional_follow_line(
+    left_sensor: IRSensor = _UNSET,
+    right_sensor: IRSensor = _UNSET,
+    distance_cm: float | None = None,
+    heading_speed: float = 0.0,
+    strafe_speed: float = 0.0,
+    kp: float = 0.4,
+    ki: float = 0.0,
+    kd: float = 0.1,
+    until: StopCondition | None = None,
+):
     """
     Follow a line with independent heading and strafe speeds.
 
@@ -438,20 +474,29 @@ class StrafeFollowLineBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._left_sensor is not _UNSET:
-            kwargs['left_sensor'] = self._left_sensor
+            kwargs["left_sensor"] = self._left_sensor
         if self._right_sensor is not _UNSET:
-            kwargs['right_sensor'] = self._right_sensor
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['speed'] = self._speed
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['until'] = self._until
+            kwargs["right_sensor"] = self._right_sensor
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["speed"] = self._speed
+        kwargs["kp"] = self._kp
+        kwargs["ki"] = self._ki
+        kwargs["kd"] = self._kd
+        kwargs["until"] = self._until
         return StrafeFollowLine(**kwargs)
 
 
-@dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line(left_sensor: IRSensor = _UNSET, right_sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
+@dsl(tags=["motion", "line-follow"])
+def strafe_follow_line(
+    left_sensor: IRSensor = _UNSET,
+    right_sensor: IRSensor = _UNSET,
+    distance_cm: float | None = None,
+    speed: float = 0.5,
+    kp: float = 0.4,
+    ki: float = 0.0,
+    kd: float = 0.1,
+    until: StopCondition | None = None,
+):
     """
     Follow a line forward, correcting position by strafing left/right.
 
@@ -557,19 +602,28 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['speed'] = self._speed
-        kwargs['side'] = self._side
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['until'] = self._until
+            kwargs["sensor"] = self._sensor
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["speed"] = self._speed
+        kwargs["side"] = self._side
+        kwargs["kp"] = self._kp
+        kwargs["ki"] = self._ki
+        kwargs["kd"] = self._kd
+        kwargs["until"] = self._until
         return StrafeFollowLineSingle(**kwargs)
 
 
-@dsl(tags=['motion', 'line-follow'])
-def strafe_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, speed: float = 0.5, side: LineSide = LineSide.LEFT, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
+@dsl(tags=["motion", "line-follow"])
+def strafe_follow_line_single(
+    sensor: IRSensor = _UNSET,
+    distance_cm: float | None = None,
+    speed: float = 0.5,
+    side: LineSide = LineSide.LEFT,
+    kp: float = 0.4,
+    ki: float = 0.0,
+    kd: float = 0.1,
+    until: StopCondition | None = None,
+):
     """
     Follow a line edge forward, correcting position by strafing.
 
@@ -676,20 +730,30 @@ class DirectionalFollowLineSingleBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['heading_speed'] = self._heading_speed
-        kwargs['strafe_speed'] = self._strafe_speed
-        kwargs['side'] = self._side
-        kwargs['kp'] = self._kp
-        kwargs['ki'] = self._ki
-        kwargs['kd'] = self._kd
-        kwargs['until'] = self._until
+            kwargs["sensor"] = self._sensor
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["heading_speed"] = self._heading_speed
+        kwargs["strafe_speed"] = self._strafe_speed
+        kwargs["side"] = self._side
+        kwargs["kp"] = self._kp
+        kwargs["ki"] = self._ki
+        kwargs["kd"] = self._kd
+        kwargs["until"] = self._until
         return DirectionalFollowLineSingle(**kwargs)
 
 
-@dsl(tags=['motion', 'line-follow'])
-def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float | None = None, heading_speed: float = 0.0, strafe_speed: float = 0.0, side: LineSide = LineSide.LEFT, kp: float = 0.4, ki: float = 0.0, kd: float = 0.1, until: StopCondition | None = None):
+@dsl(tags=["motion", "line-follow"])
+def directional_follow_line_single(
+    sensor: IRSensor = _UNSET,
+    distance_cm: float | None = None,
+    heading_speed: float = 0.0,
+    strafe_speed: float = 0.0,
+    side: LineSide = LineSide.LEFT,
+    kp: float = 0.4,
+    ki: float = 0.0,
+    kd: float = 0.1,
+    until: StopCondition | None = None,
+):
     """
     Follow a line edge with a single sensor and independent heading/strafe speeds.
 
@@ -745,4 +809,17 @@ def directional_follow_line_single(sensor: IRSensor = _UNSET, distance_cm: float
     return b
 
 
-__all__ = ['FollowLineBuilder', 'follow_line', 'FollowLineSingleBuilder', 'follow_line_single', 'DirectionalFollowLineBuilder', 'directional_follow_line', 'StrafeFollowLineBuilder', 'strafe_follow_line', 'StrafeFollowLineSingleBuilder', 'strafe_follow_line_single', 'DirectionalFollowLineSingleBuilder', 'directional_follow_line_single']
+__all__ = [
+    "FollowLineBuilder",
+    "follow_line",
+    "FollowLineSingleBuilder",
+    "follow_line_single",
+    "DirectionalFollowLineBuilder",
+    "directional_follow_line",
+    "StrafeFollowLineBuilder",
+    "strafe_follow_line",
+    "StrafeFollowLineSingleBuilder",
+    "strafe_follow_line_single",
+    "DirectionalFollowLineSingleBuilder",
+    "directional_follow_line_single",
+]
