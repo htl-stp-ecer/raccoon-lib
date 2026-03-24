@@ -105,7 +105,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout with submodules
@@ -138,21 +138,17 @@ jobs:
       - name: Build mock wheels
         uses: pypa/cibuildwheel@v2.23
         env:
-          CIBW_BUILD: "cp313-manylinux* cp313-macosx*"
+          CIBW_BUILD: "cp313-manylinux* cp313-macosx* cp313-win*"
           CIBW_ARCHS_LINUX: "x86_64"
           CIBW_ARCHS_MACOS: "auto"
+          CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
           CIBW_CONFIG_SETTINGS: "cmake.args=-DDRIVER_BUNDLE=mock"
           CIBW_BEFORE_BUILD: "pip install scikit-build-core pybind11 cmake"
           CIBW_BEFORE_BUILD_LINUX: "yum install -y git && pip install scikit-build-core pybind11 cmake"
+          CIBW_BEFORE_BUILD_WINDOWS: "choco install -y pkgconfiglite && vcpkg install glib:x64-windows && pip install scikit-build-core pybind11 cmake"
+          CIBW_ENVIRONMENT_WINDOWS: 'CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake'
           CIBW_REPAIR_WHEEL_COMMAND: ""
-
-      - name: Rename wheels to libstp_mock
-        shell: bash
-        run: |
-          for f in wheelhouse/libstp-*; do
-            mv "$f" "${f/libstp-/libstp_mock-}"
-          done
 
       - name: Upload mock wheels
         uses: actions/upload-artifact@v4
@@ -186,10 +182,11 @@ jobs:
           cd release-bundle
           tar czf ../libstp-${{ needs.build-wombat.outputs.version }}.tar.gz *
 
-      - name: Collect mock wheels
+      - name: Collect all wheels
         run: |
-          mkdir -p mock-wheels
-          cp artifacts/mock-wheel-*/*.whl mock-wheels/
+          mkdir -p all-wheels
+          cp artifacts/wombat-wheel/*.whl all-wheels/
+          cp artifacts/mock-wheel-*/*.whl all-wheels/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -207,9 +204,10 @@ jobs:
 
             **Install on laptop (Mock platform — codegen & indexing, no hardware needed):**
             ```bash
-            pip install <libstp_mock wheel for your platform>
+            pip install libstp-${{ needs.build-wombat.outputs.version }}-cp313-cp313-<your-platform>.whl
             ```
-            Mock wheels are available for Linux x86_64, macOS (ARM64 & Intel), and Windows.
+            Wheels are available for Linux x86_64, macOS ARM64, and Windows AMD64.
+            Use `raccoon update` to auto-detect and install the correct wheel.
 
             **View documentation:**
             1. Download and unzip `libstp-docs-${{ needs.build-wombat.outputs.version }}.zip`
@@ -217,8 +215,7 @@ jobs:
             3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
           files: |
             libstp-${{ needs.build-wombat.outputs.version }}.tar.gz
-            artifacts/wombat-wheel/*.whl
-            mock-wheels/*.whl
+            all-wheels/*.whl
             artifacts/docs-zip/*.zip
 
       - name: Trigger documentation rebuild
