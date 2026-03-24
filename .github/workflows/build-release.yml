@@ -9,10 +9,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  # --- Wombat (ARM64 Pi) wheel — self-hosted runner ---
+  build-wombat:
     runs-on: self-hosted
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout with submodules
@@ -28,12 +29,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- Build Wombat (ARM64) wheel ---
-      - name: Clean old build artifacts
-        run: |
-          find build-docker -name '*.whl' -delete 2>/dev/null || true
-          # Clean mock build dirs completely to avoid cross-platform cache contamination
-          rm -rf build-docker-mock _skbuild-docker-mock .cmake-cache-docker-mock
+      - name: Clean old wheels
+        run: find build-docker -name '*.whl' -delete 2>/dev/null || true
 
       - name: Build ARM64 Wombat wheel
         run: |
@@ -48,34 +45,13 @@ jobs:
           WHL=$(find build-docker -name '*.whl' -type f -exec ls -t {} + | head -1)
           VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "wombat_wheel=$WHL" >> "$GITHUB_OUTPUT"
-          echo "wombat_wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
 
-      # --- Build Mock wheel (same platform, mock drivers) ---
-      - name: Build Mock wheel
-        run: |
-          SKIP_TESTS=1 \
-          BUILD_NUMBER=${{ github.run_number }} \
-          BUILD_JOBS=4 \
-          IMAGE_NAME=libstp-dev:mock \
-          BUILD_DIR=build-docker-mock \
-          SKBUILD_DIR=_skbuild-docker-mock \
-          FETCHCONTENT_DIR=.cmake-cache-docker-mock \
-          EXTRA_CMAKE_ARGS="-DDRIVER_BUNDLE=mock" \
-          bash build.sh
+      - name: Upload wombat wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wombat-wheel
+          path: build-docker/*.whl
 
-      - name: Locate mock wheel
-        id: mock
-        run: |
-          WHL=$(find build-docker-mock -name '*.whl' -type f -exec ls -t {} + | head -1)
-          BASENAME=$(basename "$WHL")
-          # Rename to include -mock suffix for clarity
-          MOCK_NAME="${BASENAME/libstp-/libstp_mock-}"
-          cp "$WHL" "build-docker-mock/$MOCK_NAME"
-          echo "mock_wheel=build-docker-mock/$MOCK_NAME" >> "$GITHUB_OUTPUT"
-          echo "mock_wheel_name=$MOCK_NAME" >> "$GITHUB_OUTPUT"
-
-      # --- Build docs ---
       - name: Build documentation
         run: |
           docker run --rm \
@@ -114,44 +90,134 @@ jobs:
               zip -r ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip .
             '
 
-      # --- Release ---
-      - name: Bundle release assets
+      - name: Upload docs zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-zip
+          path: libstp-docs-*.zip
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  # --- Mock wheels (all laptop platforms via cibuildwheel) ---
+  build-mock:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
+
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Patch version and generate code
+        shell: bash
         run: |
-          rm -rf release-bundle
+          # Patch version with build number
+          ORIG=$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml)
+          BASE="${ORIG%.*}"
+          NEW="${BASE}.${{ github.run_number }}"
+          sed -i.bak "s/^version = .*/version = \"$NEW\"/" pyproject.toml
+          # Same for raccoon-transport
+          RORIG=$(sed -n 's/^version = "\([^"]*\)"/\1/p' raccoon-transport/python/pyproject.toml)
+          RBASE="${RORIG%.*}"
+          RNEW="${RBASE}.${{ github.run_number }}"
+          sed -i.bak "s/^version = .*/version = \"$RNEW\"/" raccoon-transport/python/pyproject.toml
+          # Generate step builders
+          python tools/generate_step_builders.py
+
+      - name: Build mock wheels
+        uses: pypa/cibuildwheel@v2.23
+        env:
+          CIBW_BUILD: "cp313-*"
+          CIBW_ARCHS_LINUX: "x86_64"
+          CIBW_ARCHS_MACOS: "auto"
+          CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_CONFIG_SETTINGS: "cmake.args=-DDRIVER_BUNDLE=mock"
+          CIBW_BEFORE_BUILD: "pip install scikit-build-core pybind11 cmake"
+
+      - name: Rename wheels to libstp_mock
+        shell: bash
+        run: |
+          for f in wheelhouse/libstp-*; do
+            mv "$f" "${f/libstp-/libstp_mock-}"
+          done
+
+      - name: Upload mock wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-wheel-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  # --- Create release from all artifacts ---
+  release:
+    needs: [build-wombat, build-mock]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout (for install.py)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: install.py
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Bundle Pi release tarball
+        run: |
           mkdir -p release-bundle
-          cp "${{ steps.version.outputs.wombat_wheel }}" release-bundle/
+          cp artifacts/wombat-wheel/*.whl release-bundle/
           cp install.py release-bundle/
           cd release-bundle
-          tar czf ../libstp-${{ steps.version.outputs.version }}.tar.gz *
+          tar czf ../libstp-${{ needs.build-wombat.outputs.version }}.tar.gz *
+
+      - name: Collect mock wheels
+        run: |
+          mkdir -p mock-wheels
+          cp artifacts/mock-wheel-*/*.whl mock-wheels/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: libstp ${{ steps.version.outputs.version }}
+          tag_name: v${{ needs.build-wombat.outputs.version }}
+          name: libstp ${{ needs.build-wombat.outputs.version }}
           body: |
             Automated release from commit ${{ github.sha }}.
 
             **Install on Raspberry Pi (Wombat platform):**
             ```bash
-            tar xzf libstp-${{ steps.version.outputs.version }}.tar.gz
+            tar xzf libstp-${{ needs.build-wombat.outputs.version }}.tar.gz
             RPI_HOST=<your-pi-ip> python3 install.py
             ```
 
             **Install on laptop (Mock platform — codegen & indexing, no hardware needed):**
             ```bash
-            pip install ${{ steps.mock.outputs.mock_wheel_name }}
+            pip install <libstp_mock wheel for your platform>
             ```
+            Mock wheels are available for Linux x86_64, macOS (ARM64 & Intel), and Windows.
 
             **View documentation:**
-            1. Download and unzip `libstp-docs-${{ steps.version.outputs.version }}.zip`
+            1. Download and unzip `libstp-docs-${{ needs.build-wombat.outputs.version }}.zip`
             2. Run `python3 -m http.server 8000` in the extracted folder
             3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
           files: |
-            libstp-${{ steps.version.outputs.version }}.tar.gz
-            ${{ steps.version.outputs.wombat_wheel }}
-            ${{ steps.mock.outputs.mock_wheel }}
-            libstp-docs-${{ steps.version.outputs.version }}.zip
+            libstp-${{ needs.build-wombat.outputs.version }}.tar.gz
+            artifacts/wombat-wheel/*.whl
+            mock-wheels/*.whl
+            artifacts/docs-zip/*.zip
 
       - name: Trigger documentation rebuild
         run: |
@@ -159,4 +225,4 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
-            -d '{"event_type":"library-release","client_payload":{"version":"${{ steps.version.outputs.version }}"}}'
+            -d '{"event_type":"library-release","client_payload":{"version":"${{ needs.build-wombat.outputs.version }}"}}'
