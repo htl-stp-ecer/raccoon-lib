@@ -83,13 +83,13 @@ FetchContent_MakeAvailable(eigen)
 include_directories(${eigen_SOURCE_DIR})
 
 # ---------- raccoon-transport (brings LCM + message types) ----------
+# Force static LCM so the wheel is self-contained (no external liblcm.so needed).
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         raccoon_transport
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/raccoon-transport
 )
 FetchContent_MakeAvailable(raccoon_transport)
-
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         spdlog

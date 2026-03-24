@@ -145,6 +145,7 @@ jobs:
           CIBW_CONFIG_SETTINGS: "cmake.args=-DDRIVER_BUNDLE=mock"
           CIBW_BEFORE_BUILD: "pip install scikit-build-core pybind11 cmake"
           CIBW_BEFORE_BUILD_LINUX: "yum install -y git && pip install scikit-build-core pybind11 cmake"
+          CIBW_REPAIR_WHEEL_COMMAND: ""
 
       - name: Rename wheels to libstp_mock
         shell: bash
