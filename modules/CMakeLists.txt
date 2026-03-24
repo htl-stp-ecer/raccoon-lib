@@ -50,6 +50,11 @@ function(register_libstp_module module_name is_interface additional_libraries)
                 target_link_libraries(${module_name} PUBLIC ${additional_libraries})
             endif ()
             if (_lib_type STREQUAL "SHARED")
+                # Allow deferred symbol resolution on macOS (Linux does this by default).
+                # Platform driver symbols are provided at runtime by the pybind11 modules.
+                if (APPLE)
+                    target_link_options(${module_name} PRIVATE -undefined dynamic_lookup)
+                endif ()
                 # Install shared libs alongside Python modules so $ORIGIN works.
                 install(TARGETS ${module_name} DESTINATION libstp)
             endif ()
