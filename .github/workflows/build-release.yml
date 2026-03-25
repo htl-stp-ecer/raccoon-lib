@@ -30,7 +30,9 @@ jobs:
 
       # --- Build library ---
       - name: Clean old wheels
-        run: find build-docker -name '*.whl' -delete 2>/dev/null || true
+        run: |
+          find build-docker -name '*.whl' -delete 2>/dev/null || true
+          rm -rf build-docker-stubs
 
       - name: Build ARM64 wheel
         run: |
@@ -58,54 +60,8 @@ jobs:
             -v "$PWD":/src -w /src \
             libstp-dev:arm64 bash -lc "
               set -euo pipefail
-
-              # Install the built wheel + its runtime deps + stubgen
-              pip install --quiet pybind11-stubgen /src/raccoon-transport/python /src/build-docker/$WHL_NAME
-
-              # Generate .pyi stubs from the compiled C++ bindings
-              rm -rf /src/stubs-staging
-              pybind11-stubgen libstp -o /src/stubs-staging --ignore-all-errors 2>/dev/null || true
-
-              # Merge pure Python source into the stubs package so IDEs
-              # can resolve the full API (DSL steps, helpers, etc.)
-              SITE=\$(pip show libstp | grep '^Location:' | cut -d' ' -f2)/libstp
-              find \"\$SITE\" -name '*.py' | while read py; do
-                REL=\${py#\$SITE/}
-                DEST=/src/stubs-staging/libstp/\$REL
-                mkdir -p \$(dirname \$DEST)
-                # Only copy if no .pyi already exists for this module
-                PYI=/src/stubs-staging/libstp/\${REL%.py}.pyi
-                if [ ! -f \"\$PYI\" ]; then
-                  cp \"\$py\" \"\$DEST\"
-                fi
-              done
-
-              # Add py.typed marker so IDEs recognize this as a typed package
-              touch /src/stubs-staging/libstp/py.typed
-
-              # Write pyproject.toml for the stubs wheel
-              cat > /src/stubs-staging/pyproject.toml << PYEOF
-          [build-system]
-          requires = [\"setuptools\"]
-          build-backend = \"setuptools.build_meta\"
-
-          [project]
-          name = \"libstp-stubs\"
-          version = \"$VERSION\"
-          description = \"Type stubs and Python source for libstp (IDE support, no C++ bindings)\"
-          requires-python = \">=3.11\"
-
-          [tool.setuptools.packages.find]
-          include = [\"libstp*\"]
-
-          [tool.setuptools.package-data]
-          libstp = [\"*.pyi\", \"py.typed\", \"**/*.pyi\"]
-          PYEOF
-
-              # Build the universal wheel
-              pip install --quiet build
-              cd /src/stubs-staging
-              python -m build --wheel --outdir /src/build-docker-stubs
+              pip install --quiet pybind11-stubgen mypy /src/raccoon-transport/python /src/build-docker/$WHL_NAME
+              bash /src/scripts/build-stubs.sh $VERSION
             "
 
           echo "✓ Stubs wheel built"
