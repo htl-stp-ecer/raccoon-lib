@@ -57,6 +57,22 @@ jobs:
           echo "After: $(du -sh . 2>/dev/null || echo unknown)"
         continue-on-error: true
 
+      - name: Remove iOS Simulator runtimes
+        run: |
+          echo "=== Simulator runtimes before ==="
+          xcrun simctl runtime list 2>/dev/null || true
+          # Delete all simulator runtimes
+          xcrun simctl runtime delete all 2>/dev/null || true
+          # Delete all simulator devices
+          xcrun simctl delete all 2>/dev/null || true
+          # Remove CoreSimulator caches and runtime images
+          rm -rf ~/Library/Developer/CoreSimulator/Caches/* 2>/dev/null || true
+          rm -rf /Library/Developer/CoreSimulator/Cryptex/Images/* 2>/dev/null || true
+          rm -rf /Library/Developer/CoreSimulator/Volumes/* 2>/dev/null || true
+          echo "=== Simulator runtimes after ==="
+          xcrun simctl runtime list 2>/dev/null || true
+        continue-on-error: true
+
       - name: Clean runner temp files
         run: |
           rm -rf /tmp/docker-* /tmp/buildx-* /tmp/qemu-* 2>/dev/null || true
