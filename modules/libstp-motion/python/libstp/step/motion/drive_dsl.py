@@ -36,13 +36,13 @@ class DriveForwardBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["cm"] = self._cm
-        kwargs["speed"] = self._speed
-        kwargs["until"] = self._until
+        kwargs['cm'] = self._cm
+        kwargs['speed'] = self._speed
+        kwargs['until'] = self._until
         return DriveForward(**kwargs)
 
 
-@dsl(tags=["motion", "drive"])
+@dsl(tags=['motion', 'drive'])
 def drive_forward(cm: float = None, speed: float = 1.0, until: StopCondition = None):
     """
     Drive forward with distance or condition-based termination.
@@ -97,13 +97,13 @@ class DriveBackwardBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["cm"] = self._cm
-        kwargs["speed"] = self._speed
-        kwargs["until"] = self._until
+        kwargs['cm'] = self._cm
+        kwargs['speed'] = self._speed
+        kwargs['until'] = self._until
         return DriveBackward(**kwargs)
 
 
-@dsl(tags=["motion", "drive"])
+@dsl(tags=['motion', 'drive'])
 def drive_backward(cm: float = None, speed: float = 1.0, until: StopCondition = None):
     """
     Drive backward with distance or condition-based termination.
@@ -156,13 +156,13 @@ class StrafeLeftBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["cm"] = self._cm
-        kwargs["speed"] = self._speed
-        kwargs["until"] = self._until
+        kwargs['cm'] = self._cm
+        kwargs['speed'] = self._speed
+        kwargs['until'] = self._until
         return StrafeLeft(**kwargs)
 
 
-@dsl(tags=["motion", "strafe"])
+@dsl(tags=['motion', 'strafe'])
 def strafe_left(cm: float = None, speed: float = 1.0, until: StopCondition = None):
     """
     Strafe left with distance or condition-based termination.
@@ -213,13 +213,13 @@ class StrafeRightBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["cm"] = self._cm
-        kwargs["speed"] = self._speed
-        kwargs["until"] = self._until
+        kwargs['cm'] = self._cm
+        kwargs['speed'] = self._speed
+        kwargs['until'] = self._until
         return StrafeRight(**kwargs)
 
 
-@dsl(tags=["motion", "strafe"])
+@dsl(tags=['motion', 'strafe'])
 def strafe_right(cm: float = None, speed: float = 1.0, until: StopCondition = None):
     """
     Strafe right with distance or condition-based termination.
@@ -247,13 +247,4 @@ def strafe_right(cm: float = None, speed: float = 1.0, until: StopCondition = No
     return b
 
 
-__all__ = [
-    "DriveForwardBuilder",
-    "drive_forward",
-    "DriveBackwardBuilder",
-    "drive_backward",
-    "StrafeLeftBuilder",
-    "strafe_left",
-    "StrafeRightBuilder",
-    "strafe_right",
-]
+__all__ = ['DriveForwardBuilder', 'drive_forward', 'DriveBackwardBuilder', 'drive_backward', 'StrafeLeftBuilder', 'strafe_left', 'StrafeRightBuilder', 'strafe_right']

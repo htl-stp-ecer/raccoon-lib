@@ -20,7 +20,7 @@ class AutoTuneVelocityBuilder(StepBuilder):
         super().__init__()
         self._axes = None
         self._persist = True
-        self._csv_dir = "/tmp/auto_tune"
+        self._csv_dir = '/tmp/auto_tune'
 
     def axes(self, value: list[str]):
         self._axes = value
@@ -36,18 +36,14 @@ class AutoTuneVelocityBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["axes"] = self._axes
-        kwargs["persist"] = self._persist
-        kwargs["csv_dir"] = self._csv_dir
+        kwargs['axes'] = self._axes
+        kwargs['persist'] = self._persist
+        kwargs['csv_dir'] = self._csv_dir
         return AutoTuneVelocity(**kwargs)
 
 
-@dsl(tags=["motion", "calibration", "auto-tune"])
-def auto_tune_velocity(
-    axes: list[str] = None,
-    persist: bool = True,
-    csv_dir: Optional[str] = "/tmp/auto_tune",
-):
+@dsl(tags=['motion', 'calibration', 'auto-tune'])
+def auto_tune_velocity(axes: list[str] = None, persist: bool = True, csv_dir: Optional[str] = '/tmp/auto_tune'):
     """
     Tune velocity controllers via step-response system identification.
 
@@ -114,7 +110,7 @@ class AutoTuneMotionBuilder(StepBuilder):
         super().__init__()
         self._axes = None
         self._persist = True
-        self._csv_dir = "/tmp/auto_tune"
+        self._csv_dir = '/tmp/auto_tune'
 
     def axes(self, value: list[str]):
         self._axes = value
@@ -130,18 +126,14 @@ class AutoTuneMotionBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["axes"] = self._axes
-        kwargs["persist"] = self._persist
-        kwargs["csv_dir"] = self._csv_dir
+        kwargs['axes'] = self._axes
+        kwargs['persist'] = self._persist
+        kwargs['csv_dir'] = self._csv_dir
         return AutoTuneMotion(**kwargs)
 
 
-@dsl(tags=["motion", "calibration", "auto-tune"])
-def auto_tune_motion(
-    axes: list[str] = None,
-    persist: bool = True,
-    csv_dir: Optional[str] = "/tmp/auto_tune",
-):
+@dsl(tags=['motion', 'calibration', 'auto-tune'])
+def auto_tune_motion(axes: list[str] = None, persist: bool = True, csv_dir: Optional[str] = '/tmp/auto_tune'):
     """
     Tune motion PID controllers via iterative real-world optimization.
 
@@ -216,7 +208,7 @@ class AutoTuneBuilder(StepBuilder):
         self._characterize_trials = 3
         self._characterize_power_percent = 100
         self._persist = True
-        self._csv_dir = "/tmp/auto_tune"
+        self._csv_dir = '/tmp/auto_tune'
 
     def vel_axes(self, value: list[str]):
         self._vel_axes = value
@@ -260,32 +252,21 @@ class AutoTuneBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["vel_axes"] = self._vel_axes
-        kwargs["characterize_axes"] = self._characterize_axes
-        kwargs["motion_axes"] = self._motion_axes
-        kwargs["tune_characterize"] = self._tune_characterize
-        kwargs["tune_velocity"] = self._tune_velocity
-        kwargs["tune_motion"] = self._tune_motion
-        kwargs["characterize_trials"] = self._characterize_trials
-        kwargs["characterize_power_percent"] = self._characterize_power_percent
-        kwargs["persist"] = self._persist
-        kwargs["csv_dir"] = self._csv_dir
+        kwargs['vel_axes'] = self._vel_axes
+        kwargs['characterize_axes'] = self._characterize_axes
+        kwargs['motion_axes'] = self._motion_axes
+        kwargs['tune_characterize'] = self._tune_characterize
+        kwargs['tune_velocity'] = self._tune_velocity
+        kwargs['tune_motion'] = self._tune_motion
+        kwargs['characterize_trials'] = self._characterize_trials
+        kwargs['characterize_power_percent'] = self._characterize_power_percent
+        kwargs['persist'] = self._persist
+        kwargs['csv_dir'] = self._csv_dir
         return AutoTune(**kwargs)
 
 
-@dsl(tags=["motion", "calibration", "auto-tune"])
-def auto_tune(
-    vel_axes: list[str] = None,
-    characterize_axes: list[str] = None,
-    motion_axes: list[str] = None,
-    tune_characterize: bool = True,
-    tune_velocity: bool = True,
-    tune_motion: bool = True,
-    characterize_trials: int = 3,
-    characterize_power_percent: int = 100,
-    persist: bool = True,
-    csv_dir: Optional[str] = "/tmp/auto_tune",
-):
+@dsl(tags=['motion', 'calibration', 'auto-tune'])
+def auto_tune(vel_axes: list[str] = None, characterize_axes: list[str] = None, motion_axes: list[str] = None, tune_characterize: bool = True, tune_velocity: bool = True, tune_motion: bool = True, characterize_trials: int = 3, characterize_power_percent: int = 100, persist: bool = True, csv_dir: Optional[str] = '/tmp/auto_tune'):
     """
     Auto-tune the full drive system: characterize, velocity PID, motion PID.
 
@@ -369,11 +350,4 @@ def auto_tune(
     return b
 
 
-__all__ = [
-    "AutoTuneVelocityBuilder",
-    "auto_tune_velocity",
-    "AutoTuneMotionBuilder",
-    "auto_tune_motion",
-    "AutoTuneBuilder",
-    "auto_tune",
-]
+__all__ = ['AutoTuneVelocityBuilder', 'auto_tune_velocity', 'AutoTuneMotionBuilder', 'auto_tune_motion', 'AutoTuneBuilder', 'auto_tune']

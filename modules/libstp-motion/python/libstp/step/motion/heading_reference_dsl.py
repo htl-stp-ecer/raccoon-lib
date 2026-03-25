@@ -26,11 +26,11 @@ class MarkHeadingReferenceBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["origin_offset_deg"] = self._origin_offset_deg
+        kwargs['origin_offset_deg'] = self._origin_offset_deg
         return MarkHeadingReference(**kwargs)
 
 
-@dsl(tags=["motion", "turn"])
+@dsl(tags=['motion', 'turn'])
 def mark_heading_reference(origin_offset_deg: float = 0.0):
     """
     Mark the current IMU heading as a reference point for absolute turns.
@@ -75,4 +75,4 @@ def mark_heading_reference(origin_offset_deg: float = 0.0):
     return b
 
 
-__all__ = ["MarkHeadingReferenceBuilder", "mark_heading_reference"]
+__all__ = ['MarkHeadingReferenceBuilder', 'mark_heading_reference']
