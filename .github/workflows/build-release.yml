@@ -51,16 +51,27 @@ jobs:
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
 
       # --- Generate stubs wheel (universal, works on any platform) ---
+      - name: Build mock-platform wheel for stub generation
+        run: |
+          SKIP_TESTS=1 \
+          BUILD_NUMBER=${{ github.run_number }} \
+          BUILD_JOBS=4 \
+          BUILD_DIR=build-docker-mock \
+          SKBUILD_DIR=_skbuild-docker-mock \
+          FETCHCONTENT_DIR=.cmake-cache-docker-mock \
+          EXTRA_CMAKE_ARGS="-DDRIVER_BUNDLE=mock" \
+          bash build.sh
+
       - name: Generate stubs and build universal wheel
         run: |
-          WHL_NAME=$(basename "${{ steps.version.outputs.wheel }}")
+          MOCK_WHL=$(find build-docker-mock -name '*.whl' -type f | head -1)
           VERSION="${{ steps.version.outputs.version }}"
 
           docker run --rm --platform=linux/arm64/v8 \
             -v "$PWD":/src -w /src \
             libstp-dev:arm64 bash -lc "
               set -euo pipefail
-              pip install --quiet pybind11-stubgen mypy /src/raccoon-transport/python /src/build-docker/$WHL_NAME
+              pip install --quiet pybind11-stubgen mypy /src/raccoon-transport/python /src/$MOCK_WHL
               bash /src/scripts/build-stubs.sh $VERSION
             "
 
