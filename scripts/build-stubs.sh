@@ -19,13 +19,10 @@ mkdir -p "$STAGING/libstp"
 SITE_PACKAGES="$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
 echo "Site-packages: $SITE_PACKAGES"
 
-# --- 0) Patch installed libstp to disable import side effects ---
-# The __init__.py registers atexit hooks that call Motor.disable_all(),
-# which segfaults without hardware. Patch it out in the container.
-INIT_PY="$SITE_PACKAGES/libstp/__init__.py"
-sed -i 's/^_install_shutdown_hooks()/#_install_shutdown_hooks()/' "$INIT_PY"
-sed -i 's/^initialize_logging()/#initialize_logging()/' "$INIT_PY"
-echo "Patched $INIT_PY (disabled shutdown hooks and logging init)"
+# --- 0) Ensure LIBSTP_STUBGEN is exported for all child processes ---
+# This env var disables import side effects in __init__.py (atexit hooks,
+# signal handlers, logging init) and skips LcmReader background thread.
+export LIBSTP_STUBGEN=1
 
 # Stub out the compiled 'raccoon' LCM types module (not installed in container)
 if ! python -c "import raccoon" 2>/dev/null; then
