@@ -32,38 +32,18 @@ if ! python -c "import raccoon" 2>/dev/null; then
 fi
 
 # --- 1) C++ binding stubs (pybind11-stubgen) ---
-# Run per-submodule for isolation (a segfault in one doesn't kill the rest),
-# but pre-import all dependencies so cross-module types are registered.
+# Run per-submodule so a segfault in one module doesn't kill the rest.
+# Some modules may fail (e.g. cross-module type references or hardware
+# static init) — mypy stubgen in step 2 fills the gaps.
 echo "--- Running pybind11-stubgen per C++ submodule ---"
 CPP_MODULES=(
   _core foundation hal drive motion odometry odometry_fused odometry_stm32
   kinematics kinematics_differential kinematics_mecanum
   button sensor_ir sensor_et calibration_store kmeans cam async
 )
-# Python snippet that pre-imports all C++ modules, then runs stubgen
-# on a single target module passed as the first CLI argument.
-STUBGEN_RUNNER='
-import sys, importlib
-target = sys.argv[1]
-# Pre-import modules in dependency order so pybind11 cross-module types
-# (base classes, default argument types) are registered before introspection.
-for mod in [
-    "_core", "foundation", "hal", "drive", "motion", "odometry",
-    "odometry_fused", "kinematics", "button", "sensor_ir", "sensor_et",
-    "calibration_store", "kmeans", "cam",
-]:
-    try:
-        importlib.import_module(f"libstp.{mod}")
-    except Exception:
-        pass
-# Now run pybind11-stubgen on the target module
-sys.argv = ["pybind11-stubgen", f"libstp.{target}", "-o", sys.argv[2], "--ignore-all-errors"]
-from pybind11_stubgen import main
-main()
-'
 for mod in "${CPP_MODULES[@]}"; do
   echo -n "  libstp.$mod ... "
-  if (cd /tmp && python -c "$STUBGEN_RUNNER" "$mod" "$STAGING") 2>&1; then
+  if (cd /tmp && pybind11-stubgen "libstp.$mod" -o "$STAGING" --ignore-all-errors) 2>&1; then
     echo "OK"
   else
     echo "FAILED (exit $?)"
