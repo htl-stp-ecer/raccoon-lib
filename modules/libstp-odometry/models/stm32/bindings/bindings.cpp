@@ -9,6 +9,7 @@
 
 #include "odometry/stm32/stm32_odometry.hpp"
 #include "hal/IMU.hpp"
+#include "hal/OdometryBridge.hpp"
 #include "kinematics/kinematics.hpp"
 
 namespace py = pybind11;
@@ -41,9 +42,11 @@ PYBIND11_MODULE(odometry_stm32, m)
             "All getters return the latest snapshot from the coprocessor.")
         .def(py::init<std::shared_ptr<libstp::hal::imu::IMU>,
                       std::shared_ptr<libstp::kinematics::IKinematics>,
+                      std::shared_ptr<libstp::hal::odometry_bridge::OdometryBridge>,
                       libstp::odometry::stm32::Stm32OdometryConfig>(),
              py::arg("imu"),
              py::arg("kinematics"),
+             py::arg("bridge"),
              py::arg("config") = libstp::odometry::stm32::Stm32OdometryConfig{})
         .def("update", &libstp::odometry::stm32::Stm32Odometry::update, py::arg("dt"))
         .def("get_pose", &libstp::odometry::stm32::Stm32Odometry::getPose)

@@ -5,8 +5,6 @@
 #include "odometry/stm32/stm32_odometry.hpp"
 #include "odometry/angle_utils.hpp"
 #include "foundation/config.hpp"
-#include "core/LcmReader.hpp"
-#include "core/LcmWriter.hpp"
 #include <cmath>
 #include <stdexcept>
 
@@ -14,13 +12,16 @@ namespace libstp::odometry::stm32
 {
     Stm32Odometry::Stm32Odometry(std::shared_ptr<hal::imu::IIMU> imu,
                                    std::shared_ptr<kinematics::IKinematics> kinematics,
+                                   std::shared_ptr<hal::odometry_bridge::IOdometryBridge> bridge,
                                    Stm32OdometryConfig config)
         : config_(std::move(config))
         , imu_(std::move(imu))
         , kinematics_(std::move(kinematics))
+        , bridge_(std::move(bridge))
     {
         if (!imu_) throw std::invalid_argument("imu cannot be null");
         if (!kinematics_) throw std::invalid_argument("kinematics cannot be null");
+        if (!bridge_) throw std::invalid_argument("bridge cannot be null");
 
         imu_->setYawRateAxisMode(config_.turn_axis);
 
@@ -37,19 +38,18 @@ namespace libstp::odometry::stm32
     void Stm32Odometry::sendKinematicsConfig()
     {
         auto cfg = kinematics_->getStmOdometryConfig();
-        platform::wombat::core::LcmDataWriter::instance().sendKinematicsConfig(
-            cfg.inv_matrix, cfg.ticks_to_rad, cfg.fwd_matrix);
+        bridge_->sendKinematicsConfig(cfg.inv_matrix, cfg.ticks_to_rad, cfg.fwd_matrix);
     }
 
     void Stm32Odometry::update(double /*dt*/)
     {
         // No-op: the STM32 integrates autonomously.
-        // The LcmReader background thread keeps the cache fresh.
+        // The bridge's background thread keeps the cache fresh.
     }
 
     foundation::Pose Stm32Odometry::getPose() const
     {
-        auto snap = platform::wombat::core::LcmReader::instance().readOdometry();
+        auto snap = bridge_->readOdometry();
         foundation::Pose pose;
         pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
         pose.heading = snap.heading;
@@ -58,7 +58,7 @@ namespace libstp::odometry::stm32
 
     DistanceFromOrigin Stm32Odometry::getDistanceFromOrigin() const
     {
-        auto snap = platform::wombat::core::LcmReader::instance().readOdometry();
+        auto snap = bridge_->readOdometry();
 
         const Eigen::Vector3f pos(snap.pos_x, snap.pos_y, 0.0f);
 
@@ -76,7 +76,7 @@ namespace libstp::odometry::stm32
 
     double Stm32Odometry::getHeading() const
     {
-        auto snap = platform::wombat::core::LcmReader::instance().readOdometry();
+        auto snap = bridge_->readOdometry();
         return wrapAngle(static_cast<double>(snap.heading));
     }
 
@@ -104,7 +104,7 @@ namespace libstp::odometry::stm32
         origin_heading_ = 0.0;
 
         // Tell STM32 to zero its integrated pose
-        platform::wombat::core::LcmDataWriter::instance().resetOdometry();
+        bridge_->resetCoprocessorOdometry();
 
         // Re-send kinematics config (ensures STM32 encoder tracking is re-initialized)
         sendKinematicsConfig();
@@ -112,12 +112,12 @@ namespace libstp::odometry::stm32
         // Block until the STM32 publishes near-zero odometry, confirming
         // the reset was processed.  This prevents the motion controller
         // from reading stale pre-reset position data.
-        if (!platform::wombat::core::LcmReader::instance().waitForOdometryReset(500)) {
+        if (!bridge_->waitForOdometryReset(500)) {
             LIBSTP_LOG_WARN("Stm32Odometry::reset — timed out waiting for STM32 reset confirmation");
         }
 
         // Zero the local cache once more to eliminate any sub-threshold residual
-        platform::wombat::core::LcmReader::instance().resetOdometry();
+        bridge_->resetLocalOdometry();
 
         LIBSTP_LOG_TRACE("Stm32Odometry::reset — STM32 odometry reset confirmed");
     }
