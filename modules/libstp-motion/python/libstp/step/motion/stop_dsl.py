@@ -26,11 +26,11 @@ class StopBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["hard"] = self._hard
+        kwargs['hard'] = self._hard
         return Stop(**kwargs)
 
 
-@dsl(tags=["motion", "stop"])
+@dsl(tags=['motion', 'stop'])
 def stop(hard: bool = True):
     """
     Stop all drive motors immediately.
@@ -56,4 +56,4 @@ def stop(hard: bool = True):
     return b
 
 
-__all__ = ["StopBuilder", "stop"]
+__all__ = ['StopBuilder', 'stop']

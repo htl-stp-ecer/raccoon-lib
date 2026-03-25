@@ -27,11 +27,11 @@ class WaitUntilDistanceBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._cm is not _UNSET:
-            kwargs["cm"] = self._cm
+            kwargs['cm'] = self._cm
         return WaitUntilDistance(**kwargs)
 
 
-@dsl(tags=["motion", "wait"])
+@dsl(tags=['motion', 'wait'])
 def wait_until_distance(cm: float = _UNSET):
     """
     Wait until the robot has driven at least the given distance.
@@ -64,4 +64,4 @@ def wait_until_distance(cm: float = _UNSET):
     return b
 
 
-__all__ = ["WaitUntilDistanceBuilder", "wait_until_distance"]
+__all__ = ['WaitUntilDistanceBuilder', 'wait_until_distance']

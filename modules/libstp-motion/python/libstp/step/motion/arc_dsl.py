@@ -10,14 +10,7 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .arc import (
-    DriveArcLeft,
-    DriveArcRight,
-    DriveArc,
-    StrafeArcLeft,
-    StrafeArcRight,
-    StrafeArc,
-)
+from .arc import DriveArcLeft, DriveArcRight, DriveArc, StrafeArcLeft, StrafeArcRight, StrafeArc
 
 
 class DriveArcLeftBuilder(StepBuilder):
@@ -44,17 +37,15 @@ class DriveArcLeftBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._radius_cm is not _UNSET:
-            kwargs["radius_cm"] = self._radius_cm
+            kwargs['radius_cm'] = self._radius_cm
         if self._degrees is not _UNSET:
-            kwargs["degrees"] = self._degrees
-        kwargs["speed"] = self._speed
+            kwargs['degrees'] = self._degrees
+        kwargs['speed'] = self._speed
         return DriveArcLeft(**kwargs)
 
 
-@dsl(tags=["motion", "arc"])
-def drive_arc_left(
-    radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0
-):
+@dsl(tags=['motion', 'arc'])
+def drive_arc_left(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0):
     """
     Drive along a circular arc curving to the left.
 
@@ -113,17 +104,15 @@ class DriveArcRightBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._radius_cm is not _UNSET:
-            kwargs["radius_cm"] = self._radius_cm
+            kwargs['radius_cm'] = self._radius_cm
         if self._degrees is not _UNSET:
-            kwargs["degrees"] = self._degrees
-        kwargs["speed"] = self._speed
+            kwargs['degrees'] = self._degrees
+        kwargs['speed'] = self._speed
         return DriveArcRight(**kwargs)
 
 
-@dsl(tags=["motion", "arc"])
-def drive_arc_right(
-    radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0
-):
+@dsl(tags=['motion', 'arc'])
+def drive_arc_right(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0):
     """
     Drive along a circular arc curving to the right.
 
@@ -179,14 +168,14 @@ class DriveArcBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._radius_cm is not _UNSET:
-            kwargs["radius_cm"] = self._radius_cm
+            kwargs['radius_cm'] = self._radius_cm
         if self._degrees is not _UNSET:
-            kwargs["degrees"] = self._degrees
-        kwargs["speed"] = self._speed
+            kwargs['degrees'] = self._degrees
+        kwargs['speed'] = self._speed
         return DriveArc(**kwargs)
 
 
-@dsl(tags=["motion", "arc"])
+@dsl(tags=['motion', 'arc'])
 def drive_arc(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0):
     """
     Drive along a circular arc with explicit direction.
@@ -244,17 +233,15 @@ class StrafeArcLeftBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._radius_cm is not _UNSET:
-            kwargs["radius_cm"] = self._radius_cm
+            kwargs['radius_cm'] = self._radius_cm
         if self._degrees is not _UNSET:
-            kwargs["degrees"] = self._degrees
-        kwargs["speed"] = self._speed
+            kwargs['degrees'] = self._degrees
+        kwargs['speed'] = self._speed
         return StrafeArcLeft(**kwargs)
 
 
-@dsl(tags=["motion", "strafe", "arc"])
-def strafe_arc_left(
-    radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0
-):
+@dsl(tags=['motion', 'strafe', 'arc'])
+def strafe_arc_left(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0):
     """
     Strafe along a circular arc curving to the left.
 
@@ -320,17 +307,15 @@ class StrafeArcRightBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._radius_cm is not _UNSET:
-            kwargs["radius_cm"] = self._radius_cm
+            kwargs['radius_cm'] = self._radius_cm
         if self._degrees is not _UNSET:
-            kwargs["degrees"] = self._degrees
-        kwargs["speed"] = self._speed
+            kwargs['degrees'] = self._degrees
+        kwargs['speed'] = self._speed
         return StrafeArcRight(**kwargs)
 
 
-@dsl(tags=["motion", "strafe", "arc"])
-def strafe_arc_right(
-    radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0
-):
+@dsl(tags=['motion', 'strafe', 'arc'])
+def strafe_arc_right(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0):
     """
     Strafe along a circular arc curving to the right.
 
@@ -393,14 +378,14 @@ class StrafeArcBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._radius_cm is not _UNSET:
-            kwargs["radius_cm"] = self._radius_cm
+            kwargs['radius_cm'] = self._radius_cm
         if self._degrees is not _UNSET:
-            kwargs["degrees"] = self._degrees
-        kwargs["speed"] = self._speed
+            kwargs['degrees'] = self._degrees
+        kwargs['speed'] = self._speed
         return StrafeArc(**kwargs)
 
 
-@dsl(tags=["motion", "strafe", "arc"])
+@dsl(tags=['motion', 'strafe', 'arc'])
 def strafe_arc(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float = 1.0):
     """
     Strafe along a circular arc with explicit direction.
@@ -443,17 +428,4 @@ def strafe_arc(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: float 
     return b
 
 
-__all__ = [
-    "DriveArcLeftBuilder",
-    "drive_arc_left",
-    "DriveArcRightBuilder",
-    "drive_arc_right",
-    "DriveArcBuilder",
-    "drive_arc",
-    "StrafeArcLeftBuilder",
-    "strafe_arc_left",
-    "StrafeArcRightBuilder",
-    "strafe_arc_right",
-    "StrafeArcBuilder",
-    "strafe_arc",
-]
+__all__ = ['DriveArcLeftBuilder', 'drive_arc_left', 'DriveArcRightBuilder', 'drive_arc_right', 'DriveArcBuilder', 'drive_arc', 'StrafeArcLeftBuilder', 'strafe_arc_left', 'StrafeArcRightBuilder', 'strafe_arc_right', 'StrafeArcBuilder', 'strafe_arc']
