@@ -44,10 +44,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # --- Build library ---
-      - name: Clean old wheels
+      - name: Clean old build artifacts
         run: |
           find build-docker -name '*.whl' -delete 2>/dev/null || true
-          rm -rf build-docker-stubs
+          rm -rf build-docker-stubs build-docker-mock
+          rm -rf .cmake-cache-docker-mock _skbuild-docker-mock
 
       - name: Build ARM64 wheel
         run: |
