@@ -15,6 +15,19 @@ jobs:
       contents: write
 
     steps:
+      - name: Ensure Docker (Colima) is running
+        run: |
+          # Start Colima if not running
+          if ! colima status 2>/dev/null; then
+            echo "Colima not running, starting..."
+            colima start --cpu 4 --memory 4 --disk 60
+          fi
+          # Set Docker context to Colima
+          docker context use colima 2>/dev/null || true
+          # Verify
+          docker info > /dev/null
+          echo "Docker is ready"
+
       - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
