@@ -52,8 +52,11 @@ done
 
 # --- 2) Python source stubs (mypy stubgen --no-import) ---
 # --no-import parses source files without importing, avoiding side effects.
-echo "--- Running stubgen --no-import ---"
-stubgen --no-import -p libstp --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP" || true
+# Unset LIBSTP_STUBGEN so stubgen sees the full __init__.py source.
+# Use both purelib and platlib as search paths (C extensions go to platlib).
+PLATLIB="$(python -c 'import sysconfig; print(sysconfig.get_path("platlib"))')"
+echo "--- Running stubgen --no-import (search: $SITE_PACKAGES, $PLATLIB) ---"
+LIBSTP_STUBGEN= stubgen --no-import -p libstp --search-path "$SITE_PACKAGES" --search-path "$PLATLIB" -o "$PY_STUBS_TMP" || true
 if [ -d "$PY_STUBS_TMP/libstp" ]; then
   find "$PY_STUBS_TMP/libstp" -name '*.pyi' | while read -r pyi; do
     REL="${pyi#$PY_STUBS_TMP/libstp/}"
