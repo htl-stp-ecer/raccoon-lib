@@ -32,40 +32,44 @@ if ! python -c "import raccoon" 2>/dev/null; then
 fi
 
 # --- 1) C++ binding stubs (pybind11-stubgen) ---
-# Pre-import all C++ modules so cross-module types are registered,
-# then run pybind11-stubgen on the whole package in one shot.
-echo "--- Running pybind11-stubgen ---"
-cd /tmp
-python -c "
-# Import modules in dependency order so pybind11 types are registered
-import libstp._core
-import libstp.foundation
-import libstp.hal
-import libstp.drive
-import libstp.motion
-import libstp.odometry
-import libstp.odometry_fused
-try:
-    import libstp.odometry_stm32
-except ImportError:
-    pass
-import libstp.kinematics
-import libstp.kinematics_differential
-import libstp.kinematics_mecanum
-import libstp.button
-import libstp.sensor_ir
-import libstp.sensor_et
-import libstp.calibration_store
-import libstp.kmeans
-import libstp.cam
-
-# Now run stubgen with all types registered
-import sys
-sys.argv = ['pybind11-stubgen', 'libstp', '-o', '$STAGING', '--ignore-all-errors']
+# Run per-submodule for isolation (a segfault in one doesn't kill the rest),
+# but pre-import all dependencies so cross-module types are registered.
+echo "--- Running pybind11-stubgen per C++ submodule ---"
+CPP_MODULES=(
+  _core foundation hal drive motion odometry odometry_fused odometry_stm32
+  kinematics kinematics_differential kinematics_mecanum
+  button sensor_ir sensor_et calibration_store kmeans cam async
+)
+# Python snippet that pre-imports all C++ modules, then runs stubgen
+# on a single target module passed as the first CLI argument.
+STUBGEN_RUNNER='
+import sys, importlib
+target = sys.argv[1]
+# Pre-import modules in dependency order so pybind11 cross-module types
+# (base classes, default argument types) are registered before introspection.
+for mod in [
+    "_core", "foundation", "hal", "drive", "motion", "odometry",
+    "odometry_fused", "kinematics", "kinematics_differential",
+    "kinematics_mecanum", "button", "sensor_ir", "sensor_et",
+    "calibration_store", "kmeans", "cam",
+]:
+    try:
+        importlib.import_module(f"libstp.{mod}")
+    except Exception:
+        pass
+# Now run pybind11-stubgen on the target module
+sys.argv = ["pybind11-stubgen", f"libstp.{target}", "-o", sys.argv[2], "--ignore-all-errors"]
 from pybind11_stubgen import main
 main()
-" 2>&1 || true
-cd /src
+'
+for mod in "${CPP_MODULES[@]}"; do
+  echo -n "  libstp.$mod ... "
+  if (cd /tmp && python -c "$STUBGEN_RUNNER" "$mod" "$STAGING") 2>&1; then
+    echo "OK"
+  else
+    echo "FAILED (exit $?)"
+  fi
+done
 
 # --- 2) Python source stubs (mypy stubgen --no-import) ---
 # --no-import parses source files without importing, avoiding side effects.
