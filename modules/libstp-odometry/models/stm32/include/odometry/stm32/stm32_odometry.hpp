@@ -10,6 +10,7 @@
 
 #include "odometry/odometry.hpp"
 #include "hal/IIMU.hpp"
+#include "hal/IOdometryBridge.hpp"
 #include "kinematics/kinematics.hpp"
 
 namespace libstp::odometry::stm32
@@ -23,7 +24,7 @@ namespace libstp::odometry::stm32
 
     /**
      * Odometry implementation that reads pose/velocity from the STM32
-     * coprocessor via LCM channels.
+     * coprocessor via an IOdometryBridge.
      *
      * At construction the pre-baked inverse kinematics matrix is sent to the
      * STM32 so it can run dead reckoning on-board at full BEMF sample rate.
@@ -34,6 +35,7 @@ namespace libstp::odometry::stm32
     public:
         Stm32Odometry(std::shared_ptr<hal::imu::IIMU> imu,
                        std::shared_ptr<kinematics::IKinematics> kinematics,
+                       std::shared_ptr<hal::odometry_bridge::IOdometryBridge> bridge,
                        Stm32OdometryConfig config = {});
 
         void update(double dt) override;
@@ -49,6 +51,7 @@ namespace libstp::odometry::stm32
         Stm32OdometryConfig config_;
         std::shared_ptr<hal::imu::IIMU> imu_;
         std::shared_ptr<kinematics::IKinematics> kinematics_;
+        std::shared_ptr<hal::odometry_bridge::IOdometryBridge> bridge_;
 
         // Origin tracking (for getDistanceFromOrigin)
         double origin_heading_{0.0};

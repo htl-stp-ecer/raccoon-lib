@@ -11,6 +11,7 @@ void init_analog(const py::module& m);
 void init_digital(const py::module& m);
 void init_motor(const py::module& m);
 void init_servo(const py::module& m);
+void init_odometry_bridge(const py::module& m);
 
 PYBIND11_MODULE(hal, m) {
     m.doc() = "Python bindings for libstp-hal";
@@ -23,4 +24,5 @@ PYBIND11_MODULE(hal, m) {
     init_digital(m);
     init_motor(m);
     init_servo(m);
+    init_odometry_bridge(m);
 }

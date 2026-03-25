@@ -5,5 +5,6 @@ add_subdirectory(digital)
 add_subdirectory(motor)
 add_subdirectory(servo)
 add_subdirectory(screen)
+add_subdirectory(odometry_bridge)
 
 register_platform(mock)
