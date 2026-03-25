@@ -17,14 +17,16 @@ jobs:
     steps:
       - name: Ensure Docker (Colima) is running
         run: |
-          # Start Colima if not running
-          if ! colima status 2>/dev/null; then
-            echo "Colima not running, starting..."
-            colima start --cpu 4 --memory 4 --disk 60
+          if docker info >/dev/null 2>&1; then
+            echo "Docker already running"
+            exit 0
           fi
-          # Set Docker context to Colima
+
+          echo "Docker not available, resetting Colima..."
+          colima stop --force 2>/dev/null || true
+          colima delete --force 2>/dev/null || true
+          colima start --cpu 4 --memory 4 --disk 60
           docker context use colima 2>/dev/null || true
-          # Verify
           docker info > /dev/null
           echo "Docker is ready"
 
