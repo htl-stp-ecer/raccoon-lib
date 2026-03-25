@@ -11,36 +11,23 @@ jobs:
       - name: Disk usage (before)
         run: df -h || true
 
-      - name: Docker factory reset
+      - name: Docker factory reset (Colima)
         run: |
           echo "=== Docker status before ==="
           docker system df 2>&1 || echo "Docker is corrupted"
-          docker info 2>&1 | head -5 || true
+          colima status 2>&1 || true
 
-          # Quit Docker Desktop completely
-          osascript -e 'quit app "Docker"' 2>/dev/null || true
-          pkill -f Docker 2>/dev/null || true
-          sleep 5
+          # Delete the Colima VM (wipes all Docker data)
+          echo "Deleting Colima VM..."
+          colima delete --force 2>/dev/null || true
 
-          # Nuke ALL Docker data — this is the only way to fix corrupted containerd blobs
-          echo "Wiping Docker data directories..."
-          rm -rf ~/Library/Containers/com.docker.docker/Data/vms 2>/dev/null || true
-          rm -rf ~/Library/Containers/com.docker.docker/Data/docker.raw.sock 2>/dev/null || true
+          # Clean leftover Docker state
           rm -rf ~/.docker/buildx 2>/dev/null || true
-          rm -rf ~/.docker/contexts 2>/dev/null || true
+          rm -rf ~/.colima/_lima 2>/dev/null || true
 
-          # Restart Docker Desktop
-          echo "Starting Docker Desktop..."
-          open -a Docker
-
-          # Wait for Docker to be ready (up to 60s)
-          for i in $(seq 1 20); do
-            if docker info >/dev/null 2>&1; then
-              echo "Docker is ready after ~$((i * 3))s"
-              break
-            fi
-            sleep 3
-          done
+          # Recreate Colima with sensible defaults for ARM cross-compilation
+          echo "Starting fresh Colima VM..."
+          colima start --cpu 4 --memory 4 --disk 60
 
           echo "=== Docker status after ==="
           docker system df 2>&1 || echo "Docker still unhealthy"
