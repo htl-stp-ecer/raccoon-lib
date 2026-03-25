@@ -8,38 +8,68 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Docker disk usage (before)
-        run: docker system df
+      - name: Disk usage (before)
+        run: df -h || true
 
-      - name: Prune Docker (containers, images, build cache, volumes)
+      - name: Nuclear Docker cleanup
         run: |
-          docker container prune -f
-          docker image prune -a -f
-          docker builder prune -a -f
-          docker volume prune -a -f
+          # Stop all running containers first
+          docker kill $(docker ps -q) 2>/dev/null || true
+          docker rm -f $(docker ps -aq) 2>/dev/null || true
 
-      - name: Docker disk usage (after)
-        run: docker system df
+          # Remove everything - images, cache, volumes
+          docker system prune -a --volumes -f 2>/dev/null || true
+
+          # If Docker is corrupted, nuke the data directly
+          if ! docker system df 2>/dev/null; then
+            echo "Docker store appears corrupted, cleaning data directories..."
+            docker stop $(docker ps -q) 2>/dev/null || true
+            # Restart Docker to release file locks
+            if command -v brew &>/dev/null; then
+              # macOS with Docker Desktop or colima
+              osascript -e 'quit app "Docker"' 2>/dev/null || true
+              sleep 5
+              # Clean containerd/buildkit data
+              rm -rf ~/Library/Containers/com.docker.docker/Data/vms/0/data/docker/buildkit 2>/dev/null || true
+              rm -rf ~/.docker/buildx 2>/dev/null || true
+              # Restart Docker
+              open -a Docker 2>/dev/null || true
+              sleep 15
+            fi
+            docker system prune -a --volumes -f 2>/dev/null || true
+          fi
+
+          echo "Docker cleanup done"
+        continue-on-error: true
 
       - name: Clean workspace build artifacts
         run: |
-          echo "=== Before ==="
-          du -sh ${{ github.workspace }} 2>/dev/null || true
+          cd "${{ github.workspace }}" 2>/dev/null || cd ~/actions-runner/_work/raccoon-lib/raccoon-lib 2>/dev/null || true
+          echo "Workspace: $(pwd)"
+          echo "Before: $(du -sh . 2>/dev/null || echo unknown)"
 
-          cd ${{ github.workspace }} || exit 0
           rm -rf build-docker build-docker-mock build-docker-stubs
           rm -rf _skbuild* .cmake-cache*
           rm -rf docs/_build docs-site
           rm -rf release-bundle
           rm -f libstp-*.tar.gz libstp-docs-*.zip
 
-          echo "=== After ==="
-          du -sh ${{ github.workspace }} 2>/dev/null || true
+          echo "After: $(du -sh . 2>/dev/null || echo unknown)"
+        continue-on-error: true
 
-      - name: Clean runner temp and tool cache
+      - name: Clean runner temp files
         run: |
-          rm -rf /tmp/docker-* /tmp/buildx-* 2>/dev/null || true
-          echo "Runner temp cleaned"
+          rm -rf /tmp/docker-* /tmp/buildx-* /tmp/qemu-* 2>/dev/null || true
+          rm -rf /tmp/containerd* 2>/dev/null || true
+          # Clean Actions runner temp
+          rm -rf ~/actions-runner/_work/_temp/* 2>/dev/null || true
+          rm -rf ~/actions-runner/_work/_tool/* 2>/dev/null || true
+          echo "Temp files cleaned"
+        continue-on-error: true
 
-      - name: Show disk usage
-        run: df -h
+      - name: Disk usage (after)
+        run: df -h || true
+
+      - name: Docker status
+        run: docker system df 2>&1 || echo "Docker still unhealthy"
+        continue-on-error: true
