@@ -12,6 +12,13 @@ namespace Channels = raccoon::Channels;
 LcmReader::LcmReader()
     : transport_(raccoon::Transport::create())
 {
+    // Skip subscriptions and background thread during stub generation —
+    // there is no hardware or raccoon daemon, and the listener thread
+    // would segfault on cleanup.
+    if (std::getenv("LIBSTP_STUBGEN")) {
+        return;
+    }
+
     using raccoon::SubscribeOptions;
 
     // Retained subscribe options for channels that cache latest values
