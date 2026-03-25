@@ -32,21 +32,40 @@ if ! python -c "import raccoon" 2>/dev/null; then
 fi
 
 # --- 1) C++ binding stubs (pybind11-stubgen) ---
-# Run per-submodule so a segfault in one module doesn't kill the rest.
-echo "--- Running pybind11-stubgen per C++ submodule ---"
-CPP_MODULES=(
-  _core foundation hal motion drive odometry odometry_fused odometry_stm32
-  kinematics kinematics_differential kinematics_mecanum
-  button sensor_ir sensor_et calibration_store kmeans cam async
-)
-for mod in "${CPP_MODULES[@]}"; do
-  echo -n "  libstp.$mod ... "
-  if (cd /tmp && pybind11-stubgen "libstp.$mod" -o "$STAGING" --ignore-all-errors) 2>&1; then
-    echo "OK"
-  else
-    echo "FAILED (exit $?)"
-  fi
-done
+# Pre-import all C++ modules so cross-module types are registered,
+# then run pybind11-stubgen on the whole package in one shot.
+echo "--- Running pybind11-stubgen ---"
+cd /tmp
+python -c "
+# Import modules in dependency order so pybind11 types are registered
+import libstp._core
+import libstp.foundation
+import libstp.hal
+import libstp.drive
+import libstp.motion
+import libstp.odometry
+import libstp.odometry_fused
+try:
+    import libstp.odometry_stm32
+except ImportError:
+    pass
+import libstp.kinematics
+import libstp.kinematics_differential
+import libstp.kinematics_mecanum
+import libstp.button
+import libstp.sensor_ir
+import libstp.sensor_et
+import libstp.calibration_store
+import libstp.kmeans
+import libstp.cam
+
+# Now run stubgen with all types registered
+import sys
+sys.argv = ['pybind11-stubgen', 'libstp', '-o', '$STAGING', '--ignore-all-errors']
+from pybind11_stubgen import main
+main()
+" 2>&1 || true
+cd /src
 
 # --- 2) Python source stubs (mypy stubgen --no-import) ---
 # --no-import parses source files without importing, avoiding side effects.
