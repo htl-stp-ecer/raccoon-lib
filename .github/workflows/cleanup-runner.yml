@@ -11,35 +11,40 @@ jobs:
       - name: Disk usage (before)
         run: df -h || true
 
-      - name: Nuclear Docker cleanup
+      - name: Docker factory reset
         run: |
-          # Stop all running containers first
-          docker kill $(docker ps -q) 2>/dev/null || true
-          docker rm -f $(docker ps -aq) 2>/dev/null || true
+          echo "=== Docker status before ==="
+          docker system df 2>&1 || echo "Docker is corrupted"
+          docker info 2>&1 | head -5 || true
 
-          # Remove everything - images, cache, volumes
-          docker system prune -a --volumes -f 2>/dev/null || true
+          # Quit Docker Desktop completely
+          osascript -e 'quit app "Docker"' 2>/dev/null || true
+          pkill -f Docker 2>/dev/null || true
+          sleep 5
 
-          # If Docker is corrupted, nuke the data directly
-          if ! docker system df 2>/dev/null; then
-            echo "Docker store appears corrupted, cleaning data directories..."
-            docker stop $(docker ps -q) 2>/dev/null || true
-            # Restart Docker to release file locks
-            if command -v brew &>/dev/null; then
-              # macOS with Docker Desktop or colima
-              osascript -e 'quit app "Docker"' 2>/dev/null || true
-              sleep 5
-              # Clean containerd/buildkit data
-              rm -rf ~/Library/Containers/com.docker.docker/Data/vms/0/data/docker/buildkit 2>/dev/null || true
-              rm -rf ~/.docker/buildx 2>/dev/null || true
-              # Restart Docker
-              open -a Docker 2>/dev/null || true
-              sleep 15
+          # Nuke ALL Docker data — this is the only way to fix corrupted containerd blobs
+          echo "Wiping Docker data directories..."
+          rm -rf ~/Library/Containers/com.docker.docker/Data/vms 2>/dev/null || true
+          rm -rf ~/Library/Containers/com.docker.docker/Data/docker.raw.sock 2>/dev/null || true
+          rm -rf ~/.docker/buildx 2>/dev/null || true
+          rm -rf ~/.docker/contexts 2>/dev/null || true
+
+          # Restart Docker Desktop
+          echo "Starting Docker Desktop..."
+          open -a Docker
+
+          # Wait for Docker to be ready (up to 60s)
+          for i in $(seq 1 20); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker is ready after ~$((i * 3))s"
+              break
             fi
-            docker system prune -a --volumes -f 2>/dev/null || true
-          fi
+            sleep 3
+          done
 
-          echo "Docker cleanup done"
+          echo "=== Docker status after ==="
+          docker system df 2>&1 || echo "Docker still unhealthy"
+          docker info 2>&1 | head -5 || true
         continue-on-error: true
 
       - name: Clean workspace build artifacts
