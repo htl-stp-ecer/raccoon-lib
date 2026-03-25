@@ -49,8 +49,7 @@ target = sys.argv[1]
 # (base classes, default argument types) are registered before introspection.
 for mod in [
     "_core", "foundation", "hal", "drive", "motion", "odometry",
-    "odometry_fused", "kinematics", "kinematics_differential",
-    "kinematics_mecanum", "button", "sensor_ir", "sensor_et",
+    "odometry_fused", "kinematics", "button", "sensor_ir", "sensor_et",
     "calibration_store", "kmeans", "cam",
 ]:
     try:
