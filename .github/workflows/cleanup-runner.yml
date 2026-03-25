@@ -28,6 +28,7 @@ jobs:
           # Recreate Colima with sensible defaults for ARM cross-compilation
           echo "Starting fresh Colima VM..."
           colima start --cpu 4 --memory 4 --disk 60
+          docker context use colima 2>/dev/null || true
 
           echo "=== Docker status after ==="
           docker system df 2>&1 || echo "Docker still unhealthy"
