@@ -50,6 +50,7 @@ from libstp.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 from libstp.foundation import Feedforward, FeedforwardController, MotorCalibration, PidConfig, PidController, PidGains
 from libstp.motion import AxisConstraints
 from libstp.hal import IMU
+from libstp.hal import IOdometryBridge, OdometryBridge
 from libstp.kinematics_differential import DifferentialKinematics
 from libstp.kmeans import KMeans, KMeansResult
 
@@ -105,6 +106,8 @@ __all__ = [
     "PidController",
     "PidGains",
     "IMU",
+    "IOdometryBridge",
+    "OdometryBridge",
     # Motion
     "AxisConstraints",
     # All step exports
