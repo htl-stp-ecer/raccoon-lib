@@ -1,0 +1,45 @@
+name: Cleanup Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+
+    steps:
+      - name: Docker disk usage (before)
+        run: docker system df
+
+      - name: Prune Docker (containers, images, build cache, volumes)
+        run: |
+          docker container prune -f
+          docker image prune -a -f
+          docker builder prune -a -f
+          docker volume prune -a -f
+
+      - name: Docker disk usage (after)
+        run: docker system df
+
+      - name: Clean workspace build artifacts
+        run: |
+          echo "=== Before ==="
+          du -sh ${{ github.workspace }} 2>/dev/null || true
+
+          cd ${{ github.workspace }} || exit 0
+          rm -rf build-docker build-docker-mock build-docker-stubs
+          rm -rf _skbuild* .cmake-cache*
+          rm -rf docs/_build docs-site
+          rm -rf release-bundle
+          rm -f libstp-*.tar.gz libstp-docs-*.zip
+
+          echo "=== After ==="
+          du -sh ${{ github.workspace }} 2>/dev/null || true
+
+      - name: Clean runner temp and tool cache
+        run: |
+          rm -rf /tmp/docker-* /tmp/buildx-* 2>/dev/null || true
+          echo "Runner temp cleaned"
+
+      - name: Show disk usage
+        run: df -h
