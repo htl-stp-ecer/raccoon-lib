@@ -31,8 +31,10 @@ fi
 
 # --- 1) C++ binding stubs (pybind11-stubgen) ---
 # Run from /tmp to avoid repo's python/ shadowing the installed package.
+# LIBSTP_STUBGEN=1 skips atexit/signal hooks and logging init that
+# would segfault when no hardware is present.
 echo "--- Running pybind11-stubgen ---"
-(cd /tmp && pybind11-stubgen libstp -o "$STAGING" --ignore-all-errors) || true
+(cd /tmp && LIBSTP_STUBGEN=1 pybind11-stubgen libstp -o "$STAGING" --ignore-all-errors) || true
 
 # --- 2) Python source stubs (mypy stubgen --no-import) ---
 # --no-import parses source files without importing, avoiding side effects.
@@ -50,12 +52,7 @@ if [ -d "$PY_STUBS_TMP/libstp" ]; then
   done
 fi
 
-# --- 3) Hand-written stubs from repo (highest priority) ---
-if [ -d /src/python/stubs/libstp ]; then
-  cp -R /src/python/stubs/libstp/. "$STAGING/libstp/"
-fi
-
-# --- 4) Strip all runtime code — keep only .pyi + py.typed ---
+# --- 3) Strip all runtime code — keep only .pyi + py.typed ---
 find "$STAGING/libstp" -name '*.py' ! -name '__init__.py' -delete
 # Empty __init__.py files (needed for package structure, no logic)
 find "$STAGING/libstp" -name '__init__.py' -exec sh -c 'echo "" > "$1"' _ {} \;

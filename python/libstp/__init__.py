@@ -187,5 +187,8 @@ def _install_shutdown_hooks() -> None:
         print(f"Registered signal handler for {sig_name}")
 
 
-_install_shutdown_hooks()
-initialize_logging()
+import os as _os
+
+if not _os.environ.get("LIBSTP_STUBGEN"):
+    _install_shutdown_hooks()
+    initialize_logging()
