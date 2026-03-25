@@ -15,18 +15,29 @@ PY_STUBS_TMP=/tmp/py-stubs
 rm -rf "$STAGING" "$PY_STUBS_TMP"
 mkdir -p "$STAGING/libstp"
 
-# Find the installed libstp package location
-SITE_LIBSTP="$(pip show libstp | grep '^Location:' | cut -d' ' -f2)/libstp"
+# Find the site-packages directory reliably
+SITE_PACKAGES="$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+echo "Site-packages: $SITE_PACKAGES"
+
+# --- 0) Stub out missing native modules so import chain doesn't break ---
+# raccoon_transport depends on the compiled 'raccoon' LCM types module
+# which isn't installed in the build container. Create an empty placeholder
+# so pybind11-stubgen can import libstp without ModuleNotFoundError.
+if ! python -c "import raccoon" 2>/dev/null; then
+  echo "Creating stub 'raccoon' module for import resolution"
+  mkdir -p "$SITE_PACKAGES/raccoon"
+  touch "$SITE_PACKAGES/raccoon/__init__.py"
+fi
 
 # --- 1) C++ binding stubs (pybind11-stubgen) ---
 # Run from /tmp to avoid repo's python/ shadowing the installed package.
-# pybind11-stubgen must import the compiled .so modules to introspect them.
+echo "--- Running pybind11-stubgen ---"
 (cd /tmp && pybind11-stubgen libstp -o "$STAGING" --ignore-all-errors) || true
 
 # --- 2) Python source stubs (mypy stubgen --no-import) ---
-# --no-import parses source files without importing, avoiding side effects
-# (libstp.__init__ registers signal handlers and calls initialize_logging).
-stubgen --no-import -p libstp --search-path "$SITE_LIBSTP/.." -o "$PY_STUBS_TMP" || true
+# --no-import parses source files without importing, avoiding side effects.
+echo "--- Running stubgen --no-import ---"
+stubgen --no-import -p libstp --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP" || true
 if [ -d "$PY_STUBS_TMP/libstp" ]; then
   find "$PY_STUBS_TMP/libstp" -name '*.pyi' | while read -r pyi; do
     REL="${pyi#$PY_STUBS_TMP/libstp/}"
