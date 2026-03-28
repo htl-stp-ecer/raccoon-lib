@@ -102,6 +102,9 @@ namespace libstp::odometry::fused
 
         fusion_initialized_ = true;
 
+        // Accumulate path length (monotonic odometer)
+        path_length_ += static_cast<double>(v_world.norm()) * dt;
+
         // Integrate world-frame velocity into position
         position_ += v_world * dt_f;
 
@@ -159,6 +162,11 @@ namespace libstp::odometry::fused
         return imu_->getHeading();
     }
 
+    double FusedOdometry::getPathLength() const
+    {
+        return path_length_;
+    }
+
     double FusedOdometry::getHeadingError(double target_heading_rad) const
     {
         const double current_heading = getHeading();
@@ -190,6 +198,6 @@ namespace libstp::odometry::fused
         fusion_initialized_ = false;
         imu_->resetIntegratedVelocity();
 
-        LIBSTP_LOG_TRACE("FusedOdometry::reset to origin");
+        LIBSTP_LOG_WARN("FusedOdometry::reset to origin");
     }
 }

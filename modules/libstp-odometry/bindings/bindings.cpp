@@ -27,5 +27,11 @@ PYBIND11_MODULE(odometry, m)
              "Get absolute IMU heading unaffected by reset().\n\n"
              "Returns:\n"
              "    Heading in radians (CCW-positive). Stable across odometry resets.")
+        .def("get_path_length", &libstp::odometry::IOdometry::getPathLength,
+             "Get cumulative path length (odometer) in meters.\n\n"
+             "Monotonically increasing — NOT affected by reset().\n"
+             "Accumulates distance traveled each update cycle regardless of direction.\n\n"
+             "Returns:\n"
+             "    Total distance traveled in meters since construction.")
         .def("reset", py::overload_cast<>(&libstp::odometry::IOdometry::reset));
 }

@@ -29,6 +29,19 @@ class _ConditionalDrive(MotionStep):
             raise ValueError(
                 f"{self.__class__.__name__} requires either 'cm' or 'until'"
             )
+        if cm is not None:
+            if not isinstance(cm, (int, float)):
+                raise TypeError(f"cm must be a number, got {type(cm).__name__}")
+            if cm <= 0:
+                raise ValueError(f"cm must be > 0, got {cm}")
+        if not isinstance(speed, (int, float)):
+            raise TypeError(f"speed must be a number, got {type(speed).__name__}")
+        if not (0.0 < speed <= 1.0):
+            raise ValueError(f"speed must be in (0.0, 1.0], got {speed}")
+        if until is not None and not isinstance(until, StopCondition):
+            raise TypeError(
+                f"until must be a StopCondition, got {type(until).__name__}"
+            )
         self._cm = cm
         self._speed = speed
         self._until = until

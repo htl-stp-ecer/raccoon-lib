@@ -106,7 +106,7 @@ namespace libstp::motion
             complete();
             drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             [[maybe_unused]] const auto mc = drive().update(dt);
-            LIBSTP_LOG_INFO("TURN DONE [c={}] heading={:.1f}deg error={:.2f}deg filt_vel={:.4f}",
+            LIBSTP_LOG_DEBUG("TURN DONE [c={}] heading={:.1f}deg error={:.2f}deg filt_vel={:.4f}",
                         cycle_, current_heading_deg, error / kDegToRad, filtered_velocity_);
             return;
         }
@@ -158,14 +158,14 @@ namespace libstp::motion
         // Only warn if the profile is done but tracking error is still large,
         // which would indicate the robot overshot or is stuck.
         if (profile_done && std::abs(tracking_error) > 0.5) {
-            LIBSTP_LOG_WARN(
+            LIBSTP_LOG_DEBUG(
                 "TURN [c={}] LARGE TRACKING ERROR after profile done: {:.3f}rad ({:.1f}deg) - "
                 "setpoint={:.3f} heading={:.3f} (overshoot or stuck?)",
                 cycle_, tracking_error, tracking_error / kDegToRad,
                 sp.position, current_heading);
         }
         if (std::abs(raw_velocity) > 3.0 * max_velocity_) {
-            LIBSTP_LOG_WARN(
+            LIBSTP_LOG_DEBUG(
                 "TURN [c={}] HEADING JUMP: raw_vel={:.3f}rad/s (>{:.1f}x max) - "
                 "heading={:.3f} prev={:.3f} (heading discontinuity?)",
                 cycle_, raw_velocity, 3.0, current_heading, current_heading - raw_velocity * dt);
@@ -175,7 +175,7 @@ namespace libstp::motion
             bool sign_mismatch = (omega_cmd * drive_state.wz < 0);
             bool not_moving = (std::abs(drive_state.wz) < 0.05);
             if (sign_mismatch || not_moving) {
-                LIBSTP_LOG_WARN(
+                LIBSTP_LOG_DEBUG(
                     "TURN [c={}] SATURATED: omega={:.3f} (max={:.3f}) while error={:.1f}deg - "
                     "gyro_wz={:.3f} ({})",
                     cycle_, omega_cmd, max_velocity_, error / kDegToRad, drive_state.wz,

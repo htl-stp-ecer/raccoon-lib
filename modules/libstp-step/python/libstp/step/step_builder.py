@@ -30,6 +30,8 @@ class StepBuilder(Step):
     used anywhere a Step is expected (seq, parallel, mission step lists).
     """
 
+    _composite = True
+
     def __init__(self) -> None:
         super().__init__()
         self._builder_anomaly_callback: Optional[StepAnomalyCallback] = None

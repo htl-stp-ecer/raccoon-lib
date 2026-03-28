@@ -42,6 +42,15 @@ class DoWhileActive(Step):
 
     def __init__(self, reference_step: Step, task: Step) -> None:
         super().__init__()
+        from ..model import StepProtocol
+        if not isinstance(reference_step, StepProtocol):
+            raise TypeError(
+                f"reference_step must be a Step, got {type(reference_step).__name__}"
+            )
+        if not isinstance(task, StepProtocol):
+            raise TypeError(
+                f"task must be a Step, got {type(task).__name__}"
+            )
         self.reference_step = reference_step
         self.task = task
 
@@ -52,6 +61,8 @@ class DoWhileActive(Step):
 
     def collected_resources(self) -> frozenset[str]:
         return self.reference_step.collected_resources() | self.task.collected_resources()
+
+    _composite = True
 
     def _generate_signature(self) -> str:
         return "DoWhileActive()"

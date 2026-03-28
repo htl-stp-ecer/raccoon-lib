@@ -89,6 +89,17 @@ namespace libstp::odometry
         [[nodiscard]] virtual double getAbsoluteHeading() const = 0;
 
         /**
+         * Get the cumulative path length (odometer) in meters.
+         *
+         * Monotonically increasing — NOT affected by reset().
+         * Accumulates the Euclidean distance traveled each update cycle,
+         * regardless of direction (forward, strafe, curved).
+         *
+         * @return Total distance traveled in meters since construction
+         */
+        [[nodiscard]] virtual double getPathLength() const = 0;
+
+        /**
          * Reset the odometry to origin (zero position, identity orientation)
          */
         virtual void reset() = 0;

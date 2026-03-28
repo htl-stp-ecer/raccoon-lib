@@ -53,6 +53,7 @@ PYBIND11_MODULE(odometry_stm32, m)
         .def("get_distance_from_origin", &libstp::odometry::stm32::Stm32Odometry::getDistanceFromOrigin)
         .def("get_heading", &libstp::odometry::stm32::Stm32Odometry::getHeading)
         .def("get_absolute_heading", &libstp::odometry::stm32::Stm32Odometry::getAbsoluteHeading)
+        .def("get_path_length", &libstp::odometry::stm32::Stm32Odometry::getPathLength)
         .def("get_heading_error", &libstp::odometry::stm32::Stm32Odometry::getHeadingError,
              py::arg("target_heading_rad"))
         .def("reset", &libstp::odometry::stm32::Stm32Odometry::reset);

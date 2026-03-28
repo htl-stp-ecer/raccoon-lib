@@ -161,48 +161,44 @@ namespace libstp::kinematics::mecanum
 
         StmOdometryConfig cfg{};
 
-        // vx = (w_fl + w_fr + w_bl + w_br) * R / 4
-        cfg.inv_matrix[0] = {
-            static_cast<float>(R / 4.0),
-            static_cast<float>(R / 4.0),
-            static_cast<float>(R / 4.0),
-            static_cast<float>(R / 4.0)
-        };
+        // Kinematics-slot coefficients for each wheel:
+        //   inv_matrix row 0 (vx):  [FL: +R/4,    FR: +R/4,    BL: +R/4,    BR: +R/4   ]
+        //   inv_matrix row 1 (vy):  [FL: +R/4,    FR: -R/4,    BL: -R/4,    BR: +R/4   ]
+        //   inv_matrix row 2 (wz):  [FL: -R/(4L), FR: +R/(4L), BL: -R/(4L), BR: +R/(4L)]
+        //   fwd_matrix (vx,vy,wz → wheel rad/s):
+        //     FL: [1/R,  1/R, -L/R]   FR: [1/R, -1/R,  L/R]
+        //     BL: [1/R, -1/R, -L/R]   BR: [1/R,  1/R,  L/R]
+        const std::array<std::array<float, 3>, 4> slot_inv_cols = {{
+            {{ static_cast<float>(R / 4.0),  static_cast<float>(R / 4.0),  static_cast<float>(-R / (4.0 * L)) }},  // FL
+            {{ static_cast<float>(R / 4.0),  static_cast<float>(-R / 4.0), static_cast<float>( R / (4.0 * L)) }},  // FR
+            {{ static_cast<float>(R / 4.0),  static_cast<float>(-R / 4.0), static_cast<float>(-R / (4.0 * L)) }},  // BL
+            {{ static_cast<float>(R / 4.0),  static_cast<float>(R / 4.0),  static_cast<float>( R / (4.0 * L)) }},  // BR
+        }};
+        const std::array<std::array<float, 3>, 4> slot_fwd_rows = {{
+            {{ static_cast<float>(1.0/R), static_cast<float>( 1.0/R), static_cast<float>(-L/R) }},  // FL
+            {{ static_cast<float>(1.0/R), static_cast<float>(-1.0/R), static_cast<float>( L/R) }},  // FR
+            {{ static_cast<float>(1.0/R), static_cast<float>(-1.0/R), static_cast<float>(-L/R) }},  // BL
+            {{ static_cast<float>(1.0/R), static_cast<float>( 1.0/R), static_cast<float>( L/R) }},  // BR
+        }};
 
-        // vy = (w_fl - w_fr - w_bl + w_br) * R / 4
-        cfg.inv_matrix[1] = {
-            static_cast<float>(R / 4.0),
-            static_cast<float>(-R / 4.0),
-            static_cast<float>(-R / 4.0),
-            static_cast<float>(R / 4.0)
-        };
+        // The STM32 indexes w[] and motor_data.position[] by hardware PORT
+        // number, so the config arrays must be reordered from kinematics-slot
+        // order to port order.
+        const auto motors = getMotors();  // [FL=0, FR=1, BL=2, BR=3]
+        for (std::size_t slot = 0; slot < 4; ++slot) {
+            const int port = motors[slot]->getPort();
 
-        // wz = (-w_fl + w_fr - w_bl + w_br) * R / (4 * L)
-        cfg.inv_matrix[2] = {
-            static_cast<float>(-R / (4.0 * L)),
-            static_cast<float>(R / (4.0 * L)),
-            static_cast<float>(-R / (4.0 * L)),
-            static_cast<float>(R / (4.0 * L))
-        };
+            cfg.inv_matrix[0][port] = slot_inv_cols[slot][0];  // vx
+            cfg.inv_matrix[1][port] = slot_inv_cols[slot][1];  // vy
+            cfg.inv_matrix[2][port] = slot_inv_cols[slot][2];  // wz
 
-        // Forward kinematics: body velocity -> wheel speeds (rad/s)
-        // w_fl = (vx + vy - L*wz) / R
-        // w_fr = (vx - vy + L*wz) / R
-        // w_bl = (vx - vy - L*wz) / R
-        // w_br = (vx + vy + L*wz) / R
-        cfg.fwd_matrix[0] = {static_cast<float>(1.0/R), static_cast<float>( 1.0/R), static_cast<float>(-L/R)};
-        cfg.fwd_matrix[1] = {static_cast<float>(1.0/R), static_cast<float>(-1.0/R), static_cast<float>( L/R)};
-        cfg.fwd_matrix[2] = {static_cast<float>(1.0/R), static_cast<float>(-1.0/R), static_cast<float>(-L/R)};
-        cfg.fwd_matrix[3] = {static_cast<float>(1.0/R), static_cast<float>( 1.0/R), static_cast<float>( L/R)};
+            cfg.fwd_matrix[port] = slot_fwd_rows[slot];
 
-        // Per-motor ticks_to_rad from calibration
-        const auto motors = getMotors();
-        for (std::size_t i = 0; i < 4; ++i) {
-            double t2r = motors[i]->getCalibration().ticks_to_rad;
+            double t2r = motors[slot]->getCalibration().ticks_to_rad;
             // STM32 reads raw BEMF ticks — negate for inverted motors so
             // the sign convention matches the kinematics matrix.
-            if (motors[i]->isInverted()) t2r = -t2r;
-            cfg.ticks_to_rad[i] = static_cast<float>(t2r);
+            if (motors[slot]->isInverted()) t2r = -t2r;
+            cfg.ticks_to_rad[port] = static_cast<float>(t2r);
         }
 
         return cfg;

@@ -41,6 +41,8 @@ class Timeout(Step):
         timeout(wait_for_button(), seconds=30.0)
     """
 
+    _composite = True
+
     def __init__(self,
                  step: Step,
                  seconds: Union[float, int]) -> None:

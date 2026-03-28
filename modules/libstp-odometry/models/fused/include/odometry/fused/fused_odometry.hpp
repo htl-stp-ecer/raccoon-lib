@@ -76,6 +76,9 @@ namespace libstp::odometry::fused
         // Complementary filter state
         bool fusion_initialized_{false};
 
+        // Cumulative path length (monotonic odometer, not affected by reset)
+        double path_length_{0.0};
+
     public:
         /**
          * Construct fused odometry with IMU and kinematics
@@ -102,6 +105,9 @@ namespace libstp::odometry::fused
 
         /** Return the raw IMU heading unaffected by reset(). */
         [[nodiscard]] double getAbsoluteHeading() const override;
+
+        /** Return cumulative path length in meters (monotonic, not affected by reset). */
+        [[nodiscard]] double getPathLength() const override;
 
         /** Return the shortest signed angular error from the current heading to the target. */
         [[nodiscard]] double getHeadingError(double target_heading_rad) const override;

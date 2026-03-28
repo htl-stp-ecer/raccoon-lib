@@ -65,6 +65,8 @@ class SetMotorPower(Step):
 
     def __init__(self, motor: IMotor, percent: int) -> None:
         super().__init__()
+        if not hasattr(motor, "port"):
+            raise TypeError(f"motor must be a Motor (has .port), got {type(motor).__name__}")
         self._motor = motor
         self._percent = int(percent)
         if not (-100 <= self._percent <= 100):
@@ -112,6 +114,8 @@ class SetMotorVelocity(Step):
 
     def __init__(self, motor: IMotor, velocity: int) -> None:
         super().__init__()
+        if not hasattr(motor, "port"):
+            raise TypeError(f"motor must be a Motor (has .port), got {type(motor).__name__}")
         self._motor = motor
         self._velocity = int(velocity)
 
@@ -159,6 +163,8 @@ class SetMotorDps(Step):
 
     def __init__(self, motor: IMotor, dps: float) -> None:
         super().__init__()
+        if not hasattr(motor, "port"):
+            raise TypeError(f"motor must be a Motor (has .port), got {type(motor).__name__}")
         self._motor = motor
         self._dps = float(dps)
 
@@ -214,12 +220,17 @@ class MoveMotorTo(Step):
         timeout: Optional[float] = None,
     ) -> None:
         super().__init__()
+        if not hasattr(motor, "port"):
+            raise TypeError(f"motor must be a Motor (has .port), got {type(motor).__name__}")
         self._motor = motor
         self._position = int(position)
         self._velocity = int(velocity)
         self._timeout = timeout
         if self._velocity <= 0:
             raise ValueError(f"velocity must be > 0, got {self._velocity}")
+        if timeout is not None:
+            if not isinstance(timeout, (int, float)) or timeout <= 0:
+                raise ValueError(f"timeout must be > 0, got {timeout}")
 
     def required_resources(self) -> frozenset[str]:
         return frozenset({f"motor:{self._motor.port}"})
@@ -284,12 +295,17 @@ class MoveMotorRelative(Step):
         timeout: Optional[float] = None,
     ) -> None:
         super().__init__()
+        if not hasattr(motor, "port"):
+            raise TypeError(f"motor must be a Motor (has .port), got {type(motor).__name__}")
         self._motor = motor
         self._delta = int(delta)
         self._velocity = int(velocity)
         self._timeout = timeout
         if self._velocity <= 0:
             raise ValueError(f"velocity must be > 0, got {self._velocity}")
+        if timeout is not None:
+            if not isinstance(timeout, (int, float)) or timeout <= 0:
+                raise ValueError(f"timeout must be > 0, got {timeout}")
 
     def required_resources(self) -> frozenset[str]:
         return frozenset({f"motor:{self._motor.port}"})
@@ -322,6 +338,8 @@ class StopMotor(Step):
         self, motor: IMotor, mode: StopMode = StopMode.ACTIVE_BRAKE
     ) -> None:
         super().__init__()
+        if not hasattr(motor, "port"):
+            raise TypeError(f"motor must be a Motor (has .port), got {type(motor).__name__}")
         self._motor = motor
         self._mode = mode
 

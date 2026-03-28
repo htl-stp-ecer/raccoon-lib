@@ -29,6 +29,19 @@ class _ConditionalTurn(MotionStep):
             raise ValueError(
                 f"{self.__class__.__name__} requires either 'degrees' or 'until'"
             )
+        if degrees is not None:
+            if not isinstance(degrees, (int, float)):
+                raise TypeError(f"degrees must be a number, got {type(degrees).__name__}")
+            if degrees <= 0:
+                raise ValueError(f"degrees must be > 0, got {degrees}")
+        if not isinstance(speed, (int, float)):
+            raise TypeError(f"speed must be a number, got {type(speed).__name__}")
+        if not (0.0 < speed <= 1.0):
+            raise ValueError(f"speed must be in (0.0, 1.0], got {speed}")
+        if until is not None and not isinstance(until, StopCondition):
+            raise TypeError(
+                f"until must be a StopCondition, got {type(until).__name__}"
+            )
         self._degrees = degrees
         self._speed = speed
         self._until = until

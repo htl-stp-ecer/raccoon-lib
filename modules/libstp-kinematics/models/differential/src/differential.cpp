@@ -132,40 +132,40 @@ namespace libstp::kinematics::differential
 
         StmOdometryConfig cfg{};
 
-        // vx = (w_left + w_right) * R / 2
-        // Columns: [left, right, 0, 0]
-        cfg.inv_matrix[0] = {
-            static_cast<float>(R / 2.0),
-            static_cast<float>(R / 2.0),
-            0.0f, 0.0f
-        };
+        // Kinematics-slot coefficients for each wheel:
+        //   inv_matrix row 0 (vx):  [left: +R/2,          right: +R/2         ]
+        //   inv_matrix row 1 (vy):  [left: 0,             right: 0            ]
+        //   inv_matrix row 2 (wz):  [left: -R/wheelbase,  right: +R/wheelbase ]
+        //   fwd_matrix:
+        //     left:  [1/R, 0, -wheelbase/(2R)]
+        //     right: [1/R, 0, +wheelbase/(2R)]
+        const std::array<std::array<float, 3>, 2> slot_inv_cols = {{
+            {{ static_cast<float>(R / 2.0),  0.0f, static_cast<float>(-R / m_wheelbase) }},  // left
+            {{ static_cast<float>(R / 2.0),  0.0f, static_cast<float>( R / m_wheelbase) }},  // right
+        }};
+        const std::array<std::array<float, 3>, 2> slot_fwd_rows = {{
+            {{ static_cast<float>(1.0/R), 0.0f, static_cast<float>(-m_wheelbase/(2.0*R)) }},  // left
+            {{ static_cast<float>(1.0/R), 0.0f, static_cast<float>( m_wheelbase/(2.0*R)) }},  // right
+        }};
 
-        // vy = 0 (no lateral motion)
-        cfg.inv_matrix[1] = {0.0f, 0.0f, 0.0f, 0.0f};
+        // The STM32 indexes w[] and motor_data.position[] by hardware PORT
+        // number, so the config arrays must be reordered from kinematics-slot
+        // order to port order.
+        const auto motors = getMotors();  // [left=0, right=1]
+        for (std::size_t slot = 0; slot < motors.size(); ++slot) {
+            const int port = motors[slot]->getPort();
 
-        // wz = (w_right - w_left) * R / wheelbase
-        cfg.inv_matrix[2] = {
-            static_cast<float>(-R / m_wheelbase),
-            static_cast<float>(R / m_wheelbase),
-            0.0f, 0.0f
-        };
+            cfg.inv_matrix[0][port] = slot_inv_cols[slot][0];  // vx
+            cfg.inv_matrix[1][port] = slot_inv_cols[slot][1];  // vy
+            cfg.inv_matrix[2][port] = slot_inv_cols[slot][2];  // wz
 
-        // Forward kinematics: body velocity -> wheel speeds (rad/s)
-        // w_left  = (vx - wz * wheelbase/2) / R
-        // w_right = (vx + wz * wheelbase/2) / R
-        cfg.fwd_matrix[0] = {static_cast<float>(1.0/R), 0.0f, static_cast<float>(-m_wheelbase/(2.0*R))};
-        cfg.fwd_matrix[1] = {static_cast<float>(1.0/R), 0.0f, static_cast<float>( m_wheelbase/(2.0*R))};
-        // Wheels 2-3 unused in differential drive
-        cfg.fwd_matrix[2] = {0.0f, 0.0f, 0.0f};
-        cfg.fwd_matrix[3] = {0.0f, 0.0f, 0.0f};
+            cfg.fwd_matrix[port] = slot_fwd_rows[slot];
 
-        const auto motors = getMotors();
-        for (std::size_t i = 0; i < motors.size(); ++i) {
-            double t2r = motors[i]->getCalibration().ticks_to_rad;
+            double t2r = motors[slot]->getCalibration().ticks_to_rad;
             // STM32 reads raw BEMF ticks — negate for inverted motors so
             // the sign convention matches the kinematics matrix.
-            if (motors[i]->isInverted()) t2r = -t2r;
-            cfg.ticks_to_rad[i] = static_cast<float>(t2r);
+            if (motors[slot]->isInverted()) t2r = -t2r;
+            cfg.ticks_to_rad[port] = static_cast<float>(t2r);
         }
 
         return cfg;

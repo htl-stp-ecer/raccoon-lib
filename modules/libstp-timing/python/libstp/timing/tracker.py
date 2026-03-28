@@ -60,7 +60,7 @@ class StepTimingTracker(ClassNameLogger):
 
             if anomaly:
                 direction = "FASTER" if anomaly.faster_than_expected else "SLOWER"
-                self.warn(
+                self.debug(
                     (
                         f"Timing anomaly for {signature}: {duration:.3f}s "
                         f"(expected {anomaly.expected_mean:.3f}s +/- "

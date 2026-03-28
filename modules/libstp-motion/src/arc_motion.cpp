@@ -115,7 +115,7 @@ namespace libstp::motion
             complete();
             drive().setVelocity(foundation::ChassisVelocity{0.0, 0.0, 0.0});
             [[maybe_unused]] const auto mc = drive().update(dt);
-            LIBSTP_LOG_INFO("ARC DONE [c={}] heading={:.1f}deg error={:.2f}deg filt_vel={:.4f}",
+            LIBSTP_LOG_DEBUG("ARC DONE [c={}] heading={:.1f}deg error={:.2f}deg filt_vel={:.4f}",
                         cycle_,
                         current_heading * 180.0 / std::numbers::pi,
                         heading_error * 180.0 / std::numbers::pi,

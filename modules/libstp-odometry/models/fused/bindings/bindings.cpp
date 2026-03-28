@@ -99,6 +99,11 @@ PYBIND11_MODULE(odometry_fused, m)
              "Get absolute IMU heading unaffected by reset().\n\n"
              "Returns:\n"
              "    Heading in radians (CCW-positive). Stable across odometry resets.")
+        .def("get_path_length", &libstp::odometry::fused::FusedOdometry::getPathLength,
+             "Get cumulative path length (odometer) in meters.\n\n"
+             "Monotonically increasing — NOT affected by reset().\n\n"
+             "Returns:\n"
+             "    Total distance traveled in meters since construction.")
         .def("get_heading_error", &libstp::odometry::fused::FusedOdometry::getHeadingError,
              py::arg("target_heading_rad"),
              "Get heading error to reach a target heading.\n\n"

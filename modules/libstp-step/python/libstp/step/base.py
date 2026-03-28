@@ -1,7 +1,8 @@
 import asyncio
+import contextvars
 import time
 from abc import abstractmethod
-from typing import Any, Awaitable, Callable, Optional, TYPE_CHECKING
+from typing import Any, Awaitable, Callable, List, Optional, TYPE_CHECKING
 
 from .model import SimulationStep, SimulationStepDelta
 from .resource import get_resource_manager
@@ -13,9 +14,15 @@ if TYPE_CHECKING:
 
 StepAnomalyCallback = Callable[["Step", "GenericRobot"], Awaitable[Any]]
 
+_step_path: contextvars.ContextVar[List[str]] = contextvars.ContextVar(
+    "step_path", default=[]
+)
+
 
 class Step(ClassNameLogger):
     """Base async action executed by missions and higher-level step combinators."""
+
+    _composite: bool = False
 
     def __init__(self) -> None:
         self._skip_timing: bool = False
@@ -41,6 +48,11 @@ class Step(ClassNameLogger):
         """
         return self.required_resources()
 
+    @staticmethod
+    def _push_path(segment: str) -> contextvars.Token[List[str]]:
+        path = _step_path.get()
+        return _step_path.set([*path, segment])
+
     async def run_step(self, robot: "GenericRobot") -> None:
         """
         Execute the step with logging and optional timing instrumentation.
@@ -50,7 +62,12 @@ class Step(ClassNameLogger):
         elapsed time exceeds the anomaly upper bound — even while the step
         is still running.
         """
-        self.debug(f"Executing {self.__class__.__name__} step")
+        if not self._composite:
+            path = _step_path.get()
+            prefix = " > ".join(path) + ": " if path else ""
+            self.info(f"{prefix}{self._generate_signature()}")
+        else:
+            self.debug(f"Executing {self.__class__.__name__} step")
 
         signature: Optional[str] = None
         start_time: Optional[float] = None

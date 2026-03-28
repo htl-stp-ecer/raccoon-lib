@@ -13,5 +13,6 @@ void init_ir_sensor_calib(py::module& m) {
     .def_static("calibrateSensors", &libstp::sensors::ir::IRSensorCalibration::calibrateSensors,
                 py::arg("sensors"), py::arg("durationSeconds") = 5.0f,
                 py::arg("usePre") = false, py::arg("set_name") = "default")
-    .def_static("collectValues", &libstp::sensors::ir::IRSensorCalibration::collectValues);
+    .def_static("collectValues", &libstp::sensors::ir::IRSensorCalibration::collectValues,
+                py::arg("sensors"), py::arg("durationSeconds") = 5.0f);
 }

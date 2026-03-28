@@ -13,7 +13,8 @@ void init_ir_sensor(py::module& m) {
     py::class_<libstp::sensors::ir::IRSensor, libstp::hal::analog::AnalogSensor>(m, "IRSensor")
         .def(py::init<const int&>(),
              py::arg("port"))
-        .def("setCalibration", &libstp::sensors::ir::IRSensor::setCalibration)
+        .def("setCalibration", &libstp::sensors::ir::IRSensor::setCalibration,
+             py::arg("black_threshold"), py::arg("white_threshold"))
         .def("calibrate", &libstp::sensors::ir::IRSensor::calibrate,
              py::arg("values"))
         .def_readonly("blackThreshold", &libstp::sensors::ir::IRSensor::blackThreshold)

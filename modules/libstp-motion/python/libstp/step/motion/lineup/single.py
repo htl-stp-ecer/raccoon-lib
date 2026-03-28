@@ -118,7 +118,7 @@ class SingleSensorCrossing(MotionStep):
             if confidence >= self.config.entry_threshold:
                 self._leading_edge_pos = current
                 self._phase = 1
-                self.info(
+                self.debug(
                     f"Leading edge at {current * 100:.1f}cm "
                     f"(confidence={confidence:.2f})"
                 )
@@ -136,7 +136,7 @@ class SingleSensorCrossing(MotionStep):
                     if self.apparent_width_m > 0 else 1.0
                 self.crossing_angle_rad = math.acos(ratio)
 
-                self.info(
+                self.debug(
                     f"Trailing edge at {current * 100:.1f}cm, "
                     f"apparent={self.apparent_width_m * 100:.1f}cm, "
                     f"angle={math.degrees(self.crossing_angle_rad):.1f}deg"

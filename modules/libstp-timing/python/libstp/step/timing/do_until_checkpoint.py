@@ -39,9 +39,18 @@ class DoUntilCheckpoint(Step):
         ])
     """
 
+    _composite = True
+
     def __init__(self, checkpoint: float, step) -> None:
         super().__init__()
-        self.checkpoint = checkpoint
+        if not isinstance(checkpoint, (int, float)):
+            raise TypeError(f"checkpoint must be a number, got {type(checkpoint).__name__}")
+        if checkpoint < 0:
+            raise ValueError(f"checkpoint must be >= 0, got {checkpoint}")
+        from ..model import StepProtocol
+        if not isinstance(step, StepProtocol):
+            raise TypeError(f"step must be a Step, got {type(step).__name__}")
+        self.checkpoint = float(checkpoint)
         self.step = step
 
     def collected_resources(self) -> frozenset[str]:
