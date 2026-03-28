@@ -21,5 +21,7 @@ ENV CCACHE_DIR=/ccache \
     CCACHE_COMPRESS=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
+# Trust bind-mounted source tree and its CMake FetchContent checkouts
+RUN git config --global --add safe.directory '*'
 WORKDIR /src
 CMD ["/bin/bash"]
