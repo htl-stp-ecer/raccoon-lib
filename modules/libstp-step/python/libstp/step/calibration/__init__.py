@@ -1,3 +1,5 @@
+from .calibrate_step import CalibrateStep
+from .store import CalibrationStore
 from .calibrate import Calibrate
 from .calibrate_dsl import calibrate
 from .calibrate_wfl import CalibrateWaitForLight
@@ -24,6 +26,8 @@ from .sensors import (
 )
 
 __all__ = [
+    "CalibrateStep",
+    "CalibrationStore",
     "calibrate",
     "Calibrate",
     "calibrate_wait_for_light",
