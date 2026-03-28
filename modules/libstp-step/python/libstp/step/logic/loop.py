@@ -1,5 +1,6 @@
 from typing import Any
 from .. import Step, StepProtocol
+from ..base import _step_path
 from ..annotation import dsl_step
 
 
@@ -41,12 +42,20 @@ class LoopForever(Step):
     def collected_resources(self) -> frozenset[str]:
         return self.step.collected_resources()
 
+    _composite = True
+
     def _generate_signature(self) -> str:
         return "LoopForever()"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        iteration = 0
         while True:
-            await self.step.run_step(robot)
+            iteration += 1
+            token = self._push_path(f"Loop[{iteration}]")
+            try:
+                await self.step.run_step(robot)
+            finally:
+                _step_path.reset(token)
 
 
 @dsl_step(tags=["control", "loop"])
@@ -85,9 +94,15 @@ class LoopFor(Step):
     def collected_resources(self) -> frozenset[str]:
         return self.step.collected_resources()
 
+    _composite = True
+
     def _generate_signature(self) -> str:
         return f"LoopFor(iterations={self.iterations})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        for _ in range(self.iterations):
-            await self.step.run_step(robot)
+        for i in range(self.iterations):
+            token = self._push_path(f"Loop[{i + 1}/{self.iterations}]")
+            try:
+                await self.step.run_step(robot)
+            finally:
+                _step_path.reset(token)

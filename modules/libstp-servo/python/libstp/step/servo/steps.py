@@ -82,10 +82,17 @@ class Easing(enum.Enum):
 
 
 def _unwrap_servo(servo_or_preset):
-    """Extract the raw Servo from a ServoPreset, or return as-is if already a Servo."""
+    """Extract the raw Servo from a ServoPreset, or return as-is if already a Servo.
+
+    Raises TypeError if the argument is neither a Servo nor a ServoPreset.
+    """
     from .preset import ServoPreset
     if isinstance(servo_or_preset, ServoPreset):
         return servo_or_preset.device
+    if not hasattr(servo_or_preset, "set_position") or not hasattr(servo_or_preset, "port"):
+        raise TypeError(
+            f"Expected a Servo or ServoPreset, got {type(servo_or_preset).__name__}"
+        )
     return servo_or_preset
 
 
@@ -278,11 +285,15 @@ class SlowServo(Step):
     ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
+        if not isinstance(angle, (int, float)):
+            raise TypeError(f"angle must be a number, got {type(angle).__name__}")
         self._target_angle = float(angle)
         self._speed = float(speed)
-        self._easing: EasingFunc = easing if callable(easing) else easing.value
         if self._speed <= 0:
             raise ValueError(f"Speed must be > 0, got {self._speed}")
+        if not callable(easing):
+            raise TypeError(f"easing must be an Easing member or callable, got {type(easing).__name__}")
+        self._easing: EasingFunc = easing if callable(easing) else easing.value
 
     def required_resources(self) -> frozenset[str]:
         return frozenset({f"servo:{self._servo_ref.port}"})

@@ -43,8 +43,17 @@ namespace libstp::odometry::stm32
 
     void Stm32Odometry::update(double /*dt*/)
     {
-        // No-op: the STM32 integrates autonomously.
-        // The bridge's background thread keeps the cache fresh.
+        // The STM32 integrates position autonomously.
+        // We accumulate path length here from position deltas.
+        auto snap = bridge_->readOdometry();
+        if (path_initialized_) {
+            const float dx = snap.pos_x - last_pos_x_;
+            const float dy = snap.pos_y - last_pos_y_;
+            path_length_ += std::sqrt(dx * dx + dy * dy);
+        }
+        last_pos_x_ = snap.pos_x;
+        last_pos_y_ = snap.pos_y;
+        path_initialized_ = true;
     }
 
     foundation::Pose Stm32Odometry::getPose() const
@@ -85,6 +94,11 @@ namespace libstp::odometry::stm32
         return imu_->getHeading();
     }
 
+    double Stm32Odometry::getPathLength() const
+    {
+        return path_length_;
+    }
+
     double Stm32Odometry::getHeadingError(double target_heading_rad) const
     {
         return angularError(getHeading(), target_heading_rad);
@@ -119,6 +133,6 @@ namespace libstp::odometry::stm32
         // Zero the local cache once more to eliminate any sub-threshold residual
         bridge_->resetLocalOdometry();
 
-        LIBSTP_LOG_TRACE("Stm32Odometry::reset — STM32 odometry reset confirmed");
+        LIBSTP_LOG_WARN("Stm32Odometry::reset — STM32 odometry reset confirmed");
     }
 }

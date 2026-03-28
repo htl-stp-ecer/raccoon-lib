@@ -27,9 +27,9 @@ class Mission(ClassNameLogger, MissionProtocol):
 
     async def run(self, robot):
         """Build the mission sequence and execute it on the provided robot."""
-        self.debug(f"Executing {self.__class__.__name__}")
+        self.info(f"Starting mission: {self.__class__.__name__}")
         await self.sequence().run_step(robot)
-        self.debug(f"Completed {self.__class__.__name__}")
+        self.info(f"Completed mission: {self.__class__.__name__}")
 
     @abstractmethod
     def sequence(self) -> "Step":

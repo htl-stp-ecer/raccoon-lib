@@ -44,6 +44,7 @@ namespace libstp::odometry::stm32
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override;
         [[nodiscard]] double getHeading() const override;
         [[nodiscard]] double getAbsoluteHeading() const override;
+        [[nodiscard]] double getPathLength() const override;
         [[nodiscard]] double getHeadingError(double target_heading_rad) const override;
         void reset() override;
 
@@ -55,6 +56,12 @@ namespace libstp::odometry::stm32
 
         // Origin tracking (for getDistanceFromOrigin)
         double origin_heading_{0.0};
+
+        // Cumulative path length (monotonic odometer, not affected by reset)
+        double path_length_{0.0};
+        float last_pos_x_{0.0f};
+        float last_pos_y_{0.0f};
+        bool path_initialized_{false};
 
         void sendKinematicsConfig();
     };

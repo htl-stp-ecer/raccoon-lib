@@ -14,6 +14,7 @@ namespace libstp::test
         MOCK_METHOD(odometry::DistanceFromOrigin, getDistanceFromOrigin, (), (const, override));
         MOCK_METHOD(double, getHeading, (), (const, override));
         MOCK_METHOD(double, getAbsoluteHeading, (), (const, override));
+        MOCK_METHOD(double, getPathLength, (), (const, override));
         MOCK_METHOD(double, getHeadingError, (double target_heading_rad), (const, override));
         MOCK_METHOD(void, reset, (), (override));
 
@@ -40,12 +41,17 @@ namespace libstp::test
             ON_CALL(*this, getPose()).WillByDefault(testing::Return(pose));
         }
 
+        void setPathLength(double meters) {
+            ON_CALL(*this, getPathLength()).WillByDefault(testing::Return(meters));
+        }
+
         // Default setup for common test scenarios
         void setupDefaults() {
             simulateForwardProgress(0.0, 0.0);
             setHeading(0.0);
             setHeadingError(0.0);
             setPose(foundation::Pose{});
+            setPathLength(0.0);
         }
 
     private:

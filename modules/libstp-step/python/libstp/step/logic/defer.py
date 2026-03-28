@@ -37,7 +37,11 @@ class Defer(Step):
 
     def __init__(self, factory: Callable[["GenericRobot"], Step]) -> None:
         super().__init__()
+        if not callable(factory):
+            raise TypeError(f"factory must be callable, got {type(factory).__name__}")
         self.factory = factory
+
+    _composite = True
 
     def _generate_signature(self) -> str:
         return "Defer()"
@@ -80,6 +84,8 @@ class Run(Step):
         action: Callable[["GenericRobot"], Union[None, Awaitable[None]]],
     ) -> None:
         super().__init__()
+        if not callable(action):
+            raise TypeError(f"action must be callable, got {type(action).__name__}")
         self.action = action
 
     def _generate_signature(self) -> str:

@@ -34,7 +34,8 @@ void init_types(const py::module& m)
 {
     py::class_<libstp::foundation::ChassisVelocity>(m, "ChassisVelocity")
         .def(py::init<>())
-        .def(py::init<double, double, double>())
+        .def(py::init<double, double, double>(),
+             py::arg("vx"), py::arg("vy"), py::arg("wz"))
         .def_readwrite("vx", &libstp::foundation::ChassisVelocity::vx)
         .def_readwrite("vy", &libstp::foundation::ChassisVelocity::vy)
         .def_readwrite("wz", &libstp::foundation::ChassisVelocity::wz)

@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
+from .base import _step_path
 from .annotation import dsl
 
 
@@ -9,6 +10,8 @@ class Sequential(Step):
     """
     Composite step that runs child steps one after another.
     """
+
+    _composite = True
 
     def __init__(self, steps: List[Step]) -> None:
         """
@@ -71,8 +74,13 @@ class Sequential(Step):
         """
         Run each child step in order against the same robot instance.
         """
+        total = len(self.steps)
         for i, step in enumerate(self.steps):
-            await step.run_step(robot)
+            token = self._push_path(f"{i + 1}/{total}")
+            try:
+                await step.run_step(robot)
+            finally:
+                _step_path.reset(token)
 
 @dsl(hidden=True)
 def seq(steps: List[Step]) -> Sequential:

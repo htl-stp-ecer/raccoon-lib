@@ -86,6 +86,18 @@ class WallAlign(MotionStep):
         grace_period: float,
     ):
         super().__init__()
+        if not isinstance(direction, WallDirection):
+            raise TypeError(f"direction must be a WallDirection, got {type(direction).__name__}")
+        if not isinstance(speed, (int, float)) or speed <= 0:
+            raise ValueError(f"speed must be > 0, got {speed}")
+        if not isinstance(accel_threshold, (int, float)) or accel_threshold <= 0:
+            raise ValueError(f"accel_threshold must be > 0, got {accel_threshold}")
+        if not isinstance(settle_duration, (int, float)) or settle_duration < 0:
+            raise ValueError(f"settle_duration must be >= 0, got {settle_duration}")
+        if not isinstance(max_duration, (int, float)) or max_duration <= 0:
+            raise ValueError(f"max_duration must be > 0, got {max_duration}")
+        if not isinstance(grace_period, (int, float)) or grace_period < 0:
+            raise ValueError(f"grace_period must be >= 0, got {grace_period}")
         self.direction = direction
         self.speed = speed
         self.accel_threshold = accel_threshold
@@ -133,7 +145,7 @@ class WallAlign(MotionStep):
 
         # Safety timeout
         if self._elapsed >= self.max_duration:
-            self.warn("Wall align timed out without detecting a bump")
+            self.debug("Wall align timed out without detecting a bump")
             return True
 
         ax, ay, _az = self._imu.get_linear_acceleration()
@@ -150,7 +162,7 @@ class WallAlign(MotionStep):
                 self._peak_accel = accel_mag
                 self._peak_ax = ax
                 self._peak_ay = ay
-                self.info(f"Bump detected: {accel_mag:.2f} m/s²")
+                self.debug(f"Bump detected: {accel_mag:.2f} m/s²")
         else:
             # Track the peak accel sample during the settle window
             # — the true impact peak often arrives 1-2 samples after
@@ -175,7 +187,7 @@ class WallAlign(MotionStep):
                     impact_angle_deg=impact_angle,
                     heading_correction_deg=heading_correction,
                 )
-                self.info(
+                self.debug(
                     f"Wall align done: peak={self._peak_accel:.2f} m/s², "
                     f"wall_angle={impact_angle:.1f} deg, "
                     f"heading_correction={heading_correction:.1f} deg"

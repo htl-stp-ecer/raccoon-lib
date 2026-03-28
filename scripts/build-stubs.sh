@@ -30,9 +30,12 @@ fi
 echo "--- Running pybind11-stubgen ---"
 (cd /tmp && pybind11-stubgen libstp -o "$STAGING" --ignore-all-errors) || true
 
-# --- 2) Python source stubs (mypy stubgen --no-import) ---
-echo "--- Running stubgen --no-import ---"
-stubgen --no-import -p libstp --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP" || true
+# --- 2) Python source stubs (mypy stubgen --inspect-mode) ---
+# --inspect-mode imports modules at runtime, producing cleaner stubs that
+# preserve docstrings, full signatures, and proper types compared to
+# --no-import which only does static analysis and loses most of this.
+echo "--- Running stubgen --inspect-mode ---"
+stubgen --inspect-mode -p libstp --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP" || true
 if [ -d "$PY_STUBS_TMP/libstp" ]; then
   find "$PY_STUBS_TMP/libstp" -name '*.pyi' | while read -r pyi; do
     REL="${pyi#$PY_STUBS_TMP/libstp/}"

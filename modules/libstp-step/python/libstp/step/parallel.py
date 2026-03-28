@@ -4,6 +4,7 @@ from typing import List, Optional
 from libstp.robot.api import GenericRobot
 
 from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
+from .base import _step_path
 from .sequential import seq, Sequential
 from .annotation import dsl
 from .resource import validate_no_overlap
@@ -14,6 +15,8 @@ class Parallel(Step):
     """
     Composite step that runs branches concurrently and waits for all of them.
     """
+
+    _composite = True
 
     def __init__(self, steps: List[Step]) -> None:
         """
@@ -81,12 +84,20 @@ class Parallel(Step):
             return
 
         completed_steps = []
+        total = len(self.steps)
 
-        async def step_callback(step):
-            await step.run_step(robot)
+        async def step_callback(index: int, step: Step) -> None:
+            token = self._push_path(f"P[{index + 1}/{total}]")
+            try:
+                await step.run_step(robot)
+            finally:
+                _step_path.reset(token)
             completed_steps.append(step)
 
-        tasks = [asyncio.create_task(step_callback(step)) for step in self.steps]
+        tasks = [
+            asyncio.create_task(step_callback(i, step))
+            for i, step in enumerate(self.steps)
+        ]
 
         await asyncio.gather(*tasks)
 
