@@ -23,24 +23,14 @@ class DriveForwardBuilder(StepBuilder):
         self._until = None
 
     def cm(self, value: float):
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"cm must be a number, got {type(value).__name__}")
-        if value <= 0:
-            raise ValueError(f"cm must be > 0, got {value}")
         self._cm = value
         return self
 
     def speed(self, value: float):
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"speed must be a number, got {type(value).__name__}")
-        if not (0.0 < value <= 1.0):
-            raise ValueError(f"speed must be in (0.0, 1.0], got {value}")
         self._speed = value
         return self
 
     def until(self, value: StopCondition):
-        if not isinstance(value, StopCondition):
-            raise TypeError(f"until must be a StopCondition, got {type(value).__name__}")
         self._until = value
         return self
 
@@ -153,24 +143,14 @@ class StrafeLeftBuilder(StepBuilder):
         self._until = None
 
     def cm(self, value: float):
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"cm must be a number, got {type(value).__name__}")
-        if value <= 0:
-            raise ValueError(f"cm must be > 0, got {value}")
         self._cm = value
         return self
 
     def speed(self, value: float):
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"speed must be a number, got {type(value).__name__}")
-        if not (0.0 < value <= 1.0):
-            raise ValueError(f"speed must be in (0.0, 1.0], got {value}")
         self._speed = value
         return self
 
     def until(self, value: StopCondition):
-        if not isinstance(value, StopCondition):
-            raise TypeError(f"until must be a StopCondition, got {type(value).__name__}")
         self._until = value
         return self
 
@@ -220,24 +200,14 @@ class StrafeRightBuilder(StepBuilder):
         self._until = None
 
     def cm(self, value: float):
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"cm must be a number, got {type(value).__name__}")
-        if value <= 0:
-            raise ValueError(f"cm must be > 0, got {value}")
         self._cm = value
         return self
 
     def speed(self, value: float):
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"speed must be a number, got {type(value).__name__}")
-        if not (0.0 < value <= 1.0):
-            raise ValueError(f"speed must be in (0.0, 1.0], got {value}")
         self._speed = value
         return self
 
     def until(self, value: StopCondition):
-        if not isinstance(value, StopCondition):
-            raise TypeError(f"until must be a StopCondition, got {type(value).__name__}")
         self._until = value
         return self
 
