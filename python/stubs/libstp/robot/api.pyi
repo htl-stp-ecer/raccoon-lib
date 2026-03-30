@@ -85,9 +85,10 @@ class GenericRobot(abc.ABC, libstp.class_name_logger.ClassNameLogger):
         Odometry system for position tracking.
         """
     @property
-    def setup_mission(self) -> typing.Optional[libstp.robot.api.MissionProtocol]:
+    def setup_mission(self) -> typing.Optional[libstp.mission.api.SetupMission]:
         """
-        Optional mission to run before main missions.
+        Optional setup mission to run before main missions.
+        Must be a SetupMission instance.
         """
     @property
     def shutdown_mission(self) -> typing.Optional[libstp.robot.api.MissionProtocol]:
