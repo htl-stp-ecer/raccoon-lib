@@ -4,6 +4,7 @@ from .loop import LoopFor, LoopForever
 from .loop_dsl import loop_forever, loop_for
 from .defer import Defer, Run
 from .defer_dsl import defer, run
+from .background import Background, WaitForBackground, background, wait_for_background
 
 __all__ = [
     "DoWhileActive",
@@ -16,4 +17,8 @@ __all__ = [
     "defer",
     "Run",
     "run",
+    "Background",
+    "WaitForBackground",
+    "background",
+    "wait_for_background",
 ]
