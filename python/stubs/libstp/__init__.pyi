@@ -10,6 +10,7 @@ from libstp.foundation import initialize_logging
 from libstp.hal import Motor
 from libstp.hal import Servo
 from libstp.mission.api import Mission
+from libstp.mission.api import SetupMission
 from libstp.robot.api import GenericRobot
 from libstp.robot.api import MissionProtocol
 from libstp.robot.api import RobotDefinitionsProtocol

@@ -38,7 +38,7 @@ from libstp.step.servo.preset import ServoPreset
 from libstp.ui import __all__ as _ui_all
 from libstp.robot import __all__ as _robot_all
 from libstp.robot import *
-from libstp.mission.api import Mission, MissionProtocol
+from libstp.mission.api import Mission, MissionProtocol, SetupMission
 from libstp.timing import StepTimingTracker
 # UI library (replaces legacy RenderScreen)
 from libstp.ui import *
@@ -68,6 +68,7 @@ __all__ = [
     "MissionProtocol",
     # Mission API
     "Mission",
+    "SetupMission",
     # Logging
     "error",
     "info",

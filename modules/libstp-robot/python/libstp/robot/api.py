@@ -15,7 +15,7 @@ _S = TypeVar("_S", bound=RobotService)
 
 if TYPE_CHECKING:
     from libstp.drive import Drive
-    from libstp.mission.api import MissionProtocol
+    from libstp.mission.api import MissionProtocol, SetupMission
     from libstp.odometry import Odometry
 
 
@@ -89,8 +89,11 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         return []
 
     @property
-    def setup_mission(self) -> Optional["MissionProtocol"]:
-        """Optional mission to run before main missions."""
+    def setup_mission(self) -> Optional["SetupMission"]:
+        """Optional setup mission to run before main missions.
+
+        Must be a ``SetupMission`` instance (not a plain ``Mission``).
+        """
         return None
 
     @property
@@ -129,6 +132,13 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             self.warn("Robot does not have any missions attached")
 
         if self.setup_mission is not None:
+            from libstp.mission.api import SetupMission
+            if not isinstance(self.setup_mission, SetupMission):
+                raise TypeError(
+                    f"setup_mission must be a SetupMission instance, "
+                    f"got {type(self.setup_mission).__name__}. "
+                    f"Subclass SetupMission instead of Mission for setup missions."
+                )
             self.info("Setup mission found")
 
         if self.shutdown_mission is not None:
@@ -217,7 +227,11 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             await setup_mission.run(self)
 
         # Pre-start gate (wait for light or button)
-        await self._pre_start_gate()
+        if setup_mission is not None and setup_mission._custom_pre_start_gate:
+            self.info("Using setup mission's custom pre-start gate")
+            await setup_mission.pre_start_gate(self)
+        else:
+            await self._pre_start_gate()
 
         # Main missions with shutdown timer
         initialize_timer() # reset clock to 0 before main missions
