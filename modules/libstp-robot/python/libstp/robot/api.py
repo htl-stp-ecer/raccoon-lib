@@ -212,6 +212,27 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             self.info(f"Starting mission: {mission}")
             await mission.run(self)
             self.info(f"Finished mission: {mission}")
+            self._warn_leaked_background_tasks(mission)
+
+    def _warn_leaked_background_tasks(self, mission: "MissionProtocol") -> None:
+        """Warn if background tasks from a mission are still running."""
+        bg_mgr = getattr(self, "_background_manager", None)
+        if bg_mgr is not None and bg_mgr.active_count > 0:
+            self.warning(
+                f"{bg_mgr.active_count} background task(s) still running "
+                f"after mission {mission} — consider using wait_for_background()"
+            )
+
+    async def _drain_background_tasks(self) -> None:
+        """Cancel all remaining background tasks and await their cleanup."""
+        bg_mgr = getattr(self, "_background_manager", None)
+        if bg_mgr is None or bg_mgr.active_count == 0:
+            return
+        self.info(
+            f"Cancelling {bg_mgr.active_count} remaining background task(s) "
+            f"before shutdown"
+        )
+        await bg_mgr.cancel_all()
 
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
@@ -244,6 +265,9 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             )
         except asyncio.TimeoutError:
             self.error(f"Shutdown timer expired after {self.shutdown_in}s! Forcing shutdown.")
+
+        # Cancel orphaned background tasks before shutdown mission
+        await self._drain_background_tasks()
 
         # Always run shutdown mission
         initialize_timer() # reset clock to 0 before shutdown mission

@@ -18,6 +18,10 @@ _step_path: contextvars.ContextVar[List[str]] = contextvars.ContextVar(
     "step_path", default=[]
 )
 
+_in_background: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_in_background", default=False
+)
+
 
 class Step(ClassNameLogger):
     """Base async action executed by missions and higher-level step combinators."""
@@ -89,6 +93,17 @@ class Step(ClassNameLogger):
 
         # Runtime resource guard (safety net for Defer / Run)
         resources = self.required_resources()
+
+        # Preempt conflicting background steps before acquiring
+        if resources and not _in_background.get(False):
+            from .background_manager import get_background_manager
+
+            bg_mgr = get_background_manager(robot)
+            if bg_mgr.active_count > 0:
+                await bg_mgr.preempt_conflicts(
+                    resources, self._generate_signature()
+                )
+
         mgr = get_resource_manager(robot) if resources else None
         if mgr is not None:
             mgr.acquire(resources, self._generate_signature())
