@@ -4,7 +4,7 @@ from libstp.robot.heading_reference import HeadingReferenceService
 
 from .. import Step, dsl
 from ..annotation import dsl_step
-from ..logic.defer import Defer
+from ..logic.defer import Defer, Run
 from .turn_dsl import turn_left, turn_right
 
 if TYPE_CHECKING:
@@ -75,11 +75,16 @@ def _build_heading_turn(
     """Shared logic for heading turn steps."""
     service = robot.get_service(HeadingReferenceService)
     relative_deg = service.compute_turn(target_deg, force_direction=force_direction)
+    angle = abs(relative_deg)
 
-    if relative_deg >= 0:
-        return turn_left(relative_deg, speed=speed)
+    if angle < 0.1:
+        service.debug(f"Already at target heading (error={angle:.3f}°) — skipping turn")
+        return Run(lambda _robot: None)
+
+    if relative_deg > 0:
+        return turn_left(angle, speed=speed)
     else:
-        return turn_right(-relative_deg, speed=speed)
+        return turn_right(angle, speed=speed)
 
 
 @dsl(tags=["motion", "turn"])

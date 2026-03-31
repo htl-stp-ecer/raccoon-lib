@@ -9,7 +9,7 @@ from ..widgets import (
     Widget, Text, Icon, Button, Spacer,
     StatusBadge, StatusIcon, HintBox, ResultsTable,
     LightBulb, SensorValue, SensorGraph,
-    NumericInput, Row, Column, Split, Card, Center,
+    NumericInput, Row, Column, Split, Card, Center, Container,
 )
 from ..events import on_click, on_button_press, on_change
 
@@ -232,21 +232,29 @@ class WFLDetectScreen(UIScreen[None]):
 
         # Big full-screen GO! indicator
         if self.status == "GO!":
-            return Center(children=[
-                Column(children=[
-                    StatusBadge(
-                        text="GO!",
-                        color="blue",
-                        glow=True,
-                    ),
-                ], align="center", spacing=0),
+            return Container(bg_color="#1565C0", children=[
+                Text("GO!", size="title", bold=True, align="center", color="white"),
+            ])
+
+        # Full-screen ARMED indicator — visible from across the room
+        if self.status == "ARMED":
+            return Container(bg_color="#2E7D32", padding=16, children=[
+                Text("ARMED", size="title", bold=True, align="center", color="white"),
+                Spacer(12),
+                Text(f"Sensor: {self.raw_value}", size="large", align="center", color="white"),
+                Spacer(8),
+                ResultsTable(rows=[
+                    ("Baseline", f"{self.baseline:.0f}", "white"),
+                    ("Threshold", f"{self.threshold:.0f}", "white"),
+                ]),
+                Spacer(12),
+                Button("test", "Back to Test Mode", style="secondary"),
             ])
 
         children: list[Widget] = [
             StatusBadge(
                 text=self.status,
                 color=self.status_color,
-                glow=self.status == "ARMED",
             ),
             Spacer(16),
             Text(f"Sensor: {self.raw_value}", size="xlarge"),
@@ -260,9 +268,6 @@ class WFLDetectScreen(UIScreen[None]):
 
         if self.hint:
             children += [Spacer(12), HintBox(self.hint)]
-
-        if self.status == "ARMED":
-            children += [Spacer(12), Button("test", "Back to Test Mode", style="secondary")]
 
         return Center(children=[
             Column(children=children, align="center", spacing=0),

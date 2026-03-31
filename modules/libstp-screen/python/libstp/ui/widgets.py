@@ -287,6 +287,13 @@ class Center(Widget):
 
 
 @dataclass
+class Container(Widget):
+    """Container with optional background color, fills available space."""
+    children: List[Widget] = field(default_factory=list)
+    bg_color: Optional[str] = None  # hex color or named color
+    padding: int = 0
+
+@dataclass
 class Card(Widget):
     """Card container with optional title."""
     children: List[Widget] = field(default_factory=list)
