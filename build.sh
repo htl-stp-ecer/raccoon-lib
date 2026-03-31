@@ -119,6 +119,9 @@ docker_exec() {
     -e PIP_CACHE_DIR=/root/.cache/pip \
     -e PYTHONUNBUFFERED=1 \
     -e PYTHONDONTWRITEBYTECODE=1 \
+    -e GIT_CONFIG_COUNT=1 \
+    -e GIT_CONFIG_KEY_0=safe.directory \
+    -e GIT_CONFIG_VALUE_0='*' \
     -e CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_JOBS" \
     -e MAKEFLAGS="-j$BUILD_JOBS" \
     -e SKBUILD_BUILD_DIR=/src/$SKBUILD_DIR \
