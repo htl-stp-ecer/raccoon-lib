@@ -7,9 +7,9 @@ then computes and executes a corrective turn angle.
 import math
 import time
 from enum import Enum
-from libstp.foundation import ChassisVelocity
+from libstp.foundation import ChassisVelocity, info
 from libstp.sensor_ir import IRSensor
-from libstp.step import Sequential, seq, defer
+from libstp.step import Sequential, seq, defer, Run
 from libstp.step.condition import on_black, on_white
 from typing import TYPE_CHECKING
 
@@ -144,6 +144,11 @@ def _compute_lineup_turn(measure: TimingBasedLineUp, robot: "GenericRobot"):
     if measure.forward_speed < 0:
         angle_rad = -angle_rad
     degrees = math.degrees(abs(angle_rad))
+
+    if abs(degrees) < 0.1:
+        info(f"Already at target heading (error={degrees:.3f}°) — skipping turn")
+        return Run(lambda _robot: None)
+
     return turn_left(degrees) if angle_rad >= 0 else turn_right(degrees)
 
 

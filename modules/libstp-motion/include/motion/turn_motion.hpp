@@ -40,7 +40,8 @@ namespace libstp::motion
         ProfiledPIDController profiled_pid_;
 
         // Velocity tracking for settling detection
-        double prev_heading_{0.0};
+        double prev_heading_{0.0};       // last wrapped heading from odometry (for delta computation)
+        double accumulated_heading_{0.0}; // unwrapped heading (handles wraparound at ±π)
         double filtered_velocity_{0.0};
         static constexpr double kVelocityFilterAlpha{0.3};
 
