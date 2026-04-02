@@ -50,6 +50,13 @@ class StopCondition:
         """Chain conditions: once *self* triggers, start checking *other*."""
         return _Then(self, other)
 
+    def __bool__(self) -> bool:
+        raise TypeError(
+            "StopCondition cannot be used as a boolean. "
+            "You may have written 'a > b > c' — Python treats this as a chained "
+            "comparison, not (a > b) > c. Use parentheses: '(a > b) > c'."
+        )
+
 
 class _Then(StopCondition):
     """Sequential chain: once *first* triggers, start and check *second*.
