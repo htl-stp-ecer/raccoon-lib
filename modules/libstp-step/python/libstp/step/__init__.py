@@ -26,6 +26,7 @@ from .wait_for_digital_dsl import wait_for_digital
 from .wait_for_light import WaitForLight, WaitForLightLegacy
 from .wait_for_light_dsl import wait_for_light, wait_for_light_legacy
 from .timeout_dsl import timeout
+from .timeout_or import TimeoutOr, timeout_or
 from .servo import *
 from .servo import __all__ as _servo_all
 from .motor import *
@@ -53,6 +54,8 @@ __all__ = [
     "WaitForLightLegacy",
     "wait_for_light_legacy",
     "timeout",
+    "TimeoutOr",
+    "timeout_or",
     "dsl",
     "dsl_step",
     "DslMeta",
