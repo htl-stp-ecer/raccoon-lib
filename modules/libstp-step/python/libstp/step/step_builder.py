@@ -12,7 +12,7 @@ and a snake_case factory function is generated alongside.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Union, TYPE_CHECKING
 
 from .base import Step, StepAnomalyCallback
 
@@ -37,17 +37,29 @@ class StepBuilder(Step):
         self._builder_anomaly_callback: Optional[StepAnomalyCallback] = None
         self._builder_skip_timing: bool = False
 
-    def on_anomaly(self, callback: StepAnomalyCallback) -> "StepBuilder":
-        """Register a callback invoked when a timing anomaly is detected.
+    def on_anomaly(self, callback_or_step: "Union[StepAnomalyCallback, Step]") -> "StepBuilder":
+        """Register a callback or step invoked when a timing anomaly is detected.
 
-        The callback receives the step instance and robot::
+        Accepts either an async callback ``(step, robot) -> None`` or a
+        ``Step`` instance to run when the anomaly fires::
 
             drive_forward(25).on_anomaly(my_handler)
 
             async def my_handler(step, robot):
                 ...
+
+            # Or pass a step directly:
+            drive_forward(25).on_anomaly(play_sound())
         """
-        self._builder_anomaly_callback = callback
+        if isinstance(callback_or_step, Step):
+            anomaly_step = callback_or_step
+
+            async def _step_callback(_anomalous: "Step", robot: "GenericRobot") -> None:
+                await anomaly_step.run_step(robot)
+
+            self._builder_anomaly_callback = _step_callback
+        else:
+            self._builder_anomaly_callback = callback_or_step
         return self
 
     def skip_timing(self) -> "StepBuilder":

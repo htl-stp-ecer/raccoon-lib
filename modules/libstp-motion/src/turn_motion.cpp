@@ -52,6 +52,7 @@ namespace libstp::motion
         finished_ = false;
 
         prev_heading_ = 0.0;
+        accumulated_heading_ = 0.0;
         filtered_velocity_ = 0.0;
 
         odometry().reset();
@@ -88,13 +89,18 @@ namespace libstp::motion
         const double current_heading = odometry().getHeading();
         const double current_heading_deg = current_heading / kDegToRad;
 
-        // Filtered angular velocity for settling detection
-        const double raw_velocity = (current_heading - prev_heading_) / dt;
-        filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
+        // Accumulate unwrapped heading to handle ±π wraparound for turns > 180°.
+        // angularError gives the shortest-path delta, which is correct for small dt.
+        const double heading_delta = angularError(prev_heading_, current_heading);
+        accumulated_heading_ += heading_delta;
         prev_heading_ = current_heading;
 
-        // Heading error to goal for settling check
-        const double error = odometry().getHeadingError(cfg_.target_angle_rad);
+        // Filtered angular velocity for settling detection
+        const double raw_velocity = heading_delta / dt;
+        filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
+
+        // Error in unwrapped space: how far still to go
+        const double error = cfg_.target_angle_rad - accumulated_heading_;
 
         // Drive feedback: measured angular velocity from gyro (via drive's velocity PID)
         const auto drive_state = drive().estimateState();
@@ -114,11 +120,12 @@ namespace libstp::motion
         // Snapshot setpoint BEFORE calculate to see profile advance
         const auto sp_before = profiled_pid_.getSetpoint();
 
-        // Profiled PID: profile advances setpoint, PID tracks it
-        const double pid_raw = profiled_pid_.calculate(current_heading, dt);
+        // Profiled PID: profile advances setpoint, PID tracks it.
+        // Use accumulated (unwrapped) heading so the controller never sees a discontinuity.
+        const double pid_raw = profiled_pid_.calculate(accumulated_heading_, dt);
 
         const auto sp = profiled_pid_.getSetpoint();
-        const double tracking_error = sp.position - current_heading;
+        const double tracking_error = sp.position - accumulated_heading_;
         const bool profile_done = profiled_pid_.profileComplete();
 
         double omega_cmd = pid_raw;

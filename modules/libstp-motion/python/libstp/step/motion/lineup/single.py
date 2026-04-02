@@ -147,13 +147,15 @@ class SingleSensorCrossing(MotionStep):
 
 
 def _compute_single_sensor_turn(crossing: SingleSensorCrossing, _robot: "GenericRobot"):
-    from libstp.step import run
+    from libstp.foundation import info
+    from libstp.step import Run
 
-    angle = crossing.crossing_angle_rad
-    if angle < math.radians(1.0):
-        return run(lambda _: None)
+    degrees = math.degrees(crossing.crossing_angle_rad)
 
-    degrees = math.degrees(angle)
+    if degrees < 0.1:
+        info(f"Already at target heading (error={degrees:.3f}°) — skipping turn")
+        return Run(lambda _: None)
+
     if crossing.config.correction_side == CorrectionSide.RIGHT:
         return turn_right(degrees)
     return turn_left(degrees)
