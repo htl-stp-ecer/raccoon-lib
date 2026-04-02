@@ -42,7 +42,7 @@ class TimeoutOr(Step):
         try:
             await asyncio.wait_for(self.step.run_step(robot), timeout=self.seconds)
         except asyncio.TimeoutError:
-            self.warning(
+            self.warn(
                 f"Step timed out after {self.seconds}s — running fallback "
                 f"{self.fallback.__class__.__name__}"
             )

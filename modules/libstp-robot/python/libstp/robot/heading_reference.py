@@ -25,8 +25,9 @@ class HeadingReferenceService(RobotService):
     def __init__(self, robot: "GenericRobot") -> None:
         super().__init__(robot)
         self._reference_rad: float | None = None
+        self._positive_direction: str = "left"
 
-    def mark(self, origin_offset_deg: float = 0.0) -> None:
+    def mark(self, origin_offset_deg: float = 0.0, positive_direction: str = "left") -> None:
         """Capture the current absolute IMU heading as the reference.
 
         Args:
@@ -35,12 +36,18 @@ class HeadingReferenceService(RobotService):
                 physical starting rotation.  For example, if the robot is placed
                 at 30° to the board edge but you want 0° to mean "along the
                 board edge", pass ``origin_offset_deg=-30``.
+            positive_direction: Which physical direction corresponds to positive
+                angles.  ``"left"`` (default) means CCW is positive, matching the
+                standard mathematical convention.  ``"right"`` flips the sign so
+                CW is positive.
         """
         raw = self.robot.odometry.get_absolute_heading()
         self._reference_rad = raw + math.radians(origin_offset_deg)
+        self._positive_direction = positive_direction
         self.info(
             f"Heading reference set to {math.degrees(self._reference_rad):.1f} deg "
-            f"(absolute={math.degrees(raw):.1f}°, offset={origin_offset_deg:.1f}°)"
+            f"(absolute={math.degrees(raw):.1f}°, offset={origin_offset_deg:.1f}°, "
+            f"positive={positive_direction})"
         )
 
     @property
@@ -75,7 +82,8 @@ class HeadingReferenceService(RobotService):
                 "No heading reference set. Call mark_heading_reference() first."
             )
 
-        target_absolute = self._reference_rad + math.radians(target_deg)
+        sign = 1.0 if self._positive_direction == "left" else -1.0
+        target_absolute = self._reference_rad + sign * math.radians(target_deg)
         current_absolute = self.robot.odometry.get_absolute_heading()
         relative_rad = _normalize_angle(target_absolute - current_absolute)
         relative_deg = math.degrees(relative_rad)

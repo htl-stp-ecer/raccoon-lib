@@ -91,7 +91,7 @@ namespace libstp::motion
 
         // Accumulate unwrapped heading to handle ±π wraparound for turns > 180°.
         // angularError gives the shortest-path delta, which is correct for small dt.
-        const double heading_delta = angularError(prev_heading_, current_heading);
+        const double heading_delta = libstp::odometry::angularError(prev_heading_, current_heading);
         accumulated_heading_ += heading_delta;
         prev_heading_ = current_heading;
 

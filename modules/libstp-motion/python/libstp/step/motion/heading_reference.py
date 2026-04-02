@@ -36,6 +36,12 @@ class MarkHeadingReference(Step):
             For example, if the robot always starts angled 30° clockwise
             from "forward on the board", pass ``origin_offset_deg=-30``
             so that 0° means "forward on the board".
+        positive_direction: Which physical direction is treated as
+            positive for subsequent ``turn_to_heading_left`` and
+            ``turn_to_heading_right`` calls. ``"left"`` (default) means
+            counter-clockwise angles are positive, matching the standard
+            mathematical convention. ``"right"`` flips the sign so
+            clockwise angles are positive.
 
     Example::
 
@@ -51,19 +57,33 @@ class MarkHeadingReference(Step):
 
         # With offset: robot starts 30° CW from board forward
         mark_heading_reference(origin_offset_deg=-30)
+
+        # Positive direction is clockwise (right)
+        mark_heading_reference(positive_direction="right")
     """
 
-    def __init__(self, origin_offset_deg: float = 0.0) -> None:
+    def __init__(
+        self,
+        origin_offset_deg: float = 0.0,
+        positive_direction: Literal["left", "right"] = "left",
+    ) -> None:
         super().__init__()
         self._origin_offset_deg = origin_offset_deg
+        self._positive_direction = positive_direction
 
     def _generate_signature(self) -> str:
+        parts = []
         if self._origin_offset_deg != 0.0:
-            return f"MarkHeadingReference(offset={self._origin_offset_deg:.1f}°)"
-        return "MarkHeadingReference()"
+            parts.append(f"offset={self._origin_offset_deg:.1f}°")
+        if self._positive_direction != "left":
+            parts.append(f"positive={self._positive_direction}")
+        inner = ", ".join(parts)
+        return f"MarkHeadingReference({inner})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        robot.get_service(HeadingReferenceService).mark(self._origin_offset_deg)
+        robot.get_service(HeadingReferenceService).mark(
+            self._origin_offset_deg, self._positive_direction
+        )
 
 
 def _build_heading_turn(
