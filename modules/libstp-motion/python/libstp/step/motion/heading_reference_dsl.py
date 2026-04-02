@@ -19,13 +19,13 @@ class MarkHeadingReferenceBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._origin_offset_deg = 0.0
-        self._positive_direction = "left"
+        self._positive_direction = 'left'
 
     def origin_offset_deg(self, value: float):
         self._origin_offset_deg = value
         return self
 
-    def positive_direction(self, value: str):
+    def positive_direction(self, value: Literal['left', 'right']):
         self._positive_direction = value
         return self
 
@@ -37,10 +37,7 @@ class MarkHeadingReferenceBuilder(StepBuilder):
 
 
 @dsl(tags=['motion', 'turn'])
-def mark_heading_reference(
-    origin_offset_deg: float = 0.0,
-    positive_direction: str = "left",
-):
+def mark_heading_reference(origin_offset_deg: float = 0.0, positive_direction: Literal['left', 'right'] = 'left'):
     """
     Mark the current IMU heading as a reference point for absolute turns.
 
@@ -60,7 +57,7 @@ def mark_heading_reference(
 
     Args:
         origin_offset_deg: Offset in degrees added to the captured heading. Use this to define a consistent board-relative origin regardless of the robot's physical starting rotation. For example, if the robot always starts angled 30° clockwise from "forward on the board", pass ``origin_offset_deg=-30`` so that 0° means "forward on the board".
-        positive_direction: Which physical direction is treated as positive for subsequent ``turn_to_heading_left`` and ``turn_to_heading_right`` calls. ``"left"`` (default) means counter-clockwise is positive. ``"right"`` flips the sign so clockwise is positive.
+        positive_direction: Which physical direction is treated as positive for subsequent ``turn_to_heading_left`` and ``turn_to_heading_right`` calls. ``"left"`` (default) means counter-clockwise angles are positive, matching the standard mathematical convention. ``"right"`` flips the sign so clockwise angles are positive.
 
     Returns:
         A MarkHeadingReferenceBuilder (chainable via ``.origin_offset_deg()``, ``.positive_direction()``, ``.on_anomaly()``, ``.skip_timing()``).
