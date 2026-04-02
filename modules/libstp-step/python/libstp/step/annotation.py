@@ -1,4 +1,5 @@
 from __future__ import annotations
+import inspect
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Type, TypeVar, Any, Union, overload, get_type_hints
 from functools import wraps
@@ -152,6 +153,10 @@ def dsl(
                     f"got {type(result).__name__}"
                 )
             return result
+
+        # Preserve the original signature so stubgen emits full typed params
+        # instead of collapsing to (*args, **kwargs).
+        wrapper.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
 
         # Attach DSL metadata to the wrapper
         setattr(wrapper, "__dsl__", meta)
