@@ -38,6 +38,7 @@ class RobotDefinitionsProtocol(Protocol):
     button: DigitalSensor
     wait_for_light_sensor: Optional[AnalogSensor]
     wait_for_light_mode: str  # "auto" (default) or "legacy"
+    wait_for_light_drop_fraction: float  # sensitivity for auto mode (default 0.15)
 
 class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     """
@@ -204,7 +205,8 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                     await wait_for_light_legacy(sensor).run_step(self)
                 else:
                     from libstp.step import wait_for_light
-                    await wait_for_light(sensor).run_step(self)
+                    drop_fraction = getattr(self.defs, "wait_for_light_drop_fraction", 0.15)
+                    await wait_for_light(sensor, drop_fraction=drop_fraction).run_step(self)
 
     async def _run_main_missions(self, missions: List["MissionProtocol"]) -> None:
         """Execute main missions sequentially."""
