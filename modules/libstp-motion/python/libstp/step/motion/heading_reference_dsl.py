@@ -19,19 +19,28 @@ class MarkHeadingReferenceBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._origin_offset_deg = 0.0
+        self._positive_direction = "left"
 
     def origin_offset_deg(self, value: float):
         self._origin_offset_deg = value
         return self
 
+    def positive_direction(self, value: str):
+        self._positive_direction = value
+        return self
+
     def _build(self):
         kwargs = {}
         kwargs['origin_offset_deg'] = self._origin_offset_deg
+        kwargs['positive_direction'] = self._positive_direction
         return MarkHeadingReference(**kwargs)
 
 
 @dsl(tags=['motion', 'turn'])
-def mark_heading_reference(origin_offset_deg: float = 0.0):
+def mark_heading_reference(
+    origin_offset_deg: float = 0.0,
+    positive_direction: str = "left",
+):
     """
     Mark the current IMU heading as a reference point for absolute turns.
 
@@ -51,9 +60,10 @@ def mark_heading_reference(origin_offset_deg: float = 0.0):
 
     Args:
         origin_offset_deg: Offset in degrees added to the captured heading. Use this to define a consistent board-relative origin regardless of the robot's physical starting rotation. For example, if the robot always starts angled 30° clockwise from "forward on the board", pass ``origin_offset_deg=-30`` so that 0° means "forward on the board".
+        positive_direction: Which physical direction is treated as positive for subsequent ``turn_to_heading_left`` and ``turn_to_heading_right`` calls. ``"left"`` (default) means counter-clockwise is positive. ``"right"`` flips the sign so clockwise is positive.
 
     Returns:
-        A MarkHeadingReferenceBuilder (chainable via ``.origin_offset_deg()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A MarkHeadingReferenceBuilder (chainable via ``.origin_offset_deg()``, ``.positive_direction()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -69,9 +79,13 @@ def mark_heading_reference(origin_offset_deg: float = 0.0):
 
         # With offset: robot starts 30° CW from board forward
         mark_heading_reference(origin_offset_deg=-30)
+
+        # Positive direction is clockwise (right)
+        mark_heading_reference(positive_direction="right")
     """
     b = MarkHeadingReferenceBuilder()
     b._origin_offset_deg = origin_offset_deg
+    b._positive_direction = positive_direction
     return b
 
 
