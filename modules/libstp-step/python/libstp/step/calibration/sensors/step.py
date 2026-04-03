@@ -183,7 +183,10 @@ class CalibrateSensors(UIStep):
         from libstp.no_calibrate import is_no_calibrate
 
         if is_no_calibrate():
-            self.info("--no-calibrate: skipping sensor calibration, using stored values")
+            self.info("--no-calibrate: skipping sensor calibration, loading stored values")
+            from libstp.step.calibration.calibrate_distance import _load_stored_ir_calibration
+            ir_sensors_nc: List[IRSensor] = [s for s in robot.defs.analog_sensors if isinstance(s, IRSensor)]
+            _load_stored_ir_calibration(ir_sensors_nc, self.calibration_sets, self.debug, self.warn)
             return
 
         sensors = robot.defs.analog_sensors

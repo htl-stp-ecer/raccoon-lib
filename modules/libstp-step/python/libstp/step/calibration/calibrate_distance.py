@@ -86,6 +86,30 @@ class PerWheelCalibration:
     motor_name: Optional[str] = None  # Motor name in YAML definitions
 
 
+def _load_stored_ir_calibration(
+    ir_sensors: list,
+    calibration_sets: List[str],
+    debug_fn,
+    warn_fn,
+) -> None:
+    """Apply stored IR thresholds from CalibrationStore to each sensor (used under --no-calibrate)."""
+    from libstp import calibration_store as CalibrationStore
+    from libstp.calibration_store import CalibrationType
+
+    for set_name in calibration_sets:
+        for sensor in ir_sensors:
+            key = f"{set_name}_port{sensor.port}"
+            if CalibrationStore.has_readings(CalibrationType.IR_SENSOR, key):
+                readings = CalibrationStore.get_readings(CalibrationType.IR_SENSOR, key)
+                sensor.setCalibration(readings[1], readings[0])
+                debug_fn(
+                    f"--no-calibrate: IR port {sensor.port} set '{set_name}': "
+                    f"black={readings[1]:.1f} white={readings[0]:.1f}"
+                )
+            else:
+                warn_fn(f"--no-calibrate: no stored readings for IR port {sensor.port} set '{set_name}'")
+
+
 def _find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
     """Find project root by searching upward for raccoon.project.yml."""
     return _find_project_root_util(start_path)
@@ -416,6 +440,13 @@ class CalibrateDistance(UIStep):
             global _calibrated
             _calibrated = True
             self.info("--no-calibrate: skipping distance calibration, using stored values")
+            if self.calibrate_light_sensors:
+                from libstp.sensor_ir import IRSensor as _IRSensor
+                ir_sensors = [
+                    s for s in robot.defs.analog_sensors
+                    if isinstance(s, _IRSensor) and s not in self.exclude_ir_sensors
+                ]
+                _load_stored_ir_calibration(ir_sensors, self.calibration_sets, self.debug, self.warn)
             return
 
         from libstp.step.motion.drive import _drive_forward_uncalibrated
