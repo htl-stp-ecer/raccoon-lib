@@ -24,6 +24,13 @@ from .sensors import (
     switch_calibration_set,
     SwitchCalibrationSet,
 )
+from .calibrate_analog_sensor import (
+    CalibrateAnalogSensor,
+    AnalogSensorCalibration,
+    ANALOG_SENSOR_STORE_SECTION,
+    analog_sensor_store_key,
+)
+from .calibrate_analog_sensor_dsl import calibrate_analog_sensor
 
 __all__ = [
     "CalibrateStep",
@@ -46,4 +53,9 @@ __all__ = [
     "CalibrateSensors",
     "switch_calibration_set",
     "SwitchCalibrationSet",
+    "calibrate_analog_sensor",
+    "CalibrateAnalogSensor",
+    "AnalogSensorCalibration",
+    "ANALOG_SENSOR_STORE_SECTION",
+    "analog_sensor_store_key",
 ]
