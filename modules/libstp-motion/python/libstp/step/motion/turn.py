@@ -66,11 +66,11 @@ class _ConditionalTurn(MotionStep):
             vel = ChassisVelocity(0, 0, self._sign * self._speed * max_w)
             robot.drive.set_velocity(vel)
 
-        if self._until:
+        if self._until is not None:
             self._until.start(robot)
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
-        if self._until and self._until.check(robot):
+        if self._until is not None and self._until.check(robot):
             return True
         if self._motion:
             self._motion.update(dt)

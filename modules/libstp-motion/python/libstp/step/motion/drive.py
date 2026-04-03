@@ -74,11 +74,11 @@ class _ConditionalDrive(MotionStep):
         )
         self._motion.start()
 
-        if self._until:
+        if self._until is not None:
             self._until.start(robot)
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
-        if self._until and self._until.check(robot):
+        if self._until is not None and self._until.check(robot):
             return True
         self._motion.update(dt)
         return self._motion.is_finished()

@@ -142,7 +142,7 @@ class LineFollow(MotionStep):
             integral_max=1.0, output_min=-1.0, output_max=1.0,
         ))
 
-        if self._until:
+        if self._until is not None:
             self._until.start(robot)
 
         parts = []
@@ -160,7 +160,7 @@ class LineFollow(MotionStep):
         cfg = self.config
 
         # Check composable stop condition
-        if self._until and self._until.check(robot):
+        if self._until is not None and self._until.check(robot):
             return True
 
         # Sensor error: left - right
@@ -246,7 +246,7 @@ class SingleSensorLineFollow(MotionStep):
             integral_max=1.0, output_min=-1.0, output_max=1.0,
         ))
 
-        if self._until:
+        if self._until is not None:
             self._until.start(robot)
 
         self.debug(
@@ -258,7 +258,7 @@ class SingleSensorLineFollow(MotionStep):
         cfg = self.config
 
         # Check composable stop condition
-        if self._until and self._until.check(robot):
+        if self._until is not None and self._until.check(robot):
             return True
 
         # Edge-tracking error: 0.5 = edge of line
@@ -595,7 +595,7 @@ class DirectionalLineFollow(MotionStep):
                 integral_max=1.0, output_min=-1.0, output_max=1.0,
             ))
 
-        if self._until:
+        if self._until is not None:
             self._until.start(robot)
 
         parts = []
@@ -614,7 +614,7 @@ class DirectionalLineFollow(MotionStep):
         cfg = self.config
 
         # Check composable stop condition
-        if self._until and self._until.check(robot):
+        if self._until is not None and self._until.check(robot):
             return True
 
         left_conf = cfg.left_sensor.probabilityOfBlack()
@@ -759,7 +759,7 @@ class DirectionalSingleLineFollow(MotionStep):
                 integral_max=1.0, output_min=-1.0, output_max=1.0,
             ))
 
-        if self._until:
+        if self._until is not None:
             self._until.start(robot)
 
         corr_str = "lateral" if cfg.lateral_correction else "angular"
@@ -772,7 +772,7 @@ class DirectionalSingleLineFollow(MotionStep):
         cfg = self.config
 
         # Check composable stop condition
-        if self._until and self._until.check(robot):
+        if self._until is not None and self._until.check(robot):
             return True
 
         # Check distance

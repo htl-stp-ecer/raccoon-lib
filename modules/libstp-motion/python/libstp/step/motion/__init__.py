@@ -96,6 +96,8 @@ from .auto_tune_dsl import (
     auto_tune_motion,
 )
 from .sensor_group import SensorGroup
+from .drive_to_analog_target import DriveToAnalogTarget
+from .drive_to_analog_target_dsl import drive_to_analog_target
 
 __all__ = [
     # Base
@@ -207,4 +209,7 @@ __all__ = [
     "auto_tune_motion",
     # Sensor group
     "SensorGroup",
+    # Analog sensor target drive
+    "DriveToAnalogTarget",
+    "drive_to_analog_target",
 ]
