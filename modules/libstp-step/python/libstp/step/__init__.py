@@ -6,6 +6,7 @@ from .step_builder import StepBuilder
 from .condition import (
     StopCondition, on_black, on_white, after_seconds, after_cm, after_degrees,
     on_digital, on_analog_above, on_analog_below, stall_detected, custom,
+    over_line,
 )
 from .sequential import Sequential, seq
 from .parallel import parallel
@@ -75,6 +76,7 @@ __all__ = [
     "on_analog_below",
     "stall_detected",
     "custom",
+    "over_line",
     *_calibration_all,
     *_logic_all,
     *_motion_all,
