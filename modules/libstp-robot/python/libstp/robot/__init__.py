@@ -3,6 +3,8 @@
 from .api import GenericRobot, RobotDefinitionsProtocol
 from .geometry import RobotGeometry, SensorPosition, WheelPosition
 from .service import RobotService
+from .table_map import TableMap, MapSegment
+from .map_corrected_odometry import MapCorrectedOdometry
 
 __all__ = [
     "GenericRobot",
@@ -11,4 +13,7 @@ __all__ = [
     "RobotGeometry",
     "SensorPosition",
     "WheelPosition",
+    "TableMap",
+    "MapSegment",
+    "MapCorrectedOdometry",
 ]

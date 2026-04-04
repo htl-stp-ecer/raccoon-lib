@@ -53,6 +53,8 @@ from libstp.hal import IMU
 from libstp.hal import IOdometryBridge, OdometryBridge
 from libstp.kinematics_differential import DifferentialKinematics
 from libstp.kmeans import KMeans, KMeansResult
+from libstp.robot.table_map import TableMap, MapSegment
+from libstp.robot.map_corrected_odometry import MapCorrectedOdometry
 
 __all__ = [
     # Core hardware
@@ -99,6 +101,10 @@ __all__ = [
     "UnifiedMotionPidConfig",
     "KMeans",
     "KMeansResult",
+    # Table map
+    "TableMap",
+    "MapSegment",
+    "MapCorrectedOdometry",
     # Calibration
     "Feedforward",
     "FeedforwardController",
