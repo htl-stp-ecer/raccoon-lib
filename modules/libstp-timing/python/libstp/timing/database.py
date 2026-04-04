@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from pathlib import Path
 from typing import List, Optional
@@ -6,6 +7,8 @@ from typing import List, Optional
 import aiosqlite
 
 from .models import AnomalyDetection
+
+logger = logging.getLogger(__name__)
 
 
 class StepTimingDatabase:
@@ -17,8 +20,22 @@ class StepTimingDatabase:
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
+    async def _check_integrity(self) -> bool:
+        """Return True if the database passes an integrity check."""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute("PRAGMA integrity_check")
+                result = await cursor.fetchone()
+                return result is not None and result[0] == "ok"
+        except Exception:
+            return False
+
     async def initialize(self) -> None:
-        """Create database and schema if needed."""
+        """Create database and schema if needed.
+
+        If the existing database file is corrupted, it is deleted and
+        recreated automatically.
+        """
         if self._initialized:
             return
 
@@ -26,7 +43,15 @@ class StepTimingDatabase:
             if self._initialized:
                 return
 
-            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+            db_file = Path(self.db_path)
+            db_file.parent.mkdir(parents=True, exist_ok=True)
+
+            if db_file.exists() and not await self._check_integrity():
+                logger.warning(
+                    "Timing database %s is corrupted — deleting and recreating",
+                    self.db_path,
+                )
+                db_file.unlink()
 
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
