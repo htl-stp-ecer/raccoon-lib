@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from libstp.drive import Drive
     from libstp.mission.api import MissionProtocol, SetupMission
     from libstp.odometry import Odometry
+    from libstp.robot.table_map import TableMap
 
 
 @runtime_checkable
@@ -78,6 +79,11 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     def shutdown_in(self) -> float:
         """Maximum runtime in seconds for main missions. MUST be specified."""
         ...
+
+    @property
+    def table_map(self) -> Optional["TableMap"]:
+        """Table map with field line/wall geometry. ``None`` if not configured."""
+        return None
 
     @property
     def motion_pid_config(self) -> UnifiedMotionPidConfig:
