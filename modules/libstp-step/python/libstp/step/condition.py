@@ -1,18 +1,22 @@
 """Composable stop conditions for motion steps.
 
 A StopCondition determines when a motion step should terminate. Conditions
-can be combined with ``|`` (any/or), ``&`` (all/and), and ``>`` (then/sequence)
-operators.
+can be combined with ``|`` (any/or), ``&`` (all/and), ``>`` / ``+``
+(then/sequence) operators.
 
 Example::
 
-    from libstp.step.condition import on_black, after_seconds, after_cm
+    from libstp.step.condition import on_black, on_white, after_seconds, after_cm, over_line
 
     # Stop when sensor sees black OR after 10 seconds
     drive_forward(speed=1.0).until(on_black(sensor) | after_seconds(10))
 
     # Sequential: first wait for black, then travel 10 more cm
-    drive_forward(speed=1.0).until(on_black(sensor) > after_cm(10))
+    # Use + instead of > to avoid Python's chained-comparison gotcha
+    drive_forward(speed=1.0).until(on_black(sensor) + after_cm(10))
+
+    # Cross a line (black then white) three times
+    drive_forward(speed=1.0).until(over_line(sensor) + over_line(sensor) + over_line(sensor))
 """
 
 from __future__ import annotations
@@ -50,11 +54,20 @@ class StopCondition:
         """Chain conditions: once *self* triggers, start checking *other*."""
         return _Then(self, other)
 
+    def __add__(self, other: "StopCondition") -> "StopCondition":
+        """Chain conditions (alias for ``>``): ``a + b + c``.
+
+        Unlike ``>``, the ``+`` operator does not suffer from Python's
+        chained-comparison rewrite, so parentheses are never required.
+        """
+        return _Then(self, other)
+
     def __bool__(self) -> bool:
         raise TypeError(
             "StopCondition cannot be used as a boolean. "
             "You may have written 'a > b > c' — Python treats this as a chained "
-            "comparison, not (a > b) > c. Use parentheses: '(a > b) > c'."
+            "comparison, not (a > b) > c. Use parentheses: '(a > b) > c', "
+            "or use the + operator: 'a + b + c'."
         )
 
 
@@ -368,3 +381,21 @@ class custom(StopCondition):
 
     def check(self, robot: "GenericRobot") -> bool:
         return self._fn(robot)
+
+
+def over_line(
+    sensor: "IRSensor",
+    black_threshold: float = 0.7,
+    white_threshold: float = 0.7,
+) -> StopCondition:
+    """Stop after crossing a line (black then white).
+
+    Equivalent to ``on_black(sensor) > on_white(sensor)`` — waits for
+    the sensor to see black, then waits for it to see white again.
+
+    Args:
+        sensor: IR sensor to monitor.
+        black_threshold: Probability threshold for the black phase.
+        white_threshold: Probability threshold for the white phase.
+    """
+    return on_black(sensor, black_threshold) + on_white(sensor, white_threshold)
