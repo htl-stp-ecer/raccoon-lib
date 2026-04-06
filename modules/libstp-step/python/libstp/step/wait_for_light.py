@@ -193,6 +193,7 @@ class WaitForLight(UIStep):
                 if not test_mode:
                     test_mode = True
                     consecutive = 0
+                    last_ui = 0.0  # force immediate screen refresh
                     self.info("WFL: returning to test mode via UI")
 
             if test_mode:
@@ -227,25 +228,10 @@ class WaitForLight(UIStep):
                         await screen.refresh()
                         self.info(f"WFL: test trigger #{test_count} (raw={raw})")
 
-                        # Stay triggered until sensor returns above threshold (or user cancels)
-                        last_triggered_ui = 0.0
+                        # Stay triggered until sensor returns above threshold
                         while True:
                             raw = sensor.read()
                             trigger_threshold = kf.estimate * threshold_factor
-
-                            now = time.monotonic()
-                            if now - last_triggered_ui > 0.1:
-                                screen.raw_value = raw
-                                screen.threshold = trigger_threshold
-                                await screen.refresh()
-                                last_triggered_ui = now
-
-                            await self.pump_events()
-                            if screen.request_test_mode:
-                                screen.request_test_mode = False
-                                self.info("WFL: back to test mode via button (during triggered)")
-                                break
-
                             if raw >= trigger_threshold:
                                 break
                             await asyncio.sleep(self._poll_interval)

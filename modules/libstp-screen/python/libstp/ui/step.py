@@ -263,6 +263,9 @@ class UIStep(Step, ABC):
         )
         try:
             self._transport.spin_once(timeout_ms=int(timeout * 1000))
+            # Yield so that call_soon_threadsafe callbacks (put_nowait) run
+            # before we try to drain the queue.
+            await asyncio.sleep(0)
             while True:
                 try:
                     event = event_queue.get_nowait()
