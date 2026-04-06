@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .steps import SetMotorPower, SetMotorVelocity, SetMotorDps, MoveMotorTo, MoveMotorRelative, MotorOff, MotorPassiveBrake, MotorBrake
 
+from libstp.hal import IMotor
 
 class SetMotorPowerBuilder(StepBuilder):
     """Builder for SetMotorPower. Auto-generated — do not edit."""

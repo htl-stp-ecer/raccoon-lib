@@ -281,6 +281,64 @@ def _extract_default_refs(node: ast.expr) -> List[str]:
     return refs
 
 
+_ANNOTATION_BUILTINS = frozenset({
+    "None", "True", "False", "int", "float", "str", "bool", "bytes", "object",
+    "Optional", "Union", "List", "Dict", "Tuple", "Set", "Any", "Callable",
+    "Type", "ClassVar", "Final", "Literal",
+})
+
+
+def _extract_annotation_refs(annotation: str) -> List[str]:
+    """Extract top-level names referenced in a type annotation string.
+
+    Parses the annotation as an expression and returns every bare ``Name``
+    node that isn't a builtin or typing construct.  For example,
+    ``"Servo | ServoPreset"`` yields ``["Servo", "ServoPreset"]``.
+    """
+    if not annotation:
+        return []
+    try:
+        tree = ast.parse(annotation, mode="eval")
+    except SyntaxError:
+        return []
+    return [
+        node.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and node.id not in _ANNOTATION_BUILTINS
+    ]
+
+
+def _find_imports_for_names(source_file: Path, needed_names: set) -> List[str]:
+    """Return import statements from *source_file* that provide *needed_names*.
+
+    Scans the entire AST of the source file (including function bodies) for
+    ``from X import Y`` statements and returns the subset that covers the
+    requested names.  Each returned string is a ready-to-emit import line.
+    """
+    if not needed_names:
+        return []
+    try:
+        tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    except (SyntaxError, OSError):
+        return []
+
+    # Map: provided name → import line (first occurrence wins)
+    found: Dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        module = node.module or ""
+        dots = "." * (node.level or 0)
+        for alias in node.names:
+            exported = alias.asname or alias.name
+            if exported in needed_names and exported not in found:
+                fragment = alias.name + (f" as {alias.asname}" if alias.asname else "")
+                found[exported] = f"from {dots}{module} import {fragment}"
+
+    # Return in stable order (same as needed_names iteration would give)
+    return [found[n] for n in sorted(needed_names) if n in found]
+
+
 def _parse_function_params(func: ast.FunctionDef) -> List[ParamInfo]:
     params: List[ParamInfo] = []
     args = func.args
@@ -454,8 +512,41 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
     lines += [
         f"from .{source_file.stem} import {', '.join(all_imports)}",
         "",
-        "",
     ]
+    # Collect names used only in type annotations that aren't already imported.
+    # These are needed so that get_type_hints() (used by stubgen/mypy) can resolve
+    # them at runtime; without this the stub generator silently skips the module.
+    _already_covered = set(all_imports) | {
+        "StepBuilder", "StopCondition", "dsl",
+        # builtins / typing — already in _ANNOTATION_BUILTINS, but be explicit
+        "Optional", "Union", "List", "Dict", "Tuple", "Set", "Any", "Callable",
+    }
+    annotation_only_refs: List[str] = []
+    for c in classes:
+        for p in c.params:
+            for ref in _extract_annotation_refs(p.annotation):
+                if ref not in _already_covered and ref not in annotation_only_refs:
+                    annotation_only_refs.append(ref)
+    if annotation_only_refs:
+        # Names that come from an external module — re-emit that import line.
+        found_via_import = _find_imports_for_names(source_file, set(annotation_only_refs))
+        found_names = {
+            line.rsplit("import ", 1)[-1].split(" as ")[0].strip()
+            for line in found_via_import
+        }
+        for import_line in found_via_import:
+            lines.append(import_line)
+        # Names defined directly in the source file (not imported there) —
+        # add to the source-module import so get_type_hints() can resolve them.
+        locally_defined = [r for r in annotation_only_refs if r not in found_names]
+        if locally_defined:
+            # Rewrite the already-emitted source-module import to include them.
+            src_import_idx = next(
+                i for i, l in enumerate(lines) if l.startswith(f"from .{source_file.stem} import ")
+            )
+            existing = lines[src_import_idx]
+            lines[src_import_idx] = existing.rstrip() + ", " + ", ".join(locally_defined)
+    lines.append("")
 
     exports: List[str] = []
     for info in classes:

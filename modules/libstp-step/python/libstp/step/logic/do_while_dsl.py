@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .do_while import DoWhileActive
 
+from .. import Step
 
 class DoWhileActiveBuilder(StepBuilder):
     """Builder for DoWhileActive. Auto-generated — do not edit."""
