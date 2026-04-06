@@ -7,7 +7,7 @@ from .drive import (
 from .drive_dsl import (
     drive_forward, drive_backward, strafe_left, strafe_right,
 )
-from .drive_angle import DriveAngle
+from .drive_angle import DriveAngle, DriveAngleLeft, DriveAngleRight
 from .drive_angle_dsl import drive_angle
 from .arc import Arc, DriveArcLeft, DriveArcRight, DriveArc, StrafeArcLeft, StrafeArcRight, StrafeArc
 from .arc_dsl import drive_arc_left, drive_arc_right, drive_arc, strafe_arc_left, strafe_arc_right, strafe_arc
@@ -115,6 +115,8 @@ __all__ = [
     "StrafeRight",
     "strafe_right",
     "DriveAngle",
+    "DriveAngleLeft",
+    "DriveAngleRight",
     "drive_angle",
     "Arc",
     "DriveArcLeft",
