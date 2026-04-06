@@ -225,16 +225,8 @@ class WFLDetectScreen(UIScreen[None]):
                     ),
                     Spacer(8),
                     Text("Lamp detected!", size="xlarge"),
-                    Spacer(12),
-                    ResultsTable(rows=[
-                        ("Sensor", f"{self.raw_value}", "green"),
-                        ("Baseline", f"{self.baseline:.0f}", "grey"),
-                        ("Threshold", f"{self.threshold:.0f}", "blue"),
-                    ]),
                     Spacer(8),
                     Text("Turn off lamp to continue", size="small", muted=True),
-                    Spacer(12),
-                    Button("test", "Back to Test Mode", style="secondary"),
                 ], align="center", spacing=0),
             ])
 
