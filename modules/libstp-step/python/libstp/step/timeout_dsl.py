@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .timeout import Timeout
 
+from . import Step
 
 class TimeoutBuilder(StepBuilder):
     """Builder for Timeout. Auto-generated — do not edit."""

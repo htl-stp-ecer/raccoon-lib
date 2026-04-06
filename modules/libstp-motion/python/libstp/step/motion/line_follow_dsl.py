@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .line_follow import FollowLine, FollowLineSingle, DirectionalFollowLine, StrafeFollowLine, StrafeFollowLineSingle, DirectionalFollowLineSingle, LineSide
 
+from libstp.sensor_ir import IRSensor
 
 class FollowLineBuilder(StepBuilder):
     """Builder for FollowLine. Auto-generated — do not edit."""

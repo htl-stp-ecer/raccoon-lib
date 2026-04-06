@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .wait_for_light import WaitForLight, WaitForLightLegacy
 
+from libstp.hal import AnalogSensor
 
 class WaitForLightBuilder(StepBuilder):
     """Builder for WaitForLight. Auto-generated — do not edit."""

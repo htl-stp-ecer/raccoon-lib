@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .loop import LoopForever, LoopFor
 
+from .. import StepProtocol
 
 class LoopForeverBuilder(StepBuilder):
     """Builder for LoopForever. Auto-generated — do not edit."""

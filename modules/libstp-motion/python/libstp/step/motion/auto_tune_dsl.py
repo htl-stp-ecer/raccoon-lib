@@ -10,7 +10,7 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .auto_tune import AutoTuneVelocity, AutoTuneMotion, AutoTune
+from .auto_tune import AutoTuneVelocity, AutoTuneMotion, AutoTune, list
 
 
 class AutoTuneVelocityBuilder(StepBuilder):

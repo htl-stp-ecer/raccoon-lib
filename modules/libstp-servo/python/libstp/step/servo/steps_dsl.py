@@ -10,8 +10,10 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing
+from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing, EasingFunc
 
+from libstp.hal import Servo
+from .preset import ServoPreset
 
 class ShakeServoBuilder(StepBuilder):
     """Builder for ShakeServo. Auto-generated — do not edit."""

@@ -12,6 +12,7 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .calibrate_wfl import CalibrateWaitForLight
 
+from libstp.hal import AnalogSensor
 
 class CalibrateWaitForLightBuilder(StepBuilder):
     """Builder for CalibrateWaitForLight. Auto-generated — do not edit."""

@@ -24,6 +24,8 @@ from .wait_for_button import WaitForButton
 from .wait_for_button_dsl import wait_for_button
 from .wait_for_digital import WaitForDigital
 from .wait_for_digital_dsl import wait_for_digital
+from .wait_for import WaitFor
+from .wait_for_dsl import wait_for
 from .wait_for_light import WaitForLight, WaitForLightLegacy
 from .wait_for_light_dsl import wait_for_light, wait_for_light_legacy
 from .timeout_dsl import timeout
@@ -50,6 +52,8 @@ __all__ = [
     "wait_for_button",
     "WaitForDigital",
     "wait_for_digital",
+    "WaitFor",
+    "wait_for",
     "WaitForLight",
     "wait_for_light",
     "WaitForLightLegacy",
