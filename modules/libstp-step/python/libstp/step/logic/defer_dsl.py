@@ -12,7 +12,6 @@ from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
 from .defer import Defer, Run
 
-from typing import Awaitable
 from .. import Step
 
 class DeferBuilder(StepBuilder):

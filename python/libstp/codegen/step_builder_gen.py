@@ -282,9 +282,16 @@ def _extract_default_refs(node: ast.expr) -> List[str]:
 
 
 _ANNOTATION_BUILTINS = frozenset({
-    "None", "True", "False", "int", "float", "str", "bool", "bytes", "object",
-    "Optional", "Union", "List", "Dict", "Tuple", "Set", "Any", "Callable",
-    "Type", "ClassVar", "Final", "Literal",
+    # Python builtins usable as generics in annotations (PEP 585)
+    "None", "True", "False",
+    "int", "float", "str", "bool", "bytes", "bytearray", "object",
+    "list", "dict", "tuple", "set", "frozenset", "type",
+    # typing module constructs
+    "Optional", "Union", "List", "Dict", "Tuple", "Set", "FrozenSet",
+    "Any", "Callable", "Type", "ClassVar", "Final", "Literal",
+    "Awaitable", "Coroutine", "AsyncIterator", "AsyncIterable",
+    "Iterator", "Iterable", "Generator", "Sequence", "Mapping",
+    "MutableMapping", "MutableSequence", "TypeVar", "overload",
 })
 
 

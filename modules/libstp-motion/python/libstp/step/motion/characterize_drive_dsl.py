@@ -10,7 +10,7 @@ _UNSET = object()
 from libstp.step.step_builder import StepBuilder
 from libstp.step.condition import StopCondition
 from libstp.step.annotation import dsl
-from .characterize_drive import CharacterizeDrive, list
+from .characterize_drive import CharacterizeDrive
 
 
 class CharacterizeDriveBuilder(StepBuilder):
