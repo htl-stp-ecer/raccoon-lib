@@ -258,12 +258,17 @@ class WFLDetectScreen(UIScreen[None]):
             ),
             Spacer(16),
             Text(f"Sensor: {self.raw_value}", size="xlarge"),
-            Spacer(8),
-            ResultsTable(rows=[
-                ("Baseline", f"{self.baseline:.0f}", "grey"),
-                ("Threshold", f"{self.threshold:.0f}", "blue"),
-                ("Tests", f"{self.test_count}", "green" if self.test_count > 0 else "grey"),
-            ]),
+            Spacer(12),
+            Text(f"Baseline: {self.baseline:.0f}", size="large", muted=True),
+            Spacer(4),
+            Text(f"Threshold: {self.threshold:.0f}", size="large"),
+            Spacer(4),
+            Text(
+                f"Tests: {self.test_count}",
+                size="large",
+                color="green" if self.test_count > 0 else None,
+                muted=self.test_count == 0,
+            ),
         ]
 
         if self.hint:
