@@ -64,6 +64,9 @@ class UIStep(Step, ABC):
         self._transport = Transport()
         self._lcm_pump_task: Optional[asyncio.Task] = None
         self._ui_active: bool = False  # Track if any UI has been shown
+        # Persistent subscription state for non-blocking display/pump_events
+        self._pump_queue: Optional[asyncio.Queue] = None
+        self._pump_sub = None
 
     async def show(self, screen: UIScreen[T]) -> T:
         """
@@ -171,6 +174,7 @@ class UIStep(Step, ABC):
         """Close any active screen."""
         if not self._ui_active:
             return
+        self._teardown_pump_sub()
         msg = screen_render_t()
         msg.timestamp = int(time.time() * 1_000_000)
         msg.screen_name = self._SCREEN_NAME
@@ -220,12 +224,43 @@ class UIStep(Step, ABC):
                 await asyncio.sleep(0.1)
             await self.close_ui()
         """
+        # Tear down any previous persistent subscription
+        self._teardown_pump_sub()
+
         screen._step = self
         screen._closed = False
         screen._result = None
         self._current_screen = screen
         self.debug(f"Displaying screen (non-blocking): {screen.__class__.__name__}")
         await self._render_screen(screen)
+
+        # Set up persistent LCM subscription so events are buffered between
+        # pump_events() calls instead of being silently dropped.
+        loop = asyncio.get_event_loop()
+        self._pump_queue = asyncio.Queue()
+        queue = self._pump_queue  # capture for closure
+
+        def lcm_handler(channel, data):
+            msg = screen_render_answer_t.decode(data)
+            if msg.screen_name == self._SCREEN_NAME:
+                try:
+                    event = json.loads(msg.reason) if msg.reason else {}
+                except json.JSONDecodeError:
+                    event = {}
+                event["_action"] = msg.value
+                self.debug(f"[LCM RX] pump <- action={msg.value}")
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+
+        self._pump_sub = self._transport.subscribe(
+            "libstp/screen_render/answer", lcm_handler, reliable=True,
+        )
+
+    def _teardown_pump_sub(self) -> None:
+        """Unsubscribe the persistent pump subscription if active."""
+        if self._pump_sub is not None:
+            self._transport._lcm.unsubscribe(self._pump_sub)
+            self._pump_sub = None
+        self._pump_queue = None
 
     async def pump_events(self, timeout: float = 0) -> None:
         """
@@ -240,40 +275,22 @@ class UIStep(Step, ABC):
                 # ... do background work ...
                 await asyncio.sleep(0.05)
         """
-        if not self._current_screen:
+        if not self._current_screen or self._pump_queue is None:
             return
 
         screen = self._current_screen
-        loop = asyncio.get_event_loop()
-        event_queue: asyncio.Queue = asyncio.Queue()
 
-        def lcm_handler(channel, data):
-            msg = screen_render_answer_t.decode(data)
-            if msg.screen_name == self._SCREEN_NAME:
-                try:
-                    event = json.loads(msg.reason) if msg.reason else {}
-                except json.JSONDecodeError:
-                    event = {}
-                event["_action"] = msg.value
-                self.debug(f"[LCM RX] pump <- action={msg.value}")
-                loop.call_soon_threadsafe(event_queue.put_nowait, event)
+        # Deliver any pending LCM messages into the queue
+        self._transport.spin_once(timeout_ms=int(timeout * 1000))
+        # Yield so that call_soon_threadsafe callbacks run
+        await asyncio.sleep(0)
 
-        sub = self._transport.subscribe(
-            "libstp/screen_render/answer", lcm_handler, reliable=True,
-        )
-        try:
-            self._transport.spin_once(timeout_ms=int(timeout * 1000))
-            # Yield so that call_soon_threadsafe callbacks (put_nowait) run
-            # before we try to drain the queue.
-            await asyncio.sleep(0)
-            while True:
-                try:
-                    event = event_queue.get_nowait()
-                    await screen._dispatch_event(event)
-                except asyncio.QueueEmpty:
-                    break
-        finally:
-            self._transport._lcm.unsubscribe(sub)
+        while True:
+            try:
+                event = self._pump_queue.get_nowait()
+                await screen._dispatch_event(event)
+            except asyncio.QueueEmpty:
+                break
 
     @asynccontextmanager
     async def showing(self, screen: UIScreen[T]):
