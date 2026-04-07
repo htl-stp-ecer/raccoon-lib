@@ -154,6 +154,12 @@ RaccoonLib is one piece of the full platform:
 
 ---
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add modules, steps, run tests, and follow code style.
+
+---
+
 ## License
 
 Copyright (C) 2026 Tobias Madlberger  
