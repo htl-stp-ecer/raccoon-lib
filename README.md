@@ -47,7 +47,7 @@ Built from years of competition experience at HTL St. Pölten, it's designed so 
 **1. Clone**
 
 ```bash
-git clone https://github.com/htl-stp-ecer/raccoon-lib.git
+git clone https://github.com/htl-stp-ecer/raccoon-lib.git --recurse-submodules
 cd raccoon-lib
 ```
 
