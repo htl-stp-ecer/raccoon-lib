@@ -22,7 +22,7 @@ PID motion control · Kinematics · Odometry · Step-based missions · Python bi
 
 RaccoonLib is the heart of [RaccoonOS](https://github.com/htl-stp-ecer) — a full robotics platform built for [Botball](https://www.kipr.org/botball/) competition. It gives your robot a solid foundation: reliable motion, clean sensor abstractions, and a step-based mission system that makes autonomous code readable and maintainable.
 
-Built from years of competition experience at HTL St. Pölten, it's designed so that the next team doesn't have to start from zero.
+Built from years of competition experience at HTL St. Pölten, it's designed so that new team doesn't have to start from zero.
 
 ---
 
