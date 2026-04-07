@@ -35,16 +35,23 @@ Useful build env vars:
 
 ```
 library/
-├── modules/              # C++ modules (one folder each)
-├── python/libstp/        # Pure-Python parts of the package
+├── modules/                      # C++ modules (one folder each)
+│   └── libstp-<name>/
+│       ├── include/              # Public C++ headers
+│       ├── src/                  # C++ sources
+│       ├── bindings/             # pybind11 bindings (optional)
+│       └── python/libstp/        # Python files shipped with this module
+├── python/libstp/                # Global Python-only package files (minimal)
 ├── tests/
-│   ├── cpp/              # Google Test suites
-│   └── python/           # pytest suites
-├── tools/                # Code generators
+│   ├── cpp/                      # Google Test suites
+│   └── python/                   # pytest suites
+├── tools/                        # Code generators
 │   └── generate_step_builders.py
-├── build.sh              # Docker cross-compile + codegen
-└── deploy.sh             # build.sh + install on Pi
+├── build.sh                      # Docker cross-compile + codegen
+└── deploy.sh                     # build.sh + install on Pi
 ```
+
+Python code almost always lives inside the module it belongs to (`modules/libstp-<name>/python/libstp/`). The root `python/libstp/` folder is for the handful of things that don't belong to any specific module (package init, logging helpers, project YAML utilities).
 
 ---
 
@@ -59,9 +66,11 @@ modules/libstp-mymodule/
 │   └── my_class.hpp
 ├── src/
 │   └── my_class.cpp
-└── bindings/             # only if you need Python bindings
-    ├── bindings.cpp
-    └── my_class.cpp
+├── bindings/                 # only if you need Python bindings
+│   ├── bindings.cpp
+│   └── my_class.cpp
+└── python/libstp/mymodule/   # Python files for this module (steps, helpers, etc.)
+    └── __init__.py
 ```
 
 ### 2. CMakeLists.txt
@@ -118,11 +127,7 @@ Export the symbol in `python/libstp/__init__.py` so users can import it directly
 
 ## Adding a Python step
 
-Steps are the building blocks users write missions with (`drive_forward`, `turn_right`, etc.).
-
-### Where to put it
-
-Steps live alongside their module's Python fragment:
+Steps are the building blocks users write missions with (`drive_forward`, `turn_right`, etc.). They live inside the module they belong to:
 
 ```
 modules/libstp-<domain>/python/libstp/step/<domain>/my_step.py
@@ -133,8 +138,6 @@ Export it from the domain's `__init__.py`.
 ### Simple step
 
 ```python
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from libstp.step.annotation import dsl_step
@@ -199,7 +202,7 @@ class MyMotion(MotionStep):
 - Use `Result<T>` for error handling, not exceptions
 - Prefer `std::shared_ptr` for shared ownership
 
-**Python** -- the project uses [Ruff](https://docs.astral.sh/ruff/):
+**Python** -- the project uses [Ruff](https://docs.astral.sh/ruff/) and targets Python 3.11+:
 
 ```bash
 pip install ruff
@@ -207,7 +210,7 @@ ruff check python/ modules/
 ruff format python/ modules/
 ```
 
-All files must start with `from __future__ import annotations`. Keep `GenericRobot` imports behind `TYPE_CHECKING` to avoid circular imports.
+Keep `GenericRobot` imports behind `TYPE_CHECKING` to avoid circular imports.
 
 ---
 
@@ -229,7 +232,7 @@ Tests live in `tests/cpp/`. Follow the existing fixture pattern -- see `tests/cp
 pytest tests/python/
 ```
 
-Requires the wheel installed. Deploy to the Pi first, or install locally if you have a compatible host.
+Requires the wheel installed. Deploy to the Pi first.
 
 ---
 
@@ -237,6 +240,7 @@ Requires the wheel installed. Deploy to the Pi first, or install locally if you 
 
 - [ ] New C++ module registered in `modules/CMakeLists.txt`
 - [ ] Bindings exported from `python/libstp/__init__.py`
+- [ ] Module Python files placed under `modules/libstp-<name>/python/libstp/`
 - [ ] New step has `@dsl_step(tags=[...])` and a docstring
 - [ ] `_generate_signature()` implemented
 - [ ] Tests added (C++ or Python as appropriate)
