@@ -35,7 +35,7 @@ Built from years of competition experience at HTL St. Pölten, it's designed so 
 | **Kinematics** | Differential and mecanum drivetrains — forward & inverse |
 | **Odometry** | Real-time position and heading from wheel encoders |
 | **Step Framework** | Sequential and parallel task execution — write missions like a recipe |
-| **Sensors** | IR sensors, buttons, servos — clean, consistent API |
+| **Sensors & Actuators** | IR sensors, buttons, servos — clean, consistent API |
 | **Python Bindings** | Full Python API via pybind11 — same power, less boilerplate |
 
 ---
