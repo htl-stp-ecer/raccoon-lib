@@ -179,7 +179,5 @@ pytest tests/
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-[pybind11]: https://pybind11.readthedocs.io
-[scikit-build-core]: https://scikit-build-core.readthedocs.io
+Copyright (C) 2026 Tobias Madlberger  
+Licensed under the GNU General Public License v3.0 — see [COPYING](COPYING) for details.
