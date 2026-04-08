@@ -8,6 +8,8 @@
 
 PID motion control · Kinematics · Odometry · Step-based missions · Python bindings
 
+[![Build & Release](https://github.com/htl-stp-ecer/raccoon-lib/actions/workflows/build-release.yml/badge.svg)](https://github.com/htl-stp-ecer/raccoon-lib/actions/workflows/build-release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/htl-stp-ecer/raccoon-lib)](https://github.com/htl-stp-ecer/raccoon-lib/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](COPYING)
 ![C++20](https://img.shields.io/badge/C%2B%2B20-00599C?logo=cplusplus&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=ffdd54)
