@@ -13,6 +13,7 @@ jobs:
     runs-on: self-hosted
     permissions:
       contents: write
+      id-token: write
 
     steps:
       - name: Ensure Docker (Colima) is running
@@ -95,6 +96,12 @@ jobs:
           echo "✓ Stubs wheel built"
           ls -la build-docker-stubs/*.whl
 
+      # --- Publish stubs to PyPI (trusted publisher via OIDC) ---
+      - name: Publish raccoon-stubs to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: build-docker-stubs/
+
       # --- Build docs ---
       - name: Build documentation
         run: |
@@ -160,9 +167,12 @@ jobs:
 
             **Install on laptop (any platform — for codegen & IDE support):**
             ```bash
-            pip install libstp_stubs-${{ steps.version.outputs.version }}-py3-none-any.whl
+            pip install raccoon-stubs==${{ steps.version.outputs.version }}
             ```
-            This universal wheel works on Windows, macOS, and Linux.
+            Or from the release asset:
+            ```bash
+            pip install raccoon_stubs-${{ steps.version.outputs.version }}-py3-none-any.whl
+            ```
             Use `raccoon update` to install automatically.
 
             **View documentation:**
