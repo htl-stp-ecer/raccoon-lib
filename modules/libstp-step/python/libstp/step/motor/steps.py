@@ -247,7 +247,7 @@ class MoveMotorTo(Step):
         start = loop.time()
         while not self._motor.is_done():
             if self._timeout is not None and (loop.time() - start) >= self._timeout:
-                self.warning(
+                self.warn(
                     f"MoveMotorTo timed out after {self._timeout:.1f}s "
                     f"(target={self._position}, current={self._motor.get_position()})"
                 )
@@ -322,7 +322,7 @@ class MoveMotorRelative(Step):
         start = loop.time()
         while not self._motor.is_done():
             if self._timeout is not None and (loop.time() - start) >= self._timeout:
-                self.warning(
+                self.warn(
                     f"MoveMotorRelative timed out after {self._timeout:.1f}s "
                     f"(delta={self._delta}, current={self._motor.get_position()})"
                 )
