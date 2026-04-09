@@ -98,9 +98,36 @@ jobs:
 
       # --- Publish stubs to PyPI (trusted publisher via OIDC) ---
       - name: Publish raccoon-stubs to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: build-docker-stubs/
+        run: |
+          # Get OIDC token from GitHub
+          OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pypi" | jq -r '.value')
+
+          # Upload using PyPI trusted publishing API
+          docker run --rm \
+            -v "$PWD/build-docker-stubs":/dist \
+            -e OIDC_TOKEN="$OIDC_TOKEN" \
+            python:3.11-slim bash -c '
+              set -euo pipefail
+              pip install --quiet twine id
+
+              # Exchange OIDC token for PyPI API token via PEP 740
+              PYPI_TOKEN=$(python -c "
+import id, json, urllib.request
+token = \"$OIDC_TOKEN\"
+req = urllib.request.Request(
+    \"https://pypi.org/_/oidc/mint-token\",
+    data=json.dumps({\"token\": token}).encode(),
+    headers={\"Content-Type\": \"application/json\"},
+    method=\"POST\",
+)
+resp = urllib.request.urlopen(req)
+print(json.loads(resp.read())[\"token\"])
+")
+
+              TWINE_USERNAME=__token__ TWINE_PASSWORD="$PYPI_TOKEN" \
+                twine upload /dist/*.whl
+            '
 
       # --- Build docs ---
       - name: Build documentation
