@@ -97,37 +97,29 @@ jobs:
           ls -la build-docker-stubs/*.whl
 
       # --- Publish stubs to PyPI (trusted publisher via OIDC) ---
-      - name: Publish raccoon-stubs to PyPI
+      - name: Mint PyPI token from OIDC
+        id: pypi-token
         run: |
-          # Get OIDC token from GitHub
           OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pypi" | jq -r '.value')
+          PYPI_TOKEN=$(curl -sS -X POST https://pypi.org/_/oidc/mint-token \
+            -H "Content-Type: application/json" \
+            -d "{\"token\": \"$OIDC_TOKEN\"}" | jq -r '.token')
+          echo "::add-mask::$PYPI_TOKEN"
+          echo "token=$PYPI_TOKEN" >> "$GITHUB_OUTPUT"
 
-          # Upload using PyPI trusted publishing API
+      - name: Publish raccoon-stubs to PyPI
+        run: |
           docker run --rm \
             -v "$PWD/build-docker-stubs":/dist \
-            -e OIDC_TOKEN="$OIDC_TOKEN" \
+            -e TWINE_USERNAME=__token__ \
+            -e TWINE_PASSWORD="$PYPI_TOKEN" \
             python:3.11-slim bash -c '
-              set -euo pipefail
-              pip install --quiet twine id
-
-              # Exchange OIDC token for PyPI API token via PEP 740
-              PYPI_TOKEN=$(python -c "
-import id, json, urllib.request
-token = \"$OIDC_TOKEN\"
-req = urllib.request.Request(
-    \"https://pypi.org/_/oidc/mint-token\",
-    data=json.dumps({\"token\": token}).encode(),
-    headers={\"Content-Type\": \"application/json\"},
-    method=\"POST\",
-)
-resp = urllib.request.urlopen(req)
-print(json.loads(resp.read())[\"token\"])
-")
-
-              TWINE_USERNAME=__token__ TWINE_PASSWORD="$PYPI_TOKEN" \
-                twine upload /dist/*.whl
+              pip install --quiet twine
+              twine upload /dist/*.whl
             '
+        env:
+          PYPI_TOKEN: ${{ steps.pypi-token.outputs.token }}
 
       # --- Build docs ---
       - name: Build documentation
