@@ -226,7 +226,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         """Warn if background tasks from a mission are still running."""
         bg_mgr = getattr(self, "_background_manager", None)
         if bg_mgr is not None and bg_mgr.active_count > 0:
-            self.warning(
+            self.warn(
                 f"{bg_mgr.active_count} background task(s) still running "
                 f"after mission {mission} — consider using wait_for_background()"
             )
