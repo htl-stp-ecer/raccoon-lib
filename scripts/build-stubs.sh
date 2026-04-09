@@ -77,7 +77,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "libstp-stubs"
+name = "raccoon-stubs"
 version = "$VERSION"
 description = "Type stubs for libstp (IDE support, type hinting, codegen — no runtime code)"
 requires-python = ">=3.11"
