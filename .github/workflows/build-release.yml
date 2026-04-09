@@ -89,7 +89,7 @@ jobs:
             -v "$PWD":/src -w /src \
             libstp-dev:arm64 bash -lc "
               set -euo pipefail
-              pip install --quiet pybind11-stubgen mypy /src/raccoon-transport/python /src/$MOCK_WHL
+              pip install --quiet pybind11-stubgen 'mypy>=1.15' /src/raccoon-transport/python /src/$MOCK_WHL
               bash /src/scripts/build-stubs.sh $VERSION
             "
 
