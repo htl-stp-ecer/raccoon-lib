@@ -1,5 +1,5 @@
-libstp Documentation
-====================
+raccoon Documentation
+=====================
 
 Robotics library for Botball.
 

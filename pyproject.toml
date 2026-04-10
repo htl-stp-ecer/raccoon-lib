@@ -4,9 +4,9 @@ build-backend = "scikit_build_core.build"
 
 
 [project]
-name = "libstp"
+name = "raccoon"
 version = "1.0.0"
-description="LibStp robotics library"
+description="Raccoon robotics library (formerly libstp)"
 readme = "README.md"
 authors = [
   { name = "Tobias Madlberger", email = "tobias.madlberger@gmail.com" },

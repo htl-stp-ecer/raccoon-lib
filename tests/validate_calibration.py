@@ -6,7 +6,7 @@ def test_imports():
     """Test that all new imports work."""
     print("Testing imports...", end=" ")
     try:
-        from libstp.step.calibrate_distance import (
+        from raccoon.step.calibrate_distance import (
             calibrate_distance,
             CalibrateDistance,
             CalibrationRequiredError,
@@ -25,7 +25,7 @@ def test_calibration_functions():
     """Test calibration flag functions."""
     print("Testing calibration functions...", end=" ")
     try:
-        from libstp.step.calibrate_distance import (
+        from raccoon.step.calibrate_distance import (
             is_distance_calibrated,
             check_distance_calibration,
             reset_distance_calibration,
@@ -52,7 +52,7 @@ def test_per_wheel_calibration_dataclass():
     """Test PerWheelCalibration dataclass."""
     print("Testing PerWheelCalibration...", end=" ")
     try:
-        from libstp.step.calibrate_distance import PerWheelCalibration
+        from raccoon.step.calibrate_distance import PerWheelCalibration
 
         result = PerWheelCalibration(
             motor_port=0,
@@ -76,7 +76,7 @@ def test_motor_set_calibration():
     """Test Motor.set_calibration exists."""
     print("Testing Motor.set_calibration...", end=" ")
     try:
-        from libstp.hal import Motor
+        from raccoon.hal import Motor
 
         assert hasattr(Motor, 'set_calibration'), "Motor missing set_calibration"
         assert hasattr(Motor, 'get_calibration'), "Motor missing get_calibration"
@@ -91,8 +91,8 @@ def test_kinematics_wheel_radius():
     """Test kinematics get_wheel_radius."""
     print("Testing kinematics get_wheel_radius...", end=" ")
     try:
-        from libstp.kinematics_differential import DifferentialKinematics
-        from libstp.kinematics_mecanum import MecanumKinematics
+        from raccoon.kinematics_differential import DifferentialKinematics
+        from raccoon.kinematics_mecanum import MecanumKinematics
 
         assert hasattr(DifferentialKinematics, 'get_wheel_radius'), "Differential missing get_wheel_radius"
         assert hasattr(MecanumKinematics, 'get_wheel_radius'), "Mecanum missing get_wheel_radius"
@@ -107,7 +107,7 @@ def test_drive_wheel_radius():
     """Test Drive.get_wheel_radius."""
     print("Testing Drive.get_wheel_radius...", end=" ")
     try:
-        from libstp.drive import Drive
+        from raccoon.drive import Drive
 
         assert hasattr(Drive, 'get_wheel_radius'), "Drive missing get_wheel_radius"
 
@@ -121,8 +121,8 @@ def test_drive_requires_calibration():
     """Test that drive_forward/backward require calibration."""
     print("Testing drive requires calibration...", end=" ")
     try:
-        from libstp.step.calibrate_distance import reset_distance_calibration, CalibrationRequiredError
-        from libstp.step.drive import drive_forward, drive_backward
+        from raccoon.step.calibrate_distance import reset_distance_calibration, CalibrationRequiredError
+        from raccoon.step.drive import drive_forward, drive_backward
 
         reset_distance_calibration()
 
@@ -150,7 +150,7 @@ def test_robot_protocol():
     """Test RobotDefinitionsProtocol has drive_motors."""
     print("Testing RobotDefinitionsProtocol...", end=" ")
     try:
-        from libstp.robot.api import RobotDefinitionsProtocol
+        from raccoon.robot.api import RobotDefinitionsProtocol
         import typing
 
         hints = typing.get_type_hints(RobotDefinitionsProtocol)
