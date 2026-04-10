@@ -1,5 +1,7 @@
 from .do_while import DoWhileActive
 from .do_while_dsl import do_while_active
+from .if_then import IfThen
+from .if_then_dsl import if_then
 from .loop import LoopFor, LoopForever
 from .loop_dsl import loop_forever, loop_for
 from .defer import Defer, Run
@@ -9,6 +11,8 @@ from .background import Background, WaitForBackground, background, wait_for_back
 __all__ = [
     "DoWhileActive",
     "do_while_active",
+    "IfThen",
+    "if_then",
     "LoopFor",
     "loop_for",
     "LoopForever",

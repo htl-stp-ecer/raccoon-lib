@@ -14,6 +14,7 @@ from .wait_for_light import WaitForLight, WaitForLightLegacy
 
 from libstp.hal import AnalogSensor
 
+
 class WaitForLightBuilder(StepBuilder):
     """Builder for WaitForLight. Auto-generated — do not edit."""
 
@@ -48,16 +49,22 @@ class WaitForLightBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        kwargs['drop_fraction'] = self._drop_fraction
-        kwargs['confirm_count'] = self._confirm_count
-        kwargs['warmup_seconds'] = self._warmup_seconds
-        kwargs['poll_interval'] = self._poll_interval
+            kwargs["sensor"] = self._sensor
+        kwargs["drop_fraction"] = self._drop_fraction
+        kwargs["confirm_count"] = self._confirm_count
+        kwargs["warmup_seconds"] = self._warmup_seconds
+        kwargs["poll_interval"] = self._poll_interval
         return WaitForLight(**kwargs)
 
 
-@dsl(tags=['timing', 'wait'])
-def wait_for_light(sensor: AnalogSensor = _UNSET, drop_fraction: float = 0.15, confirm_count: int = 3, warmup_seconds: float = 1.0, poll_interval: float = 0.005):
+@dsl(tags=["timing", "wait"])
+def wait_for_light(
+    sensor: AnalogSensor = _UNSET,
+    drop_fraction: float = 0.15,
+    confirm_count: int = 3,
+    warmup_seconds: float = 1.0,
+    poll_interval: float = 0.005,
+):
     """
     Wait for the start lamp using automatic Kalman-filtered flank detection.
 
@@ -121,11 +128,11 @@ class WaitForLightLegacyBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
+            kwargs["sensor"] = self._sensor
         return WaitForLightLegacy(**kwargs)
 
 
-@dsl(tags=['timing', 'wait'])
+@dsl(tags=["timing", "wait"])
 def wait_for_light_legacy(sensor: AnalogSensor = _UNSET):
     """
     Wait for light using the legacy manual-calibration threshold method.
@@ -159,4 +166,9 @@ def wait_for_light_legacy(sensor: AnalogSensor = _UNSET):
     return b
 
 
-__all__ = ['WaitForLightBuilder', 'wait_for_light', 'WaitForLightLegacyBuilder', 'wait_for_light_legacy']
+__all__ = [
+    "WaitForLightBuilder",
+    "wait_for_light",
+    "WaitForLightLegacyBuilder",
+    "wait_for_light_legacy",
+]

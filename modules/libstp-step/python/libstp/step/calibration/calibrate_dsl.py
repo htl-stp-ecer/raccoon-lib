@@ -40,22 +40,28 @@ class CalibrateBuilder(StepBuilder):
         self._calibration_sets = value
         return self
 
-    def exclude_ir_sensors(self, value: Optional[List['IRSensor']]):
+    def exclude_ir_sensors(self, value: Optional[List["IRSensor"]]):
         self._exclude_ir_sensors = value
         return self
 
     def _build(self):
         kwargs = {}
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['persist_to_yaml'] = self._persist_to_yaml
-        kwargs['ema_alpha'] = self._ema_alpha
-        kwargs['calibration_sets'] = self._calibration_sets
-        kwargs['exclude_ir_sensors'] = self._exclude_ir_sensors
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["persist_to_yaml"] = self._persist_to_yaml
+        kwargs["ema_alpha"] = self._ema_alpha
+        kwargs["calibration_sets"] = self._calibration_sets
+        kwargs["exclude_ir_sensors"] = self._exclude_ir_sensors
         return Calibrate(**kwargs)
 
 
-@dsl(tags=['calibration'])
-def calibrate(distance_cm: float = 30.0, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: Optional[List[str]] = None, exclude_ir_sensors: Optional[List['IRSensor']] = None):
+@dsl(tags=["calibration"])
+def calibrate(
+    distance_cm: float = 30.0,
+    persist_to_yaml: bool = True,
+    ema_alpha: float = 0.7,
+    calibration_sets: Optional[List[str]] = None,
+    exclude_ir_sensors: Optional[List["IRSensor"]] = None,
+):
     """
     Run a unified distance and IR sensor calibration.
 
@@ -107,4 +113,4 @@ def calibrate(distance_cm: float = 30.0, persist_to_yaml: bool = True, ema_alpha
     return b
 
 
-__all__ = ['CalibrateBuilder', 'calibrate']
+__all__ = ["CalibrateBuilder", "calibrate"]

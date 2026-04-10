@@ -14,6 +14,7 @@ from .timeout import Timeout
 
 from . import Step
 
+
 class TimeoutBuilder(StepBuilder):
     """Builder for Timeout. Auto-generated — do not edit."""
 
@@ -33,13 +34,13 @@ class TimeoutBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._step is not _UNSET:
-            kwargs['step'] = self._step
+            kwargs["step"] = self._step
         if self._seconds is not _UNSET:
-            kwargs['seconds'] = self._seconds
+            kwargs["seconds"] = self._seconds
         return Timeout(**kwargs)
 
 
-@dsl(tags=['control', 'timeout'])
+@dsl(tags=["control", "timeout"])
 def timeout(step: Step = _UNSET, seconds: Union[float, int] = _UNSET):
     """
     Wrap a step with a time limit, cancelling it if it runs too long.
@@ -84,4 +85,4 @@ def timeout(step: Step = _UNSET, seconds: Union[float, int] = _UNSET):
     return b
 
 
-__all__ = ['TimeoutBuilder', 'timeout']
+__all__ = ["TimeoutBuilder", "timeout"]

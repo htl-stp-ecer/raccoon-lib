@@ -18,7 +18,7 @@ class WaitForButtonBuilder(StepBuilder):
 
     def __init__(self):
         super().__init__()
-        self._message = 'Waiting for button press...'
+        self._message = "Waiting for button press..."
 
     def message(self, value: str):
         self._message = value
@@ -26,12 +26,12 @@ class WaitForButtonBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs['message'] = self._message
+        kwargs["message"] = self._message
         return WaitForButton(**kwargs)
 
 
-@dsl(tags=['timing', 'button'])
-def wait_for_button(message: str = 'Waiting for button press...'):
+@dsl(tags=["timing", "button"])
+def wait_for_button(message: str = "Waiting for button press..."):
     """
     Wait for the operator to press the hardware button before continuing.
 
@@ -64,4 +64,4 @@ def wait_for_button(message: str = 'Waiting for button press...'):
     return b
 
 
-__all__ = ['WaitForButtonBuilder', 'wait_for_button']
+__all__ = ["WaitForButtonBuilder", "wait_for_button"]

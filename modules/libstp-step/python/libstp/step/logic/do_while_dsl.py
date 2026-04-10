@@ -14,6 +14,7 @@ from .do_while import DoWhileActive
 
 from .. import Step
 
+
 class DoWhileActiveBuilder(StepBuilder):
     """Builder for DoWhileActive. Auto-generated — do not edit."""
 
@@ -33,13 +34,13 @@ class DoWhileActiveBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._reference_step is not _UNSET:
-            kwargs['reference_step'] = self._reference_step
+            kwargs["reference_step"] = self._reference_step
         if self._task is not _UNSET:
-            kwargs['task'] = self._task
+            kwargs["task"] = self._task
         return DoWhileActive(**kwargs)
 
 
-@dsl(tags=['control', 'concurrent'])
+@dsl(tags=["control", "concurrent"])
 def do_while_active(reference_step: Step = _UNSET, task: Step = _UNSET):
     """
     Run a task concurrently with a reference step, cancelling the task when the reference finishes.
@@ -81,4 +82,4 @@ def do_while_active(reference_step: Step = _UNSET, task: Step = _UNSET):
     return b
 
 
-__all__ = ['DoWhileActiveBuilder', 'do_while_active']
+__all__ = ["DoWhileActiveBuilder", "do_while_active"]
