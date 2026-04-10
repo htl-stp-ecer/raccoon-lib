@@ -27,11 +27,11 @@ class WaitForSecondsBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._seconds is not _UNSET:
-            kwargs['seconds'] = self._seconds
+            kwargs["seconds"] = self._seconds
         return WaitForSeconds(**kwargs)
 
 
-@dsl(tags=['timing', 'wait'])
+@dsl(tags=["timing", "wait"])
 def wait_for_seconds(seconds: Union[float, int] = _UNSET):
     """
     Pause execution for a fixed number of seconds.
@@ -68,4 +68,4 @@ def wait_for_seconds(seconds: Union[float, int] = _UNSET):
     return b
 
 
-__all__ = ['WaitForSecondsBuilder', 'wait_for_seconds']
+__all__ = ["WaitForSecondsBuilder", "wait_for_seconds"]

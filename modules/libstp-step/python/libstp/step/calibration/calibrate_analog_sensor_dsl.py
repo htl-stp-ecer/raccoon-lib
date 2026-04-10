@@ -19,10 +19,10 @@ class CalibrateAnalogSensorBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._sensor = _UNSET
-        self._set_name = 'default'
+        self._set_name = "default"
         self._sample_duration = 3.0
 
-    def sensor(self, value: 'AnalogSensor'):
+    def sensor(self, value: "AnalogSensor"):
         self._sensor = value
         return self
 
@@ -37,14 +37,18 @@ class CalibrateAnalogSensorBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        kwargs['set_name'] = self._set_name
-        kwargs['sample_duration'] = self._sample_duration
+            kwargs["sensor"] = self._sensor
+        kwargs["set_name"] = self._set_name
+        kwargs["sample_duration"] = self._sample_duration
         return CalibrateAnalogSensor(**kwargs)
 
 
-@dsl(tags=['calibration', 'sensor'])
-def calibrate_analog_sensor(sensor: 'AnalogSensor' = _UNSET, set_name: str = 'default', sample_duration: float = 3.0):
+@dsl(tags=["calibration", "sensor"])
+def calibrate_analog_sensor(
+    sensor: "AnalogSensor" = _UNSET,
+    set_name: str = "default",
+    sample_duration: float = 3.0,
+):
     """
     Capture a reference analog sensor reading at a target robot position.
 
@@ -92,4 +96,4 @@ def calibrate_analog_sensor(sensor: 'AnalogSensor' = _UNSET, set_name: str = 'de
     return b
 
 
-__all__ = ['CalibrateAnalogSensorBuilder', 'calibrate_analog_sensor']
+__all__ = ["CalibrateAnalogSensorBuilder", "calibrate_analog_sensor"]

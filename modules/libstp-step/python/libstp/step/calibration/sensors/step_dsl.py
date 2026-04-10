@@ -36,14 +36,18 @@ class CalibrateSensorsBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs['calibration_time'] = self._calibration_time
-        kwargs['allow_use_existing'] = self._allow_use_existing
-        kwargs['calibration_sets'] = self._calibration_sets
+        kwargs["calibration_time"] = self._calibration_time
+        kwargs["allow_use_existing"] = self._allow_use_existing
+        kwargs["calibration_sets"] = self._calibration_sets
         return CalibrateSensors(**kwargs)
 
 
-@dsl(tags=['calibration', 'sensor'])
-def calibrate_sensors(calibration_time: float = 5.0, allow_use_existing: bool = True, calibration_sets: Optional[List[str]] = None):
+@dsl(tags=["calibration", "sensor"])
+def calibrate_sensors(
+    calibration_time: float = 5.0,
+    allow_use_existing: bool = True,
+    calibration_sets: Optional[List[str]] = None,
+):
     """
     Calibrate IR sensors by sampling black and white surface readings.
 
@@ -81,4 +85,4 @@ def calibrate_sensors(calibration_time: float = 5.0, allow_use_existing: bool = 
     return b
 
 
-__all__ = ['CalibrateSensorsBuilder', 'calibrate_sensors']
+__all__ = ["CalibrateSensorsBuilder", "calibrate_sensors"]
