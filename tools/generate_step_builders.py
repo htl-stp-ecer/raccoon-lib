@@ -18,10 +18,10 @@ import logging
 import sys
 from pathlib import Path
 
-# Load the codegen module directly to avoid triggering libstp/__init__.py
-# which requires the C++ extension (libstp._core) and other native deps.
+# Load the codegen module directly to avoid triggering raccoon/__init__.py
+# which requires the C++ extension (raccoon._core) and other native deps.
 _LIB_ROOT = Path(__file__).resolve().parent.parent
-_CODEGEN_PATH = _LIB_ROOT / "python" / "libstp" / "codegen" / "step_builder_gen.py"
+_CODEGEN_PATH = _LIB_ROOT / "python" / "raccoon" / "codegen" / "step_builder_gen.py"
 
 import importlib.util as _ilu
 
@@ -37,16 +37,16 @@ camel_to_snake = _mod.camel_to_snake
 def _collect_source_dirs(lib_root: Path, module: str | None) -> list[Path]:
     modules_dir = lib_root / "modules"
     if module:
-        candidates = list(modules_dir.glob(f"libstp-{module}/python/libstp"))
+        candidates = list(modules_dir.glob(f"libstp-{module}/python/raccoon"))
         if not candidates:
             print(f"ERROR: No module 'libstp-{module}' found", file=sys.stderr)
             sys.exit(1)
         return candidates
 
     return sorted(
-        d / "python" / "libstp"
+        d / "python" / "raccoon"
         for d in modules_dir.iterdir()
-        if (d / "python" / "libstp").is_dir()
+        if (d / "python" / "raccoon").is_dir()
     )
 
 

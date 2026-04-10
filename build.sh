@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # -------- Config (env overridable) --------
-PROJECT_NAME="${PROJECT_NAME:-libstp}"
+PROJECT_NAME="${PROJECT_NAME:-raccoon}"
 BUILD_DOCS="${BUILD_DOCS:-0}"
 BUILD_DIR="${BUILD_DIR:-build-docker}"
 PLATFORM="${PLATFORM:-linux/arm64/v8}"
@@ -50,7 +50,7 @@ if [[ "$BUILD_NUMBER" != "0" ]]; then
   ORIGINAL_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$PYPROJECT")
   BASE_VERSION="${ORIGINAL_VERSION%.*}"  # e.g. "1.0"
   NEW_VERSION="${BASE_VERSION}.${BUILD_NUMBER}"
-  echo "▶ Patching libstp version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
+  echo "▶ Patching raccoon version: ${ORIGINAL_VERSION} → ${NEW_VERSION}"
   patch_version_file "$PYPROJECT" "$NEW_VERSION"
 
   RACCOON_ORIGINAL_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$RACCOON_PYPROJECT")
@@ -188,10 +188,10 @@ if [[ "$BUILD_DOCS" == "1" ]]; then
   WHEEL_BASENAME=$(basename "$WHEEL_FILE")
   docker_exec "pip install --quiet pybind11-stubgen && \
     pip install --quiet /src/$BUILD_DIR/$WHEEL_BASENAME && \
-    pybind11-stubgen libstp -o /src/python/stubs --ignore-all-errors 2>/dev/null || true"
+    pybind11-stubgen raccoon -o /src/python/stubs --ignore-all-errors 2>/dev/null || true"
 
-  if [[ -d "python/stubs/libstp" ]]; then
-    echo "  ✓ Stubs generated: python/stubs/libstp/"
+  if [[ -d "python/stubs/raccoon" ]]; then
+    echo "  ✓ Stubs generated: python/stubs/raccoon/"
   else
     echo "  ⚠ Stub generation failed or produced no output"
   fi
