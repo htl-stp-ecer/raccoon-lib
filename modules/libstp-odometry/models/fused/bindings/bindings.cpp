@@ -18,9 +18,9 @@ PYBIND11_MODULE(odometry_fused, m)
     m.doc() = "Python bindings for libstp-odometry_fused";
 
     // Ensure dependent base/types are registered before referencing them
-    py::module_::import("libstp.odometry");
-    py::module_::import("libstp.hal");
-    py::module_::import("libstp.kinematics");
+    py::module_::import("raccoon.odometry");
+    py::module_::import("raccoon.hal");
+    py::module_::import("raccoon.kinematics");
 
     // DistanceFromOrigin struct
     py::class_<libstp::odometry::DistanceFromOrigin>(m, "DistanceFromOrigin",

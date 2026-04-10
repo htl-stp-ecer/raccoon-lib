@@ -15,8 +15,8 @@ PYBIND11_MODULE(kinematics_mecanum, m)
     m.doc() = "Python bindings for libstp-kinematics_mecanum";
 
     // Ensure dependent base/types are registered before referencing them
-    py::module_::import("libstp.kinematics");
-    py::module_::import("libstp.hal");
+    py::module_::import("raccoon.kinematics");
+    py::module_::import("raccoon.hal");
 
     py::class_<libstp::kinematics::mecanum::MecanumKinematics, libstp::kinematics::IKinematics,
                 std::shared_ptr<libstp::kinematics::mecanum::MecanumKinematics>>(m, "MecanumKinematics")

@@ -3,16 +3,35 @@
 //
 
 #include "hal/OdometryBridge.hpp"
+#include "core/MockPlatform.hpp"
 #include "foundation/config.hpp"
 
 namespace libstp::hal::odometry_bridge
 {
+    namespace
+    {
+        constexpr float kCmToMeters = 0.01f;
+    }
+
     OdometryBridge::OdometryBridge() = default;
 
     OdometrySnapshot OdometryBridge::readOdometry()
     {
-        // Mock returns zeroed state — tests can extend MockPlatform if needed.
-        return OdometrySnapshot{};
+        auto& platform = platform::mock::core::MockPlatform::instance();
+        if (!platform.hasSim())
+        {
+            return OdometrySnapshot{};
+        }
+
+        const auto pose = platform.simPose();
+        OdometrySnapshot snap{};
+        snap.pos_x = pose.x * kCmToMeters;
+        snap.pos_y = pose.y * kCmToMeters;
+        snap.heading = pose.theta;
+        snap.wz = platform.simYawRate();
+        // vx/vy in body frame — we don't expose the body twist from SimWorld
+        // yet; leave them zero until Step consumers need them.
+        return snap;
     }
 
     void OdometryBridge::resetLocalOdometry()

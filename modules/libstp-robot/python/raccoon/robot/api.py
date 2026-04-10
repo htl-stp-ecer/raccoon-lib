@@ -215,12 +215,42 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                     await wait_for_light(sensor, drop_fraction=drop_fraction).run_step(self)
 
     async def _run_main_missions(self, missions: List["MissionProtocol"]) -> None:
-        """Execute main missions sequentially."""
+        """Execute main missions sequentially with per-mission watchdogs."""
+        from raccoon.step.watchdog_manager import get_watchdog_manager
+
+        wdt = get_watchdog_manager(self)
         for mission in missions:
             self.info(f"Starting mission: {mission}")
-            await mission.run(self)
+
+            budget = getattr(mission, "time_budget", None)
+            wd_name: Optional[str] = None
+            if budget is not None and budget > 0:
+                wd_name = f"mission:{mission}"
+                wdt.arm(wd_name, float(budget), source="mission")
+
+            try:
+                await mission.run(self)
+            finally:
+                if wd_name is not None:
+                    wdt.disarm(wd_name, missing_ok=True)
+
             self.info(f"Finished mission: {mission}")
             self._warn_leaked_background_tasks(mission)
+            self._warn_leaked_watchdogs(mission)
+
+    def _warn_leaked_watchdogs(self, mission: "MissionProtocol") -> None:
+        """Warn if user watchdogs from a mission are still armed at its end."""
+        from raccoon.step.watchdog_manager import get_watchdog_manager
+
+        wdt = get_watchdog_manager(self)
+        leaked = wdt.active_names(source="user")
+        if leaked:
+            self.warn(
+                f"{len(leaked)} watchdog(s) still armed after mission {mission}: "
+                f"{', '.join(leaked)} — call stop_watchdog() before the mission ends"
+            )
+            for name in leaked:
+                wdt.disarm(name, missing_ok=True)
 
     def _warn_leaked_background_tasks(self, mission: "MissionProtocol") -> None:
         """Warn if background tasks from a mission are still running."""
@@ -262,17 +292,44 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         else:
             await self._pre_start_gate()
 
-        # Main missions with shutdown timer
+        # Main missions with shutdown timer and watchdog manager
         initialize_timer() # reset clock to 0 before main missions
         self.synchronizer.start_recording()
 
+        from raccoon.step.watchdog_manager import get_watchdog_manager
+        wdt = get_watchdog_manager(self)
+        main_task = asyncio.create_task(self._run_main_missions(missions))
+        wdt.attach_main_task(main_task)
+
         try:
-            await asyncio.wait_for(
-                self._run_main_missions(missions),
-                timeout=self.shutdown_in,
+            done, pending = await asyncio.wait(
+                [main_task], timeout=self.shutdown_in
             )
-        except asyncio.TimeoutError:
-            self.error(f"Shutdown timer expired after {self.shutdown_in}s! Forcing shutdown.")
+            if main_task in pending:
+                self.error(
+                    f"Shutdown timer expired after {self.shutdown_in}s! Forcing shutdown."
+                )
+                main_task.cancel()
+                try:
+                    await main_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            elif main_task.cancelled():
+                expired = wdt.expired_name
+                if expired is not None:
+                    self.error(
+                        f"Watchdog '{expired}' expired — main missions cancelled, "
+                        f"running shutdown mission"
+                    )
+                else:
+                    self.error("Main missions cancelled externally")
+            else:
+                exc = main_task.exception()
+                if exc is not None:
+                    self.error(f"Main missions raised: {exc}")
+        finally:
+            wdt.detach_main_task()
+            await wdt.cancel_all()
 
         # Cancel orphaned background tasks before shutdown mission
         await self._drain_background_tasks()

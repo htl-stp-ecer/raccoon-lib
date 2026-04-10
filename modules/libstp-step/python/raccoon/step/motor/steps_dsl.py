@@ -10,19 +10,9 @@ _UNSET = object()
 from raccoon.step.step_builder import StepBuilder
 from raccoon.step.condition import StopCondition
 from raccoon.step.annotation import dsl
-from .steps import (
-    SetMotorPower,
-    SetMotorVelocity,
-    SetMotorDps,
-    MoveMotorTo,
-    MoveMotorRelative,
-    MotorOff,
-    MotorPassiveBrake,
-    MotorBrake,
-)
+from .steps import SetMotorPower, SetMotorVelocity, SetMotorDps, MoveMotorTo, MoveMotorRelative, MotorOff, MotorPassiveBrake, MotorBrake
 
 from raccoon.hal import IMotor
-
 
 class SetMotorPowerBuilder(StepBuilder):
     """Builder for SetMotorPower. Auto-generated — do not edit."""
@@ -43,13 +33,13 @@ class SetMotorPowerBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         if self._percent is not _UNSET:
-            kwargs["percent"] = self._percent
+            kwargs['percent'] = self._percent
         return SetMotorPower(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
+@dsl(tags=['motor', 'actuator'])
 def set_motor_power(motor: IMotor = _UNSET, percent: int = _UNSET):
     """
     Set a motor to open-loop percent power.
@@ -104,13 +94,13 @@ class SetMotorVelocityBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         if self._velocity is not _UNSET:
-            kwargs["velocity"] = self._velocity
+            kwargs['velocity'] = self._velocity
         return SetMotorVelocity(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
+@dsl(tags=['motor', 'actuator'])
 def set_motor_velocity(motor: IMotor = _UNSET, velocity: int = _UNSET):
     """
     Set a motor to closed-loop velocity in firmware BEMF units.
@@ -167,13 +157,13 @@ class SetMotorDpsBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         if self._dps is not _UNSET:
-            kwargs["dps"] = self._dps
+            kwargs['dps'] = self._dps
         return SetMotorDps(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
+@dsl(tags=['motor', 'actuator'])
 def set_motor_dps(motor: IMotor = _UNSET, dps: float = _UNSET):
     """
     Set a motor to closed-loop velocity in degrees per second.
@@ -243,21 +233,16 @@ class MoveMotorToBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         if self._position is not _UNSET:
-            kwargs["position"] = self._position
-        kwargs["velocity"] = self._velocity
-        kwargs["timeout"] = self._timeout
+            kwargs['position'] = self._position
+        kwargs['velocity'] = self._velocity
+        kwargs['timeout'] = self._timeout
         return MoveMotorTo(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
-def move_motor_to(
-    motor: IMotor = _UNSET,
-    position: int = _UNSET,
-    velocity: int = 1000,
-    timeout: Optional[float] = None,
-):
+@dsl(tags=['motor', 'actuator'])
+def move_motor_to(motor: IMotor = _UNSET, position: int = _UNSET, velocity: int = 1000, timeout: Optional[float] = None):
     """
     Move a motor to an absolute encoder position and wait for completion.
 
@@ -321,21 +306,16 @@ class MoveMotorRelativeBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         if self._delta is not _UNSET:
-            kwargs["delta"] = self._delta
-        kwargs["velocity"] = self._velocity
-        kwargs["timeout"] = self._timeout
+            kwargs['delta'] = self._delta
+        kwargs['velocity'] = self._velocity
+        kwargs['timeout'] = self._timeout
         return MoveMotorRelative(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
-def move_motor_relative(
-    motor: IMotor = _UNSET,
-    delta: int = _UNSET,
-    velocity: int = 1000,
-    timeout: Optional[float] = None,
-):
+@dsl(tags=['motor', 'actuator'])
+def move_motor_relative(motor: IMotor = _UNSET, delta: int = _UNSET, velocity: int = 1000, timeout: Optional[float] = None):
     """
     Move a motor by a relative encoder delta and wait for completion.
 
@@ -387,11 +367,11 @@ class MotorOffBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         return MotorOff(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
+@dsl(tags=['motor', 'actuator'])
 def motor_off(motor: IMotor = _UNSET):
     """
     Turn a motor off, allowing it to coast freely.
@@ -438,11 +418,11 @@ class MotorPassiveBrakeBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         return MotorPassiveBrake(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
+@dsl(tags=['motor', 'actuator'])
 def motor_passive_brake(motor: IMotor = _UNSET):
     """
     Passively brake a motor by commanding zero power.
@@ -489,11 +469,11 @@ class MotorBrakeBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
-            kwargs["motor"] = self._motor
+            kwargs['motor'] = self._motor
         return MotorBrake(**kwargs)
 
 
-@dsl(tags=["motor", "actuator"])
+@dsl(tags=['motor', 'actuator'])
 def motor_brake(motor: IMotor = _UNSET):
     """
     Actively brake a motor and hold its current position.
@@ -526,21 +506,4 @@ def motor_brake(motor: IMotor = _UNSET):
     return b
 
 
-__all__ = [
-    "SetMotorPowerBuilder",
-    "set_motor_power",
-    "SetMotorVelocityBuilder",
-    "set_motor_velocity",
-    "SetMotorDpsBuilder",
-    "set_motor_dps",
-    "MoveMotorToBuilder",
-    "move_motor_to",
-    "MoveMotorRelativeBuilder",
-    "move_motor_relative",
-    "MotorOffBuilder",
-    "motor_off",
-    "MotorPassiveBrakeBuilder",
-    "motor_passive_brake",
-    "MotorBrakeBuilder",
-    "motor_brake",
-]
+__all__ = ['SetMotorPowerBuilder', 'set_motor_power', 'SetMotorVelocityBuilder', 'set_motor_velocity', 'SetMotorDpsBuilder', 'set_motor_dps', 'MoveMotorToBuilder', 'move_motor_to', 'MoveMotorRelativeBuilder', 'move_motor_relative', 'MotorOffBuilder', 'motor_off', 'MotorPassiveBrakeBuilder', 'motor_passive_brake', 'MotorBrakeBuilder', 'motor_brake']

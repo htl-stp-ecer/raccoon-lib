@@ -18,9 +18,9 @@ PYBIND11_MODULE(odometry_stm32, m)
 {
     m.doc() = "Python bindings for STM32-sourced odometry";
 
-    py::module_::import("libstp.odometry");
-    py::module_::import("libstp.hal");
-    py::module_::import("libstp.kinematics");
+    py::module_::import("raccoon.odometry");
+    py::module_::import("raccoon.hal");
+    py::module_::import("raccoon.kinematics");
 
     // Stm32OdometryConfig struct
     py::class_<libstp::odometry::stm32::Stm32OdometryConfig>(m, "Stm32OdometryConfig",

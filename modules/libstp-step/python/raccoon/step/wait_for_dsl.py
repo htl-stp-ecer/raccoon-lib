@@ -27,11 +27,11 @@ class WaitForBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._condition is not _UNSET:
-            kwargs["condition"] = self._condition
+            kwargs['condition'] = self._condition
         return WaitFor(**kwargs)
 
 
-@dsl(tags=["timing", "wait", "sensor"])
+@dsl(tags=['timing', 'wait', 'sensor'])
 def wait_for(condition: StopCondition = _UNSET):
     """
     Block until a stop condition is satisfied.
@@ -64,4 +64,4 @@ def wait_for(condition: StopCondition = _UNSET):
     return b
 
 
-__all__ = ["WaitForBuilder", "wait_for"]
+__all__ = ['WaitForBuilder', 'wait_for']

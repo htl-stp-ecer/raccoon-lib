@@ -233,6 +233,121 @@ class after_cm(StopCondition):
         return (robot.odometry.get_path_length() - self._baseline_m) >= self._target_m
 
 
+class _AxisDisplacementCondition(StopCondition):
+    """Shared base: signed displacement along an axis fixed at ``start()``.
+
+    In **relative** mode (default), ``start()`` snapshots the robot's
+    world-frame pose *and* heading. Each ``check()`` then projects the
+    displacement-since-snapshot onto that snapshot heading — so
+    "forward"/"lateral" always mean forward/lateral *from where and how
+    the robot was pointing when this condition began*, regardless of any
+    turning that happens afterwards.
+
+    In **absolute** mode, the condition reads
+    ``get_distance_from_origin().forward / .lateral`` directly — axes
+    fixed to the odometry origin heading (last ``reset()``).
+    """
+
+    # Sign of the projection: +1 for forward, -1 means "use lateral".
+    # Concrete subclasses override _project().
+    _axis_name = ""  # for error messages
+
+    def __init__(self, cm: float, *, absolute: bool = False):
+        if not isinstance(cm, (int, float)):
+            raise TypeError(f"cm must be a number, got {type(cm).__name__}")
+        if cm == 0:
+            raise ValueError(f"cm must be nonzero, got {cm}")
+        self._target_m = cm / 100.0
+        self._absolute = absolute
+        self._origin_x_m: float = 0.0
+        self._origin_y_m: float = 0.0
+        self._cos_h: float = 1.0
+        self._sin_h: float = 0.0
+        self._started = False
+
+    def start(self, robot: "GenericRobot") -> None:
+        if not self._absolute:
+            pose = robot.odometry.get_pose()
+            self._origin_x_m = float(pose.position[0])
+            self._origin_y_m = float(pose.position[1])
+            heading = float(pose.heading)
+            self._cos_h = math.cos(heading)
+            self._sin_h = math.sin(heading)
+        self._started = True
+
+    def _displacement_m(self, robot: "GenericRobot") -> float:
+        if self._absolute:
+            return self._absolute_component(robot)
+        pose = robot.odometry.get_pose()
+        dx = float(pose.position[0]) - self._origin_x_m
+        dy = float(pose.position[1]) - self._origin_y_m
+        return self._project(dx, dy)
+
+    def _project(self, dx: float, dy: float) -> float:
+        raise NotImplementedError
+
+    def _absolute_component(self, robot: "GenericRobot") -> float:
+        raise NotImplementedError
+
+    def check(self, robot: "GenericRobot") -> bool:
+        if not self._started:
+            return False
+        delta = self._displacement_m(robot)
+        if self._target_m >= 0:
+            return delta >= self._target_m
+        return delta <= self._target_m
+
+
+class after_forward_cm(_AxisDisplacementCondition):
+    """Stop after traveling a forward/backward displacement.
+
+    Unlike :class:`after_cm` (which uses cumulative path length), this
+    measures the *signed forward component* of displacement relative to
+    the robot's heading at the moment this condition started. Any
+    turning that happens *after* ``start()`` does not rotate the axis —
+    it stays pinned to the original heading.
+
+    A positive ``cm`` triggers after the robot has moved that far
+    forward of its baseline pose; a negative ``cm`` triggers after
+    moving that far backward.
+
+    In absolute mode (``absolute=True``) the displacement is read
+    directly from ``get_distance_from_origin().forward`` — i.e. measured
+    from the odometry origin, projected onto the origin heading.
+    """
+
+    def _project(self, dx: float, dy: float) -> float:
+        return dx * self._cos_h + dy * self._sin_h
+
+    def _absolute_component(self, robot: "GenericRobot") -> float:
+        return robot.odometry.get_distance_from_origin().forward
+
+
+class after_lateral_cm(_AxisDisplacementCondition):
+    """Stop after traveling a lateral (sideways) displacement.
+
+    Measures the *signed lateral component* of displacement relative to
+    the robot's heading at the moment this condition started. Sign
+    convention matches ``DistanceFromOrigin.lateral``: positive values
+    point along the +lateral axis as defined there.
+
+    Only meaningful on drivetrains that support lateral motion (e.g.
+    mecanum / omni). On a differential drive this will stay near zero
+    unless the robot rotates and then drives forward — in which case
+    the world-frame displacement has a component sideways of the
+    original heading.
+
+    In absolute mode (``absolute=True``) the displacement is read
+    directly from ``get_distance_from_origin().lateral``.
+    """
+
+    def _project(self, dx: float, dy: float) -> float:
+        return -dx * self._sin_h + dy * self._cos_h
+
+    def _absolute_component(self, robot: "GenericRobot") -> float:
+        return robot.odometry.get_distance_from_origin().lateral
+
+
 class after_degrees(StopCondition):
     """Stop after turning a given angle (degrees).
 

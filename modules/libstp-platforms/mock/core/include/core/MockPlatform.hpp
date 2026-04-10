@@ -2,9 +2,12 @@
 #include <cstdint>
 #include <array>
 #include <atomic>
+#include <memory>
 #include <random>
 #include <chrono>
 #include <mutex>
+
+#include "libstp/sim/SimWorld.hpp"
 
 namespace platform::mock::core
 {
@@ -61,6 +64,22 @@ namespace platform::mock::core
         void setDigitalValue(uint8_t bit, bool value);
         void setIMUValues(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz);
 
+        // ─── Simulation integration ───
+        // When a SimWorld is attached, setMotor() commands are routed into it,
+        // OdometryBridge::readOdometry() reads its pose, and gyroZ() reports
+        // its yaw rate. Call tickSim(dt) to advance it. The mock HAL remains
+        // fully functional without a sim (all sim methods become no-ops).
+        void configureSim(const libstp::sim::RobotConfig& robot,
+                          const libstp::sim::SimMotorMap& motors,
+                          libstp::sim::WorldMap map,
+                          const libstp::sim::Pose2D& startPose);
+        void detachSim();
+        bool hasSim() const;
+        libstp::sim::SimWorld* sim();
+        libstp::sim::Pose2D simPose() const;
+        float simYawRate() const;
+        void tickSim(float dtSeconds);
+
     private:
         MockPlatform();
         ~MockPlatform() = default;
@@ -96,9 +115,12 @@ namespace platform::mock::core
         } m_imu;
         
         std::chrono::high_resolution_clock::time_point m_start_time;
-        
+
+        std::unique_ptr<libstp::sim::SimWorld> m_sim;
+
         void updateMotorSimulation();
         float addNoise(float value) const;
+        int motorCommandToSignedPercent(MotorDir dir, uint32_t value) const;
     };
 
     // Free functions keep mock driver code shaped similarly to wombat driver code.

@@ -1,0 +1,8 @@
+{
+  "format": "flowchart-table-map",
+  "version": 1,
+  "table": { "widthCm": 200, "heightCm": 100 },
+  "lines": [
+    { "kind": "line", "startX": 50, "startY": 50, "endX": 150, "endY": 50, "widthCm": 1.5 }
+  ]
+}
