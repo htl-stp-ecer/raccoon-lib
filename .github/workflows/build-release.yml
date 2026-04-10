@@ -63,7 +63,7 @@ jobs:
         id: version
         run: |
           WHL=$(find build-docker -name '*.whl' -type f -exec ls -t {} + | head -1)
-          VERSION=$(basename "$WHL" | sed 's/^libstp-//;s/-.*//')
+          VERSION=$(basename "$WHL" | sed 's/^raccoon-//;s/-.*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
@@ -157,7 +157,7 @@ jobs:
               cp -R docs/_build/doxygen/html/. docs-site/doxygen/
               cp docs/_build/dsl-steps.json docs-site/
               cd docs-site
-              zip -r ../libstp-docs-'"${{ steps.version.outputs.version }}"'.zip .
+              zip -r ../raccoon-docs-'"${{ steps.version.outputs.version }}"'.zip .
             '
 
       # --- Release ---
@@ -168,19 +168,19 @@ jobs:
           cp "${{ steps.version.outputs.wheel }}" release-bundle/
           cp install.py release-bundle/
           cd release-bundle
-          tar czf ../libstp-${{ steps.version.outputs.version }}.tar.gz *
+          tar czf ../raccoon-${{ steps.version.outputs.version }}.tar.gz *
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: libstp ${{ steps.version.outputs.version }}
+          name: raccoon ${{ steps.version.outputs.version }}
           body: |
             Automated release from commit ${{ github.sha }}.
 
             **Install on Raspberry Pi:**
             ```bash
-            tar xzf libstp-${{ steps.version.outputs.version }}.tar.gz
+            tar xzf raccoon-${{ steps.version.outputs.version }}.tar.gz
             RPI_HOST=<your-pi-ip> python3 install.py
             ```
 
@@ -195,14 +195,14 @@ jobs:
             Use `raccoon update` to install automatically.
 
             **View documentation:**
-            1. Download and unzip `libstp-docs-${{ steps.version.outputs.version }}.zip`
+            1. Download and unzip `raccoon-docs-${{ steps.version.outputs.version }}.zip`
             2. Run `python3 -m http.server 8000` in the extracted folder
             3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
           files: |
-            libstp-${{ steps.version.outputs.version }}.tar.gz
+            raccoon-${{ steps.version.outputs.version }}.tar.gz
             ${{ steps.version.outputs.wheel }}
             build-docker-stubs/*.whl
-            libstp-docs-${{ steps.version.outputs.version }}.zip
+            raccoon-docs-${{ steps.version.outputs.version }}.zip
 
       - name: Trigger documentation rebuild
         run: |
