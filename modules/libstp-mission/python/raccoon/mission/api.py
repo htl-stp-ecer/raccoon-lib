@@ -18,7 +18,16 @@ class MissionProtocol(Protocol):
 
 
 class Mission(ClassNameLogger, MissionProtocol):
-    """Base mission that delegates execution to a root step sequence."""
+    """Base mission that delegates execution to a root step sequence.
+
+    Subclasses may set ``time_budget`` (seconds) as a class attribute to
+    arm a per-mission deadline. If the mission exceeds its budget the
+    robot's ``WatchdogManager`` fires, cancels the main-mission task, and
+    routes through the normal shutdown path — the shutdown mission still
+    runs. Subsequent missions do not run after a budget expiry.
+    """
+
+    time_budget: Optional[float] = None
 
     def __str__(self):
         return self.__class__.__name__

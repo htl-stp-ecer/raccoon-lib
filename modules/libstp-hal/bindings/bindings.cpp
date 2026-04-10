@@ -17,7 +17,7 @@ PYBIND11_MODULE(hal, m) {
     m.doc() = "Python bindings for libstp-hal";
 
     // Motor exposes foundation::MotorCalibration, so load the sibling module first.
-    py::module::import("libstp.foundation");
+    py::module::import("raccoon.foundation");
 
     init_imu(m);
     init_analog(m);

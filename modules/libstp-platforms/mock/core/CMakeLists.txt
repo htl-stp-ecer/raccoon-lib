@@ -3,3 +3,4 @@ add_library(platform_core STATIC
 )
 
 target_include_directories(platform_core PUBLIC include)
+target_link_libraries(platform_core PUBLIC sim)

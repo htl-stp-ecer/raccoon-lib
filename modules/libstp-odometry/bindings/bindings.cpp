@@ -16,7 +16,7 @@ PYBIND11_MODULE(odometry, m)
     m.doc() = "Python bindings for libstp-odometry";
 
     // Ensure shared foundation types are registered before exposing IOdometry.
-    py::module_::import("libstp.foundation");
+    py::module_::import("raccoon.foundation");
 
     py::class_<libstp::odometry::IOdometry,
                 std::shared_ptr<libstp::odometry::IOdometry>>(m, "IOdometry")

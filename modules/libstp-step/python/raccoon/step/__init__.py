@@ -4,7 +4,8 @@ from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .resource import ResourceConflictError
 from .step_builder import StepBuilder
 from .condition import (
-    StopCondition, on_black, on_white, after_seconds, after_cm, after_degrees,
+    StopCondition, on_black, on_white, after_seconds, after_cm,
+    after_forward_cm, after_lateral_cm, after_degrees,
     on_digital, on_analog_above, on_analog_below, stall_detected, custom,
     over_line,
 )
@@ -30,6 +31,19 @@ from .wait_for_light import WaitForLight, WaitForLightLegacy
 from .wait_for_light_dsl import wait_for_light, wait_for_light_legacy
 from .timeout_dsl import timeout
 from .timeout_or import TimeoutOr, timeout_or
+from .watchdog import (
+    StartWatchdog,
+    FeedWatchdog,
+    StopWatchdog,
+    start_watchdog,
+    feed_watchdog,
+    stop_watchdog,
+)
+from .watchdog_manager import (
+    WatchdogManager,
+    WatchdogExpiredError,
+    get_watchdog_manager,
+)
 from .servo import *
 from .servo import __all__ as _servo_all
 from .motor import *
@@ -61,6 +75,15 @@ __all__ = [
     "timeout",
     "TimeoutOr",
     "timeout_or",
+    "StartWatchdog",
+    "FeedWatchdog",
+    "StopWatchdog",
+    "start_watchdog",
+    "feed_watchdog",
+    "stop_watchdog",
+    "WatchdogManager",
+    "WatchdogExpiredError",
+    "get_watchdog_manager",
     "dsl",
     "dsl_step",
     "DslMeta",
@@ -74,6 +97,8 @@ __all__ = [
     "on_white",
     "after_seconds",
     "after_cm",
+    "after_forward_cm",
+    "after_lateral_cm",
     "after_degrees",
     "on_digital",
     "on_analog_above",

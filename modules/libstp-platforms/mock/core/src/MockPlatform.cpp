@@ -1,6 +1,8 @@
 #include "core/MockPlatform.hpp"
+
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace platform::mock::core
 {
@@ -31,10 +33,25 @@ namespace platform::mock::core
     void MockPlatform::setMotor(uint8_t port, MotorDir dir, uint32_t value)
     {
         if (port >= m_motors.size()) return;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
         m_motors[port].direction = dir;
         m_motors[port].speed = value;
+
+        if (m_sim)
+        {
+            m_sim->setMotorCommand(port, motorCommandToSignedPercent(dir, value));
+        }
+    }
+
+    int MockPlatform::motorCommandToSignedPercent(MotorDir dir, uint32_t value) const
+    {
+        // Motor HAL encodes percent as duty = |percent| * 4, with dir giving
+        // the sign (CW = positive, CCW = negative). Recover the signed percent.
+        const int magnitude = static_cast<int>(value / 4u);
+        if (dir == MotorDir::CW) return magnitude;
+        if (dir == MotorDir::CCW) return -magnitude;
+        return 0;
     }
 
     float MockPlatform::getBemf(uint8_t port) const
@@ -92,6 +109,10 @@ namespace platform::mock::core
 
     float MockPlatform::getGyroZ() const
     {
+        if (m_sim)
+        {
+            return addNoise(m_sim->yawRateRadS());
+        }
         return addNoise(m_imu.gyro_z);
     }
 
@@ -191,5 +212,54 @@ namespace platform::mock::core
     float MockPlatform::addNoise(float value) const
     {
         return value + m_noise_dist(m_rng);
+    }
+
+    // ─── Simulation integration ───
+
+    void MockPlatform::configureSim(const libstp::sim::RobotConfig& robot,
+                                    const libstp::sim::SimMotorMap& motors,
+                                    libstp::sim::WorldMap map,
+                                    const libstp::sim::Pose2D& startPose)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_sim = std::make_unique<libstp::sim::SimWorld>();
+        m_sim->configure(robot, motors);
+        m_sim->setMap(std::move(map));
+        m_sim->setPose(startPose);
+    }
+
+    void MockPlatform::detachSim()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_sim.reset();
+    }
+
+    bool MockPlatform::hasSim() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_sim != nullptr;
+    }
+
+    libstp::sim::SimWorld* MockPlatform::sim() { return m_sim.get(); }
+
+    libstp::sim::Pose2D MockPlatform::simPose() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_sim) return {};
+        return m_sim->pose();
+    }
+
+    float MockPlatform::simYawRate() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_sim) return 0.0f;
+        return m_sim->yawRateRadS();
+    }
+
+    void MockPlatform::tickSim(float dtSeconds)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_sim) return;
+        m_sim->tick(dtSeconds);
     }
 }

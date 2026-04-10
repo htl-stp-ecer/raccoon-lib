@@ -1,0 +1,11 @@
+{
+  "format": "flowchart-table-map",
+  "version": 1,
+  "table": { "widthCm": 100, "heightCm": 100 },
+  "lines": [
+    { "kind": "wall", "startX": 30, "startY": 30, "endX": 70, "endY": 30, "widthCm": 0 },
+    { "kind": "wall", "startX": 70, "startY": 30, "endX": 70, "endY": 70, "widthCm": 0 },
+    { "kind": "wall", "startX": 70, "startY": 70, "endX": 30, "endY": 70, "widthCm": 0 },
+    { "kind": "wall", "startX": 30, "startY": 70, "endX": 30, "endY": 30, "widthCm": 0 }
+  ]
+}
