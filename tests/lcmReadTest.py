@@ -1,4 +1,4 @@
-from libstp.hal import AnalogSensor, Motor, Servo
+from raccoon.hal import AnalogSensor, Motor, Servo
 
 i = 0
 sensor = Motor(0)

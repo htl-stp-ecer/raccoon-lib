@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""install.py — Install libstp locally (stubs) or deploy to Raspberry Pi.
+"""install.py — Install raccoon locally (stubs) or deploy to Raspberry Pi.
 
 Usage:
     python install.py                         # Install stubs on this machine
@@ -9,7 +9,7 @@ Usage:
 Env vars (Pi deploy only):
     RPI_HOST      — Pi IP address (required for Pi deploy)
     RPI_USER      — Pi SSH user   (default: pi)
-    PROJECT_NAME  — Python import name (default: libstp)
+    PROJECT_NAME  — Python import name (default: raccoon)
     PYTHON_CMD    — Python command on Pi (default: python3)
 """
 
@@ -45,11 +45,11 @@ def install_stubs() -> None:
     script_dir = Path(__file__).resolve().parent
 
     # Look for stubs wheel next to this script, then in build-docker-stubs
-    stubs = glob.glob(str(script_dir / "libstp_stubs-*.whl"))
+    stubs = glob.glob(str(script_dir / "raccoon_stubs-*.whl"))
     if not stubs:
-        stubs = glob.glob(str(script_dir / "build-docker-stubs" / "libstp_stubs-*.whl"))
+        stubs = glob.glob(str(script_dir / "build-docker-stubs" / "raccoon_stubs-*.whl"))
     if not stubs:
-        print("Error: No libstp_stubs-*.whl found.")
+        print("Error: No raccoon_stubs-*.whl found.")
         print("  Run the build first, or download from a GitHub release.")
         sys.exit(1)
 
@@ -64,13 +64,13 @@ def install_stubs() -> None:
         print("⚠ pip install failed")
         sys.exit(1)
 
-    print("✓ libstp-stubs installed (type hints & IDE support)")
+    print("✓ raccoon-stubs installed (type hints & IDE support)")
 
 
 def deploy_to_pi() -> None:
     """Deploy the full ARM64 wheel to a Raspberry Pi."""
     script_dir = Path(__file__).resolve().parent
-    project_name = os.environ.get("PROJECT_NAME", "libstp")
+    project_name = os.environ.get("PROJECT_NAME", "raccoon")
     python_cmd = os.environ.get("PYTHON_CMD", "python3")
     rpi_user = os.environ.get("RPI_USER", "pi")
     rpi_host = os.environ["RPI_HOST"]

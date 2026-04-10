@@ -7,7 +7,7 @@ import pytest
 
 def libstp_available():
     try:
-        import libstp
+        import raccoon
         return True
     except ImportError:
         return False
@@ -15,7 +15,7 @@ def libstp_available():
 
 requires_libstp = pytest.mark.skipif(
     not libstp_available(),
-    reason="libstp native module not installed",
+    reason="raccoon native module not installed",
 )
 
 
@@ -25,7 +25,7 @@ requires_libstp = pytest.mark.skipif(
 
 
 def _make_step_classes():
-    from libstp.step.base import Step
+    from raccoon.step.base import Step
 
     class SlowStep(Step):
         """Step that sleeps for a given duration, tracking start/stop."""
@@ -89,7 +89,7 @@ class TestBackgroundBasic:
     @pytest.mark.asyncio
     async def test_background_does_not_block(self):
         """background() returns immediately while the step runs."""
-        from libstp.step.logic.background import background
+        from raccoon.step.logic.background import background
         SlowStep, _ = _make_step_classes()
 
         step = SlowStep(duration=0.5)
@@ -109,8 +109,8 @@ class TestBackgroundBasic:
     @pytest.mark.asyncio
     async def test_wait_for_background_all(self):
         """wait_for_background() blocks until all bg steps finish."""
-        from libstp.step.logic.background import background, wait_for_background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background, wait_for_background
+        from raccoon.step.sequential import seq
         SlowStep, _ = _make_step_classes()
 
         step_a = SlowStep(duration=0.1)
@@ -130,8 +130,8 @@ class TestBackgroundBasic:
     @pytest.mark.asyncio
     async def test_wait_for_background_by_name(self):
         """wait_for_background(name) blocks only for the named step."""
-        from libstp.step.logic.background import background, wait_for_background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background, wait_for_background
+        from raccoon.step.sequential import seq
         SlowStep, _ = _make_step_classes()
 
         fast = SlowStep(duration=0.05)
@@ -153,8 +153,8 @@ class TestBackgroundBasic:
     @pytest.mark.asyncio
     async def test_wait_for_already_done(self):
         """wait_for_background returns immediately if step already finished."""
-        from libstp.step.logic.background import background, wait_for_background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background, wait_for_background
+        from raccoon.step.sequential import seq
         SlowStep, _ = _make_step_classes()
 
         step = SlowStep(duration=0.01)
@@ -171,7 +171,7 @@ class TestBackgroundBasic:
     @pytest.mark.asyncio
     async def test_wait_for_nonexistent_name(self):
         """wait_for_background with unknown name returns immediately."""
-        from libstp.step.logic.background import wait_for_background
+        from raccoon.step.logic.background import wait_for_background
         robot = _make_robot()
         w = wait_for_background("does_not_exist")
         await w.run_step(robot)  # Should not raise
@@ -187,8 +187,8 @@ class TestBackgroundPreemption:
     @pytest.mark.asyncio
     async def test_foreground_preempts_background_on_conflict(self):
         """Foreground step cancels a background step using the same resource."""
-        from libstp.step.logic.background import background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background
+        from raccoon.step.sequential import seq
         SlowStep, InstantStep = _make_step_classes()
 
         bg_step = SlowStep(resources=frozenset({"drive"}), duration=5.0)
@@ -209,8 +209,8 @@ class TestBackgroundPreemption:
     @pytest.mark.asyncio
     async def test_no_preemption_without_conflict(self):
         """Background step continues when foreground uses different resource."""
-        from libstp.step.logic.background import background, wait_for_background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background, wait_for_background
+        from raccoon.step.sequential import seq
         SlowStep, InstantStep = _make_step_classes()
 
         bg_step = SlowStep(resources=frozenset({"servo:0"}), duration=0.1)
@@ -230,8 +230,8 @@ class TestBackgroundPreemption:
     @pytest.mark.asyncio
     async def test_wildcard_preemption(self):
         """servo:* foreground preempts servo:0 background."""
-        from libstp.step.logic.background import background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background
+        from raccoon.step.sequential import seq
         SlowStep, InstantStep = _make_step_classes()
 
         bg_step = SlowStep(resources=frozenset({"servo:0"}), duration=5.0)
@@ -251,8 +251,8 @@ class TestBackgroundPreemption:
     @pytest.mark.asyncio
     async def test_multiple_backgrounds_one_preempted(self):
         """Only the conflicting background step is preempted."""
-        from libstp.step.logic.background import background, wait_for_background
-        from libstp.step.sequential import seq
+        from raccoon.step.logic.background import background, wait_for_background
+        from raccoon.step.sequential import seq
         SlowStep, InstantStep = _make_step_classes()
 
         bg_drive = SlowStep(resources=frozenset({"drive"}), duration=5.0)
@@ -276,9 +276,9 @@ class TestBackgroundPreemption:
     @pytest.mark.asyncio
     async def test_background_does_not_preempt_background(self):
         """Background steps do not preempt each other via the preemption check."""
-        from libstp.step.logic.background import background
-        from libstp.step.sequential import seq
-        from libstp.step.resource import ResourceConflictError
+        from raccoon.step.logic.background import background
+        from raccoon.step.sequential import seq
+        from raccoon.step.resource import ResourceConflictError
         SlowStep, _ = _make_step_classes()
 
         bg1 = SlowStep(resources=frozenset({"drive"}), duration=0.5)
@@ -312,7 +312,7 @@ class TestBackgroundPreemption:
 @requires_libstp
 class TestBackgroundMeta:
     def test_signature_includes_inner_step(self):
-        from libstp.step.logic.background import Background
+        from raccoon.step.logic.background import Background
         SlowStep, _ = _make_step_classes()
         step = SlowStep(resources=frozenset({"drive"}), duration=1.0)
         bg = Background(step)
@@ -321,26 +321,26 @@ class TestBackgroundMeta:
         assert "SlowStep" in sig
 
     def test_signature_includes_name(self):
-        from libstp.step.logic.background import Background
+        from raccoon.step.logic.background import Background
         SlowStep, _ = _make_step_classes()
         bg = Background(SlowStep(), name="my_bg")
         assert "my_bg" in bg._generate_signature()
 
     def test_collected_resources_empty(self):
         """Background reports empty resources (preemptable, not exclusive)."""
-        from libstp.step.logic.background import Background
+        from raccoon.step.logic.background import Background
         SlowStep, _ = _make_step_classes()
         step = SlowStep(resources=frozenset({"drive", "servo:0"}))
         bg = Background(step)
         assert bg.collected_resources() == frozenset()
 
     def test_wait_signature(self):
-        from libstp.step.logic.background import WaitForBackground
+        from raccoon.step.logic.background import WaitForBackground
         assert "all" in WaitForBackground()._generate_signature()
         assert "my_step" in WaitForBackground("my_step")._generate_signature()
 
     def test_type_validation(self):
-        from libstp.step.logic.background import Background
+        from raccoon.step.logic.background import Background
         with pytest.raises(TypeError):
             Background("not a step")
 
@@ -354,7 +354,7 @@ class TestBackgroundMeta:
 class TestBackgroundManager:
     @pytest.mark.asyncio
     async def test_active_count(self):
-        from libstp.step.background_manager import BackgroundManager
+        from raccoon.step.background_manager import BackgroundManager
 
         mgr = BackgroundManager()
         assert mgr.active_count == 0
@@ -373,7 +373,7 @@ class TestBackgroundManager:
 
     @pytest.mark.asyncio
     async def test_preempt_cancels_conflicting(self):
-        from libstp.step.background_manager import BackgroundManager
+        from raccoon.step.background_manager import BackgroundManager
 
         mgr = BackgroundManager()
 
@@ -390,7 +390,7 @@ class TestBackgroundManager:
 
     @pytest.mark.asyncio
     async def test_preempt_leaves_non_conflicting(self):
-        from libstp.step.background_manager import BackgroundManager
+        from raccoon.step.background_manager import BackgroundManager
 
         mgr = BackgroundManager()
 
@@ -411,7 +411,7 @@ class TestBackgroundManager:
 
     @pytest.mark.asyncio
     async def test_wait_all(self):
-        from libstp.step.background_manager import BackgroundManager
+        from raccoon.step.background_manager import BackgroundManager
 
         mgr = BackgroundManager()
         results = []
@@ -435,7 +435,7 @@ class TestBackgroundManager:
 
     @pytest.mark.asyncio
     async def test_wait_for_name(self):
-        from libstp.step.background_manager import BackgroundManager
+        from raccoon.step.background_manager import BackgroundManager
 
         mgr = BackgroundManager()
         done = False

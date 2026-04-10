@@ -56,7 +56,7 @@ function(register_libstp_module module_name is_interface additional_libraries)
                     target_link_options(${module_name} PRIVATE -undefined dynamic_lookup)
                 endif ()
                 # Install shared libs alongside Python modules so $ORIGIN works.
-                install(TARGETS ${module_name} DESTINATION libstp)
+                install(TARGETS ${module_name} DESTINATION raccoon)
             endif ()
         endif ()
     endif ()
@@ -81,15 +81,15 @@ function(register_libstp_module module_name is_interface additional_libraries)
         if (additional_libraries)
             target_link_libraries(${PY_LIB_NAME} PRIVATE ${additional_libraries})
         endif ()
-        install(TARGETS ${PY_LIB_NAME} DESTINATION libstp)
+        install(TARGETS ${PY_LIB_NAME} DESTINATION raccoon)
     endif ()
 
-    set(_PY_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/python/libstp")
+    set(_PY_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/python/raccoon")
     if(EXISTS "${_PY_PKG_DIR}")
         message(STATUS "Installing Python package fragment from ${_PY_PKG_DIR}")
         install(
                 DIRECTORY "${_PY_PKG_DIR}/"
-                DESTINATION libstp
+                DESTINATION raccoon
                 FILES_MATCHING
                 PATTERN "*.py"
                 PATTERN "__pycache__" EXCLUDE

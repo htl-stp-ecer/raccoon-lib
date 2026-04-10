@@ -1,11 +1,11 @@
-"""Tests for libstp.motion bindings."""
+"""Tests for raccoon.motion bindings."""
 import pytest
 
 
 def test_motion_module_import():
     """Test that motion module can be imported."""
     try:
-        from libstp import motion
+        from raccoon import motion
         assert motion is not None
     except ImportError:
         pytest.skip("motion module not available")

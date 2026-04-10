@@ -128,9 +128,15 @@ target_compile_features(_core PRIVATE cxx_std_23)
 target_include_directories(_core PRIVATE ${eigen_SOURCE_DIR})
 target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
 
-install(TARGETS _core DESTINATION libstp)
+install(TARGETS _core DESTINATION raccoon)
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp/"
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/raccoon/"
+        DESTINATION raccoon
+        FILES_MATCHING PATTERN "*.py")
+
+# Compatibility shim: install python/libstp_compat/libstp -> top-level 'libstp'
+# package that emits a DeprecationWarning and aliases libstp.* to raccoon.*
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp_compat/libstp/"
         DESTINATION libstp
         FILES_MATCHING PATTERN "*.py")
 

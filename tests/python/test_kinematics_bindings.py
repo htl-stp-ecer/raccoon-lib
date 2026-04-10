@@ -1,11 +1,11 @@
-"""Tests for libstp.kinematics bindings."""
+"""Tests for raccoon.kinematics bindings."""
 import pytest
 
 
 def test_kinematics_module_import():
     """Test that kinematics module can be imported."""
     try:
-        from libstp import kinematics
+        from raccoon import kinematics
         assert kinematics is not None
     except ImportError:
         pytest.skip("kinematics module not available")

@@ -39,7 +39,7 @@ autoapi_type = 'python'
 _base = os.path.dirname(__file__)
 
 # Merge all Python sources into a single directory tree so autoapi sees
-# 'libstp' and 'raccoon_transport' as top-level packages (not 'python.libstp').
+# 'raccoon' and 'raccoon_transport' as top-level packages (not 'python.raccoon').
 _merged_dir = os.path.join(_base, '_autoapi_src')
 if os.path.exists(_merged_dir):
     shutil.rmtree(_merged_dir)
@@ -98,9 +98,9 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'libstp'
-copyright = '2025, libstp contributors'
-author = 'libstp contributors'
+project = 'raccoon'
+copyright = '2025, raccoon contributors'
+author = 'raccoon contributors'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -252,7 +252,7 @@ html_static_path = []
 #html_search_scorer = 'scorer.js'
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'libstpdoc'
+htmlhelp_basename = 'raccoondoc'
 
 # -- Options for LaTeX output ---------------------------------------------
 
@@ -274,8 +274,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'libstp.tex', 'libstp Documentation',
-     'libstp contributors', 'manual'),
+    (master_doc, 'raccoon.tex', 'raccoon Documentation',
+     'raccoon contributors', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -304,7 +304,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'libstp', 'libstp Documentation',
+    (master_doc, 'raccoon', 'raccoon Documentation',
      [author], 1)
 ]
 
@@ -318,8 +318,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'libstp', 'libstp Documentation',
-     author, 'libstp', 'Robotics library for Botball',
+    (master_doc, 'raccoon', 'raccoon Documentation',
+     author, 'raccoon', 'Robotics library for Botball',
      'Miscellaneous'),
 ]
 
