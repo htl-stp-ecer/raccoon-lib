@@ -19,6 +19,7 @@ from raccoon.hal import AnalogSensor
 from .annotation import dsl_step
 from raccoon.ui import UIStep
 from raccoon.ui.screens.wfl import WFLDetectScreen
+from raccoon.ui.step import set_setup_timer_paused
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -194,6 +195,7 @@ class WaitForLight(UIStep):
                     test_mode = True
                     consecutive = 0
                     last_ui = 0.0  # force immediate screen refresh
+                    set_setup_timer_paused(False)
                     self.info("WFL: returning to test mode via UI")
 
             if test_mode:
@@ -203,6 +205,7 @@ class WaitForLight(UIStep):
                     test_mode = False
                     consecutive = 0
                     needs_clear = True  # must see above-threshold before real trigger
+                    set_setup_timer_paused(True)
                     self.info(f"WFL: armed (baseline={kf.estimate:.0f})")
                     screen.status = "ARMED"
                     screen.status_color = "green"

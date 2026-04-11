@@ -196,7 +196,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         if dev_mode:
             self.info("Dev mode: waiting for button press")
             from raccoon.step import wait_for_button
-            await wait_for_button().run_step(self)
+            await wait_for_button("Start by clicking the button").run_step(self)
         else:
             sensor = getattr(self.defs, "wait_for_light_sensor", None)
             if sensor is None:
@@ -299,13 +299,23 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
         initialize_timer() # reset clock to 0
         if setup_mission is not None:
+            from raccoon.mission.api import SetupMission
+            from contextlib import nullcontext
+            timer_ctx = (
+                setup_mission.setup_timer_context()
+                if isinstance(setup_mission, SetupMission)
+                else nullcontext()
+            )
             self.info("Running setup mission")
-            await setup_mission.run(self)
-
-        # Pre-start gate (wait for light or button)
-        if setup_mission is not None and setup_mission._custom_pre_start_gate:
-            self.info("Using setup mission's custom pre-start gate")
-            await setup_mission.pre_start_gate(self)
+            async with timer_ctx:
+                await setup_mission.run(self)
+                # Pre-start gate runs inside the timer context so the WFL
+                # screen (and any custom gate UI) still shows the countdown.
+                if setup_mission._custom_pre_start_gate:
+                    self.info("Using setup mission's custom pre-start gate")
+                    await setup_mission.pre_start_gate(self)
+                else:
+                    await self._pre_start_gate()
         else:
             await self._pre_start_gate()
 

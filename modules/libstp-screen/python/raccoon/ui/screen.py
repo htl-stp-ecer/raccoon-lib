@@ -164,13 +164,22 @@ class UIScreen(ABC, Generic[T], ClassNameLogger):
 
     # --- Internal Methods ---
 
-    def _to_dict(self) -> dict:
-        """Serialize screen to JSON for LCM."""
-        return {
+    def _to_dict(self, setup_timer: Optional[dict] = None) -> dict:
+        """Serialize screen to JSON for LCM.
+
+        Args:
+            setup_timer: Pre-built ``{"seconds": N, "paused": bool}`` dict
+                computed by ``UIStep._render_screen`` from the active
+                ``_SetupTimerState``.  ``None`` means no timer is shown.
+        """
+        payload: dict = {
             "screen": "dynamic",
             "title": self.title,
             "body": self.build().to_dict(),
         }
+        if setup_timer is not None:
+            payload["setup_timer"] = setup_timer
+        return payload
 
     async def _dispatch_event(self, event: dict) -> None:
         """Dispatch an event to the appropriate handler."""

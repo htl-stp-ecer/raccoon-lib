@@ -8,11 +8,50 @@ from __future__ import annotations
 from abc import ABC
 from typing import Optional, TypeVar, TYPE_CHECKING, Callable, Awaitable, Any, List, Union
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 import asyncio
 import json
 
 import time
 from raccoon_transport import Transport
+
+
+class _SetupTimerState:
+    """Mutable state for the active setup-phase countdown.
+
+    Stored in a ContextVar so that every UIStep rendered during a
+    SetupMission (including the WFL gate) can read the true remaining
+    time without requiring per-second LCM messages.
+    """
+    __slots__ = ("duration", "start_monotonic", "paused")
+
+    def __init__(self, duration: int) -> None:
+        self.duration = duration
+        self.start_monotonic = time.monotonic()
+        self.paused = False
+
+    @property
+    def remaining(self) -> int:
+        """Remaining seconds — negative once overtime begins."""
+        elapsed = time.monotonic() - self.start_monotonic
+        return round(self.duration - elapsed)
+
+
+# Set by SetupMission.setup_timer_context(); None outside a setup phase.
+_active_setup_timer: ContextVar[Optional[_SetupTimerState]] = ContextVar(
+    "active_setup_timer", default=None
+)
+
+
+def set_setup_timer_paused(paused: bool) -> None:
+    """Pause or resume the setup-timer countdown.
+
+    No-op when called outside a SetupMission (e.g. in a regular mission
+    or in tests).  Used by WaitForLight to freeze the timer while armed.
+    """
+    state = _active_setup_timer.get()
+    if state is not None:
+        state.paused = paused
 from raccoon.step.base import Step
 from raccoon.button import is_pressed
 from .raccoon.screen_render_t import screen_render_t
@@ -105,7 +144,14 @@ class UIStep(Step, ABC):
         msg = screen_render_t()
         msg.timestamp = int(time.time() * 1_000_000)
         msg.screen_name = self._SCREEN_NAME
-        msg.entries = json.dumps(screen._to_dict())
+
+        timer_state = _active_setup_timer.get()
+        if timer_state is not None and timer_state.duration > 0:
+            setup_timer = {"seconds": timer_state.remaining, "paused": timer_state.paused}
+        else:
+            setup_timer = None
+
+        msg.entries = json.dumps(screen._to_dict(setup_timer=setup_timer))
         self.debug(f"[LCM TX] screen_render -> {screen.__class__.__name__}: {screen.title}")
         self._transport.publish("raccoon/screen_render", msg)
         self._ui_active = True
