@@ -212,6 +212,7 @@ class WFLDetectScreen(UIScreen[None]):
         self.test_count: int = 0
         self.hint: str = ""
         self.request_test_mode: bool = False
+        self.request_reinit: bool = False
 
     def build(self) -> Widget:
         # Big full-screen TRIGGERED indicator
@@ -254,7 +255,10 @@ class WFLDetectScreen(UIScreen[None]):
                     ("Threshold", f"{self.threshold:.0f}", "white"),
                 ]),
                 Spacer(12),
-                Button("test", "Back to Test Mode", style="secondary"),
+                Row(children=[
+                    Button("test", "Back to Test Mode", style="secondary"),
+                    Button("reinit", "Reinit Kalman", style="warning"),
+                ], spacing=8),
             ])
 
         children: list[Widget] = [
@@ -280,6 +284,12 @@ class WFLDetectScreen(UIScreen[None]):
         if self.hint:
             children += [Spacer(12), HintBox(self.hint)]
 
+        if self.status != "WARMING UP":
+            children += [
+                Spacer(16),
+                Button("reinit", "Reinit Kalman", style="warning"),
+            ]
+
         return Center(children=[
             Column(children=children, align="center", spacing=0),
         ])
@@ -287,3 +297,7 @@ class WFLDetectScreen(UIScreen[None]):
     @on_click("test")
     async def on_test(self):
         self.request_test_mode = True
+
+    @on_click("reinit")
+    async def on_reinit(self):
+        self.request_reinit = True

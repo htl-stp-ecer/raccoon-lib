@@ -22,19 +22,40 @@ class _SetupTimerState:
     Stored in a ContextVar so that every UIStep rendered during a
     SetupMission (including the WFL gate) can read the true remaining
     time without requiring per-second LCM messages.
+
+    Pausing shifts ``start_monotonic`` forward on resume so elapsed time
+    genuinely freezes during the pause rather than merely hiding it in
+    the UI.
     """
-    __slots__ = ("duration", "start_monotonic", "paused")
+    __slots__ = ("duration", "start_monotonic", "paused", "_pause_start")
 
     def __init__(self, duration: int) -> None:
         self.duration = duration
         self.start_monotonic = time.monotonic()
         self.paused = False
+        self._pause_start = 0.0
 
     @property
     def remaining(self) -> int:
         """Remaining seconds — negative once overtime begins."""
-        elapsed = time.monotonic() - self.start_monotonic
+        now = self._pause_start if self.paused else time.monotonic()
+        elapsed = now - self.start_monotonic
         return round(self.duration - elapsed)
+
+    def pause(self) -> None:
+        if not self.paused:
+            self._pause_start = time.monotonic()
+            self.paused = True
+
+    def resume(self) -> None:
+        if self.paused:
+            self.start_monotonic += time.monotonic() - self._pause_start
+            self.paused = False
+
+    def reset(self) -> None:
+        """Restart the countdown from full duration and unpause."""
+        self.start_monotonic = time.monotonic()
+        self.paused = False
 
 
 # Set by SetupMission.setup_timer_context(); None outside a setup phase.
@@ -50,8 +71,22 @@ def set_setup_timer_paused(paused: bool) -> None:
     or in tests).  Used by WaitForLight to freeze the timer while armed.
     """
     state = _active_setup_timer.get()
+    if state is None:
+        return
+    if paused:
+        state.pause()
+    else:
+        state.resume()
+
+
+def reset_setup_timer() -> None:
+    """Restart the setup-timer countdown from its full duration.
+
+    No-op outside a SetupMission.
+    """
+    state = _active_setup_timer.get()
     if state is not None:
-        state.paused = paused
+        state.reset()
 from raccoon.step.base import Step
 from raccoon.button import is_pressed
 from .raccoon.screen_render_t import screen_render_t
