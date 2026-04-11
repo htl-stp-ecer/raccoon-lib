@@ -4,6 +4,7 @@ register_libstp_test(test_sim
         test_worldmap.cpp
         test_collision.cpp
         test_simworld.cpp
+        test_sensors.cpp
     LIBS
         sim
 )
@@ -14,6 +15,7 @@ if(DRIVER_BUNDLE STREQUAL "mock")
     register_libstp_test(test_sim_mock_integration
         SOURCES
             test_mock_integration.cpp
+            test_autotick.cpp
         LIBS
             sim
             platform_core

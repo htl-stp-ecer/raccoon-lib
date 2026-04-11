@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <random>
 #include <chrono>
@@ -34,6 +35,11 @@ namespace platform::mock::core
 
         // Motor control
         void setMotor(uint8_t port, MotorDir dir, uint32_t value);
+        /// Closed-loop velocity command path: signed BEMF integer units.
+        /// Distinguished from setMotor() because the unit is different
+        /// (BEMF ticks/s, not duty %), and the sim needs to interpret it
+        /// through the motor calibration rather than as a duty.
+        void setMotorVelocity(uint8_t port, int signedBemfUnits);
         float getBemf(uint8_t port) const;
         
         // Servo control
@@ -77,8 +83,43 @@ namespace platform::mock::core
         bool hasSim() const;
         libstp::sim::SimWorld* sim();
         libstp::sim::Pose2D simPose() const;
+
+        /// Pose relative to the last `resetSimOrigin()` call, expressed in the
+        /// frame of the original heading. Mirrors how a real STM32 coprocessor
+        /// reports its locally-integrated pose: the value zeroes on reset and
+        /// climbs from there. Returned pose is in centimeters / radians.
+        libstp::sim::Pose2D simRelativePose() const;
+
+        /// Capture the current ground-truth sim pose as the origin for
+        /// `simRelativePose()`. Equivalent to telling the coprocessor to zero
+        /// its integrator.
+        void resetSimOrigin();
+
         float simYawRate() const;
         void tickSim(float dtSeconds);
+
+        /// Auto-tick mode: when enabled, every call into the mock HAL that
+        /// reads sim state (getAnalog, OdometryBridge::readOdometry, gyroZ)
+        /// first advances the sim by the wall-clock delta since the last tick.
+        /// Disabled by default so C++ tests stay deterministic with explicit
+        /// tickSim() calls.
+        void setAutoTickEnabled(bool enabled);
+        bool isAutoTickEnabled() const;
+
+        /// Replace the wall-clock source used by auto-tick. Returns seconds.
+        /// Default is monotonic steady_clock. Unit tests can inject a fake
+        /// clock to freeze or advance time deterministically.
+        using ClockFn = std::function<double()>;
+        void setClockSource(ClockFn clock);
+
+        /// Cap on how far a single auto-tick advances the sim — prevents a
+        /// long pause (e.g. breakpoint, slow test setup) from teleporting
+        /// the robot. Default 50 ms.
+        void setAutoTickMaxStep(float maxDtSeconds);
+
+        /// Invoked from query paths (internal). Advances sim by clock delta
+        /// when auto-tick is enabled, else no-op. Safe to call with no sim.
+        void autoTickIfEnabled();
 
     private:
         MockPlatform();
@@ -117,10 +158,16 @@ namespace platform::mock::core
         std::chrono::high_resolution_clock::time_point m_start_time;
 
         std::unique_ptr<libstp::sim::SimWorld> m_sim;
+        libstp::sim::Pose2D m_simOrigin{};
+        bool m_autoTick{false};
+        ClockFn m_clock;
+        double m_lastTickTime{0.0};
+        float m_autoTickMaxStep{0.05f};
 
         void updateMotorSimulation();
         float addNoise(float value) const;
         int motorCommandToSignedPercent(MotorDir dir, uint32_t value) const;
+        void autoTickLocked();  // caller holds m_mutex
     };
 
     // Free functions keep mock driver code shaped similarly to wombat driver code.

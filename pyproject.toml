@@ -33,6 +33,9 @@ classifiers = [
 [project.optional-dependencies]
 test = ["pytest"]
 
+[project.entry-points.pytest11]
+raccoon_testing = "raccoon.testing.pytest_plugin"
+
 
 [tool.scikit-build]
 wheel.expand-macos-universal-tags = true

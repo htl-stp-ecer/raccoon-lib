@@ -316,4 +316,36 @@ namespace libstp::sim::collision
         }
         return false;
     }
+
+    float raycastDistanceCm(
+        float originX,
+        float originY,
+        float angleRad,
+        float maxDistanceCm,
+        const std::vector<MapSegment>& walls)
+    {
+        const float dx = std::cos(angleRad);
+        const float dy = std::sin(angleRad);
+        float bestT = maxDistanceCm;
+
+        // Parametric ray-vs-segment intersection.
+        // Ray:     (ox + t·dx, oy + t·dy), t ≥ 0
+        // Segment: (sx + u·ex, sy + u·ey), u ∈ [0, 1]
+        for (const auto& wall : walls)
+        {
+            const float ex = wall.endX - wall.startX;
+            const float ey = wall.endY - wall.startY;
+            const float denom = dx * ey - dy * ex;
+            if (std::abs(denom) < kEps) continue;  // parallel
+
+            const float sx = wall.startX - originX;
+            const float sy = wall.startY - originY;
+            const float t = (sx * ey - sy * ex) / denom;
+            const float u = (sx * dy - sy * dx) / denom;
+            if (t < 0.0f || t > bestT) continue;
+            if (u < 0.0f || u > 1.0f) continue;
+            bestT = t;
+        }
+        return bestT;
+    }
 }

@@ -53,11 +53,9 @@ void libstp::hal::motor::Motor::setVelocity(const int velocity)
 {
     const int directionVelocity = inverted_ ? -velocity : velocity;
     LIBSTP_LOG_INFO("Mock Motor port={} setVelocity={} inverted={}", port_, velocity, inverted_);
-    // Mock: just set PWM proportional to velocity for simulation
-    const auto dir = directionVelocity >= 0
-        ? platform::mock::core::MotorDir::CW
-        : platform::mock::core::MotorDir::CCW;
-    platform::mock::core::setMotor(port_, dir, static_cast<uint32_t>(std::abs(directionVelocity)));
+    // Closed-loop velocity command — uses the BEMF-units path so the sim can
+    // interpret it via the motor calibration instead of as a duty %.
+    platform::mock::core::MockPlatform::instance().setMotorVelocity(port_, directionVelocity);
 }
 
 void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goalPosition)

@@ -24,9 +24,9 @@ class TimeoutOr(Step):
         if seconds <= 0:
             raise ValueError(f"Timeout duration must be positive: {seconds}")
 
-        self.step = step
+        self.step = step.resolve()
         self.seconds = float(seconds)
-        self.fallback = fallback
+        self.fallback = fallback.resolve()
 
     def collected_resources(self) -> frozenset[str]:
         return self.step.collected_resources() | self.fallback.collected_resources()

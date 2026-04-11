@@ -27,7 +27,8 @@ PYBIND11_MODULE(kinematics_differential, m)
              py::arg("right_motor"),
              py::arg("wheelbase"),
              py::arg("wheel_radius"),
-             py::keep_alive<1, 2>())
+             py::keep_alive<1, 2>(),
+             py::keep_alive<1, 3>())
         .def("wheel_count", &libstp::kinematics::differential::DifferentialKinematics::wheelCount)
         .def("apply_command", &libstp::kinematics::differential::DifferentialKinematics::applyCommand,
              py::arg("cmd"), py::arg("dt"))

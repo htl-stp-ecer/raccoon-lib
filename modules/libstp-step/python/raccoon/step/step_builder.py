@@ -36,6 +36,7 @@ class StepBuilder(Step):
         super().__init__()
         self._builder_anomaly_callback: Optional[StepAnomalyCallback] = None
         self._builder_skip_timing: bool = False
+        self._resolved: Optional[Step] = None
 
     def on_anomaly(self, callback_or_step: "Union[StepAnomalyCallback, Step]") -> "StepBuilder":
         """Register a callback or step invoked when a timing anomaly is detected.
@@ -76,15 +77,37 @@ class StepBuilder(Step):
         """Construct the real Step from collected parameters."""
         raise NotImplementedError
 
+    def resolve(self) -> Step:
+        """Build the underlying Step and apply any chained options.
+
+        Idempotent — composite constructors call this to replace a builder
+        with its real Step at validation time, so resource conflict checks
+        and signature lookups see the actual underlying step rather than
+        an empty builder placeholder. Subsequent calls return the cached
+        instance, so this is safe even if a builder ends up reachable from
+        multiple parents.
+
+        Once a builder has been resolved, mutating it via ``on_anomaly()``
+        or ``skip_timing()`` is a no-op against the cached step — call
+        those before placing the builder inside a composite.
+        """
+        if self._resolved is None:
+            step = self._build()
+            if self._builder_anomaly_callback is not None:
+                step._anomaly_callback = self._builder_anomaly_callback
+            if self._builder_skip_timing:
+                step._skip_timing = True
+            self._resolved = step
+        return self._resolved
+
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        """Build the step, transfer builder options, and execute it."""
-        step = self._build()
-        if self._builder_anomaly_callback is not None:
-            step._anomaly_callback = self._builder_anomaly_callback
-        if self._builder_skip_timing:
-            step._skip_timing = True
-        await step.run_step(robot)
+        """Execute via the resolved underlying step.
+
+        Composites resolve their children eagerly, so this path is only
+        reached when a builder is run directly (e.g. as the root of a
+        mission's ``sequence()``).
+        """
+        await self.resolve().run_step(robot)
 
     def _generate_signature(self) -> str:
-        step = self._build()
-        return step._generate_signature()
+        return self.resolve()._generate_signature()

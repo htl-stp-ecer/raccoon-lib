@@ -64,10 +64,13 @@ class IfThen(Step):
             )
 
         self.condition = condition
-        self.then_step = then_step
-        self.else_step = else_step
+        self.then_step = then_step.resolve()
+        self.else_step = else_step.resolve() if else_step is not None else None
 
-        branches = [then_step] if else_step is None else [then_step, else_step]
+        branches = (
+            [self.then_step] if self.else_step is None
+            else [self.then_step, self.else_step]
+        )
         validate_no_overlap(branches, context="IfThen")
 
     def collected_resources(self) -> frozenset[str]:

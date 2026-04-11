@@ -51,7 +51,7 @@ class DoUntilCheckpoint(Step):
         if not isinstance(step, StepProtocol):
             raise TypeError(f"step must be a Step, got {type(step).__name__}")
         self.checkpoint = float(checkpoint)
-        self.step = step
+        self.step = step.resolve()
 
     def collected_resources(self) -> frozenset[str]:
         return self.step.collected_resources()

@@ -37,7 +37,7 @@ class LoopForever(Step):
         if not isinstance(step, StepProtocol):
             raise TypeError(f"Expected step to be a Step instance, got {type(step)}")
 
-        self.step = step
+        self.step = step.resolve()
 
     def collected_resources(self) -> frozenset[str]:
         return self.step.collected_resources()
@@ -88,7 +88,7 @@ class LoopFor(Step):
         if not isinstance(iterations, int) or iterations <= 0:
             raise ValueError(f"Iterations must be a positive integer, got {iterations}")
 
-        self.step = step
+        self.step = step.resolve()
         self.iterations = iterations
 
     def collected_resources(self) -> frozenset[str]:

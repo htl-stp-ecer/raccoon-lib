@@ -6,10 +6,21 @@
 
 namespace platform::mock::core
 {
+    namespace
+    {
+        double defaultClockSeconds()
+        {
+            using clock = std::chrono::steady_clock;
+            static const auto origin = clock::now();
+            return std::chrono::duration<double>(clock::now() - origin).count();
+        }
+    }
+
     MockPlatform::MockPlatform()
         : m_rng(std::chrono::steady_clock::now().time_since_epoch().count())
         , m_noise_dist(0.0f, 0.01f)  // Small amount of noise
         , m_start_time(std::chrono::high_resolution_clock::now())
+        , m_clock(&defaultClockSeconds)
     {
         // Initialize with realistic default values
         std::fill(m_analog_values.begin(), m_analog_values.end(), 512);  // Mid-range ADC value
@@ -44,6 +55,22 @@ namespace platform::mock::core
         }
     }
 
+    void MockPlatform::setMotorVelocity(uint8_t port, int signedBemfUnits)
+    {
+        if (port >= m_motors.size()) return;
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_motors[port].direction =
+            signedBemfUnits > 0 ? MotorDir::CW :
+            signedBemfUnits < 0 ? MotorDir::CCW : MotorDir::Off;
+        m_motors[port].speed = static_cast<uint32_t>(std::abs(signedBemfUnits));
+
+        if (m_sim)
+        {
+            m_sim->setMotorVelocityCommand(port, signedBemfUnits);
+        }
+    }
+
     int MockPlatform::motorCommandToSignedPercent(MotorDir dir, uint32_t value) const
     {
         // Motor HAL encodes percent as duty = |percent| * 4, with dir giving
@@ -57,8 +84,15 @@ namespace platform::mock::core
     float MockPlatform::getBemf(uint8_t port) const
     {
         if (port >= m_motors.size()) return 0.0f;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_sim)
+        {
+            // Live BEMF derived from the sim's actual wheel angular velocity.
+            // Lets the chassis velocity controller close the loop against
+            // the same physics that's integrating the pose.
+            return static_cast<float>(m_sim->motorBemf(port));
+        }
         return m_motors[port].bemf;
     }
 
@@ -74,9 +108,17 @@ namespace platform::mock::core
     uint16_t MockPlatform::getAnalog(uint8_t port) const
     {
         if (port >= m_analog_values.size()) return 0;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
-        // Add some random variation to simulate real sensor readings
+        const_cast<MockPlatform*>(this)->autoTickLocked();
+        if (m_sim)
+        {
+            if (auto sampled = m_sim->readAnalog(port))
+            {
+                return *sampled;
+            }
+        }
+        // Fall through to the stock static value when no sim sensor is bound.
         float base_value = static_cast<float>(m_analog_values[port]);
         float noisy_value = base_value + addNoise(base_value) * 10.0f;  // Small variation
         return static_cast<uint16_t>(std::clamp(noisy_value, 0.0f, 1023.0f));
@@ -109,6 +151,10 @@ namespace platform::mock::core
 
     float MockPlatform::getGyroZ() const
     {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            const_cast<MockPlatform*>(this)->autoTickLocked();
+        }
         if (m_sim)
         {
             return addNoise(m_sim->yawRateRadS());
@@ -226,6 +272,9 @@ namespace platform::mock::core
         m_sim->configure(robot, motors);
         m_sim->setMap(std::move(map));
         m_sim->setPose(startPose);
+        // Default origin = the start pose, so a fresh sim starts at relative
+        // (0, 0, 0). Subsequent odometry resets recapture the live pose.
+        m_simOrigin = startPose;
     }
 
     void MockPlatform::detachSim()
@@ -249,6 +298,29 @@ namespace platform::mock::core
         return m_sim->pose();
     }
 
+    libstp::sim::Pose2D MockPlatform::simRelativePose() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_sim) return {};
+        const auto p = m_sim->pose();
+        const float dx = p.x - m_simOrigin.x;
+        const float dy = p.y - m_simOrigin.y;
+        const float c = std::cos(m_simOrigin.theta);
+        const float s = std::sin(m_simOrigin.theta);
+        libstp::sim::Pose2D rel{};
+        rel.x = dx * c + dy * s;
+        rel.y = -dx * s + dy * c;
+        rel.theta = libstp::sim::normalizeAngle(p.theta - m_simOrigin.theta);
+        return rel;
+    }
+
+    void MockPlatform::resetSimOrigin()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_sim) return;
+        m_simOrigin = m_sim->pose();
+    }
+
     float MockPlatform::simYawRate() const
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -261,5 +333,49 @@ namespace platform::mock::core
         std::lock_guard<std::mutex> lock(m_mutex);
         if (!m_sim) return;
         m_sim->tick(dtSeconds);
+    }
+
+    void MockPlatform::setAutoTickEnabled(bool enabled)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_autoTick = enabled;
+        m_lastTickTime = m_clock ? m_clock() : 0.0;
+    }
+
+    bool MockPlatform::isAutoTickEnabled() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_autoTick;
+    }
+
+    void MockPlatform::setClockSource(ClockFn clock)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_clock = std::move(clock);
+        if (!m_clock) m_clock = &defaultClockSeconds;
+        m_lastTickTime = m_clock();
+    }
+
+    void MockPlatform::setAutoTickMaxStep(float maxDtSeconds)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (maxDtSeconds > 0.0f) m_autoTickMaxStep = maxDtSeconds;
+    }
+
+    void MockPlatform::autoTickIfEnabled()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        autoTickLocked();
+    }
+
+    void MockPlatform::autoTickLocked()
+    {
+        if (!m_autoTick || !m_sim || !m_clock) return;
+        const double now = m_clock();
+        double dt = now - m_lastTickTime;
+        m_lastTickTime = now;
+        if (dt <= 0.0) return;
+        if (dt > static_cast<double>(m_autoTickMaxStep)) dt = m_autoTickMaxStep;
+        m_sim->tick(static_cast<float>(dt));
     }
 }

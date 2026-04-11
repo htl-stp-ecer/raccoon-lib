@@ -38,7 +38,7 @@ class Mission(ClassNameLogger, MissionProtocol):
     async def run(self, robot):
         """Build the mission sequence and execute it on the provided robot."""
         self.info(f"Starting mission: {self.__class__.__name__}")
-        await self.sequence().run_step(robot)
+        await self.sequence().resolve().run_step(robot)
         self.info(f"Completed mission: {self.__class__.__name__}")
 
     @abstractmethod

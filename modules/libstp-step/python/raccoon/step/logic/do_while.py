@@ -51,8 +51,8 @@ class DoWhileActive(Step):
             raise TypeError(
                 f"task must be a Step, got {type(task).__name__}"
             )
-        self.reference_step = reference_step
-        self.task = task
+        self.reference_step = reference_step.resolve()
+        self.task = task.resolve()
 
         # Pre-execution resource conflict check
         validate_no_overlap(

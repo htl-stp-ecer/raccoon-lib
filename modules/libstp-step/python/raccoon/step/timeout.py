@@ -54,7 +54,7 @@ class Timeout(Step):
         if seconds <= 0:
             raise ValueError(f"Timeout duration must be positive: {seconds}")
 
-        self.step = step
+        self.step = step.resolve()
         self.seconds = float(seconds)
         self.result = None
 

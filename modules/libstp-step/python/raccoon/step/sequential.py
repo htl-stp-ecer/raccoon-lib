@@ -32,8 +32,8 @@ class Sequential(Step):
             if not isinstance(step, StepProtocol):
                 raise TypeError(f"Element at index {i} is not a Step instance: {type(step)}")
 
-        self.steps: List[Step] = steps
-        self._last_internal_step: Optional[Step] = steps[-1] if steps else None
+        self.steps: List[Step] = [step.resolve() for step in steps]
+        self._last_internal_step: Optional[Step] = self.steps[-1] if self.steps else None
 
     def collected_resources(self) -> frozenset[str]:
         result: set[str] = set()
