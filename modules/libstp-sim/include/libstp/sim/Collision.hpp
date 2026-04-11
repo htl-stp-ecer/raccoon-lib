@@ -52,4 +52,15 @@ namespace libstp::sim::collision
         const Pose2D& pose,
         const RobotConfig& robot,
         const std::vector<MapSegment>& walls);
+
+    /// Closest-hit raycast against a set of wall segments.
+    /// `originX, originY` in cm, `angleRad` is the world-frame direction.
+    /// Returns the distance (cm) to the first wall hit within `maxDistanceCm`,
+    /// or `maxDistanceCm` if no wall is hit (clean miss to max range).
+    float raycastDistanceCm(
+        float originX,
+        float originY,
+        float angleRad,
+        float maxDistanceCm,
+        const std::vector<MapSegment>& walls);
 }

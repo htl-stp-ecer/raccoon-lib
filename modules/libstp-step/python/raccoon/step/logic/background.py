@@ -33,7 +33,7 @@ class Background(Step):
 
         if not isinstance(step, StepProtocol):
             raise TypeError(f"step must be a Step, got {type(step).__name__}")
-        self._step = step
+        self._step = step.resolve()
         self._name = name
 
     def collected_resources(self) -> frozenset[str]:

@@ -134,6 +134,13 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/raccoon/"
         DESTINATION raccoon
         FILES_MATCHING PATTERN "*.py")
 
+# Install bundled test scenes alongside the raccoon package so
+# raccoon.testing can resolve scene names like "empty_table.ftmap" via
+# importlib.resources.
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/scenes/"
+        DESTINATION raccoon/scenes
+        FILES_MATCHING PATTERN "*.ftmap")
+
 # Compatibility shim: install python/libstp_compat/libstp -> top-level 'libstp'
 # package that emits a DeprecationWarning and aliases libstp.* to raccoon.*
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/python/libstp_compat/libstp/"

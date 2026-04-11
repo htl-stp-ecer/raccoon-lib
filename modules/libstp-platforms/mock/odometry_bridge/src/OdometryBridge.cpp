@@ -23,11 +23,15 @@ namespace libstp::hal::odometry_bridge
             return OdometrySnapshot{};
         }
 
-        const auto pose = platform.simPose();
+        platform.autoTickIfEnabled();
+        // Use the relative pose so this bridge behaves like a real STM32
+        // coprocessor: pose is reported in the frame captured by the most
+        // recent reset, and zeroes when reset is called.
+        const auto rel = platform.simRelativePose();
         OdometrySnapshot snap{};
-        snap.pos_x = pose.x * kCmToMeters;
-        snap.pos_y = pose.y * kCmToMeters;
-        snap.heading = pose.theta;
+        snap.pos_x = rel.x * kCmToMeters;
+        snap.pos_y = rel.y * kCmToMeters;
+        snap.heading = rel.theta;
         snap.wz = platform.simYawRate();
         // vx/vy in body frame — we don't expose the body twist from SimWorld
         // yet; leave them zero until Step consumers need them.
@@ -37,6 +41,7 @@ namespace libstp::hal::odometry_bridge
     void OdometryBridge::resetLocalOdometry()
     {
         LIBSTP_LOG_TRACE("MockOdometryBridge::resetLocalOdometry");
+        platform::mock::core::MockPlatform::instance().resetSimOrigin();
     }
 
     bool OdometryBridge::waitForOdometryReset(int /*timeout_ms*/)
@@ -56,5 +61,6 @@ namespace libstp::hal::odometry_bridge
     void OdometryBridge::resetCoprocessorOdometry()
     {
         LIBSTP_LOG_TRACE("MockOdometryBridge::resetCoprocessorOdometry");
+        platform::mock::core::MockPlatform::instance().resetSimOrigin();
     }
 }

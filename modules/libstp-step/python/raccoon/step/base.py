@@ -52,6 +52,18 @@ class Step(ClassNameLogger):
         """
         return self.required_resources()
 
+    def resolve(self) -> "Step":
+        """Return the concrete Step that should actually execute.
+
+        Default returns ``self``. ``StepBuilder`` overrides this to call
+        ``_build()`` so that fluent-DSL builders are converted into the
+        underlying Step at composite-construction time. Composite steps
+        call ``resolve()`` on their children before storing them so that
+        ``validate_no_overlap`` and ``collected_resources`` see the real
+        resource sets, not empty builder placeholders.
+        """
+        return self
+
     @staticmethod
     def _push_path(segment: str) -> contextvars.Token[List[str]]:
         path = _step_path.get()

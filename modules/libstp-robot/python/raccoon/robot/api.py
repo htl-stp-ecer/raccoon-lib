@@ -366,4 +366,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 self.warn(f"Mission does not expose sequence() for preload: {mission}")
                 continue
             self.debug(f"Preloading {label} mission: {mission}")
-            sequence_builder()
+            # Resolve the root so a bare StepBuilder at the top of sequence()
+            # still triggers construction-time validation (nested builders are
+            # already resolved via composite constructors).
+            sequence_builder().resolve()

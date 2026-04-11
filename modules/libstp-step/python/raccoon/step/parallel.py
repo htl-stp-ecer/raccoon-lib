@@ -37,7 +37,7 @@ class Parallel(Step):
             if not isinstance(step, StepProtocol):
                 raise TypeError(f"Element at index {i} is not a Step instance: {type(step)}")
 
-        self.steps: List[Step] = steps
+        self.steps: List[Step] = [step.resolve() for step in steps]
         self._last_completed_step: Optional[Step] = None
 
         # Pre-execution resource conflict check

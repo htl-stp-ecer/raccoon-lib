@@ -79,9 +79,18 @@ TEST_F(MockSimIntegrationTest, ConfigureSimExposesStartPoseThroughBridge)
     configureOpenTable({50.0f, 30.0f, kPi / 4.0f});
     libstp::hal::odometry_bridge::OdometryBridge bridge;
     const auto snap = bridge.readOdometry();
-    EXPECT_NEAR(snap.pos_x, 0.50f, 1e-4f);   // cm → m
-    EXPECT_NEAR(snap.pos_y, 0.30f, 1e-4f);
-    EXPECT_NEAR(snap.heading, kPi / 4.0f, 1e-4f);
+    // The bridge reports pose RELATIVE to the last reset, mirroring real
+    // STM32 coprocessor behavior. configureSim() sets the initial origin to
+    // the start pose, so a fresh sim reads (0, 0, 0) before any motion.
+    EXPECT_NEAR(snap.pos_x, 0.0f, 1e-4f);
+    EXPECT_NEAR(snap.pos_y, 0.0f, 1e-4f);
+    EXPECT_NEAR(snap.heading, 0.0f, 1e-4f);
+
+    // Ground-truth absolute pose still available via simPose().
+    const auto abs_pose = mock::MockPlatform::instance().simPose();
+    EXPECT_NEAR(abs_pose.x, 50.0f, 1e-4f);
+    EXPECT_NEAR(abs_pose.y, 30.0f, 1e-4f);
+    EXPECT_NEAR(abs_pose.theta, kPi / 4.0f, 1e-4f);
 }
 
 TEST_F(MockSimIntegrationTest, HalMotorDrivesSimForward)
@@ -98,10 +107,11 @@ TEST_F(MockSimIntegrationTest, HalMotorDrivesSimForward)
 
     libstp::hal::odometry_bridge::OdometryBridge bridge;
     const auto snap = bridge.readOdometry();
-    // ~0.9 m/s × 1 s = 0.9 m, minus ramp-up. Starting at 0.20 m.
-    EXPECT_GT(snap.pos_x, 1.00f);
-    EXPECT_LT(snap.pos_x, 1.15f);
-    EXPECT_NEAR(snap.pos_y, 0.50f, 5e-3f);
+    // Bridge reports relative-to-start pose. Drive forward 1 s at ~0.9 m/s
+    // → ~0.9 m, minus the brief motor ramp.
+    EXPECT_GT(snap.pos_x, 0.80f);
+    EXPECT_LT(snap.pos_x, 0.95f);
+    EXPECT_NEAR(snap.pos_y, 0.0f, 5e-3f);
     EXPECT_NEAR(snap.heading, 0.0f, 5e-3f);
 }
 
@@ -118,9 +128,9 @@ TEST_F(MockSimIntegrationTest, HalMotorTurnsSimInPlace)
 
     libstp::hal::odometry_bridge::OdometryBridge bridge;
     const auto snap = bridge.readOdometry();
-    // Position shouldn't have wandered much for an in-place spin.
-    EXPECT_NEAR(snap.pos_x, 0.50f, 5e-3f);
-    EXPECT_NEAR(snap.pos_y, 0.50f, 5e-3f);
+    // Bridge reports relative-to-start pose. In-place spin → pos stays at 0.
+    EXPECT_NEAR(snap.pos_x, 0.0f, 5e-3f);
+    EXPECT_NEAR(snap.pos_y, 0.0f, 5e-3f);
     // Yaw rate = (r/W)·(ω_R − ω_L) = 0.2·(−60) ≈ −12 rad/s steady state.
     // Over 0.2 s (minus ramp), integrated heading ≈ −2.4 rad.
     EXPECT_LT(snap.heading, -1.5f);
