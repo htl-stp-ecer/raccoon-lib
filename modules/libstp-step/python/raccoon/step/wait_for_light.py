@@ -126,27 +126,18 @@ class WaitForLight(UIStep):
             f"confirm={self._confirm_count})"
         )
 
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        from raccoon.button import is_pressed
-
-        sensor = self._sensor
-        kf = _KalmanFilter(
-            process_variance=0.01,
-            measurement_variance=50.0,
-        )
-
-        screen = WFLDetectScreen()
-        await self.display(screen)
-
-        threshold_factor = 1.0 - self._drop_fraction
-
-        # --- Phase 1: Warm-up — establish baseline ---
+    async def _run_warmup(
+        self,
+        screen: WFLDetectScreen,
+        threshold_factor: float,
+    ) -> _KalmanFilter:
+        kf = _KalmanFilter(process_variance=0.01, measurement_variance=50.0)
         warmup_end = time.monotonic() + self._warmup_seconds
         self.info(f"WFL: warming up for {self._warmup_seconds}s...")
         last_ui = 0.0
 
         while time.monotonic() < warmup_end:
-            raw = sensor.read()
+            raw = self._sensor.read()
             kf.update(raw)
 
             now = time.monotonic()
@@ -162,9 +153,22 @@ class WaitForLight(UIStep):
 
             await asyncio.sleep(self._poll_interval)
 
-        # --- Phase 2: Test mode + Armed loop ---
         # Slow down Kalman adaptation now that baseline is established.
         kf.set_process_variance(0.001)
+        return kf
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
+        from raccoon.button import is_pressed
+
+        sensor = self._sensor
+
+        screen = WFLDetectScreen()
+        await self.display(screen)
+
+        threshold_factor = 1.0 - self._drop_fraction
+
+        # --- Phase 1: Warm-up — establish baseline ---
+        kf = await self._run_warmup(screen, threshold_factor)
 
         test_mode = True
         test_count = 0
@@ -187,6 +191,22 @@ class WaitForLight(UIStep):
 
             # Pump UI events for the "Back to Test Mode" button
             await self.pump_events()
+
+            # Check if screen requested Kalman reinit via UI button
+            if screen.request_reinit:
+                screen.request_reinit = False
+                self.info("WFL: reiniting Kalman filter via UI")
+                set_setup_timer_paused(False)
+                kf = await self._run_warmup(screen, threshold_factor)
+                trigger_threshold = kf.estimate * threshold_factor
+                test_mode = True
+                test_count = 0
+                consecutive = 0
+                needs_clear = False
+                was_pressed = is_pressed()
+                last_ui = 0.0
+                self.info(f"WFL: reinit complete, back to test mode (baseline={kf.estimate:.0f})")
+                continue
 
             # Check if screen requested test mode via UI button
             if screen.request_test_mode:

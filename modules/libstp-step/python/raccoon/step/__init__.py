@@ -29,6 +29,8 @@ from .wait_for import WaitFor
 from .wait_for_dsl import wait_for
 from .wait_for_light import WaitForLight, WaitForLightLegacy
 from .wait_for_light_dsl import wait_for_light, wait_for_light_legacy
+from .setup_timer import PauseSetupTimer, StartSetupTimer, ResumeSetupTimer
+from .setup_timer_dsl import pause_setup_timer, start_setup_timer, resume_setup_timer
 from .timeout_dsl import timeout
 from .timeout_or import TimeoutOr, timeout_or
 from .watchdog import (
@@ -72,6 +74,12 @@ __all__ = [
     "wait_for_light",
     "WaitForLightLegacy",
     "wait_for_light_legacy",
+    "PauseSetupTimer",
+    "pause_setup_timer",
+    "StartSetupTimer",
+    "start_setup_timer",
+    "ResumeSetupTimer",
+    "resume_setup_timer",
     "timeout",
     "TimeoutOr",
     "timeout_or",
