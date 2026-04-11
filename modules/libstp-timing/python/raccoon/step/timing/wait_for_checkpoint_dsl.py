@@ -37,10 +37,12 @@ def wait_for_checkpoint(checkpoint_seconds: Union[float, int] = _UNSET):
     Wait until a mission-relative time checkpoint is reached.
 
     Pauses execution until the robot's global synchronizer clock reaches
-    the specified number of seconds since mission start. If the
-    checkpoint time has already passed, the step returns immediately.
-    This is useful for synchronizing actions to absolute times within a
-    timed Botball run (e.g. "at T=20s, start collecting").
+    the specified number of seconds since mission start. While waiting,
+    a full-screen countdown UI shows the remaining time. If the
+    checkpoint time has already passed, the step returns immediately
+    without showing any UI. This is useful for synchronizing actions to
+    absolute times within a timed Botball run (e.g. "at T=20s, start
+    collecting").
 
     Prerequisites:
         The robot must have a ``synchronizer`` configured. The synchronizer

@@ -14,7 +14,6 @@ from .loop import LoopForever, LoopFor
 
 from .. import StepProtocol
 
-
 class LoopForeverBuilder(StepBuilder):
     """Builder for LoopForever. Auto-generated — do not edit."""
 
@@ -29,11 +28,11 @@ class LoopForeverBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._step is not _UNSET:
-            kwargs["step"] = self._step
+            kwargs['step'] = self._step
         return LoopForever(**kwargs)
 
 
-@dsl(tags=["control", "loop"])
+@dsl(tags=['control', 'loop'])
 def loop_forever(step: StepProtocol = _UNSET):
     """
     Repeat a step indefinitely until externally cancelled.
@@ -88,13 +87,13 @@ class LoopForBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._step is not _UNSET:
-            kwargs["step"] = self._step
+            kwargs['step'] = self._step
         if self._iterations is not _UNSET:
-            kwargs["iterations"] = self._iterations
+            kwargs['iterations'] = self._iterations
         return LoopFor(**kwargs)
 
 
-@dsl(tags=["control", "loop"])
+@dsl(tags=['control', 'loop'])
 def loop_for(step: StepProtocol = _UNSET, iterations: int = _UNSET):
     """
     Repeat a step a fixed number of times.
@@ -125,4 +124,4 @@ def loop_for(step: StepProtocol = _UNSET, iterations: int = _UNSET):
     return b
 
 
-__all__ = ["LoopForeverBuilder", "loop_forever", "LoopForBuilder", "loop_for"]
+__all__ = ['LoopForeverBuilder', 'loop_forever', 'LoopForBuilder', 'loop_for']

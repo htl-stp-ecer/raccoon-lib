@@ -24,7 +24,7 @@ class PauseSetupTimerBuilder(StepBuilder):
         return PauseSetupTimer(**kwargs)
 
 
-@dsl(tags=["timing", "setup"])
+@dsl(tags=['timing', 'setup'])
 def pause_setup_timer():
     """
     Freeze the setup-phase countdown at its current value.
@@ -68,7 +68,7 @@ class StartSetupTimerBuilder(StepBuilder):
         return StartSetupTimer(**kwargs)
 
 
-@dsl(tags=["timing", "setup"])
+@dsl(tags=['timing', 'setup'])
 def start_setup_timer():
     """
     Start (or restart) the setup-phase countdown from full duration.
@@ -110,7 +110,7 @@ class ResumeSetupTimerBuilder(StepBuilder):
         return ResumeSetupTimer(**kwargs)
 
 
-@dsl(tags=["timing", "setup"])
+@dsl(tags=['timing', 'setup'])
 def resume_setup_timer():
     """
     Resume a paused setup-phase countdown without resetting it.
@@ -138,11 +138,4 @@ def resume_setup_timer():
     return b
 
 
-__all__ = [
-    "PauseSetupTimerBuilder",
-    "pause_setup_timer",
-    "StartSetupTimerBuilder",
-    "start_setup_timer",
-    "ResumeSetupTimerBuilder",
-    "resume_setup_timer",
-]
+__all__ = ['PauseSetupTimerBuilder', 'pause_setup_timer', 'StartSetupTimerBuilder', 'start_setup_timer', 'ResumeSetupTimerBuilder', 'resume_setup_timer']

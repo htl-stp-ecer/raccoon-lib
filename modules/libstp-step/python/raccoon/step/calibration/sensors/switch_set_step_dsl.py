@@ -18,7 +18,7 @@ class SwitchCalibrationSetBuilder(StepBuilder):
 
     def __init__(self):
         super().__init__()
-        self._set_name = "default"
+        self._set_name = 'default'
 
     def set_name(self, value: str):
         self._set_name = value
@@ -26,12 +26,12 @@ class SwitchCalibrationSetBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["set_name"] = self._set_name
+        kwargs['set_name'] = self._set_name
         return SwitchCalibrationSet(**kwargs)
 
 
-@dsl(tags=["calibration", "sensor"])
-def switch_calibration_set(set_name: str = "default"):
+@dsl(tags=['calibration', 'sensor'])
+def switch_calibration_set(set_name: str = 'default'):
     """
     Switch IR sensors to a named calibration set.
 
@@ -61,4 +61,4 @@ def switch_calibration_set(set_name: str = "default"):
     return b
 
 
-__all__ = ["SwitchCalibrationSetBuilder", "switch_calibration_set"]
+__all__ = ['SwitchCalibrationSetBuilder', 'switch_calibration_set']

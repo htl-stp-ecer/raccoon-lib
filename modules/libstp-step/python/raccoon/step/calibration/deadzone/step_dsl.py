@@ -41,20 +41,15 @@ class CalibrateDeadzoneBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs["motor_ports"] = self._motor_ports
-        kwargs["start_percent"] = self._start_percent
-        kwargs["max_percent"] = self._max_percent
-        kwargs["settle_time"] = self._settle_time
+        kwargs['motor_ports'] = self._motor_ports
+        kwargs['start_percent'] = self._start_percent
+        kwargs['max_percent'] = self._max_percent
+        kwargs['settle_time'] = self._settle_time
         return CalibrateDeadzone(**kwargs)
 
 
-@dsl(tags=["calibration", "motor", "deadzone"])
-def calibrate_deadzone(
-    motor_ports: Optional[List[int]] = None,
-    start_percent: int = 1,
-    max_percent: int = 30,
-    settle_time: float = 0.3,
-):
+@dsl(tags=['calibration', 'motor', 'deadzone'])
+def calibrate_deadzone(motor_ports: Optional[List[int]] = None, start_percent: int = 1, max_percent: int = 30, settle_time: float = 0.3):
     """
     Calibrate motor deadzone via UI-based human observation.
 
@@ -92,4 +87,4 @@ def calibrate_deadzone(
     return b
 
 
-__all__ = ["CalibrateDeadzoneBuilder", "calibrate_deadzone"]
+__all__ = ['CalibrateDeadzoneBuilder', 'calibrate_deadzone']

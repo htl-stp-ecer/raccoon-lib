@@ -14,7 +14,6 @@ from .defer import Defer, Run
 
 from .. import Step
 
-
 class DeferBuilder(StepBuilder):
     """Builder for Defer. Auto-generated — do not edit."""
 
@@ -22,19 +21,19 @@ class DeferBuilder(StepBuilder):
         super().__init__()
         self._factory = _UNSET
 
-    def factory(self, value: Callable[["GenericRobot"], Step]):
+    def factory(self, value: Callable[['GenericRobot'], Step]):
         self._factory = value
         return self
 
     def _build(self):
         kwargs = {}
         if self._factory is not _UNSET:
-            kwargs["factory"] = self._factory
+            kwargs['factory'] = self._factory
         return Defer(**kwargs)
 
 
-@dsl(tags=["control", "defer"])
-def defer(factory: Callable[["GenericRobot"], Step] = _UNSET):
+@dsl(tags=['control', 'defer'])
+def defer(factory: Callable[['GenericRobot'], Step] = _UNSET):
     """
     Defer step construction until execution time.
 
@@ -75,19 +74,19 @@ class RunBuilder(StepBuilder):
         super().__init__()
         self._action = _UNSET
 
-    def action(self, value: Callable[["GenericRobot"], Union[None, Awaitable[None]]]):
+    def action(self, value: Callable[['GenericRobot'], Union[None, Awaitable[None]]]):
         self._action = value
         return self
 
     def _build(self):
         kwargs = {}
         if self._action is not _UNSET:
-            kwargs["action"] = self._action
+            kwargs['action'] = self._action
         return Run(**kwargs)
 
 
-@dsl(tags=["control", "run"])
-def run(action: Callable[["GenericRobot"], Union[None, Awaitable[None]]] = _UNSET):
+@dsl(tags=['control', 'run'])
+def run(action: Callable[['GenericRobot'], Union[None, Awaitable[None]]] = _UNSET):
     """
     Execute an arbitrary callable as a step.
 
@@ -121,4 +120,4 @@ def run(action: Callable[["GenericRobot"], Union[None, Awaitable[None]]] = _UNSE
     return b
 
 
-__all__ = ["DeferBuilder", "defer", "RunBuilder", "run"]
+__all__ = ['DeferBuilder', 'defer', 'RunBuilder', 'run']
