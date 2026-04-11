@@ -13,9 +13,11 @@ except Exception:
     _raccoon_version = "unknown"
 
 from raccoon.no_calibrate import is_no_calibrate as _is_no_calibrate
+from raccoon.no_checkpoints import is_no_checkpoints as _is_no_checkpoints
 
 _no_cal_label = " | --no-calibrate" if _is_no_calibrate() else ""
-print(f"raccoon v{__version__} | raccoon-transport v{_raccoon_version}{_no_cal_label}")
+_no_chk_label = " | --no-checkpoints" if _is_no_checkpoints() else ""
+print(f"raccoon v{__version__} | raccoon-transport v{_raccoon_version}{_no_cal_label}{_no_chk_label}")
 
 from raccoon import hal as _hal
 from raccoon.class_name_logger import ClassNameLogger
