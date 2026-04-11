@@ -177,6 +177,7 @@ class WaitForLight(UIStep):
         # triggers. Prevents instant GO! when lamp is still on from test.
         needs_clear = False
         was_pressed = is_pressed()
+        last_ui = 0.0
 
         self.info(f"WFL: entering test mode (baseline={kf.estimate:.0f})")
 
