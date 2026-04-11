@@ -21,6 +21,11 @@ class Synchronizer:
 
     async def wait_until_checkpoint(self, checkpoint_seconds):
         """Sleep until the mission-relative checkpoint or log that it was missed."""
+        from raccoon.no_checkpoints import is_no_checkpoints
+        if is_no_checkpoints():
+            info(f"[Synchroniser] --no-checkpoints: skipping wait for checkpoint at {checkpoint_seconds} seconds")
+            return
+
         delta = checkpoint_seconds - self.get_time()
         if delta < 0:
             warn(f"[Synchroniser] Scheduler has passed the checkpoint at {checkpoint_seconds} seconds, delta: {delta}")

@@ -272,9 +272,26 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         )
         await bg_mgr.cancel_all()
 
+    @staticmethod
+    def _get_skip_mission_indices() -> set:
+        """Return mission order indices to skip, from LIBSTP_SKIP_MISSIONS env var."""
+        import os
+        val = os.environ.get("LIBSTP_SKIP_MISSIONS", "")
+        if not val:
+            return set()
+        try:
+            return {int(x) for x in val.split(",") if x.strip()}
+        except ValueError:
+            return set()
+
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
-        missions = list(self.missions)
+        all_missions = list(self.missions)
+        skip_indices = self._get_skip_mission_indices()
+        if skip_indices:
+            skipped = [str(all_missions[i]) for i in sorted(skip_indices) if i < len(all_missions)]
+            self.info(f"--no-m: skipping mission(s) at order {sorted(skip_indices)}: {skipped}")
+        missions = [m for i, m in enumerate(all_missions) if i not in skip_indices]
         setup_mission = self.setup_mission
         shutdown_mission = self.shutdown_mission
 
