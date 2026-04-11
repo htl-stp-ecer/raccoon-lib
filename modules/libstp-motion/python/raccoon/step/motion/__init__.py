@@ -80,7 +80,7 @@ from .line_follow_dsl import (
 
 from .at_distance import WaitUntilDistance
 from .at_distance_dsl import wait_until_distance
-from .at_heading import WaitUntilDegrees
+from .at_heading import WaitUntilDegrees, HeadingOrigin
 from .at_heading_dsl import wait_until_degrees
 from .tune_drive import TuneDrive
 from .tune_drive_dsl import tune_drive
@@ -197,6 +197,7 @@ __all__ = [
     "wait_until_distance",
     # Heading wait
     "WaitUntilDegrees",
+    "HeadingOrigin",
     "wait_until_degrees",
     # Drive telemetry
     "TuneDrive",
