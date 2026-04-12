@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 #include <utility>
 
@@ -27,6 +28,22 @@ namespace libstp::motion
         std::vector<std::pair<double, double>> waypoints_m;
         std::vector<double> headings_rad;   // empty = tangent-following; one per waypoint = explicit
         double speed_scale{1.0};
+
+        /// When true, heading error is computed using getAbsoluteHeading()
+        /// (never reset by odometry resets) instead of the reset-relative
+        /// getHeading().  The absolute heading at start is captured before
+        /// the odometry reset and used as an offset for the relative target
+        /// headings, so all existing waypoint heading conventions are preserved.
+        bool use_absolute_heading{false};
+
+        /// When set, the robot smoothly rotates to this heading (radians,
+        /// relative to the robot's start orientation) as it follows the path.
+        /// Builds a two-point heading LUT: start=0 → end=final_heading_rad,
+        /// linearly interpolated by arc-length.  Ignored when headings_rad
+        /// is non-empty (explicit per-waypoint headings take precedence).
+        /// In absolute-heading mode pass a value already adjusted by the
+        /// IMU offset (Python handles this conversion).
+        std::optional<double> final_heading_rad{};
     };
 
     /** Per-cycle diagnostics captured while a SplineMotion instance runs. */
@@ -86,6 +103,10 @@ namespace libstp::motion
         ProfiledPIDController profiled_pid_;
         std::unique_ptr<foundation::PidController> heading_pid_;
         bool finished_{false};
+
+        // Heading mode
+        bool use_absolute_heading_{false};
+        double initial_absolute_heading_rad_{0.0};  // getAbsoluteHeading() captured before odometry reset
 
         // Heading interpolation LUT: arc-length → heading (built if explicit headings)
         std::vector<double> heading_arc_lengths_;  // arc-length at each point (origin + waypoints)

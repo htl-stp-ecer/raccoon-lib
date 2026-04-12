@@ -65,6 +65,13 @@ namespace libstp::motion
         }
         spline_ = std::make_unique<CatmullRomSpline>(std::move(points));
 
+        // Absolute heading mode: capture IMU heading before reset so it can
+        // be added to relative target headings during update().
+        use_absolute_heading_ = cfg_.use_absolute_heading;
+        initial_absolute_heading_rad_ = use_absolute_heading_
+            ? odometry().getAbsoluteHeading()
+            : 0.0;
+
         // Set up heading interpolation if explicit headings provided
         use_explicit_headings_ = !cfg_.headings_rad.empty();
         if (use_explicit_headings_)
@@ -88,6 +95,14 @@ namespace libstp::motion
             // Ensure last waypoint maps to total length
             heading_arc_lengths_.back() = spline_->totalLength();
         }
+        else if (cfg_.final_heading_rad.has_value())
+        {
+            // Simple two-point LUT: start = 0 (robot start heading), end = final_heading_rad.
+            // targetHeadingAt() interpolates linearly by arc-length between them.
+            use_explicit_headings_ = true;
+            all_headings_ = {0.0, cfg_.final_heading_rad.value()};
+            heading_arc_lengths_ = {0.0, spline_->totalLength()};
+        }
 
         odometry().reset();
         heading_pid_->reset();
@@ -96,9 +111,10 @@ namespace libstp::motion
         profiled_pid_.reset(0.0);
         profiled_pid_.setGoal(spline_->totalLength());
 
-        LIBSTP_LOG_TRACE("SplineMotion started: {} waypoints, arc_length={:.3f} m, max_velocity={:.3f} m/s, heading_mode={}",
+        LIBSTP_LOG_TRACE("SplineMotion started: {} waypoints, arc_length={:.3f} m, max_velocity={:.3f} m/s, heading_mode={}, abs_heading={}",
                     cfg_.waypoints_m.size(), spline_->totalLength(), max_velocity_,
-                    (use_explicit_headings_ ? "explicit" : "tangent"));
+                    (use_explicit_headings_ ? "explicit" : "tangent"),
+                    (use_absolute_heading_ ? "absolute" : "relative"));
     }
 
     void SplineMotion::update(double dt)
@@ -127,7 +143,9 @@ namespace libstp::motion
         // Get robot position in start frame
         const auto dist = odometry().getDistanceFromOrigin();
         const Eigen::Vector2d robot_pos(dist.forward, dist.lateral);
-        const double current_heading = odometry().getHeading();
+        const double current_heading = use_absolute_heading_
+            ? odometry().getAbsoluteHeading()
+            : odometry().getHeading();
 
         // Project robot position onto spline.
         // Rate-limit backward jumps: allow at most max_velocity * dt backward per cycle.
@@ -189,8 +207,11 @@ namespace libstp::motion
             at_goal_cycles_ = 0;
         }
 
-        // Heading target
-        const double target_heading = targetHeadingAt(s_setpoint);
+        // Heading target: targetHeadingAt() returns a heading relative to the
+        // robot's start orientation.  In absolute mode we offset by the captured
+        // IMU heading so the error is computed in the absolute frame.
+        const double target_heading = targetHeadingAt(s_setpoint)
+                                    + initial_absolute_heading_rad_;
 
         // Heading error
         const double heading_error = std::remainder(target_heading - current_heading,
