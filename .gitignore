@@ -157,3 +157,4 @@ cmake-build-debug
 build-test
 
 qemu_python*
+build*/

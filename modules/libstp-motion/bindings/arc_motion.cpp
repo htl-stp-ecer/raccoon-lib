@@ -51,8 +51,18 @@ void init_arc_motion(py::module_& m)
             py::keep_alive<1, 3>(),
             py::keep_alive<1, 4>())
         .def("start", &ArcMotion::start)
+        .def("start_warm", &ArcMotion::startWarm,
+             py::arg("heading_offset_rad"), py::arg("initial_angular_velocity"),
+             "Begin arc from current state without resetting odometry.")
         .def("update", &ArcMotion::update, py::arg("dt"))
         .def("is_finished", &ArcMotion::isFinished)
+        .def("has_reached_angle", &ArcMotion::hasReachedAngle,
+             "Check if target arc angle is reached (ignores velocity settling).")
+        .def("set_suppress_hard_stop", &ArcMotion::setSuppressHardStopOnComplete,
+             py::arg("suppress"),
+             "When true, complete() will not call hardStop().")
+        .def("get_filtered_velocity", &ArcMotion::getFilteredVelocity,
+             "Current filtered angular velocity (rad/s).")
         .def("get_telemetry", &ArcMotion::getTelemetry,
             py::return_value_policy::reference_internal);
 }

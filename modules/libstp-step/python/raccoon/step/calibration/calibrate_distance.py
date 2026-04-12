@@ -188,6 +188,9 @@ class CalibrateDistance(UIStep):
     Args:
         distance_cm: Distance (in cm) the robot drives during calibration.
             Longer distances yield better accuracy.
+        speed: Drive speed during the calibration runs, as a fraction of
+            max speed in ``[0.0, 1.0]``. Lower speeds reduce wheel slip
+            and usually produce more accurate calibration.
         calibrate_light_sensors: If ``True``, run IR sensor calibration
             after the distance calibration is confirmed.
         persist_to_yaml: If ``True``, write the EMA-filtered baseline to
@@ -220,6 +223,7 @@ class CalibrateDistance(UIStep):
     def __init__(
         self,
         distance_cm: float = 30.0,
+        speed: float = 1.0,
         calibrate_light_sensors: bool = False,
         persist_to_yaml: bool = True,
         ema_alpha: float = 0.7,
@@ -228,6 +232,7 @@ class CalibrateDistance(UIStep):
     ) -> None:
         super().__init__()
         self.calibration_distance_cm = distance_cm
+        self.speed = speed
         self.calibrate_light_sensors = calibrate_light_sensors
         self.persist_to_yaml = persist_to_yaml
         self.ema_alpha = ema_alpha
@@ -240,6 +245,7 @@ class CalibrateDistance(UIStep):
         excluded = [s.port for s in self.exclude_ir_sensors]
         return (
             f"CalibrateDistance(distance_cm={self.calibration_distance_cm}, "
+            f"speed={self.speed}, "
             f"light_sensors={self.calibrate_light_sensors}, "
             f"persist={self.persist_to_yaml}, sets={self.calibration_sets}, "
             f"exclude_ir_ports={sorted(excluded)})"
@@ -317,7 +323,7 @@ class CalibrateDistance(UIStep):
             self._sample_sensors(ir_sensors, stop_sampling)
         )
         try:
-            drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM)
+            drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM, speed=self.speed)
             await drive_step.run_step(robot)
         finally:
             stop_sampling.set()
@@ -407,7 +413,7 @@ class CalibrateDistance(UIStep):
             self._sample_sensors(ir_sensors, stop_sampling)
         )
         try:
-            drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM)
+            drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM, speed=self.speed)
             await drive_step.run_step(robot)
         finally:
             stop_sampling.set()
@@ -492,7 +498,7 @@ class CalibrateDistance(UIStep):
             await self._render_screen(driving_screen)
 
             # Execute the drive (with concurrent sensor sampling if enabled)
-            drive_step = _drive_forward_uncalibrated(self.calibration_distance_cm)
+            drive_step = _drive_forward_uncalibrated(self.calibration_distance_cm, speed=self.speed)
             sensor_samples: Dict[int, List[float]] = {}
 
             if ir_sensors:

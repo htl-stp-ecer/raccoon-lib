@@ -50,6 +50,7 @@ namespace libstp::motion
         if (started_) return;
         started_ = true;
         finished_ = false;
+        heading_offset_rad_ = 0.0;
 
         prev_heading_ = 0.0;
         accumulated_heading_ = 0.0;
@@ -68,6 +69,31 @@ namespace libstp::motion
                     max_velocity_, cfg_.speed_scale,
                     ctx_.pid_config.heading.kp, ctx_.pid_config.heading.ki,
                     ctx_.pid_config.heading.kd, ctx_.pid_config.velocity_ff, cfg_.kS);
+    }
+
+    void TurnMotion::startWarm(double heading_offset_rad, double initial_angular_velocity)
+    {
+        started_ = true;
+        finished_ = false;
+        heading_offset_rad_ = heading_offset_rad;
+        cycle_ = 0;
+
+        // Do NOT reset odometry -- carry heading continuously
+        // Set prev_heading_ to current so the first delta is correct
+        prev_heading_ = odometry().getHeading();
+        accumulated_heading_ = 0.0;
+        filtered_velocity_ = initial_angular_velocity;
+
+        // Start profile at position 0 with current angular velocity
+        profiled_pid_.reset(0.0, initial_angular_velocity);
+        profiled_pid_.setGoal(cfg_.target_angle_rad);
+
+        LIBSTP_LOG_DEBUG("TurnMotion warm-started: target={:.3f} rad ({:.1f} deg), "
+                    "offset={:.3f} rad, initial_vel={:.3f} rad/s, "
+                    "max_velocity={:.3f} rad/s (scale={:.2f})",
+                    cfg_.target_angle_rad, cfg_.target_angle_rad / kDegToRad,
+                    heading_offset_rad_, initial_angular_velocity,
+                    max_velocity_, cfg_.speed_scale);
     }
 
     void TurnMotion::update(double dt)
@@ -196,9 +222,20 @@ namespace libstp::motion
         return finished_;
     }
 
+    bool TurnMotion::hasReachedAngle() const
+    {
+        if (finished_) return true;
+        if (!started_) return false;
+        const double error = cfg_.target_angle_rad - accumulated_heading_;
+        return std::abs(error) <= ctx_.pid_config.angle_tolerance_rad;
+    }
+
     void TurnMotion::complete()
     {
         finished_ = true;
-        drive().hardStop();
+        if (!suppress_hard_stop_)
+        {
+            drive().hardStop();
+        }
     }
 }

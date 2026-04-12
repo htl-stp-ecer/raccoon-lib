@@ -3,8 +3,8 @@
 import math
 
 from raccoon.step.annotation import dsl
-from .arc import DriveArc
-from .arc_dsl import DriveArcBuilder
+from raccoon.step.step_builder import StepBuilder
+from .arc_dsl import DriveArcLeftBuilder, DriveArcRightBuilder
 
 _UNSET = object()
 
@@ -14,7 +14,7 @@ def drive_arc_segment(
     heading_degrees: float = _UNSET,
     distance_cm: float = _UNSET,
     speed: float = 1.0,
-) -> DriveArcBuilder:
+) -> StepBuilder:
     """Drive along a circular arc specified by heading change and travel distance.
 
     Instead of choosing a radius and arc angle separately, specify the desired
@@ -22,8 +22,7 @@ def drive_arc_segment(
     radius is computed automatically:
     ``radius = distance_cm / radians(|heading_degrees|)``.
 
-    Positive heading_degrees = counter-clockwise (left), negative = clockwise
-    (right) — same convention as ``drive_arc``.
+    Positive heading_degrees = left (CCW), negative = right (CW).
 
     Args:
         heading_degrees: Desired heading change in degrees.
@@ -37,7 +36,8 @@ def drive_arc_segment(
             or distance_cm is not positive.
 
     Returns:
-        A DriveArcBuilder configured with the computed radius and heading.
+        A DriveArcLeftBuilder or DriveArcRightBuilder configured with the
+        computed radius and heading.
 
     Example::
 
@@ -50,13 +50,11 @@ def drive_arc_segment(
         drive_arc_segment(heading_degrees=-30, distance_cm=40, speed=0.5)
     """
     if heading_degrees is _UNSET or distance_cm is _UNSET:
-        # Return a builder that will be filled in later via chaining
-        b = DriveArcBuilder()
+        # Return a builder that will be filled in later via chaining;
+        # default to left, caller must set degrees to pick direction.
+        b = DriveArcLeftBuilder()
         if heading_degrees is not _UNSET:
-            b._degrees = heading_degrees
-        if distance_cm is not _UNSET:
-            # Can't compute radius without both, store for later
-            pass
+            b._degrees = abs(heading_degrees)
         b._speed = speed
         return b
 
@@ -70,8 +68,11 @@ def drive_arc_segment(
     theta_rad = math.radians(abs(heading_degrees))
     radius_cm = distance_cm / theta_rad
 
-    b = DriveArcBuilder()
+    if heading_degrees > 0:
+        b = DriveArcLeftBuilder()
+    else:
+        b = DriveArcRightBuilder()
     b._radius_cm = radius_cm
-    b._degrees = heading_degrees
+    b._degrees = abs(heading_degrees)
     b._speed = speed
     return b

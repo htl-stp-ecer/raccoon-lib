@@ -142,29 +142,11 @@ class DriveArcRight(Arc):
         )
 
 
-@dsl_step(tags=["motion", "arc"])
+@dsl(hidden=True)
 class DriveArc(Arc):
-    """Drive along a circular arc with explicit direction.
+    """Drive along a circular arc with explicit direction (internal use only).
 
     Positive degrees = counter-clockwise (left), negative = clockwise (right).
-
-    Args:
-        radius_cm: Turning radius in centimeters (always positive).
-        degrees: Arc angle in degrees. Positive = left/CCW, negative = right/CW.
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A DriveArc step.
-
-    Example::
-
-        from raccoon.step.motion import drive_arc
-
-        # Left arc
-        drive_arc(radius_cm=30, degrees=90)
-
-        # Right arc
-        drive_arc(radius_cm=30, degrees=-90)
     """
 
     def __init__(self, radius_cm: float, degrees: float, speed: float = 1.0) -> None:
@@ -285,38 +267,11 @@ class StrafeArcRight(Arc):
         )
 
 
-@dsl_step(tags=["motion", "strafe", "arc"])
+@dsl(hidden=True)
 class StrafeArc(Arc):
-    """Strafe along a circular arc with explicit direction.
+    """Strafe along a circular arc with explicit direction (internal use only).
 
-    The robot strafes laterally while simultaneously turning, tracing a
-    circular arc of the given radius. Positive degrees = counter-clockwise
-    (left), negative = clockwise (right).
-
-    Internally uses a profiled PID on heading and derives the lateral velocity
-    from the angular velocity command: ``vy = |omega| * radius``. This produces
-    coordinated acceleration along the arc.
-
-    Prerequisites:
-        Requires a mecanum or omni-wheel drivetrain capable of lateral motion.
-
-    Args:
-        radius_cm: Turning radius in centimeters (always positive).
-        degrees: Arc angle in degrees. Positive = left/CCW, negative = right/CW.
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
-
-    Returns:
-        A StrafeArc step.
-
-    Example::
-
-        from raccoon.step.motion import strafe_arc
-
-        # Left strafe arc
-        strafe_arc(radius_cm=30, degrees=90)
-
-        # Right strafe arc
-        strafe_arc(radius_cm=30, degrees=-90)
+    Positive degrees = counter-clockwise (left), negative = clockwise (right).
     """
 
     def __init__(self, radius_cm: float, degrees: float, speed: float = 1.0) -> None:

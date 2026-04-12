@@ -29,12 +29,33 @@ namespace libstp::motion
         void update(double dt) override;
         [[nodiscard]] bool isFinished() const override;
 
+        /**
+         * Begin turn from current state without resetting odometry.
+         *
+         * Used by smooth_path() to carry angular velocity across segment boundaries.
+         *
+         * @param heading_offset_rad  Current accumulated heading (subtracted from reads)
+         * @param initial_angular_velocity  Current angular velocity to seed the profile with
+         */
+        void startWarm(double heading_offset_rad, double initial_angular_velocity);
+
+        /** When true, complete() sets finished_ without calling hardStop(). */
+        void setSuppressHardStopOnComplete(bool suppress) { suppress_hard_stop_ = suppress; }
+
+        /** Check if target angle is reached, ignoring velocity settling. */
+        [[nodiscard]] bool hasReachedAngle() const;
+
+        /** Current filtered angular velocity (rad/s). */
+        [[nodiscard]] double getFilteredVelocity() const { return filtered_velocity_; }
+
     private:
         void complete();
 
         TurnConfig cfg_{};
         double max_velocity_{0.0};  // computed from speed_scale * AxisConstraints
         bool finished_{false};
+        bool suppress_hard_stop_{false};
+        double heading_offset_rad_{0.0};  // subtracted from accumulated heading in warm-start mode
 
         // Profiled PID controller (replaces manual PID)
         ProfiledPIDController profiled_pid_;

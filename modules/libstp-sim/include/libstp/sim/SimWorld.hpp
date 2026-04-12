@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -43,6 +44,23 @@ namespace libstp::sim
         /// The sim must use the same scale to recover wheel ω from the
         /// commanded integer.
         float bemfSampleRateHz{200.0f};
+
+        /// Viscous (velocity-proportional) drag coefficient in 1/s. At each
+        /// tick the wheel ω is reduced by ``viscousDragCoeff * ω * dt``.
+        /// Models bearing friction and back-EMF drag that scale with speed.
+        /// Default 0 = no viscous drag (legacy behavior).
+        float viscousDragCoeff{0.0f};
+
+        /// Coulomb (dry/constant) friction in rad/s². A constant angular
+        /// deceleration opposing motion, independent of speed. Models
+        /// gearbox friction and wheel-surface interaction. Clamped so it
+        /// cannot reverse direction. Default 0 = no Coulomb friction.
+        float coulombFrictionRadSS{0.0f};
+
+        /// Standard deviation of Gaussian noise added to BEMF integer
+        /// readings (in raw BEMF units). Models real encoder quantization
+        /// and electrical noise. Default 0 = clean readings.
+        float bemfNoiseStddev{0.0f};
     };
 
     /// Ground-truth simulated robot. Owns a pose, integrates motor commands
@@ -150,5 +168,10 @@ namespace libstp::sim
         uint16_t sampleDistanceSensor(const SensorEntry&) const;
         std::size_t portToWheelIndex(uint8_t port) const;
         bool wheelInverted(std::size_t wheelIndex) const;
+
+        /// Mutable RNG for BEMF noise (const-correct: reading is logically const
+        /// even though the RNG state advances).
+        mutable std::mt19937 m_rng{42};
+        mutable std::normal_distribution<float> m_noiseDist{0.0f, 1.0f};
     };
 }

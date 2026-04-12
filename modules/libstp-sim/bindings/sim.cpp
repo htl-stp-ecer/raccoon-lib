@@ -102,7 +102,10 @@ PYBIND11_MODULE(sim, m)
         .def_readwrite("right_inverted", &SimMotorMap::rightInverted)
         .def_readwrite("max_wheel_velocity_rad_s", &SimMotorMap::maxWheelVelocityRadS)
         .def_readwrite("motor_time_constant_sec", &SimMotorMap::motorTimeConstantSec)
-        .def_readwrite("ticks_to_rad", &SimMotorMap::ticksToRad);
+        .def_readwrite("ticks_to_rad", &SimMotorMap::ticksToRad)
+        .def_readwrite("viscous_drag_coeff", &SimMotorMap::viscousDragCoeff)
+        .def_readwrite("coulomb_friction_rad_s2", &SimMotorMap::coulombFrictionRadSS)
+        .def_readwrite("bemf_noise_stddev", &SimMotorMap::bemfNoiseStddev);
 
     // ──────────────────── MapSegment ────────────────────
     py::class_<MapSegment> mapSeg(m, "MapSegment");

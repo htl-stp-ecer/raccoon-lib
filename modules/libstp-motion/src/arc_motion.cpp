@@ -63,6 +63,7 @@ namespace libstp::motion
         started_ = true;
         finished_ = false;
         cycle_ = 0;
+        heading_offset_rad_ = 0.0;
 
         prev_heading_ = 0.0;
         filtered_velocity_ = 0.0;
@@ -80,6 +81,31 @@ namespace libstp::motion
                     cfg_.arc_angle_rad, cfg_.arc_angle_rad * 180.0 / std::numbers::pi,
                     max_angular_velocity_, max_angular_velocity_ * cfg_.radius_m,
                     cfg_.speed_scale, cfg_.lateral);
+    }
+
+    void ArcMotion::startWarm(double heading_offset_rad, double initial_angular_velocity)
+    {
+        started_ = true;
+        finished_ = false;
+        cycle_ = 0;
+        heading_offset_rad_ = heading_offset_rad;
+
+        // Do NOT reset odometry
+        prev_heading_ = odometry().getHeading();
+        filtered_velocity_ = initial_angular_velocity;
+        elapsed_time_ = 0.0;
+        telemetry_.clear();
+
+        profiled_pid_.reset(0.0, initial_angular_velocity);
+        profiled_pid_.setGoal(cfg_.arc_angle_rad);
+
+        LIBSTP_LOG_DEBUG("ArcMotion warm-started: radius={:.3f} m, arc_angle={:.3f} rad ({:.1f} deg), "
+                    "offset={:.3f} rad, initial_vel={:.3f} rad/s, "
+                    "max_omega={:.3f} rad/s (scale={:.2f}, lateral={})",
+                    cfg_.radius_m,
+                    cfg_.arc_angle_rad, cfg_.arc_angle_rad * 180.0 / std::numbers::pi,
+                    heading_offset_rad_, initial_angular_velocity,
+                    max_angular_velocity_, cfg_.speed_scale, cfg_.lateral);
     }
 
     void ArcMotion::update(double dt)
@@ -100,13 +126,14 @@ namespace libstp::motion
 
         odometry().update(dt);
 
-        const double current_heading = odometry().getHeading();
-        const double heading_error = odometry().getHeadingError(cfg_.arc_angle_rad);
+        const double raw_heading = odometry().getHeading();
+        const double current_heading = raw_heading - heading_offset_rad_;
+        const double heading_error = cfg_.arc_angle_rad - current_heading;
 
         // Filtered angular velocity for settling detection
-        const double raw_velocity = (current_heading - prev_heading_) / dt;
+        const double raw_velocity = (raw_heading - prev_heading_) / dt;
         filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
-        prev_heading_ = current_heading;
+        prev_heading_ = raw_heading;
 
         // Settling: within angle tolerance AND nearly stopped
         if (std::abs(heading_error) <= ctx_.pid_config.angle_tolerance_rad &&
@@ -178,9 +205,21 @@ namespace libstp::motion
         return finished_;
     }
 
+    bool ArcMotion::hasReachedAngle() const
+    {
+        if (finished_) return true;
+        if (!started_) return false;
+        const double current_heading = odometry().getHeading() - heading_offset_rad_;
+        const double heading_error = cfg_.arc_angle_rad - current_heading;
+        return std::abs(heading_error) <= ctx_.pid_config.angle_tolerance_rad;
+    }
+
     void ArcMotion::complete()
     {
         finished_ = true;
-        drive().hardStop();
+        if (!suppress_hard_stop_)
+        {
+            drive().hardStop();
+        }
     }
 }

@@ -26,6 +26,12 @@ namespace libstp::motion
         LinearAxis axis{LinearAxis::Forward};
         double distance_m{0.0};
         double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.max_velocity
+
+        /// When set, the controller holds this absolute IMU heading (radians)
+        /// instead of the heading captured at start.  The heading PID error
+        /// is computed from getAbsoluteHeading() rather than the reset-relative
+        /// getHeading(), so it stays stable across odometry resets.
+        std::optional<double> target_heading_rad{};
     };
 
     /** Per-cycle diagnostics captured while a `LinearMotion` instance runs. */
@@ -77,6 +83,27 @@ namespace libstp::motion
         void update(double dt) override;
         [[nodiscard]] bool isFinished() const override;
 
+        /**
+         * Begin motion from current state without resetting odometry.
+         *
+         * Used by smooth_path() to carry velocity across segment boundaries.
+         * The profiled PID starts at position 0 with the given initial velocity,
+         * and odometry reads are offset so the segment measures from its start point.
+         *
+         * @param position_offset_m  Current primary-axis odometry position (subtracted from reads)
+         * @param initial_velocity_mps  Current velocity to seed the profile with
+         */
+        void startWarm(double position_offset_m, double initial_velocity_mps);
+
+        /** When true, complete() sets finished_ without calling hardStop(). */
+        void setSuppressHardStopOnComplete(bool suppress) { suppress_hard_stop_ = suppress; }
+
+        /** Check if target distance is reached, ignoring velocity settling. */
+        [[nodiscard]] bool hasReachedDistance() const;
+
+        /** Current filtered velocity along the primary axis (m/s). */
+        [[nodiscard]] double getFilteredVelocity() const { return filtered_velocity_; }
+
         /** Telemetry samples appended on each update cycle. */
         [[nodiscard]] const std::vector<LinearMotionTelemetry>& getTelemetry() const { return telemetry_; }
 
@@ -93,7 +120,10 @@ namespace libstp::motion
         std::unique_ptr<foundation::PidController> heading_pid_;
         ProfiledPIDController profiled_pid_;
         double initial_heading_rad_{0.0};
+        bool use_absolute_heading_{false};
         bool finished_{false};
+        bool suppress_hard_stop_{false};
+        double position_offset_m_{0.0};  // subtracted from odometry in warm-start mode
         double speed_scale_{1.0};
         double heading_scale_{1.0};
         int unsaturated_cycles_{0};

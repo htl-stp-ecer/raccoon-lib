@@ -8,6 +8,8 @@ The top-level surface is intentionally small:
 
 - :mod:`raccoon.testing.sim` — high-level sim wrapper (``use_scene``,
   ``SimRobotConfig``, ``pose``, etc.).
+- :mod:`raccoon.testing.robot_configs` — pre-built ``SimRobotConfig``
+  instances for real competition robots (``DRUMBOT``, ``PACKINGBOT``).
 - :mod:`raccoon.testing.pytest_plugin` — the pytest plugin that exposes
   the ``robot``, ``scene``, and ``run_step`` fixtures. Auto-loaded via the
   ``pytest11`` entry point in the raccoon wheel; you usually don't need
