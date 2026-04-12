@@ -110,7 +110,11 @@ namespace libstp::motion
         profiled_pid_.setGoal(cfg_.distance_m);
 
         // Always use absolute heading in warm-start mode (odometry not reset)
-        initial_heading_rad_ = odometry().getAbsoluteHeading();
+        if (cfg_.target_heading_rad.has_value()) {
+            initial_heading_rad_ = cfg_.target_heading_rad.value();
+        } else {
+            initial_heading_rad_ = odometry().getAbsoluteHeading();
+        }
         use_absolute_heading_ = true;
 
         LIBSTP_LOG_TRACE("LinearMotion warm-started: axis={}, target={:.3f} m, offset={:.3f} m, "
