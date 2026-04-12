@@ -26,6 +26,8 @@ class SplinePath(MotionStep):
         self,
         waypoints: list[tuple[float, ...]],
         speed: float,
+        absolute_heading: bool = False,
+        final_heading_deg: float | None = None,
     ) -> None:
         super().__init__()
         if len(waypoints) < 2:
@@ -46,6 +48,8 @@ class SplinePath(MotionStep):
 
         self._waypoints = waypoints
         self._speed = speed
+        self._absolute_heading = absolute_heading
+        self._final_heading_deg = final_heading_deg
         self._has_headings = first_len == 3
         self._motion: SplineMotion | None = None
 
@@ -78,6 +82,22 @@ class SplinePath(MotionStep):
             ]
 
         config.speed_scale = self._speed
+        config.use_absolute_heading = self._absolute_heading
+
+        if self._final_heading_deg is not None and not self._has_headings:
+            if self._absolute_heading:
+                # User gave an absolute heading (degrees, same convention as
+                # drive_forward(heading=…)).  Convert to a relative offset so
+                # the C++ addition of initial_absolute_heading_rad_ produces
+                # the correct absolute target at the end of the path.
+                from raccoon.robot.heading_reference import HeadingReferenceService
+                ref_svc = robot.get_service(HeadingReferenceService)
+                sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
+                abs_target_rad = ref_svc._reference_rad + sign * math.radians(self._final_heading_deg)
+                current_abs_rad = robot.odometry.get_absolute_heading()
+                config.final_heading_rad = abs_target_rad - current_abs_rad
+            else:
+                config.final_heading_rad = math.radians(self._final_heading_deg)
 
         self._motion = SplineMotion(
             robot.drive, robot.odometry, robot.motion_pid_config, config,
@@ -90,7 +110,12 @@ class SplinePath(MotionStep):
 
 
 @dsl(tags=["motion", "drive"])
-def spline(*waypoints: tuple[float, ...], speed: float = 1.0) -> SplinePath:
+def spline(
+    *waypoints: tuple[float, ...],
+    speed: float = 1.0,
+    absolute_heading: bool = False,
+    final_heading: float | None = None,
+) -> SplinePath:
     """Drive along a smooth curved path through a series of waypoints.
 
     The robot follows a centripetal Catmull-Rom spline that passes through
@@ -107,9 +132,31 @@ def spline(*waypoints: tuple[float, ...], speed: float = 1.0) -> SplinePath:
       at each waypoint, linearly interpolated along the path. Omni
       drivetrains only — raises ``ValueError`` on differential bots.
 
+    **Absolute heading mode** (``absolute_heading=True``): the heading PID
+    computes its error against the IMU's absolute heading
+    (``get_absolute_heading()``) which is never reset by odometry resets.
+    The absolute heading at the start of the step is captured and used as
+    an offset so that waypoint headings are still expressed relative to the
+    robot's facing direction at the start — the convention is unchanged.
+    Use this when the spline is chained after other motions that reset
+    odometry and you need heading tracking to remain stable.
+
+    **Final heading** (``final_heading``): the heading the robot should be
+    facing when it arrives at the last waypoint, in degrees.  The robot
+    smoothly rotates from its start heading to this target heading as it
+    follows the path (linear interpolation by arc-length).  Ignored when
+    3-tuple waypoints are used (per-waypoint headings take precedence).
+    When ``absolute_heading=True``, ``final_heading`` is interpreted as an
+    absolute heading relative to the heading reference (same convention as
+    ``drive_forward(heading=…)``).  When ``absolute_heading=False``,
+    ``final_heading`` is relative to the robot's start orientation
+    (0 = keep facing forward, 90 = face 90° CCW at the end).
+
     Prerequisites:
         Drive characterization (``auto_tune`` or ``characterize_drive``)
         must have been run so that axis constraints are populated.
+        ``mark_heading_reference()`` required when using
+        ``absolute_heading=True`` with ``final_heading``.
 
     Args:
         *waypoints: Two or more waypoints as tuples. ``forward_cm`` is
@@ -118,13 +165,21 @@ def spline(*waypoints: tuple[float, ...], speed: float = 1.0) -> SplinePath:
             Optional ``heading_deg`` is the desired heading in degrees
             (0 = initial heading, positive = CCW).
         speed: Fraction of maximum speed, 0.0 to 1.0 (default 1.0).
+        absolute_heading: If True, compute heading error against the
+            absolute IMU heading instead of the reset-relative heading
+            (default False).
+        final_heading: Optional desired heading in degrees at the end of
+            the path.  Relative to start orientation when
+            ``absolute_heading=False``; absolute (heading-reference-based)
+            when ``absolute_heading=True``.  Default None (no heading target).
 
     Returns:
         A SplinePath step configured for the described curved path.
 
     Raises:
-        ValueError: If fewer than 2 waypoints, inconsistent tuple sizes,
-            or explicit headings on a non-omni drivetrain.
+        ValueError: If fewer than 2 waypoints or inconsistent tuple sizes.
+        ValueError: If explicit headings (3-tuples) are used on a
+            non-omni drivetrain.
 
     Example::
 
@@ -136,9 +191,18 @@ def spline(*waypoints: tuple[float, ...], speed: float = 1.0) -> SplinePath:
         # Gentle curve at half speed
         spline((40, 0), (60, 20), speed=0.5)
 
+        # Arrive facing 90° left of start orientation
+        spline((30, 0), (50, 20), final_heading=90)
+
         # Omni: curve while rotating to face 90° left at the end
         spline((30, 0, 0), (50, 15, 45), (50, 30, 90))
+
+        # After an odometry reset, keep heading stable against the IMU
+        spline((30, 0), (50, 20), absolute_heading=True)
+
+        # Absolute heading + arrive facing north (heading reference = north)
+        spline((30, 0), (50, 20), absolute_heading=True, final_heading=0)
     """
     if len(waypoints) < 2:
         raise ValueError("spline() requires at least 2 waypoints")
-    return SplinePath(list(waypoints), speed)
+    return SplinePath(list(waypoints), speed, absolute_heading, final_heading)
