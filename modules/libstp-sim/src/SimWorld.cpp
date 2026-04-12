@@ -57,7 +57,12 @@ namespace libstp::sim
         if (wheelIdx >= 2) return 0;
         const float omega = m_wheelOmega[wheelIdx];
         const float divisor = std::max(1e-9f, m_motors.ticksToRad * m_motors.bemfSampleRateHz);
-        return static_cast<int>(std::lround(omega / divisor));
+        float bemf = omega / divisor;
+        if (m_motors.bemfNoiseStddev > 0.0f)
+        {
+            bemf += m_motors.bemfNoiseStddev * m_noiseDist(m_rng);
+        }
+        return static_cast<int>(std::lround(bemf));
     }
 
     std::size_t SimWorld::portToWheelIndex(uint8_t port) const
@@ -91,6 +96,27 @@ namespace libstp::sim
         {
             const float target = targetOmega(i);
             m_wheelOmega[i] += (target - m_wheelOmega[i]) * alpha;
+
+            // Viscous drag: velocity-proportional resistance (bearings, back-EMF).
+            if (m_motors.viscousDragCoeff > 0.0f)
+            {
+                m_wheelOmega[i] *= (1.0f - m_motors.viscousDragCoeff * dt);
+            }
+
+            // Coulomb friction: constant deceleration opposing motion.
+            if (m_motors.coulombFrictionRadSS > 0.0f &&
+                std::abs(m_wheelOmega[i]) > 1e-3f)
+            {
+                const float frictionDelta = m_motors.coulombFrictionRadSS * dt;
+                if (std::abs(m_wheelOmega[i]) <= frictionDelta)
+                {
+                    m_wheelOmega[i] = 0.0f;   // clamp — don't reverse through friction
+                }
+                else
+                {
+                    m_wheelOmega[i] -= std::copysign(frictionDelta, m_wheelOmega[i]);
+                }
+            }
         }
 
         // Differential-drive forward kinematics (from the classic

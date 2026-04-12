@@ -4,6 +4,7 @@ register_libstp_test(test_motion
         test_trapezoidal_profile.cpp
         test_linear_motion.cpp
         test_turn_motion.cpp
+        test_spline_motion.cpp
     LIBS
         motion
         drive

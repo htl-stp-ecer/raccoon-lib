@@ -73,6 +73,23 @@ namespace libstp::motion
         void update(double dt) override;
         [[nodiscard]] bool isFinished() const override;
 
+        /**
+         * Begin arc from current state without resetting odometry.
+         *
+         * @param heading_offset_rad  Current heading (subtracted from reads)
+         * @param initial_angular_velocity  Current angular velocity to seed the profile with
+         */
+        void startWarm(double heading_offset_rad, double initial_angular_velocity);
+
+        /** When true, complete() sets finished_ without calling hardStop(). */
+        void setSuppressHardStopOnComplete(bool suppress) { suppress_hard_stop_ = suppress; }
+
+        /** Check if target arc angle is reached, ignoring velocity settling. */
+        [[nodiscard]] bool hasReachedAngle() const;
+
+        /** Current filtered angular velocity (rad/s). */
+        [[nodiscard]] double getFilteredVelocity() const { return filtered_velocity_; }
+
         [[nodiscard]] const std::vector<ArcMotionTelemetry>& getTelemetry() const { return telemetry_; }
 
     private:
@@ -82,6 +99,8 @@ namespace libstp::motion
         double max_angular_velocity_{0.0};
         ProfiledPIDController profiled_pid_;
         bool finished_{false};
+        bool suppress_hard_stop_{false};
+        double heading_offset_rad_{0.0};
 
         // Velocity tracking for settling detection
         double prev_heading_{0.0};

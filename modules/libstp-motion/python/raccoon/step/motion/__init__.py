@@ -10,7 +10,7 @@ from .drive_dsl import (
 from .drive_angle import DriveAngle, DriveAngleLeft, DriveAngleRight
 from .drive_angle_dsl import drive_angle
 from .arc import Arc, DriveArcLeft, DriveArcRight, DriveArc, StrafeArcLeft, StrafeArcRight, StrafeArc
-from .arc_dsl import drive_arc_left, drive_arc_right, drive_arc, strafe_arc_left, strafe_arc_right, strafe_arc
+from .arc_dsl import drive_arc_left, drive_arc_right, strafe_arc_left, strafe_arc_right
 from .arc_segment import drive_arc_segment
 from .stop import Stop
 from .stop_dsl import stop
@@ -99,6 +99,10 @@ from .auto_tune_dsl import (
 from .sensor_group import SensorGroup
 from .drive_to_analog_target import DriveToAnalogTarget
 from .drive_to_analog_target_dsl import drive_to_analog_target
+from .custom_velocity import CustomVelocity
+from .custom_velocity_dsl import CustomVelocityBuilder, custom_velocity
+from .smooth_path import SmoothPath, smooth_path
+from .spline_path import SplinePath, spline
 
 __all__ = [
     # Base
@@ -124,13 +128,11 @@ __all__ = [
     "DriveArcRight",
     "drive_arc_right",
     "DriveArc",
-    "drive_arc",
     "StrafeArcLeft",
     "strafe_arc_left",
     "StrafeArcRight",
     "strafe_arc_right",
     "StrafeArc",
-    "strafe_arc",
     "drive_arc_segment",
     "TurnLeft",
     "turn_left",
@@ -217,4 +219,14 @@ __all__ = [
     # Analog sensor target drive
     "DriveToAnalogTarget",
     "drive_to_analog_target",
+    # Custom velocity
+    "CustomVelocity",
+    "CustomVelocityBuilder",
+    "custom_velocity",
+    # Smooth path
+    "SmoothPath",
+    "smooth_path",
+    # Spline path
+    "SplinePath",
+    "spline",
 ]

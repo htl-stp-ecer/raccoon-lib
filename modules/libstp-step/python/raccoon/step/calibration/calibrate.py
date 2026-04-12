@@ -34,6 +34,9 @@ class Calibrate(CalibrateDistance):
     Args:
         distance_cm: Distance (in cm) the robot drives during calibration.
             Longer distances yield more accurate results.
+        speed: Drive speed during the calibration runs, as a fraction of
+            max speed in ``[0.0, 1.0]``. Lower speeds reduce wheel slip
+            and usually produce more accurate calibration.
         persist_to_yaml: If ``True``, write the EMA-filtered baseline
             back to ``raccoon.project.yml`` so it persists across runs.
         ema_alpha: EMA smoothing coefficient between 0.0 and 1.0. Higher
@@ -61,6 +64,7 @@ class Calibrate(CalibrateDistance):
     def __init__(
         self,
         distance_cm: float = 30.0,
+        speed: float = 1.0,
         persist_to_yaml: bool = True,
         ema_alpha: float = 0.7,
         calibration_sets: Optional[List[str]] = None,
@@ -68,6 +72,7 @@ class Calibrate(CalibrateDistance):
     ) -> None:
         super().__init__(
             distance_cm=distance_cm,
+            speed=speed,
             calibrate_light_sensors=True,
             persist_to_yaml=persist_to_yaml,
             ema_alpha=ema_alpha,

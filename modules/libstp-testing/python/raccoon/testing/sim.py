@@ -99,6 +99,10 @@ class SimRobotConfig:
 
     ticks_to_rad: float = 2.0 * 3.14159265358979 / 1440.0
 
+    viscous_drag_coeff: float = 0.0
+    coulomb_friction_rad_s2: float = 0.0
+    bemf_noise_stddev: float = 0.0
+
     line_sensors: List[LineSensorMount] = field(default_factory=list)
     distance_sensors: List[DistanceSensorMount] = field(default_factory=list)
 
@@ -133,6 +137,9 @@ def _build_native_motors(cfg: SimRobotConfig) -> "_sim.SimMotorMap":
     m.max_wheel_velocity_rad_s = cfg.max_wheel_velocity_rad_s
     m.motor_time_constant_sec = cfg.motor_time_constant_sec
     m.ticks_to_rad = cfg.ticks_to_rad
+    m.viscous_drag_coeff = cfg.viscous_drag_coeff
+    m.coulomb_friction_rad_s2 = cfg.coulomb_friction_rad_s2
+    m.bemf_noise_stddev = cfg.bemf_noise_stddev
     return m
 
 

@@ -18,7 +18,8 @@ void init_linear_motion(py::module_& m)
         .def(py::init<>())
         .def_readwrite("axis", &LinearMotionConfig::axis)
         .def_readwrite("distance_m", &LinearMotionConfig::distance_m)
-        .def_readwrite("speed_scale", &LinearMotionConfig::speed_scale);
+        .def_readwrite("speed_scale", &LinearMotionConfig::speed_scale)
+        .def_readwrite("target_heading_rad", &LinearMotionConfig::target_heading_rad);
 
     py::class_<LinearMotionTelemetry>(m, "LinearMotionTelemetry")
         .def_readonly("time_s", &LinearMotionTelemetry::time_s)
@@ -61,8 +62,18 @@ void init_linear_motion(py::module_& m)
             py::keep_alive<1, 3>(),
             py::keep_alive<1, 4>())
         .def("start", &LinearMotion::start)
+        .def("start_warm", &LinearMotion::startWarm,
+             py::arg("position_offset_m"), py::arg("initial_velocity_mps"),
+             "Begin motion from current state without resetting odometry.")
         .def("update", &LinearMotion::update, py::arg("dt"))
         .def("is_finished", &LinearMotion::isFinished)
+        .def("has_reached_distance", &LinearMotion::hasReachedDistance,
+             "Check if target distance is reached (ignores velocity settling).")
+        .def("set_suppress_hard_stop", &LinearMotion::setSuppressHardStopOnComplete,
+             py::arg("suppress"),
+             "When true, complete() will not call hardStop().")
+        .def("get_filtered_velocity", &LinearMotion::getFilteredVelocity,
+             "Current filtered velocity along the primary axis (m/s).")
         .def("set_omega_override", &LinearMotion::setOmegaOverride, py::arg("omega"),
              "Override heading PID with external omega. Set each cycle before update().")
         .def("clear_omega_override", &LinearMotion::clearOmegaOverride,

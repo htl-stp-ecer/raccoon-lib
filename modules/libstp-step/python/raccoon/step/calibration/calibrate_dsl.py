@@ -19,6 +19,7 @@ class CalibrateBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._distance_cm = 30.0
+        self._speed = 1.0
         self._persist_to_yaml = True
         self._ema_alpha = 0.7
         self._calibration_sets = None
@@ -26,6 +27,10 @@ class CalibrateBuilder(StepBuilder):
 
     def distance_cm(self, value: float):
         self._distance_cm = value
+        return self
+
+    def speed(self, value: float):
+        self._speed = value
         return self
 
     def persist_to_yaml(self, value: bool):
@@ -47,6 +52,7 @@ class CalibrateBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         kwargs['distance_cm'] = self._distance_cm
+        kwargs['speed'] = self._speed
         kwargs['persist_to_yaml'] = self._persist_to_yaml
         kwargs['ema_alpha'] = self._ema_alpha
         kwargs['calibration_sets'] = self._calibration_sets
@@ -55,7 +61,7 @@ class CalibrateBuilder(StepBuilder):
 
 
 @dsl(tags=['calibration'])
-def calibrate(distance_cm: float = 30.0, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: Optional[List[str]] = None, exclude_ir_sensors: Optional[List['IRSensor']] = None):
+def calibrate(distance_cm: float = 30.0, speed: float = 1.0, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: Optional[List[str]] = None, exclude_ir_sensors: Optional[List['IRSensor']] = None):
     """
     Run a unified distance and IR sensor calibration.
 
@@ -77,13 +83,14 @@ def calibrate(distance_cm: float = 30.0, persist_to_yaml: bool = True, ema_alpha
 
     Args:
         distance_cm: Distance (in cm) the robot drives during calibration. Longer distances yield more accurate results.
+        speed: Drive speed during the calibration runs, as a fraction of max speed in ``[0.0, 1.0]``. Lower speeds reduce wheel slip and usually produce more accurate calibration.
         persist_to_yaml: If ``True``, write the EMA-filtered baseline back to ``raccoon.project.yml`` so it persists across runs.
         ema_alpha: EMA smoothing coefficient between 0.0 and 1.0. Higher values produce slower convergence but a more stable baseline.
         calibration_sets: List of named IR calibration surface sets to run (e.g. ``["default", "transparent"]``). Each set beyond the first triggers an additional drive-and-sample cycle.
         exclude_ir_sensors: List of ``IRSensor`` instances to skip during IR calibration.
 
     Returns:
-        A CalibrateBuilder (chainable via ``.distance_cm()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A CalibrateBuilder (chainable via ``.distance_cm()``, ``.speed()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -100,6 +107,7 @@ def calibrate(distance_cm: float = 30.0, persist_to_yaml: bool = True, ema_alpha
     """
     b = CalibrateBuilder()
     b._distance_cm = distance_cm
+    b._speed = speed
     b._persist_to_yaml = persist_to_yaml
     b._ema_alpha = ema_alpha
     b._calibration_sets = calibration_sets

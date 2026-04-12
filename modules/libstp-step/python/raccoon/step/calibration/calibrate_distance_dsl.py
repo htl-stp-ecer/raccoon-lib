@@ -19,6 +19,7 @@ class CalibrateDistanceBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._distance_cm = 30.0
+        self._speed = 1.0
         self._calibrate_light_sensors = False
         self._persist_to_yaml = True
         self._ema_alpha = 0.7
@@ -27,6 +28,10 @@ class CalibrateDistanceBuilder(StepBuilder):
 
     def distance_cm(self, value: float):
         self._distance_cm = value
+        return self
+
+    def speed(self, value: float):
+        self._speed = value
         return self
 
     def calibrate_light_sensors(self, value: bool):
@@ -52,6 +57,7 @@ class CalibrateDistanceBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         kwargs['distance_cm'] = self._distance_cm
+        kwargs['speed'] = self._speed
         kwargs['calibrate_light_sensors'] = self._calibrate_light_sensors
         kwargs['persist_to_yaml'] = self._persist_to_yaml
         kwargs['ema_alpha'] = self._ema_alpha
@@ -61,7 +67,7 @@ class CalibrateDistanceBuilder(StepBuilder):
 
 
 @dsl(tags=['calibration', 'distance'])
-def calibrate_distance(distance_cm: float = 30.0, calibrate_light_sensors: bool = False, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: Optional[List[str]] = None, exclude_ir_sensors: Optional[List['IRSensor']] = None):
+def calibrate_distance(distance_cm: float = 30.0, speed: float = 1.0, calibrate_light_sensors: bool = False, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: Optional[List[str]] = None, exclude_ir_sensors: Optional[List['IRSensor']] = None):
     """
     Calibrate per-wheel distance estimation via encoder measurement.
 
@@ -79,6 +85,7 @@ def calibrate_distance(distance_cm: float = 30.0, calibrate_light_sensors: bool 
 
     Args:
         distance_cm: Distance (in cm) the robot drives during calibration. Longer distances yield better accuracy.
+        speed: Drive speed during the calibration runs, as a fraction of max speed in ``[0.0, 1.0]``. Lower speeds reduce wheel slip and usually produce more accurate calibration.
         calibrate_light_sensors: If ``True``, run IR sensor calibration after the distance calibration is confirmed.
         persist_to_yaml: If ``True``, write the EMA-filtered baseline to ``raccoon.project.yml`` so it persists across program runs.
         ema_alpha: EMA smoothing coefficient between 0.0 and 1.0. Higher values produce slower convergence but a more stable baseline.
@@ -86,7 +93,7 @@ def calibrate_distance(distance_cm: float = 30.0, calibrate_light_sensors: bool 
         exclude_ir_sensors: List of ``IRSensor`` instances to skip during IR calibration.
 
     Returns:
-        A CalibrateDistanceBuilder (chainable via ``.distance_cm()``, ``.calibrate_light_sensors()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A CalibrateDistanceBuilder (chainable via ``.distance_cm()``, ``.speed()``, ``.calibrate_light_sensors()``, ``.persist_to_yaml()``, ``.ema_alpha()``, ``.calibration_sets()``, ``.exclude_ir_sensors()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -104,6 +111,7 @@ def calibrate_distance(distance_cm: float = 30.0, calibrate_light_sensors: bool 
     """
     b = CalibrateDistanceBuilder()
     b._distance_cm = distance_cm
+    b._speed = speed
     b._calibrate_light_sensors = calibrate_light_sensors
     b._persist_to_yaml = persist_to_yaml
     b._ema_alpha = ema_alpha

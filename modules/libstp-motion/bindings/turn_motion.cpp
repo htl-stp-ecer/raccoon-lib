@@ -32,6 +32,16 @@ void init_turn(py::module_& m)
             py::keep_alive<1, 3>(),
             py::keep_alive<1, 4>())
         .def("start", &TurnMotion::start)
+        .def("start_warm", &TurnMotion::startWarm,
+             py::arg("heading_offset_rad"), py::arg("initial_angular_velocity"),
+             "Begin turn from current state without resetting odometry.")
         .def("update", &TurnMotion::update, py::arg("dt"))
-        .def("is_finished", &TurnMotion::isFinished);
+        .def("is_finished", &TurnMotion::isFinished)
+        .def("has_reached_angle", &TurnMotion::hasReachedAngle,
+             "Check if target angle is reached (ignores velocity settling).")
+        .def("set_suppress_hard_stop", &TurnMotion::setSuppressHardStopOnComplete,
+             py::arg("suppress"),
+             "When true, complete() will not call hardStop().")
+        .def("get_filtered_velocity", &TurnMotion::getFilteredVelocity,
+             "Current filtered angular velocity (rad/s).");
 }
