@@ -45,7 +45,10 @@ DRUMBOT = SimRobotConfig(
     right_motor_inverted=True,
     max_wheel_velocity_rad_s=30.0,
     motor_time_constant_sec=0.06,
-    ticks_to_rad=1.76e-05,        # average of left (1.955e-5) and right (1.574e-5)
+    # ticks_to_rad intentionally left at the default (2π/1440) because the
+    # mock Motor HAL uses the default MotorCalibration, so the sim's BEMF
+    # encoding/decoding must match.  Real encoder resolution only matters
+    # on physical hardware.
     viscous_drag_coeff=0.8,
     coulomb_friction_rad_s2=1.5,
     bemf_noise_stddev=2.0,        # ~2 BEMF units of encoder noise
@@ -85,7 +88,8 @@ PACKINGBOT = SimRobotConfig(
     right_motor_inverted=True,
     max_wheel_velocity_rad_s=30.0,
     motor_time_constant_sec=0.06,
-    ticks_to_rad=1.63e-05,        # average of all four motors
+    # ticks_to_rad intentionally left at the default (2π/1440) — see DRUMBOT
+    # comment above.
     viscous_drag_coeff=1.2,
     coulomb_friction_rad_s2=2.0,
     bemf_noise_stddev=2.0,        # ~2 BEMF units of encoder noise

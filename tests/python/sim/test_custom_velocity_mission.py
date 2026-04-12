@@ -55,6 +55,7 @@ def _run_runner(config_name: str) -> dict:
     env = os.environ.copy()
     env.setdefault("LIBSTP_LOG_LEVEL", "warn")
     env.setdefault("LIBSTP_NO_CALIBRATE", "1")
+    env["LIBSTP_TIMING_ENABLED"] = "0"
 
     proc = subprocess.run(
         [sys.executable, str(RUNNER), "--config", config_name],
