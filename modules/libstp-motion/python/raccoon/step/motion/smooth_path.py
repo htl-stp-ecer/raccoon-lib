@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 class _Segment:
     """Internal representation of one motion segment extracted from a Step."""
 
-    kind: str  # "linear" | "turn" | "arc"
+    kind: str  # "linear" | "turn" | "arc" | "follow_line" | "spline"
     # Linear params
     axis: Optional[LinearAxis] = None
     sign: float = 1.0
@@ -51,6 +51,8 @@ class _Segment:
     # Common
     condition: Optional[StopCondition] = None
     has_known_endpoint: bool = True
+    # Opaque steps (follow_line, spline): store the step for adapter creation
+    opaque_step: Optional["Step"] = field(default=None, compare=False)
 
     _SENTINEL_DISTANCE_M = 100.0
 
@@ -67,6 +69,93 @@ class _SideAction:
 _PathNode = Union[_Segment, _SideAction]
 
 _log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Opaque motion adapters (follow_line, spline)
+# ---------------------------------------------------------------------------
+
+class _LineFollowAdapter:
+    """Adapts a LineFollow/SingleSensorLineFollow step to the C++ motion API.
+
+    Delegates to the step's ``on_start``/``on_update`` lifecycle and forwards
+    completion queries to the internal ``LinearMotion``.  Supports warm-start
+    for seamless velocity hand-off from a preceding forward linear segment.
+    """
+
+    def __init__(self, step, robot: "GenericRobot") -> None:
+        self._step = step
+        self._robot = robot
+        self._done = False
+
+    def start(self) -> None:
+        self._step.on_start(self._robot)
+        self._done = False
+
+    def start_warm(self, offset: float, velocity: float) -> None:
+        self._step.on_start(self._robot)
+        if self._step._motion is not None:
+            self._step._motion.start_warm(offset, velocity)
+        self._done = False
+
+    def update(self, dt: float) -> None:
+        result = self._step.on_update(self._robot, dt)
+        if result:
+            self._done = True
+
+    def is_finished(self) -> bool:
+        return self._done
+
+    def has_reached_distance(self) -> bool:
+        if self._step._motion is not None:
+            return self._step._motion.has_reached_distance()
+        return self._done
+
+    def get_filtered_velocity(self) -> float:
+        if self._step._motion is not None:
+            return self._step._motion.get_filtered_velocity()
+        return 0.0
+
+    def set_suppress_hard_stop(self, val: bool) -> None:
+        if self._step._motion is not None:
+            self._step._motion.set_suppress_hard_stop(val)
+
+
+class _SplineAdapter:
+    """Adapts a SplinePath step to the C++ motion API.
+
+    SplineMotion does not support warm-start; cross-type transitions to/from
+    spline segments always use a cold start.
+    """
+
+    def __init__(self, step, robot: "GenericRobot") -> None:
+        self._step = step
+        self._robot = robot
+
+    def start(self) -> None:
+        self._step.on_start(self._robot)
+
+    def start_warm(self, offset: float, velocity: float) -> None:
+        # SplineMotion has no warm-start; treat like cold start.
+        self._step.on_start(self._robot)
+
+    def update(self, dt: float) -> None:
+        self._step.on_update(self._robot, dt)
+
+    def is_finished(self) -> bool:
+        return (
+            self._step._motion is not None
+            and self._step._motion.is_finished()
+        )
+
+    def has_reached_distance(self) -> bool:
+        return self.is_finished()
+
+    def get_filtered_velocity(self) -> float:
+        return 0.0  # exit velocity from a spline is treated as zero
+
+    def set_suppress_hard_stop(self, val: bool) -> None:
+        pass  # SplineMotion handles its own stop behaviour
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +225,17 @@ class _WorldPoseTracker:
             if angle is None:
                 return
             self.expected_heading = _wrap_angle(h + angle)
+
+        elif seg.kind == "follow_line":
+            # Approximate as straight-forward motion; heading unchanged.
+            dist = seg.distance_m
+            if dist is None:
+                return  # condition-based, can't predict
+            self.expected_x += dist * math.cos(h)
+            self.expected_y += dist * math.sin(h)
+
+        elif seg.kind == "spline":
+            pass  # endpoint unknown in world frame; tracker reset after spline
 
         elif seg.kind == "arc":
             angle = seg.arc_angle_rad
@@ -268,6 +368,8 @@ def _extract_segment(step: Step) -> _Segment:
     from .drive import _ConditionalDrive
     from .turn import _ConditionalTurn
     from .arc import Arc
+    from .line_follow import LineFollow, SingleSensorLineFollow
+    from .spline_path import SplinePath
 
     if isinstance(step, _ConditionalDrive):
         cm = step._cm
@@ -304,9 +406,32 @@ def _extract_segment(step: Step) -> _Segment:
             has_known_endpoint=True,
         )
 
+    if isinstance(step, (LineFollow, SingleSensorLineFollow)):
+        cfg = step.config
+        return _Segment(
+            kind="follow_line",
+            axis=LinearAxis.Forward,
+            sign=1.0,
+            distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
+            speed_scale=cfg.speed_scale,
+            # Condition is handled internally by on_update; not exposed here to
+            # avoid double-starting it.  Completion is detected via adapter.is_finished().
+            condition=None,
+            has_known_endpoint=cfg.distance_cm is not None,
+            opaque_step=step,
+        )
+
+    if isinstance(step, SplinePath):
+        return _Segment(
+            kind="spline",
+            has_known_endpoint=True,
+            opaque_step=step,
+        )
+
     raise TypeError(
         f"smooth_path() does not support {type(step).__name__} as a motion "
-        f"step. Only drive, turn, and arc steps can form the motion spine."
+        f"step. Supported motion steps: drive, turn, arc, follow_line, "
+        f"follow_line_single, spline."
     )
 
 
@@ -318,12 +443,25 @@ def _resolve_step(step) -> Step:
 
 
 def _is_same_type(a: _Segment, b: _Segment) -> bool:
-    """Check if two segments can use warm-start (same motion type)."""
-    if a.kind != b.kind:
+    """Check if two segments can use warm-start (same motion type).
+
+    ``follow_line`` is treated as a forward linear for warm-start purposes:
+    it runs the same ``LinearMotion`` axis internally, so velocity can be
+    carried across ``linear(Forward) ↔ follow_line`` transitions.
+    ``spline`` never warm-starts.
+    """
+    # Spline never warm-starts (SplineMotion has no start_warm).
+    if a.kind == "spline" or b.kind == "spline":
         return False
-    if a.kind == "linear":
-        return a.axis == b.axis
-    return True
+    # Treat follow_line as forward-linear for warm-start compatibility.
+    def _effective(seg: _Segment) -> tuple:
+        if seg.kind == "follow_line":
+            return ("linear", LinearAxis.Forward)
+        if seg.kind == "linear":
+            return ("linear", seg.axis)
+        return (seg.kind, None)
+
+    return _effective(a) == _effective(b)
 
 
 # ---------------------------------------------------------------------------
@@ -389,7 +527,7 @@ def _flatten_one(
         raise TypeError(
             f"smooth_path() does not support {type(step).__name__} — "
             f"it uses the drive resource but is not a supported motion step. "
-            f"Only drive, turn, and arc steps can form the motion spine."
+            f"Supported: drive, turn, arc, follow_line, follow_line_single, spline."
         )
 
     # 9. Non-drive step — treat as inline side action
@@ -674,6 +812,12 @@ def _build_spline_step(nodes: list) -> "SplinePath":
                     "smooth_path(spline=True) cannot contain arc segments — "
                     "use corner_cut_cm instead, or remove the arc"
                 )
+            if node.kind in ("follow_line", "spline"):
+                raise ValueError(
+                    f"smooth_path(spline=True) cannot contain "
+                    f"{node.kind} segments — endpoint must be a simple "
+                    f"linear/turn sequence"
+                )
 
     segs = [n for n in nodes if isinstance(n, _Segment)]
     linear_count = sum(1 for s in segs if s.kind == "linear")
@@ -810,6 +954,11 @@ class SmoothPath(Step):
                     parts.append(f"turn({a})")
                 elif seg.kind == "arc":
                     parts.append(f"arc({abs(math.degrees(seg.arc_angle_rad or 0)):.0f}\u00b0)")
+                elif seg.kind == "follow_line":
+                    d = f"{abs(seg.distance_m or 0) * 100:.0f}cm" if seg.distance_m else "until"
+                    parts.append(f"follow_line({d})")
+                elif seg.kind == "spline":
+                    parts.append("spline(...)")
             elif isinstance(node, _SideAction):
                 label = type(node.step).__name__
                 mode = "bg" if node.is_background else "inline"
@@ -950,6 +1099,10 @@ class SmoothPath(Step):
             return self._create_turn_motion(robot, seg, is_last, correction)
         elif seg.kind == "arc":
             return self._create_arc_motion(robot, seg, is_last, correction)
+        elif seg.kind == "follow_line":
+            return _LineFollowAdapter(seg.opaque_step, robot)
+        elif seg.kind == "spline":
+            return _SplineAdapter(seg.opaque_step, robot)
         raise ValueError(f"Unknown segment kind: {seg.kind}")
 
     # ------------------------------------------------------------------
@@ -961,7 +1114,8 @@ class SmoothPath(Step):
         """Check if the motion has reached its distance/angle target.
 
         Used only for the **last** segment where the profile naturally
-        decelerates to zero at the target.
+        decelerates to zero at the target.  Opaque segments (follow_line,
+        spline) are always checked via ``is_finished()``.
         """
         if seg.kind == "linear":
             return motion.has_reached_distance()
@@ -1031,6 +1185,10 @@ class SmoothPath(Step):
                 return info.lateral
         elif seg.kind in ("turn", "arc"):
             return robot.odometry.get_heading()
+        elif seg.kind == "follow_line":
+            # Always forward-axis, same as LinearAxis.Forward
+            return robot.odometry.get_distance_from_origin().forward
+        # "spline": not used for warm-start (splines always cold-start)
         return 0.0
 
     # ------------------------------------------------------------------
@@ -1169,7 +1327,7 @@ class SmoothPath(Step):
             if not isinstance(nodes[node_idx], _Segment):
                 raise ValueError(
                     "smooth_path() resolved to no motion segments — "
-                    "at least one drive, turn, or arc step is required"
+                    "at least one motion step is required"
                 )
 
             # Start first motion segment (cold start)
@@ -1227,6 +1385,11 @@ class SmoothPath(Step):
                             robot, seg, seg_origin, seg_correction,
                         )
 
+                # Opaque steps (follow_line, spline): adapter signals
+                # completion via is_finished() regardless of is_last.
+                if not transition and seg.kind in ("follow_line", "spline"):
+                    transition = motion.is_finished()
+
                 if transition:
                     # Read current velocity before transitioning
                     current_vel = self._get_current_velocity(motion, seg)
@@ -1237,9 +1400,13 @@ class SmoothPath(Step):
                         not prev_seg.has_known_endpoint
                         or prev_seg.condition is not None and not prev_seg.has_known_endpoint
                     )
+                    # Opaque segments (follow_line, spline) may have deviated
+                    # from the ideal straight path, so reset the tracker rather
+                    # than attempting to correct based on stale geometry.
+                    was_opaque = prev_seg.kind in ("follow_line", "spline")
                     if tracker is not None:
                         tracker.advance_expected(prev_seg)
-                        if was_condition_based:
+                        if was_condition_based or was_opaque:
                             tracker.reset_expected_to_actual(robot)
 
                     node_idx += 1
@@ -1402,9 +1569,15 @@ def smooth_path(
             ``drive_forward``, ``drive_backward``, ``strafe_left``,
             ``strafe_right``, ``turn_left``, ``turn_right``,
             ``turn_to_heading_left``, ``turn_to_heading_right``,
-            ``drive_arc_left``, ``drive_arc_right``, nested ``seq()``,
-            ``parallel()`` with a motion spine, ``background()``,
-            and their builder variants with ``.until()`` and ``.speed()``.
+            ``drive_arc_left``, ``drive_arc_right``,
+            ``follow_line``, ``follow_line_single``, ``spline``,
+            nested ``seq()``, ``parallel()`` with a motion spine,
+            ``background()``, and their builder variants with
+            ``.until()`` and ``.speed()``.
+            ``follow_line`` / ``follow_line_single`` steps warm-start
+            from a preceding forward drive segment; the subsequent
+            segment cold-starts from the line-follow exit velocity.
+            ``spline`` steps always cold-start and exit at zero velocity.
         correct: Enable world-frame error correction across segment
             transitions. Default ``True``. Set to ``False`` for the
             legacy uncorrected behavior.
