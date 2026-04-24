@@ -239,10 +239,17 @@ class UIStep(Step, ABC):
 
     async def _button_listener(self, queue: asyncio.Queue) -> None:
         """Listen for physical button presses."""
-        was_pressed = is_pressed()
+        button_sensor = getattr(getattr(self._robot, "defs", None), "button", None)
+
+        def _pressed() -> bool:
+            if button_sensor is not None:
+                return bool(button_sensor.read())
+            return is_pressed()
+
+        was_pressed = _pressed()
 
         while True:
-            pressed = is_pressed()
+            pressed = _pressed()
 
             # Detect rising edge (button just pressed)
             if pressed and not was_pressed:
