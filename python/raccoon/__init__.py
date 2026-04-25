@@ -7,6 +7,11 @@ from typing import Dict
 
 from raccoon._core import __version__ as __version__
 
+# Minimum project format_version required by this version of raccoon-lib.
+# Bump this when a breaking YAML change lands (e.g. a robot.yml key renamed)
+# so that raccoon-cli can warn the user to run `raccoon migrate`.
+MIN_FORMAT_VERSION: int = 1
+
 try:
     from raccoon_transport import __version__ as _raccoon_version
 except Exception:
