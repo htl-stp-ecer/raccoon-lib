@@ -76,6 +76,14 @@ namespace platform::wombat::core {
         /// Wait until heading data has been observed at least once.
         bool waitForImuReady(int timeout_ms = 1000);
 
+        /// Wait until BEMF telemetry has been observed on any motor channel.
+        ///
+        /// Used by `Platform::probe()` to confirm motor data is flowing from
+        /// the STM32. The BEMF channel is published continuously by
+        /// `stm32-data-reader` regardless of motor activity, so a non-arrival
+        /// generally indicates the bridge is silent on the motor side.
+        bool waitForBemfData(int timeout_ms = 500);
+
         // Deprecated: callback mechanism removed, use getIntegratedVelocity via IIMU instead.
         void setLinearAccelCallback(std::function<void(float, float, float)> /*callback*/) {}
 
@@ -111,6 +119,9 @@ namespace platform::wombat::core {
 
         // Track whether real IMU heading data has been received.
         std::atomic<bool> imu_heading_received_{false};
+
+        // Track whether real BEMF telemetry has been received from the STM32.
+        std::atomic<bool> bemf_received_{false};
 
         // Background listening function.
         void listenLoop();
