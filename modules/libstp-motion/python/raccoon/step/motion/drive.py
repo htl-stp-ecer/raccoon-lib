@@ -1,5 +1,3 @@
-import math
-
 from raccoon.motion import LinearMotion, LinearMotionConfig, LinearAxis
 from typing import TYPE_CHECKING, Optional
 
@@ -79,10 +77,7 @@ class _ConditionalDrive(MotionStep):
         if self._heading_deg is not None:
             from raccoon.robot.heading_reference import HeadingReferenceService
             ref_svc = robot.get_service(HeadingReferenceService)
-            sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
-            config.target_heading_rad = (
-                ref_svc._reference_rad + sign * math.radians(self._heading_deg)
-            )
+            config.target_heading_rad = ref_svc.target_absolute_rad(self._heading_deg)
 
         self._motion = LinearMotion(
             robot.drive, robot.odometry,
