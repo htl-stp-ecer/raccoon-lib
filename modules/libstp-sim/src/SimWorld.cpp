@@ -18,7 +18,7 @@ namespace libstp::sim
     {
         m_robot = robot;
         m_motors = motors;
-        m_wheelOmega = {0.0f, 0.0f};
+        m_wheelOmega.fill(0.0f);
         m_yawRateRadS = 0.0f;
         m_motorTargetOmega.fill(0.0f);
     }
@@ -54,7 +54,7 @@ namespace libstp::sim
     int SimWorld::motorBemf(uint8_t port) const
     {
         const auto wheelIdx = portToWheelIndex(port);
-        if (wheelIdx >= 2) return 0;
+        if (wheelIdx >= activeWheelCount()) return 0;
         const float omega = m_wheelOmega[wheelIdx];
         const float divisor = std::max(1e-9f, m_motors.ticksToRad * m_motors.bemfSampleRateHz);
         float bemf = omega / divisor;
@@ -65,24 +65,63 @@ namespace libstp::sim
         return static_cast<int>(std::lround(bemf));
     }
 
+    std::size_t SimWorld::activeWheelCount() const noexcept
+    {
+        return m_motors.kind == DrivetrainKind::Mecanum ? 4 : 2;
+    }
+
     std::size_t SimWorld::portToWheelIndex(uint8_t port) const
     {
+        if (m_motors.kind == DrivetrainKind::Mecanum)
+        {
+            if (port == m_motors.flPort) return kFL;
+            if (port == m_motors.frPort) return kFR;
+            if (port == m_motors.blPort) return kBL;
+            if (port == m_motors.brPort) return kBR;
+            return std::numeric_limits<std::size_t>::max();
+        }
         if (port == m_motors.leftPort) return kLeft;
         if (port == m_motors.rightPort) return kRight;
         return std::numeric_limits<std::size_t>::max();
     }
 
+    uint8_t SimWorld::wheelPort(std::size_t wheelIndex) const
+    {
+        if (m_motors.kind == DrivetrainKind::Mecanum)
+        {
+            switch (wheelIndex)
+            {
+                case kFL: return m_motors.flPort;
+                case kFR: return m_motors.frPort;
+                case kBL: return m_motors.blPort;
+                case kBR: return m_motors.brPort;
+                default:  return 0;
+            }
+        }
+        return wheelIndex == kLeft ? m_motors.leftPort : m_motors.rightPort;
+    }
+
     bool SimWorld::wheelInverted(std::size_t wheelIndex) const
     {
+        if (m_motors.kind == DrivetrainKind::Mecanum)
+        {
+            switch (wheelIndex)
+            {
+                case kFL: return m_motors.flInverted;
+                case kFR: return m_motors.frInverted;
+                case kBL: return m_motors.blInverted;
+                case kBR: return m_motors.brInverted;
+                default:  return false;
+            }
+        }
         return wheelIndex == kLeft ? m_motors.leftInverted : m_motors.rightInverted;
     }
 
     float SimWorld::targetOmega(std::size_t wheelIndex) const
     {
-        const uint8_t port = wheelIndex == kLeft ? m_motors.leftPort : m_motors.rightPort;
-        const bool inverted = wheelInverted(wheelIndex);
+        const uint8_t port = wheelPort(wheelIndex);
         const float cmd = m_motorTargetOmega[port];
-        return inverted ? -cmd : cmd;
+        return wheelInverted(wheelIndex) ? -cmd : cmd;
     }
 
     void SimWorld::tick(float dt)
@@ -92,7 +131,8 @@ namespace libstp::sim
         // First-order motor response. Exact discrete form — stable for any dt.
         const float tau = std::max(1e-4f, m_motors.motorTimeConstantSec);
         const float alpha = 1.0f - std::exp(-dt / tau);
-        for (std::size_t i = 0; i < 2; ++i)
+        const std::size_t nWheels = activeWheelCount();
+        for (std::size_t i = 0; i < nWheels; ++i)
         {
             const float target = targetOmega(i);
             m_wheelOmega[i] += (target - m_wheelOmega[i]) * alpha;
@@ -119,18 +159,41 @@ namespace libstp::sim
             }
         }
 
-        // Differential-drive forward kinematics (from the classic
-        // omega_L/omega_R → (v, ω_z) equations used throughout libstp-drive).
+        // Forward kinematics → chassis velocity in body frame. The mecanum
+        // mixing matrix mirrors MecanumKinematics::estimateState so the sim
+        // and the production kinematics agree on sign conventions.
         const float r = m_robot.wheelRadiusM;
-        const float trackWidth = std::max(1e-4f, m_robot.trackWidthM);
-        const float vMetersPerSec = 0.5f * r * (m_wheelOmega[kLeft] + m_wheelOmega[kRight]);
-        const float yawRate = (r / trackWidth) * (m_wheelOmega[kRight] - m_wheelOmega[kLeft]);
+        float vxMps = 0.0f;
+        float vyMps = 0.0f;
+        float yawRate = 0.0f;
+
+        if (m_motors.kind == DrivetrainKind::Mecanum)
+        {
+            // Standard 4-wheel mecanum FK (matches MecanumKinematics::estimateState).
+            const float wheelbase = std::max(1e-4f, m_robot.wheelbaseM);
+            const float trackWidth = std::max(1e-4f, m_robot.trackWidthM);
+            const float L = 0.5f * (wheelbase + trackWidth);
+            const float fl = m_wheelOmega[kFL];
+            const float fr = m_wheelOmega[kFR];
+            const float bl = m_wheelOmega[kBL];
+            const float br = m_wheelOmega[kBR];
+            vxMps = (fl + fr + bl + br) * r * 0.25f;
+            vyMps = (fl - fr - bl + br) * r * 0.25f;
+            yawRate = (-fl + fr - bl + br) * r / (4.0f * L);
+        }
+        else
+        {
+            const float trackWidth = std::max(1e-4f, m_robot.trackWidthM);
+            vxMps = 0.5f * r * (m_wheelOmega[kLeft] + m_wheelOmega[kRight]);
+            yawRate = (r / trackWidth) * (m_wheelOmega[kRight] - m_wheelOmega[kLeft]);
+        }
         m_yawRateRadS = yawRate;
 
-        const float dxLocalCm = vMetersPerSec * kMetersToCm * dt;
+        const float dxLocalCm = vxMps * kMetersToCm * dt;
+        const float dyLocalCm = vyMps * kMetersToCm * dt;
         const float dThetaRad = yawRate * dt;
 
-        const Pose2D target = applyLocalDelta(m_pose, dxLocalCm, 0.0f, dThetaRad);
+        const Pose2D target = applyLocalDelta(m_pose, dxLocalCm, dyLocalCm, dThetaRad);
 
         const auto walls = collision::buildCollisionWalls(m_map);
         if (walls.empty())

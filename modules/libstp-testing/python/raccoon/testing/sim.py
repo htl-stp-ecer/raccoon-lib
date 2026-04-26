@@ -29,7 +29,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, List, Optional, Tuple, Union
+from typing import Iterator, List, Literal, Optional, Tuple, Union
 
 try:
     from raccoon import sim as _sim
@@ -89,10 +89,23 @@ class SimRobotConfig:
     track_width_m: float = 0.15
     wheelbase_m: float = 0.15
 
+    drivetrain: Literal["diff", "mecanum"] = "diff"
+
+    # Differential drive — used when drivetrain == "diff".
     left_motor_port: int = 0
     right_motor_port: int = 1
     left_motor_inverted: bool = False
     right_motor_inverted: bool = False
+
+    # Mecanum drive — used when drivetrain == "mecanum".
+    fl_motor_port: int = 0
+    fr_motor_port: int = 1
+    bl_motor_port: int = 2
+    br_motor_port: int = 3
+    fl_motor_inverted: bool = False
+    fr_motor_inverted: bool = False
+    bl_motor_inverted: bool = False
+    br_motor_inverted: bool = False
 
     max_wheel_velocity_rad_s: float = 30.0
     motor_time_constant_sec: float = 0.05
@@ -130,10 +143,22 @@ def _build_native_robot(cfg: SimRobotConfig) -> "_sim.RobotConfig":
 
 def _build_native_motors(cfg: SimRobotConfig) -> "_sim.SimMotorMap":
     m = _sim.SimMotorMap()
-    m.left_port = cfg.left_motor_port
-    m.right_port = cfg.right_motor_port
-    m.left_inverted = cfg.left_motor_inverted
-    m.right_inverted = cfg.right_motor_inverted
+    if cfg.drivetrain == "mecanum":
+        m.kind = _sim.DrivetrainKind.MECANUM
+        m.fl_port = cfg.fl_motor_port
+        m.fr_port = cfg.fr_motor_port
+        m.bl_port = cfg.bl_motor_port
+        m.br_port = cfg.br_motor_port
+        m.fl_inverted = cfg.fl_motor_inverted
+        m.fr_inverted = cfg.fr_motor_inverted
+        m.bl_inverted = cfg.bl_motor_inverted
+        m.br_inverted = cfg.br_motor_inverted
+    else:
+        m.kind = _sim.DrivetrainKind.DIFFERENTIAL
+        m.left_port = cfg.left_motor_port
+        m.right_port = cfg.right_motor_port
+        m.left_inverted = cfg.left_motor_inverted
+        m.right_inverted = cfg.right_motor_inverted
     m.max_wheel_velocity_rad_s = cfg.max_wheel_velocity_rad_s
     m.motor_time_constant_sec = cfg.motor_time_constant_sec
     m.ticks_to_rad = cfg.ticks_to_rad

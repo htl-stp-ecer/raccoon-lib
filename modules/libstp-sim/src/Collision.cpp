@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace libstp::sim::collision
 {
@@ -300,6 +301,14 @@ namespace libstp::sim::collision
 
             remainingMove = scale(tangentDir, remainingAlong);
             remainingTheta = 0.0f;
+        }
+
+        if (iterations >= kMaxIterations)
+        {
+            std::fprintf(stderr,
+                "[raccoon-sim] simulateSegment: hit iteration limit (%d); "
+                "physics truncated at (%.1f, %.1f)\n",
+                kMaxIterations, current.x, current.y);
         }
 
         return poses;
