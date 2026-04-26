@@ -139,6 +139,12 @@ namespace libstp::motion
 
         // Telemetry
         double elapsed_time_{0.0};
+        // At 100 Hz update rate, 30 s of motion = 3000 samples × ~80 bytes
+        // ≈ 240 KB. Capping at this size prevents long-running motions
+        // (timeouts, condition-driven drives) from leaking memory across an
+        // autonomous period. Older samples are dropped from the front; the
+        // most recent window is what's interesting for tuning anyway.
+        static constexpr size_t kMaxTelemetrySamples{3000};
         std::vector<LinearMotionTelemetry> telemetry_;
     };
 }
