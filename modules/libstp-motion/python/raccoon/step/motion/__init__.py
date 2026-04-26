@@ -104,47 +104,39 @@ from .custom_velocity_dsl import CustomVelocityBuilder, custom_velocity
 from .smooth_path import SmoothPath, smooth_path
 from .spline_path import SplinePath, spline
 
+# Public API: only factories, plus enums / config dataclasses that users
+# legitimately need to construct (LineFollowConfig, SurfaceColor, etc.) and
+# the MotionStep base class for users who write their own motion steps.
+#
+# Step *classes* (DriveForward, StrafeLeft, ...) are intentionally NOT
+# exported — users construct them through their factory. Re-exporting the
+# class lets callers bypass the factory's parameter validation and unit
+# conversion, then breaks them when an internal refactor renames the field.
 __all__ = [
-    # Base
+    # Base class (extension point)
     "MotionStep",
-    # Basic motion
-    "DriveForward",
+    # Basic motion factories
     "drive_forward",
-    "DriveBackward",
     "drive_backward",
-    "Stop",
     "stop",
-    "StrafeLeft",
     "strafe_left",
-    "StrafeRight",
     "strafe_right",
-    "DriveAngle",
-    "DriveAngleLeft",
-    "DriveAngleRight",
     "drive_angle",
-    "Arc",
-    "DriveArcLeft",
     "drive_arc_left",
-    "DriveArcRight",
     "drive_arc_right",
-    "DriveArc",
-    "StrafeArcLeft",
-    "strafe_arc_left",
-    "StrafeArcRight",
-    "strafe_arc_right",
-    "StrafeArc",
     "drive_arc_segment",
-    "TurnLeft",
+    "strafe_arc_left",
+    "strafe_arc_right",
     "turn_left",
-    "TurnRight",
     "turn_right",
     # Heading reference
-    "MarkHeadingReference",
     "mark_heading_reference",
     "turn_to_heading_right",
     "turn_to_heading_left",
     # Lineup
     "SurfaceColor",
+    "CorrectionSide",
+    "SingleSensorLineupConfig",
     "lineup",
     "forward_lineup_on_black",
     "forward_lineup_on_white",
@@ -154,79 +146,50 @@ __all__ = [
     "strafe_right_lineup_on_white",
     "strafe_left_lineup_on_black",
     "strafe_left_lineup_on_white",
-    "CorrectionSide",
-    "SingleSensorCrossing",
-    "SingleSensorLineupConfig",
     "forward_single_lineup",
     "backward_single_lineup",
     # Wall align
-    "WallAlign",
     "WallDirection",
     "BumpResult",
-    "WallAlignForward",
     "wall_align_forward",
-    "WallAlignBackward",
     "wall_align_backward",
-    "WallAlignStrafeLeft",
     "wall_align_strafe_left",
-    "WallAlignStrafeRight",
     "wall_align_strafe_right",
     # Line follow
-    "LineFollow",
     "LineFollowConfig",
     "LineSide",
-    "SingleSensorLineFollow",
     "SingleLineFollowConfig",
-    "FollowLine",
     "follow_line",
-    "FollowLineSingle",
     "follow_line_single",
     # Directional line follow
-    "DirectionalLineFollow",
     "DirectionalLineFollowConfig",
-    "DirectionalSingleLineFollow",
     "DirectionalSingleLineFollowConfig",
-    "DirectionalFollowLine",
     "directional_follow_line",
-    "StrafeFollowLine",
     "strafe_follow_line",
-    "StrafeFollowLineSingle",
     "strafe_follow_line_single",
-    "DirectionalFollowLineSingle",
     "directional_follow_line_single",
     # Distance wait
-    "WaitUntilDistance",
     "wait_until_distance",
     # Heading wait
-    "WaitUntilDegrees",
     "HeadingOrigin",
     "wait_until_degrees",
     # Drive telemetry
-    "TuneDrive",
     "tune_drive",
     # Drive characterization
-    "CharacterizeDrive",
     "characterize_drive",
     # Auto-tune PID
-    "AutoTune",
     "auto_tune",
-    "AutoTuneVelocity",
     "auto_tune_velocity",
-    "AutoTuneMotion",
     "auto_tune_motion",
     # Sensor group
     "SensorGroup",
     # Analog sensor target drive
-    "DriveToAnalogTarget",
     "drive_to_analog_target",
     # Custom velocity
-    "CustomVelocity",
     "CustomVelocityBuilder",
     "custom_velocity",
     # Smooth path
-    "SmoothPath",
     "smooth_path",
     # Spline path
-    "SplinePath",
     "spline",
 ]
