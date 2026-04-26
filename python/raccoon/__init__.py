@@ -135,6 +135,13 @@ _HOOKS_INSTALLED = False
 
 
 def _disable_all_motors() -> None:
+    """Best-effort motor disarm during process exit.
+
+    Logged failures matter: a robot whose Python-side disarm threw silently
+    is a robot that may keep driving after the mission ends. The C++ HAL
+    still has its own atexit-registered fallback, so this layer is allowed
+    to fail loudly without the process refusing to exit.
+    """
     disable = getattr(Motor, "disable_all", None)
     if disable is None:
         return
@@ -142,18 +149,27 @@ def _disable_all_motors() -> None:
     try:
         info("Disabling all motors")
         disable()
-    except Exception:
-        error("Failed to disable all motors")
-        # Never let shutdown hooks raise to callers
-        pass
+    except Exception as e:
+        # ``error()`` itself routes through spdlog; if logging is already
+        # half-torn-down, fall back to stderr so the message isn't lost.
+        try:
+            error(f"Failed to disable all motors via Motor.disable_all: {e!r}")
+        except Exception:
+            import sys
+            print(f"raccoon: motor disarm failed: {e!r}", file=sys.stderr)
 
 
 def _shutdown_logging() -> None:
-    """Tear down spdlog before C++ static destruction begins."""
+    """Tear down spdlog before C++ static destruction begins.
+
+    Failure here is non-fatal but worth surfacing — a stuck logger means
+    later C++ destructors may attempt to log into a dead sink.
+    """
     try:
         foundation.shutdown_logging()
-    except Exception:
-        pass
+    except Exception as e:
+        import sys
+        print(f"raccoon: logging shutdown failed: {e!r}", file=sys.stderr)
 
 
 def _forward_signal(signum: int, frame: FrameType | None) -> None:
@@ -187,8 +203,11 @@ def _install_shutdown_hooks() -> None:
 
         try:
             previous = signal.getsignal(sig)
-        except Exception:
-            debug(f"Failed to get previous handler for signal {sig_name}")
+        except (OSError, ValueError) as e:
+            # OSError: invalid signal on this platform; ValueError: not
+            # called from main thread. Both mean we should skip this
+            # signal but keep installing the rest.
+            warn(f"Skipping shutdown handler for {sig_name}: {e!r}")
             continue
 
         _PREVIOUS_SIGNAL_HANDLERS[sig] = previous
