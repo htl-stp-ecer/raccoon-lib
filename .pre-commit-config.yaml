@@ -36,14 +36,18 @@ repos:
   - id: requirements-txt-fixer
   - id: trailing-whitespace
 
-# Check linting and style issues
+# ruff-pre-commit injects --force-exclude itself, so extend-exclude in
+# pyproject.toml takes effect. We add an explicit `exclude:` here as a
+# belt-and-braces guard against generated *_dsl.py files getting
+# reformatted into shape that fights the codegen.
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: "v0.7.3"
   hooks:
     - id: ruff
       args: ["--fix", "--show-fixes"]
+      exclude: '_dsl\.py$'
     - id: ruff-format
-      exclude: ^(docs)
+      exclude: '^docs/|_dsl\.py$'
 
 # Changes tabs to spaces
 - repo: https://github.com/Lucas-C/pre-commit-hooks

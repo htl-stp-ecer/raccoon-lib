@@ -8,7 +8,10 @@ triggers or when an external combinator (e.g. ``do_until_checkpoint``)
 cancels it.
 """
 
-from typing import TYPE_CHECKING, Callable, Optional, Tuple
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from raccoon.foundation import ChassisVelocity
 from raccoon.step.annotation import dsl
@@ -19,7 +22,7 @@ from .motion_step import MotionStep
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
-VelocityFn = Callable[["GenericRobot", float], Tuple[float, float, float]]
+VelocityFn = Callable[["GenericRobot", float], tuple[float, float, float]]
 
 
 @dsl(hidden=True)
@@ -37,17 +40,15 @@ class CustomVelocity(MotionStep):
     def __init__(
         self,
         velocity_fn: VelocityFn,
-        until: Optional[StopCondition] = None,
+        until: StopCondition | None = None,
     ) -> None:
         super().__init__()
         if not callable(velocity_fn):
-            raise TypeError(
-                f"velocity_fn must be callable, got {type(velocity_fn).__name__}"
-            )
+            msg = f"velocity_fn must be callable, got {type(velocity_fn).__name__}"
+            raise TypeError(msg)
         if until is not None and not isinstance(until, StopCondition):
-            raise TypeError(
-                f"until must be a StopCondition, got {type(until).__name__}"
-            )
+            msg = f"until must be a StopCondition, got {type(until).__name__}"
+            raise TypeError(msg)
         self._velocity_fn = velocity_fn
         self._until = until
 
@@ -64,10 +65,12 @@ class CustomVelocity(MotionStep):
             return True
         cfg = robot.motion_pid_config
         vx_pct, vy_pct, omega_pct = self._velocity_fn(robot, dt)
-        robot.drive.set_velocity(ChassisVelocity(
-            vx_pct * cfg.linear.max_velocity,
-            vy_pct * cfg.lateral.max_velocity,
-            omega_pct * cfg.angular.max_velocity,
-        ))
+        robot.drive.set_velocity(
+            ChassisVelocity(
+                vx_pct * cfg.linear.max_velocity,
+                vy_pct * cfg.lateral.max_velocity,
+                omega_pct * cfg.angular.max_velocity,
+            )
+        )
         robot.drive.update(dt)
         return False

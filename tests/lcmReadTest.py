@@ -1,4 +1,6 @@
-from raccoon.hal import AnalogSensor, Motor, Servo
+from __future__ import annotations
+
+from raccoon.hal import Motor
 
 i = 0
 sensor = Motor(0)

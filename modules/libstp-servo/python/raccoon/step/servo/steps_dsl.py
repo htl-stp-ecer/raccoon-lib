@@ -15,6 +15,7 @@ from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing, EasingFunc
 from raccoon.hal import Servo
 from .preset import ServoPreset
 
+
 class ShakeServoBuilder(StepBuilder):
     """Builder for ShakeServo. Auto-generated — do not edit."""
 
@@ -44,18 +45,23 @@ class ShakeServoBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._servo is not _UNSET:
-            kwargs['servo'] = self._servo
+            kwargs["servo"] = self._servo
         if self._duration is not _UNSET:
-            kwargs['duration'] = self._duration
+            kwargs["duration"] = self._duration
         if self._angle_a is not _UNSET:
-            kwargs['angle_a'] = self._angle_a
+            kwargs["angle_a"] = self._angle_a
         if self._angle_b is not _UNSET:
-            kwargs['angle_b'] = self._angle_b
+            kwargs["angle_b"] = self._angle_b
         return ShakeServo(**kwargs)
 
 
-@dsl(tags=['servo', 'actuator'])
-def shake_servo(servo: Servo | ServoPreset = _UNSET, duration: float = _UNSET, angle_a: float = _UNSET, angle_b: float = _UNSET):
+@dsl(tags=["servo", "actuator"])
+def shake_servo(
+    servo: Servo | ServoPreset = _UNSET,
+    duration: float = _UNSET,
+    angle_a: float = _UNSET,
+    angle_b: float = _UNSET,
+):
     """
     Oscillate a servo back and forth between two angles for a set time.
 
@@ -122,16 +128,21 @@ class SlowServoBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._servo is not _UNSET:
-            kwargs['servo'] = self._servo
+            kwargs["servo"] = self._servo
         if self._angle is not _UNSET:
-            kwargs['angle'] = self._angle
-        kwargs['speed'] = self._speed
-        kwargs['easing'] = self._easing
+            kwargs["angle"] = self._angle
+        kwargs["speed"] = self._speed
+        kwargs["easing"] = self._easing
         return SlowServo(**kwargs)
 
 
-@dsl(tags=['servo', 'actuator'])
-def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed: float = 60.0, easing: Easing | EasingFunc = Easing.EASE_IN_OUT):
+@dsl(tags=["servo", "actuator"])
+def slow_servo(
+    servo: Servo | ServoPreset = _UNSET,
+    angle: float = _UNSET,
+    speed: float = 60.0,
+    easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+):
     """
     Move a servo to an angle with smooth interpolated motion.
 
@@ -188,7 +199,7 @@ class FullyDisableServosBuilder(StepBuilder):
         return FullyDisableServos(**kwargs)
 
 
-@dsl(tags=['servo', 'actuator'])
+@dsl(tags=["servo", "actuator"])
 def fully_disable_servos():
     """
     Fully disable all servo outputs, removing all power from the servo pins.
@@ -215,4 +226,11 @@ def fully_disable_servos():
     return b
 
 
-__all__ = ['ShakeServoBuilder', 'shake_servo', 'SlowServoBuilder', 'slow_servo', 'FullyDisableServosBuilder', 'fully_disable_servos']
+__all__ = [
+    "ShakeServoBuilder",
+    "shake_servo",
+    "SlowServoBuilder",
+    "slow_servo",
+    "FullyDisableServosBuilder",
+    "fully_disable_servos",
+]

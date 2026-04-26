@@ -1,4 +1,7 @@
-from raccoon.log import debug, info, error, warn, trace
+from __future__ import annotations
+
+from raccoon.log import debug, error, info, trace, warn
+
 
 class ClassNameLogger:
     def debug(self, msg: str) -> None:
@@ -27,7 +30,6 @@ class ClassNameLogger:
             msg: The message to print
         """
         warn(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
-
 
     def error(self, msg: str) -> None:
         """

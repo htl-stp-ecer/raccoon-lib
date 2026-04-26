@@ -15,6 +15,7 @@ The top-level surface is intentionally small:
   ``pytest11`` entry point in the raccoon wheel; you usually don't need
   to import it directly.
 """
+
 from __future__ import annotations
 
 __all__: list[str] = []

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 from typing import TYPE_CHECKING
 
@@ -69,9 +71,8 @@ class HeadingReferenceService(RobotService):
             RuntimeError: If no reference has been marked yet.
         """
         if self._reference_rad is None:
-            raise RuntimeError(
-                "No heading reference set. Call mark_heading_reference() first."
-            )
+            msg = "No heading reference set. Call mark_heading_reference() first."
+            raise RuntimeError(msg)
         sign = 1.0 if self._positive_direction == "left" else -1.0
         return self._reference_rad + sign * math.radians(target_deg)
 
@@ -96,9 +97,8 @@ class HeadingReferenceService(RobotService):
             RuntimeError: If no reference has been marked yet.
         """
         if self._reference_rad is None:
-            raise RuntimeError(
-                "No heading reference set. Call mark_heading_reference() first."
-            )
+            msg = "No heading reference set. Call mark_heading_reference() first."
+            raise RuntimeError(msg)
 
         sign = 1.0 if self._positive_direction == "left" else -1.0
         target_absolute = self._reference_rad + sign * math.radians(target_deg)

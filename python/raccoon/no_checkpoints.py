@@ -7,6 +7,7 @@ waiting for the mission-relative clock to reach the checkpoint time.
 Activated by the ``LIBSTP_NO_CHECKPOINTS=1`` environment variable,
 which is set automatically by ``raccoon run --no-checkpoints``.
 """
+
 from __future__ import annotations
 
 import os

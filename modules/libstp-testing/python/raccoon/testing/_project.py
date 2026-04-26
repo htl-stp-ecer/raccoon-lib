@@ -7,16 +7,16 @@ files. It uses PyYAML (already a raccoon dependency) and deliberately does
 not share code with the toolchain — the toolchain uses ruamel for
 round-trip editing, which is more than we need here.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
 from .sim import SimRobotConfig
-
 
 PROJECT_FILENAME = "raccoon.project.yml"
 
@@ -26,7 +26,7 @@ class ProjectInfo:
     """Everything the pytest plugin needs about the project under test."""
 
     root: Path
-    project_data: Dict[str, Any]
+    project_data: dict[str, Any]
     sim_config: SimRobotConfig
 
     @property
@@ -38,7 +38,7 @@ class ProjectNotFoundError(RuntimeError):
     """Raised when the plugin cannot locate a raccoon.project.yml."""
 
 
-def find_project_root(start: Optional[Path] = None) -> Path:
+def find_project_root(start: Path | None = None) -> Path:
     """Walk upward from *start* (default: cwd) to locate the project root.
 
     The project root is the nearest ancestor directory that contains a
@@ -56,12 +56,12 @@ def find_project_root(start: Optional[Path] = None) -> Path:
     raise ProjectNotFoundError(msg)
 
 
-def load_project(root: Path) -> Dict[str, Any]:
+def load_project(root: Path) -> dict[str, Any]:
     """Load ``raccoon.project.yml`` with !include / !include-merge support."""
     return _load_yaml_with_includes(root / PROJECT_FILENAME)
 
 
-def build_project_info(start: Optional[Path] = None) -> ProjectInfo:
+def build_project_info(start: Path | None = None) -> ProjectInfo:
     """Convenience: find + load + derive SimRobotConfig in one call."""
     root = find_project_root(start)
     data = load_project(root)
@@ -69,7 +69,7 @@ def build_project_info(start: Optional[Path] = None) -> ProjectInfo:
     return ProjectInfo(root=root, project_data=data, sim_config=cfg)
 
 
-def derive_sim_config(data: Dict[str, Any]) -> SimRobotConfig:
+def derive_sim_config(data: dict[str, Any]) -> SimRobotConfig:
     """Extract SimRobotConfig fields from a loaded project.yml.
 
     Missing fields fall back to SimRobotConfig defaults. This is a *best
@@ -126,9 +126,7 @@ def derive_sim_config(data: Dict[str, Any]) -> SimRobotConfig:
     if isinstance(right_inv, bool):
         cfg.right_motor_inverted = right_inv
 
-    ticks_to_rad = _as_float(
-        ((left_def or {}).get("calibration") or {}).get("ticks_to_rad")
-    )
+    ticks_to_rad = _as_float(((left_def or {}).get("calibration") or {}).get("ticks_to_rad"))
     if ticks_to_rad is not None and ticks_to_rad > 0:
         cfg.ticks_to_rad = ticks_to_rad
 
@@ -175,10 +173,7 @@ def _include_merge_constructor(loader: _IncludeLoader, node: yaml.Node) -> Any:
     path = (loader._base_dir / str(rel)).resolve()
     data = _load_yaml_with_includes(path)
     if not isinstance(data, dict):
-        msg = (
-            f"!include-merge at {rel} must resolve to a mapping, "
-            f"got {type(data).__name__}"
-        )
+        msg = f"!include-merge at {rel} must resolve to a mapping, " f"got {type(data).__name__}"
         raise ValueError(msg)
     return (_MERGE_SENTINEL, data)
 
@@ -194,11 +189,7 @@ def _post_process_merges(data: Any) -> Any:
 
     merges = []
     for key, value in list(data.items()):
-        if (
-            isinstance(value, tuple)
-            and len(value) == 2
-            and value[0] is _MERGE_SENTINEL
-        ):
+        if isinstance(value, tuple) and len(value) == 2 and value[0] is _MERGE_SENTINEL:
             merges.append((key, value[1]))
         else:
             _post_process_merges(value)
@@ -219,7 +210,7 @@ def _load_yaml_with_includes(path: Path) -> Any:
     return _post_process_merges(data)
 
 
-def _as_float(v: Any) -> Optional[float]:
+def _as_float(v: Any) -> float | None:
     if v is None or isinstance(v, bool):
         return None
     try:
@@ -228,7 +219,7 @@ def _as_float(v: Any) -> Optional[float]:
         return None
 
 
-def _as_int(v: Any) -> Optional[int]:
+def _as_int(v: Any) -> int | None:
     if v is None or isinstance(v, bool):
         return None
     try:

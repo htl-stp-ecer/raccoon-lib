@@ -19,11 +19,13 @@ Typical usage::
     from raccoon.step.motion.drive_dsl import drive_forward
     from raccoon.testing.sim import pose
 
+
     def test_drives_30cm(robot, scene, run_step):
         scene("empty_table.ftmap", start=(20, 50, 0))
         run_step(drive_forward(cm=30), robot)
         assert pose().x > 45
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,9 +33,10 @@ import importlib
 import importlib.resources
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pytest
 
@@ -41,10 +44,16 @@ from . import _project
 from .sim import PoseLike, SimRobotConfig, use_scene
 
 
-# Set True the first time the `robot` fixture runs against a mock-bundle
-# wheel. Consumed by ``pytest_sessionfinish`` to decide whether to short
-# circuit the interpreter shutdown.
-_MOCK_HAL_TOUCHED = False
+class _MockHal:
+    """Tracks whether the mock-bundle robot fixture has been instantiated.
+
+    Wrapped in a class so the toggle is a simple attribute write at the
+    call sites — no ``global`` statement needed and no lint noise from
+    PLW0603. Consumed by ``pytest_sessionfinish`` to decide whether to
+    short-circuit the interpreter shutdown.
+    """
+
+    touched: bool = False
 
 
 # --------------------------------------------------------------------------
@@ -95,7 +104,7 @@ def _ensure_project_on_sys_path(project_root: Path) -> None:
         sys.path.insert(0, root_str)
 
 
-def _bundled_scenes_dir() -> Optional[Path]:
+def _bundled_scenes_dir() -> Path | None:
     """Locate the scenes directory shipped with the raccoon wheel, if any."""
     try:
         files = importlib.resources.files("raccoon").joinpath("scenes")
@@ -140,10 +149,12 @@ def _resolve_scene(name: str, project_root: Path) -> Path:
 # Sim availability gate
 # --------------------------------------------------------------------------
 
+
 def _sim_available() -> bool:
     """True if raccoon was built with DRIVER_BUNDLE=mock."""
     try:
-        from raccoon import sim as _sim  # noqa: F401
+        from raccoon import sim as _sim
+
         return hasattr(_sim, "mock")
     except ImportError:
         return False
@@ -160,6 +171,7 @@ _SIM_SKIP_REASON = (
 # --------------------------------------------------------------------------
 # Fixtures
 # --------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def project_info() -> _project.ProjectInfo:
@@ -198,8 +210,7 @@ def robot(project_info: _project.ProjectInfo) -> Any:
     if not _sim_available():
         pytest.skip(_SIM_SKIP_REASON)
 
-    global _MOCK_HAL_TOUCHED
-    _MOCK_HAL_TOUCHED = True
+    _MockHal.touched = True
 
     _ensure_project_on_sys_path(project_info.root)
     robot_cls = _try_import_robot_class()
@@ -231,7 +242,7 @@ def scene(
         name: str,
         *,
         start: PoseLike = (0.0, 0.0, 0.0),
-        robot: Optional[SimRobotConfig] = None,
+        robot: SimRobotConfig | None = None,
         auto_tick: bool = True,
         auto_tick_max_step_sec: float = 0.05,
     ) -> None:
@@ -268,9 +279,7 @@ def run_step() -> Callable[..., Any]:
     """
 
     def _run(step: Any, robot: Any, *, timeout: float = 10.0) -> Any:
-        return asyncio.run(
-            asyncio.wait_for(step.run_step(robot), timeout=timeout)
-        )
+        return asyncio.run(asyncio.wait_for(step.run_step(robot), timeout=timeout))
 
     return _run
 
@@ -279,8 +288,9 @@ def run_step() -> Callable[..., Any]:
 # Session finish: dodge the mock-HAL singleton teardown segfault
 # --------------------------------------------------------------------------
 
+
 @pytest.hookimpl(trylast=True)
-def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
+def pytest_sessionfinish(_session: Any, exitstatus: int) -> None:
     """Bypass interpreter shutdown when the mock HAL was exercised.
 
     The pybind11-bound MockPlatform singleton has a destruction-order race
@@ -296,7 +306,7 @@ def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
       CI gets an accurate error code and any debugger post-mortem runs.
     - The user hasn't set ``RACCOON_TESTING_NO_EXIT_SHORTCUT=1`` to debug.
     """
-    if not _MOCK_HAL_TOUCHED:
+    if not _MockHal.touched:
         return
     if exitstatus != 0:
         return

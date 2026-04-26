@@ -5,14 +5,13 @@ in a dev loop without a full ``pip install``. Once the package is installed,
 the ``raccoon.sim`` import path takes precedence and the direct build-dir
 shim becomes a no-op fallback.
 """
+
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUILD_SIM_DIR = REPO_ROOT / "build" / "modules" / "libstp-sim"
@@ -22,19 +21,20 @@ SCENES_DIR = REPO_ROOT / "scenes"
 def _import_sim():
     """Import the sim module, preferring the installed raccoon.sim path."""
     try:
-        from raccoon import sim as _sim  # type: ignore
+        from raccoon import sim as _sim  # type: ignore[import-not-found]
+
         return _sim
     except ImportError:
         pass
     if BUILD_SIM_DIR.exists() and str(BUILD_SIM_DIR) not in sys.path:
         sys.path.insert(0, str(BUILD_SIM_DIR))
     try:
-        import sim as _sim  # type: ignore
+        import sim as _sim  # type: ignore[import-not-found]
+
         return _sim
     except ImportError:
         pytest.skip(
-            "sim binding not built — run "
-            "`cmake --build build --target libstp_sim` first"
+            "sim binding not built — run " "`cmake --build build --target libstp_sim` first"
         )
 
 

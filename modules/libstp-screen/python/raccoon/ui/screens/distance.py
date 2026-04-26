@@ -2,17 +2,32 @@
 Distance calibration screens.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
+from ..events import on_button_press, on_change, on_click, on_keypad
 from ..screen import UIScreen
 from ..widgets import (
-    Widget, Text, Button, Spacer,
-    StatusIcon, HintBox, ResultsTable,
-    NumericKeypad, NumericInput,
-    AnimatedRobot, PulsingArrow, RobotDrivingAnimation, ProgressSpinner,
-    Center, Row, Column, Split, Card,
+    AnimatedRobot,
+    Button,
+    Card,
+    Center,
+    Column,
+    HintBox,
+    NumericInput,
+    NumericKeypad,
+    ProgressSpinner,
+    PulsingArrow,
+    ResultsTable,
+    RobotDrivingAnimation,
+    Row,
+    Spacer,
+    Split,
+    StatusIcon,
+    Text,
+    Widget,
 )
-from ..events import on_click, on_button_press, on_keypad, on_change
 
 
 class DistancePrepareScreen(UIScreen[None]):
@@ -29,21 +44,26 @@ class DistancePrepareScreen(UIScreen[None]):
         self.requested_distance = requested_distance
 
     def build(self) -> Widget:
-        return Center(children=[
-            Row(children=[
-                AnimatedRobot(moving=False),
+        return Center(
+            children=[
+                Row(
+                    children=[
+                        AnimatedRobot(moving=False),
+                        Spacer(16),
+                        PulsingArrow(),
+                    ],
+                    align="center",
+                ),
+                Spacer(24),
+                Text("Distance Calibration", size="title"),
                 Spacer(16),
-                PulsingArrow(),
-            ], align="center"),
-            Spacer(24),
-            Text("Distance Calibration", size="title"),
-            Spacer(16),
-            Text(f"{self.requested_distance:.0f} cm", size="title", color="blue", bold=True),
-            Spacer(8),
-            Text("Robot will drive this distance forward", muted=True),
-            Spacer(32),
-            HintBox("Press button to start", style="prominent"),
-        ])
+                Text(f"{self.requested_distance:.0f} cm", size="title", color="blue", bold=True),
+                Spacer(8),
+                Text("Robot will drive this distance forward", muted=True),
+                Spacer(32),
+                HintBox("Press button to start", style="prominent"),
+            ]
+        )
 
     @on_button_press()
     async def on_press(self):
@@ -64,17 +84,22 @@ class DistanceDrivingScreen(UIScreen[None]):
         self.requested_distance = requested_distance
 
     def build(self) -> Widget:
-        return Center(children=[
-            RobotDrivingAnimation(target_distance=self.requested_distance),
-            Spacer(32),
-            Row(children=[
-                ProgressSpinner(size=24),
-                Spacer(12),
-                Text("Robot is driving...", size="large"),
-            ], align="center"),
-            Spacer(16),
-            Text(f"Target: {self.requested_distance:.0f} cm", color="orange"),
-        ])
+        return Center(
+            children=[
+                RobotDrivingAnimation(target_distance=self.requested_distance),
+                Spacer(32),
+                Row(
+                    children=[
+                        ProgressSpinner(size=24),
+                        Spacer(12),
+                        Text("Robot is driving...", size="large"),
+                    ],
+                    align="center",
+                ),
+                Spacer(16),
+                Text(f"Target: {self.requested_distance:.0f} cm", color="orange"),
+            ]
+        )
 
 
 class DistanceMeasureScreen(UIScreen[float]):
@@ -87,7 +112,7 @@ class DistanceMeasureScreen(UIScreen[float]):
     title = "Distance Calibration"
     _primary_button_id = "submit"
 
-    def __init__(self, requested_distance: float, default_value: float = None):
+    def __init__(self, requested_distance: float, default_value: float | None = None):
         super().__init__()
         self.requested_distance = requested_distance
         self.value = default_value if default_value is not None else requested_distance
@@ -145,6 +170,7 @@ class DistanceMeasureScreen(UIScreen[float]):
 @dataclass
 class DistanceConfirmResult:
     """Result from DistanceConfirmScreen."""
+
     confirmed: bool
     scale_factor: float
 
@@ -183,49 +209,69 @@ class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
 
         return Split(
             left=[
-                Row(children=[
-                    StatusIcon(
-                        icon="check" if self.is_good else "warning",
-                        color="green" if self.is_good else "orange",
-                    ),
-                    Spacer(12),
-                    Text(
-                        "Calibration Complete!" if self.is_good else "Large Adjustment",
-                        size="large",
-                    ),
-                ], align="center"),
+                Row(
+                    children=[
+                        StatusIcon(
+                            icon="check" if self.is_good else "warning",
+                            color="green" if self.is_good else "orange",
+                        ),
+                        Spacer(12),
+                        Text(
+                            "Calibration Complete!" if self.is_good else "Large Adjustment",
+                            size="large",
+                        ),
+                    ],
+                    align="center",
+                ),
                 Spacer(16),
-                Card(children=[
-                    ResultsTable(rows=[
-                        ("Requested", f"{self.requested:.1f} cm", None),
-                        ("Measured", f"{self.measured:.1f} cm", None),
-                        ("Scale", f"{self.scale_factor:.4f}", "blue"),
-                        ("Adjust", f"{sign}{self.adjustment:.1f}%",
-                         "green" if self.is_good else "orange"),
-                    ]),
-                ]),
+                Card(
+                    children=[
+                        ResultsTable(
+                            rows=[
+                                ("Requested", f"{self.requested:.1f} cm", None),
+                                ("Measured", f"{self.measured:.1f} cm", None),
+                                ("Scale", f"{self.scale_factor:.4f}", "blue"),
+                                (
+                                    "Adjust",
+                                    f"{sign}{self.adjustment:.1f}%",
+                                    "green" if self.is_good else "orange",
+                                ),
+                            ]
+                        ),
+                    ]
+                ),
             ],
             right=[
-                Column(children=[
-                    Button("apply", "Apply",
-                           style="success" if self.is_good else "warning",
-                           icon="check"),
-                    Button("retry", "Retry", style="secondary", icon="refresh"),
-                ], spacing=16),
+                Column(
+                    children=[
+                        Button(
+                            "apply",
+                            "Apply",
+                            style="success" if self.is_good else "warning",
+                            icon="check",
+                        ),
+                        Button("retry", "Retry", style="secondary", icon="refresh"),
+                    ],
+                    spacing=16,
+                ),
             ],
             ratio=(5, 4),
         )
 
     @on_click("apply")
     async def on_apply(self):
-        self.close(DistanceConfirmResult(
-            confirmed=True,
-            scale_factor=self.scale_factor,
-        ))
+        self.close(
+            DistanceConfirmResult(
+                confirmed=True,
+                scale_factor=self.scale_factor,
+            )
+        )
 
     @on_click("retry")
     async def on_retry(self):
-        self.close(DistanceConfirmResult(
-            confirmed=False,
-            scale_factor=self.scale_factor,
-        ))
+        self.close(
+            DistanceConfirmResult(
+                confirmed=False,
+                scale_factor=self.scale_factor,
+            )
+        )

@@ -27,11 +27,11 @@ class WaitUntilDistanceBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._cm is not _UNSET:
-            kwargs['cm'] = self._cm
+            kwargs["cm"] = self._cm
         return WaitUntilDistance(**kwargs)
 
 
-@dsl(tags=['motion', 'wait'])
+@dsl(tags=["motion", "wait"])
 def wait_until_distance(cm: float = _UNSET):
     """
     Wait until the robot has driven at least the given distance.
@@ -53,10 +53,12 @@ def wait_until_distance(cm: float = _UNSET):
         from raccoon.step.servo import servo
 
         # Open a servo after driving 30 cm into a 50 cm drive
-        parallel([
-            drive_forward(50),
-            seq([wait_until_distance(30), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                drive_forward(50),
+                seq([wait_until_distance(30), servo(claw, 90)]),
+            ]
+        )
     """
     b = WaitUntilDistanceBuilder()
     if cm is not _UNSET:
@@ -64,4 +66,4 @@ def wait_until_distance(cm: float = _UNSET):
     return b
 
 
-__all__ = ['WaitUntilDistanceBuilder', 'wait_until_distance']
+__all__ = ["WaitUntilDistanceBuilder", "wait_until_distance"]

@@ -1,6 +1,3 @@
-//
-// Created by tobias on 6/8/25.
-//
 #include "foundation/math.hpp"
 
 float libstp::math::lerp(const float a, const float b, const float t)

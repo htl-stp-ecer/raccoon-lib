@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import List, Optional
 
 import aiosqlite
 
@@ -86,7 +87,7 @@ class StepTimingDatabase:
 
             self._initialized = True
 
-    async def fetch_recent_durations(self, signature: str, limit: int) -> List[float]:
+    async def fetch_recent_durations(self, signature: str, limit: int) -> list[float]:
         """Return the most recent non-anomalous durations for a signature."""
         await self.initialize()
         query = """
@@ -107,7 +108,7 @@ class StepTimingDatabase:
         self,
         signature: str,
         duration: float,
-        anomaly: Optional[AnomalyDetection],
+        anomaly: AnomalyDetection | None,
     ) -> None:
         """Insert a completed execution into the database."""
         await self.initialize()

@@ -20,6 +20,9 @@ Multiple distance-triggered actions:
 Polls odometry at 100Hz.  Because LinearMotion.start() resets odometry,
 the distance is measured from the start of the concurrent drive step.
 """
+
+from __future__ import annotations
+
 import asyncio
 from typing import TYPE_CHECKING
 
@@ -48,10 +51,12 @@ class WaitUntilDistance(Step):
         from raccoon.step.servo import servo
 
         # Open a servo after driving 30 cm into a 50 cm drive
-        parallel([
-            drive_forward(50),
-            seq([wait_until_distance(30), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                drive_forward(50),
+                seq([wait_until_distance(30), servo(claw, 90)]),
+            ]
+        )
     """
 
     def __init__(self, cm: float) -> None:
@@ -77,8 +82,7 @@ class WaitUntilDistance(Step):
 
             if dist.straight_line >= self._distance_m:
                 self.debug(
-                    f"Distance {dist.straight_line:.3f}m >= "
-                    f"{self._distance_m:.3f}m — done"
+                    f"Distance {dist.straight_line:.3f}m >= " f"{self._distance_m:.3f}m — done"
                 )
                 return
 

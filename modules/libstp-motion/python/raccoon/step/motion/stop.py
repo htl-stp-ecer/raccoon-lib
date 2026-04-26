@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
-from ..annotation import dsl_step
 from .. import Step
+from ..annotation import dsl_step
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot

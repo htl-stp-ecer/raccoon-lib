@@ -27,7 +27,7 @@ class DriveAngleBuilder(StepBuilder):
         self._angle_deg = value
         return self
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -42,15 +42,20 @@ class DriveAngleBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._angle_deg is not _UNSET:
-            kwargs['angle_deg'] = self._angle_deg
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
+            kwargs["angle_deg"] = self._angle_deg
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
         return DriveAngle(**kwargs)
 
 
-@dsl(tags=['motion', 'drive'])
-def drive_angle(angle_deg: float = _UNSET, cm: float = None, speed: float = 1.0, until: StopCondition = None):
+@dsl(tags=["motion", "drive"])
+def drive_angle(
+    angle_deg: float = _UNSET,
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+):
     """
     Drive at an arbitrary angle with distance or condition-based termination.
 
@@ -105,7 +110,7 @@ class DriveAngleLeftBuilder(StepBuilder):
         self._angle_deg = value
         return self
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -120,15 +125,20 @@ class DriveAngleLeftBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._angle_deg is not _UNSET:
-            kwargs['angle_deg'] = self._angle_deg
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
+            kwargs["angle_deg"] = self._angle_deg
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
         return DriveAngleLeft(**kwargs)
 
 
-@dsl(tags=['motion', 'drive'])
-def drive_angle_left(angle_deg: float = _UNSET, cm: float = None, speed: float = 1.0, until: StopCondition = None):
+@dsl(tags=["motion", "drive"])
+def drive_angle_left(
+    angle_deg: float = _UNSET,
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+):
     """
     Drive at an angle to the left with distance or condition-based termination.
 
@@ -180,7 +190,7 @@ class DriveAngleRightBuilder(StepBuilder):
         self._angle_deg = value
         return self
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -195,15 +205,20 @@ class DriveAngleRightBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._angle_deg is not _UNSET:
-            kwargs['angle_deg'] = self._angle_deg
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
+            kwargs["angle_deg"] = self._angle_deg
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
         return DriveAngleRight(**kwargs)
 
 
-@dsl(tags=['motion', 'drive'])
-def drive_angle_right(angle_deg: float = _UNSET, cm: float = None, speed: float = 1.0, until: StopCondition = None):
+@dsl(tags=["motion", "drive"])
+def drive_angle_right(
+    angle_deg: float = _UNSET,
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+):
     """
     Drive at an angle to the right with distance or condition-based termination.
 
@@ -241,4 +256,11 @@ def drive_angle_right(angle_deg: float = _UNSET, cm: float = None, speed: float 
     return b
 
 
-__all__ = ['DriveAngleBuilder', 'drive_angle', 'DriveAngleLeftBuilder', 'drive_angle_left', 'DriveAngleRightBuilder', 'drive_angle_right']
+__all__ = [
+    "DriveAngleBuilder",
+    "drive_angle",
+    "DriveAngleLeftBuilder",
+    "drive_angle_left",
+    "DriveAngleRightBuilder",
+    "drive_angle_right",
+]

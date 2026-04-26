@@ -20,10 +20,10 @@ class DriveToAnalogTargetBuilder(StepBuilder):
         super().__init__()
         self._sensor = _UNSET
         self._speed = 0.3
-        self._set_name = 'default'
+        self._set_name = "default"
         self._timeout_cm = None
 
-    def sensor(self, value: 'AnalogSensor'):
+    def sensor(self, value: "AnalogSensor"):
         self._sensor = value
         return self
 
@@ -35,22 +35,27 @@ class DriveToAnalogTargetBuilder(StepBuilder):
         self._set_name = value
         return self
 
-    def timeout_cm(self, value: Optional[float]):
+    def timeout_cm(self, value: float | None):
         self._timeout_cm = value
         return self
 
     def _build(self):
         kwargs = {}
         if self._sensor is not _UNSET:
-            kwargs['sensor'] = self._sensor
-        kwargs['speed'] = self._speed
-        kwargs['set_name'] = self._set_name
-        kwargs['timeout_cm'] = self._timeout_cm
+            kwargs["sensor"] = self._sensor
+        kwargs["speed"] = self._speed
+        kwargs["set_name"] = self._set_name
+        kwargs["timeout_cm"] = self._timeout_cm
         return DriveToAnalogTarget(**kwargs)
 
 
-@dsl(tags=['sensor', 'drive'])
-def drive_to_analog_target(sensor: 'AnalogSensor' = _UNSET, speed: float = 0.3, set_name: str = 'default', timeout_cm: Optional[float] = None):
+@dsl(tags=["sensor", "drive"])
+def drive_to_analog_target(
+    sensor: "AnalogSensor" = _UNSET,
+    speed: float = 0.3,
+    set_name: str = "default",
+    timeout_cm: float | None = None,
+):
     """
     Drive until an analog sensor reaches its calibrated reference value.
 
@@ -102,4 +107,4 @@ def drive_to_analog_target(sensor: 'AnalogSensor' = _UNSET, speed: float = 0.3, 
     return b
 
 
-__all__ = ['DriveToAnalogTargetBuilder', 'drive_to_analog_target']
+__all__ = ["DriveToAnalogTargetBuilder", "drive_to_analog_target"]

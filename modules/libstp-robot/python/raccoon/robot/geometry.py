@@ -28,9 +28,11 @@ Example usage:
     print(f"Wheel at: {wheel_pos.forward_cm}cm forward")
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
 import math
-from typing import Dict, Optional, Any
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -87,11 +89,14 @@ class RobotGeometry:
     rotation_center_forward_cm: float = 0.0
     rotation_center_strafe_cm: float = 0.0
 
-    # Sensor registry: maps sensor instance to position
-    _sensor_positions: Dict[Any, SensorPosition] = {}
-    _wheel_positions: Dict[Any, WheelPosition] = {}
+    # Sensor registry: maps sensor instance to position. Class-level so
+    # subclasses can declare it as a literal at definition time (see
+    # module docstring); ClassVar marks the intent so the linter and
+    # type-checkers don't flag it as a per-instance default.
+    _sensor_positions: ClassVar[dict[Any, SensorPosition]] = {}
+    _wheel_positions: ClassVar[dict[Any, WheelPosition]] = {}
 
-    def sensor_position(self, sensor: Any) -> Optional[SensorPosition]:
+    def sensor_position(self, sensor: Any) -> SensorPosition | None:
         """Get the position of a sensor relative to robot center.
 
         Args:
@@ -102,7 +107,7 @@ class RobotGeometry:
         """
         return self._sensor_positions.get(sensor)
 
-    def wheel_position(self, motor: Any) -> Optional[WheelPosition]:
+    def wheel_position(self, motor: Any) -> WheelPosition | None:
         """Get the position of a wheel by its motor object.
 
         Args:
@@ -130,9 +135,11 @@ class RobotGeometry:
         pos_b = self._sensor_positions.get(sensor_b)
 
         if pos_a is None:
-            raise ValueError(f"Sensor not found in geometry: {sensor_a}")
+            msg = f"Sensor not found in geometry: {sensor_a}"
+            raise ValueError(msg)
         if pos_b is None:
-            raise ValueError(f"Sensor not found in geometry: {sensor_b}")
+            msg = f"Sensor not found in geometry: {sensor_b}"
+            raise ValueError(msg)
 
         return math.hypot(
             pos_a.forward_cm - pos_b.forward_cm,
@@ -155,7 +162,8 @@ class RobotGeometry:
         """
         pos = self._sensor_positions.get(sensor)
         if pos is None:
-            raise ValueError(f"Sensor not found in geometry: {sensor}")
+            msg = f"Sensor not found in geometry: {sensor}"
+            raise ValueError(msg)
 
         return math.hypot(
             pos.forward_cm - self.rotation_center_forward_cm,
@@ -176,7 +184,8 @@ class RobotGeometry:
         """
         pos = self._sensor_positions.get(sensor)
         if pos is None:
-            raise ValueError(f"Sensor not found in geometry: {sensor}")
+            msg = f"Sensor not found in geometry: {sensor}"
+            raise ValueError(msg)
 
         return math.hypot(pos.forward_cm, pos.strafe_cm)
 
@@ -197,7 +206,8 @@ class RobotGeometry:
         """
         pos = self._sensor_positions.get(sensor)
         if pos is None:
-            raise ValueError(f"Sensor not found in geometry: {sensor}")
+            msg = f"Sensor not found in geometry: {sensor}"
+            raise ValueError(msg)
 
         return math.atan2(pos.strafe_cm, pos.forward_cm)
 
@@ -218,14 +228,15 @@ class RobotGeometry:
         """
         pos = self._sensor_positions.get(sensor)
         if pos is None:
-            raise ValueError(f"Sensor not found in geometry: {sensor}")
+            msg = f"Sensor not found in geometry: {sensor}"
+            raise ValueError(msg)
 
         delta_forward = pos.forward_cm - self.rotation_center_forward_cm
         delta_strafe = pos.strafe_cm - self.rotation_center_strafe_cm
 
         return math.atan2(delta_strafe, delta_forward)
 
-    def all_sensors(self) -> Dict[Any, SensorPosition]:
+    def all_sensors(self) -> dict[Any, SensorPosition]:
         """Get all sensor positions.
 
         Returns:
@@ -233,7 +244,7 @@ class RobotGeometry:
         """
         return dict(self._sensor_positions)
 
-    def all_wheels(self) -> Dict[Any, WheelPosition]:
+    def all_wheels(self) -> dict[Any, WheelPosition]:
         """Get all wheel positions.
 
         Returns:

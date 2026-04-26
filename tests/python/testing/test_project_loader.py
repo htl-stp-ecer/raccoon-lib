@@ -5,6 +5,7 @@ These exercise the fragile parts of the project loader — the YAML
 that turns a drumbot-shaped project.yml into a SimRobotConfig — without
 requiring a real raccoon project or the mock HAL to be installed.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,15 +13,13 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("yaml")
-pytest.importorskip("raccoon.testing._project")
-
-from raccoon.testing import _project  # noqa: E402
-from raccoon.testing.sim import SimRobotConfig  # noqa: E402
-
+_project = pytest.importorskip("raccoon.testing._project")
+SimRobotConfig = pytest.importorskip("raccoon.testing.sim").SimRobotConfig
 
 # --------------------------------------------------------------------------
 # find_project_root
 # --------------------------------------------------------------------------
+
 
 def test_find_project_root_current_dir(tmp_path: Path) -> None:
     (tmp_path / _project.PROJECT_FILENAME).write_text("name: x\n")
@@ -43,14 +42,11 @@ def test_find_project_root_raises_when_missing(tmp_path: Path) -> None:
 # !include / !include-merge loader
 # --------------------------------------------------------------------------
 
+
 def test_include_tag_resolves_relative_path(tmp_path: Path) -> None:
     (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "motors.yml").write_text(
-        "left:\n  port: 0\nright:\n  port: 1\n"
-    )
-    (tmp_path / "raccoon.project.yml").write_text(
-        "definitions: !include 'config/motors.yml'\n"
-    )
+    (tmp_path / "config" / "motors.yml").write_text("left:\n  port: 0\nright:\n  port: 1\n")
+    (tmp_path / "raccoon.project.yml").write_text("definitions: !include 'config/motors.yml'\n")
 
     data = _project.load_project(tmp_path)
     assert data["definitions"]["left"]["port"] == 0
@@ -59,17 +55,13 @@ def test_include_tag_resolves_relative_path(tmp_path: Path) -> None:
 
 def test_include_merge_flattens_into_parent(tmp_path: Path) -> None:
     (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "extras.yml").write_text(
-        "drum_motor:\n  type: Motor\n  port: 2\n"
-    )
+    (tmp_path / "config" / "extras.yml").write_text("drum_motor:\n  type: Motor\n  port: 2\n")
     (tmp_path / "config" / "hw.yml").write_text(
         "front_left_motor:\n  port: 0\n"
         "front_right_motor:\n  port: 1\n"
         "_extras: !include-merge 'extras.yml'\n"
     )
-    (tmp_path / "raccoon.project.yml").write_text(
-        "definitions: !include 'config/hw.yml'\n"
-    )
+    (tmp_path / "raccoon.project.yml").write_text("definitions: !include 'config/hw.yml'\n")
 
     data = _project.load_project(tmp_path)
     defs = data["definitions"]
@@ -91,6 +83,7 @@ def test_nested_includes(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 # derive_sim_config
 # --------------------------------------------------------------------------
+
 
 def _drumbot_shaped_project() -> dict:
     """Minimal drumbot-shaped project.yml (post-include-resolution)."""

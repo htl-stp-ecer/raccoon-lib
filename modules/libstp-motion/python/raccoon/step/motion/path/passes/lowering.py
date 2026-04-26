@@ -13,11 +13,11 @@ identifies the motion spine inside parallel branches, and produces:
 from __future__ import annotations
 
 import math
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
-from ..ir import Segment, SideAction, PathNode
+from ..ir import PathNode, Segment, SideAction
 
 if TYPE_CHECKING:
     from .... import Step
@@ -28,11 +28,11 @@ def extract_segment(step: "Step") -> Segment:
     """Extract motion parameters from a resolved step into a ``Segment``."""
     # Local imports to avoid circular dependencies at module load time.
     # Path: step/motion/path/passes/lowering.py — `...` = step/motion/.
-    from ...drive import _ConditionalDrive
-    from ...turn import _ConditionalTurn
     from ...arc import Arc
+    from ...drive import _ConditionalDrive
     from ...line_follow import LineFollow, SingleSensorLineFollow
     from ...spline_path import SplinePath
+    from ...turn import _ConditionalTurn
 
     if isinstance(step, _ConditionalDrive):
         cm = step._cm
@@ -69,7 +69,7 @@ def extract_segment(step: "Step") -> Segment:
             has_known_endpoint=True,
         )
 
-    if isinstance(step, (LineFollow, SingleSensorLineFollow)):
+    if isinstance(step, LineFollow | SingleSensorLineFollow):
         cfg = step.config
         return Segment(
             kind="follow_line",
@@ -92,11 +92,12 @@ def extract_segment(step: "Step") -> Segment:
             opaque_step=step,
         )
 
-    raise TypeError(
+    msg = (
         f"smooth_path() does not support {type(step).__name__} as a motion "
         f"step. Supported motion steps: drive, turn, arc, follow_line, "
         f"follow_line_single, spline."
     )
+    raise TypeError(msg)
 
 
 def resolve_step(step) -> "Step":
@@ -130,7 +131,7 @@ def is_same_type(a: Segment, b: Segment) -> bool:
 
 def flatten_one(
     step,
-    nodes: list[Optional[PathNode]],
+    nodes: list[PathNode | None],
     deferred: list[tuple[int, "Defer"]],
 ) -> None:
     """Recursively flatten ``step`` into path nodes.
@@ -139,10 +140,10 @@ def flatten_one(
     placeholders with entries in ``deferred`` for runtime resolution.
     """
     # `....` = step/ (parent of motion/).
-    from ....sequential import Sequential
-    from ....parallel import Parallel
     from ....logic.background import Background
     from ....logic.defer import Defer, Run
+    from ....parallel import Parallel
+    from ....sequential import Sequential
 
     # 1. Defer — placeholder for runtime resolution.
     if isinstance(step, Defer):
@@ -185,11 +186,12 @@ def flatten_one(
     # 8. Non-motion step — check if it uses the drive resource.
     resources = step.collected_resources()
     if "drive" in resources:
-        raise TypeError(
+        msg = (
             f"smooth_path() does not support {type(step).__name__} — "
             f"it uses the drive resource but is not a supported motion step. "
             f"Supported: drive, turn, arc, follow_line, follow_line_single, spline."
         )
+        raise TypeError(msg)
 
     # 9. Non-drive step — treat as inline side action.
     nodes.append(SideAction(step=step, is_background=False))
@@ -197,7 +199,7 @@ def flatten_one(
 
 def flatten_parallel(
     par,
-    nodes: list[Optional[PathNode]],
+    nodes: list[PathNode | None],
     deferred: list[tuple[int, "Defer"]],
 ) -> None:
     """Flatten a Parallel step, identifying the motion spine branch."""
@@ -208,10 +210,11 @@ def flatten_parallel(
         branch_resources = branch.collected_resources()
         if "drive" in branch_resources:
             if spine_idx is not None:
-                raise TypeError(
+                msg = (
                     "smooth_path(): parallel() has multiple branches using "
                     "the drive resource — only one motion spine is allowed"
                 )
+                raise TypeError(msg)
             spine_idx = i
 
     if spine_idx is None:
@@ -235,7 +238,7 @@ def flatten_parallel(
 
 def flatten_steps(
     steps: list,
-) -> tuple[list[Optional[PathNode]], list[tuple[int, "Defer"]]]:
+) -> tuple[list[PathNode | None], list[tuple[int, "Defer"]]]:
     """Flatten a list of steps into a linear path.
 
     Returns:
@@ -243,7 +246,7 @@ def flatten_steps(
         ``SideAction``, or ``None`` (deferred placeholder), and ``deferred``
         is a list of ``(index, Defer)`` pairs for runtime resolution.
     """
-    nodes: list[Optional[PathNode]] = []
+    nodes: list[PathNode | None] = []
     deferred: list[tuple[int, "Defer"]] = []
     for step in steps:
         flatten_one(step, nodes, deferred)

@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 from typing import TYPE_CHECKING
 
-from .base import Step
 from .annotation import dsl_step
+from .base import Step
 
 if TYPE_CHECKING:
     from raccoon.hal import DigitalSensor

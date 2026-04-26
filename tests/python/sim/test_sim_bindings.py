@@ -4,13 +4,12 @@ These exercise the same core behaviors as the C++ ``test_sim`` suite but
 through the pybind11 API, proving the binding surface matches what teams will
 actually use from pytest.
 """
+
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import pytest
-
 from conftest import SCENES_DIR, run  # type: ignore[import-not-found]
 
 
@@ -46,7 +45,9 @@ def test_worldmap_load_and_query(sim_module):
 def test_worldmap_invalid_ftmap_raises(sim_module):
     m = sim_module.WorldMap()
     with pytest.raises(sim_module.FtmapParseError):
-        m.parse_ftmap('{"format":"wrong","version":1,"table":{"widthCm":1,"heightCm":1},"lines":[]}')
+        m.parse_ftmap(
+            '{"format":"wrong","version":1,"table":{"widthCm":1,"heightCm":1},"lines":[]}'
+        )
 
 
 def test_drive_forward_updates_pose(configured_world):
@@ -122,8 +123,11 @@ def test_distance_sensor_reads_wall(sim_module, default_robot, default_motors):
     world.set_map(m)
 
     world.attach_distance_sensor(
-        analog_port=3, forward_cm=0.0, strafe_cm=0.0,
-        mount_angle_rad=0.0, max_range_cm=100.0,
+        analog_port=3,
+        forward_cm=0.0,
+        strafe_cm=0.0,
+        mount_angle_rad=0.0,
+        max_range_cm=100.0,
     )
 
     # 15 cm away from east border — in the useful 10–45 cm range.

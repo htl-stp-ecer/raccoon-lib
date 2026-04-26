@@ -1,16 +1,18 @@
 """Tests for the watchdog manager, DSL steps, and mission time_budget."""
+
+from __future__ import annotations
+
 import asyncio
+import contextlib
+import importlib.util
 from unittest.mock import MagicMock
 
 import pytest
 
 
-def libstp_available():
-    try:
-        import raccoon  # noqa: F401
-        return True
-    except ImportError:
-        return False
+def libstp_available() -> bool:
+    """Check raccoon availability without importing the module."""
+    return importlib.util.find_spec("raccoon") is not None
 
 
 requires_libstp = pytest.mark.skipif(
@@ -24,10 +26,8 @@ def _make_robot():
     # Strip any auto-generated attributes the managers would otherwise collide with
     for attr in ("_resource_manager", "_background_manager", "_watchdog_manager"):
         if hasattr(robot, attr):
-            try:
+            with contextlib.suppress(KeyError):
                 del robot.__dict__[attr]
-            except KeyError:
-                pass
     return robot
 
 
@@ -192,7 +192,7 @@ class TestWatchdogSteps:
     @pytest.mark.asyncio
     async def test_feed_watchdog_step(self):
         """feed_watchdog step pushes the deadline out."""
-        from raccoon.step import start_watchdog, feed_watchdog, stop_watchdog
+        from raccoon.step import feed_watchdog, start_watchdog, stop_watchdog
         from raccoon.step.watchdog_manager import get_watchdog_manager
 
         robot = _make_robot()
@@ -214,10 +214,8 @@ class TestWatchdogSteps:
         assert mgr.expired_name is None
 
         main.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await main
-        except asyncio.CancelledError:
-            pass
         await mgr.cancel_all()
 
     def test_start_watchdog_rejects_invalid_args(self):

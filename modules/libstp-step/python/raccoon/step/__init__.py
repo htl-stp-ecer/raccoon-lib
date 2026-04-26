@@ -1,12 +1,23 @@
+from __future__ import annotations
 from .base import Step, StepAnomalyCallback
 from .annotation import dsl, dsl_step, DslMeta
 from .model import StepProtocol, SimulationStepDelta, SimulationStep
 from .resource import ResourceConflictError
 from .step_builder import StepBuilder
 from .condition import (
-    StopCondition, on_black, on_white, after_seconds, after_cm,
-    after_forward_cm, after_lateral_cm, after_degrees,
-    on_digital, on_analog_above, on_analog_below, stall_detected, custom,
+    StopCondition,
+    on_black,
+    on_white,
+    after_seconds,
+    after_cm,
+    after_forward_cm,
+    after_lateral_cm,
+    after_degrees,
+    on_digital,
+    on_analog_above,
+    on_analog_below,
+    stall_detected,
+    custom,
     over_line,
 )
 from .sequential import Sequential, seq
@@ -114,10 +125,10 @@ __all__ = [
     "stall_detected",
     "custom",
     "over_line",
-    *_calibration_all,
-    *_logic_all,
-    *_motion_all,
-    *_timing_all,
-    *_servo_all,
-    *_motor_all,
 ]
+__all__ += list(_calibration_all)
+__all__ += list(_logic_all)
+__all__ += list(_motion_all)
+__all__ += list(_timing_all)
+__all__ += list(_servo_all)
+__all__ += list(_motor_all)

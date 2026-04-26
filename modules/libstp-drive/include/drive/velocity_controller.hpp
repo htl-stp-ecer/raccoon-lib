@@ -2,10 +2,6 @@
 // Created by tobias on 9/8/25.
 //
 
-//
-// Created by tobias on 9/8/25.
-//
-
 #pragma once
 #include "foundation/motor.hpp"
 

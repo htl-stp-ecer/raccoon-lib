@@ -1,7 +1,3 @@
-//
-// Created by tobias on 6/1/25.
-//
-
 #include "hal/Analog.hpp"
 
 #include <stdexcept>

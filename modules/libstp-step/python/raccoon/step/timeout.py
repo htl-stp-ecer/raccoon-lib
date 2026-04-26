@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Union
 
 from . import Step, StepProtocol
 from .annotation import dsl_step
@@ -43,16 +44,16 @@ class Timeout(Step):
 
     _composite = True
 
-    def __init__(self,
-                 step: Step,
-                 seconds: Union[float, int]) -> None:
+    def __init__(self, step: Step, seconds: float | int) -> None:
         super().__init__()
 
         if not isinstance(step, StepProtocol):
-            raise TypeError(f"Expected step to be a Step instance, got {type(step)}")
+            msg = f"Expected step to be a Step instance, got {type(step)}"
+            raise TypeError(msg)
 
         if seconds <= 0:
-            raise ValueError(f"Timeout duration must be positive: {seconds}")
+            msg = f"Timeout duration must be positive: {seconds}"
+            raise ValueError(msg)
 
         self.step = step.resolve()
         self.seconds = float(seconds)
@@ -62,19 +63,27 @@ class Timeout(Step):
         return self.step.collected_resources()
 
     def _generate_signature(self) -> str:
-        return (
-            f"Timeout(step={self.step.__class__.__name__}, "
-            f"seconds={self.seconds:.3f})"
-        )
+        return f"Timeout(step={self.step.__class__.__name__}, " f"seconds={self.seconds:.3f})"
 
     async def _execute_step(self, robot) -> None:
-        """Run the wrapped step and log if it exceeds the timeout budget."""
+        """Run the wrapped step and propagate a hard failure on timeout.
+
+        ``asyncio.wait_for`` cancels the wrapped step on timeout, gives it a
+        chance to clean up via its ``finally`` blocks, and then re-raises
+        ``TimeoutError``. We log a clear message at the boundary and let the
+        error propagate — silently swallowing it would let the surrounding
+        mission continue with the wrapped step in an undefined hardware state
+        (motor still spinning, servo still moving), which defeats the purpose
+        of a timeout.
+        """
         try:
             await asyncio.wait_for(
                 self.step.run_step(robot),
-                timeout=self.seconds
+                timeout=self.seconds,
             )
-        except asyncio.TimeoutError:
-            self.error(f"Step timed out after {self.seconds} seconds")
-        except Exception:
+        except TimeoutError:
+            self.error(
+                f"{self.step.__class__.__name__} exceeded "
+                f"{self.seconds:.3f}s timeout — cancelling and propagating"
+            )
             raise

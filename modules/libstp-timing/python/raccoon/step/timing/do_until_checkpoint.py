@@ -1,4 +1,5 @@
-from typing import Any
+from __future__ import annotations
+
 from .. import Step
 from ..annotation import dsl_step
 
@@ -29,27 +30,37 @@ class DoUntilCheckpoint(Step):
         from raccoon.step.logic import loop_forever
 
         # Search for objects until T=45s, then move on
-        search = loop_forever(seq([
-            scan_for_object(),
-            drive_forward(10),
-        ]))
-        seq([
-            do_until_checkpoint(45.0, search),
-            drive_to_start(),
-        ])
+        search = loop_forever(
+            seq(
+                [
+                    scan_for_object(),
+                    drive_forward(10),
+                ]
+            )
+        )
+        seq(
+            [
+                do_until_checkpoint(45.0, search),
+                drive_to_start(),
+            ]
+        )
     """
 
     _composite = True
 
     def __init__(self, checkpoint: float, step) -> None:
         super().__init__()
-        if not isinstance(checkpoint, (int, float)):
-            raise TypeError(f"checkpoint must be a number, got {type(checkpoint).__name__}")
+        if not isinstance(checkpoint, int | float):
+            msg = f"checkpoint must be a number, got {type(checkpoint).__name__}"
+            raise TypeError(msg)
         if checkpoint < 0:
-            raise ValueError(f"checkpoint must be >= 0, got {checkpoint}")
+            msg = f"checkpoint must be >= 0, got {checkpoint}"
+            raise ValueError(msg)
         from ..model import StepProtocol
+
         if not isinstance(step, StepProtocol):
-            raise TypeError(f"step must be a Step, got {type(step).__name__}")
+            msg = f"step must be a Step, got {type(step).__name__}"
+            raise TypeError(msg)
         self.checkpoint = float(checkpoint)
         self.step = step.resolve()
 

@@ -8,6 +8,7 @@ used instead.
 Activated by the ``LIBSTP_NO_CALIBRATE=1`` environment variable,
 which is set automatically by ``raccoon run --no-calibrate``.
 """
+
 from __future__ import annotations
 
 import os

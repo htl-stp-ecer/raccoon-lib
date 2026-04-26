@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Literal
 
 from raccoon.robot.heading_reference import HeadingReferenceService
@@ -103,8 +105,7 @@ def _build_heading_turn(
 
     if relative_deg > 0:
         return turn_left(angle, speed=speed)
-    else:
-        return turn_right(angle, speed=speed)
+    return turn_right(angle, speed=speed)
 
 
 @dsl(tags=["motion", "turn"])
@@ -160,6 +161,7 @@ def turn_to_heading_right(
         # Return to origin heading
         turn_to_heading_right(0)
     """
+
     def _build(robot: "GenericRobot") -> Step:
         return _build_heading_turn(robot, -degrees, speed, force_direction)
 
@@ -219,6 +221,7 @@ def turn_to_heading_left(
         # Return to origin heading
         turn_to_heading_left(0)
     """
+
     def _build(robot: "GenericRobot") -> Step:
         return _build_heading_turn(robot, degrees, speed, force_direction)
 

@@ -25,7 +25,7 @@ Example::
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from . import Step
 from .annotation import dsl
@@ -42,12 +42,14 @@ DEFAULT_WATCHDOG_NAME = "default"
 class StartWatchdog(Step):
     """Arm a named watchdog with a timeout."""
 
-    def __init__(self, name: str, timeout: Union[float, int]) -> None:
+    def __init__(self, name: str, timeout: float | int) -> None:
         super().__init__()
         if not isinstance(name, str) or not name:
-            raise ValueError(f"Watchdog name must be a non-empty string: {name!r}")
+            msg = f"Watchdog name must be a non-empty string: {name!r}"
+            raise ValueError(msg)
         if timeout <= 0:
-            raise ValueError(f"Watchdog timeout must be positive: {timeout}")
+            msg = f"Watchdog timeout must be positive: {timeout}"
+            raise ValueError(msg)
         self._name = name
         self._timeout = float(timeout)
 
@@ -66,7 +68,8 @@ class FeedWatchdog(Step):
     def __init__(self, name: str) -> None:
         super().__init__()
         if not isinstance(name, str) or not name:
-            raise ValueError(f"Watchdog name must be a non-empty string: {name!r}")
+            msg = f"Watchdog name must be a non-empty string: {name!r}"
+            raise ValueError(msg)
         self._name = name
 
     def _generate_signature(self) -> str:
@@ -84,7 +87,8 @@ class StopWatchdog(Step):
     def __init__(self, name: str) -> None:
         super().__init__()
         if not isinstance(name, str) or not name:
-            raise ValueError(f"Watchdog name must be a non-empty string: {name!r}")
+            msg = f"Watchdog name must be a non-empty string: {name!r}"
+            raise ValueError(msg)
         self._name = name
 
     def _generate_signature(self) -> str:
@@ -98,7 +102,7 @@ class StopWatchdog(Step):
 @dsl(tags=["control", "watchdog"])
 def start_watchdog(
     name: str = DEFAULT_WATCHDOG_NAME,
-    timeout: Union[float, int] = 5.0,
+    timeout: float | int = 5.0,
 ) -> StartWatchdog:
     """Arm a named watchdog that will kill the robot if not fed in time.
 

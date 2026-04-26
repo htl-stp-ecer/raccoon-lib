@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 from abc import abstractmethod
 from contextlib import asynccontextmanager
-from typing import List, Optional, runtime_checkable, Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from raccoon.class_name_logger import ClassNameLogger
-from raccoon.foundation import initialize_timer
 
 if TYPE_CHECKING:
     from raccoon.step.base import Step
@@ -28,7 +29,7 @@ class Mission(ClassNameLogger, MissionProtocol):
     runs. Subsequent missions do not run after a budget expiry.
     """
 
-    time_budget: Optional[float] = None
+    time_budget: float | None = None
 
     def __str__(self):
         return self.__class__.__name__
@@ -45,7 +46,8 @@ class Mission(ClassNameLogger, MissionProtocol):
     @abstractmethod
     def sequence(self) -> "Step":
         """Return the root step tree for this mission."""
-        raise NotImplementedError("Method sequence() not implemented")
+        msg = "Method sequence() not implemented"
+        raise NotImplementedError(msg)
 
 
 class SetupMission(Mission):
@@ -74,7 +76,9 @@ class SetupMission(Mission):
             async def pre_start_gate(self, robot) -> None:
                 # Skip the wait-for-light — just wait for button
                 from raccoon.step import wait_for_button
+
                 await wait_for_button().run_step(robot)
+
 
         class QuickSetup(SetupMission):
             def sequence(self) -> Step:
@@ -106,6 +110,7 @@ class SetupMission(Mission):
             return
         # Lazy import keeps mission module free of a hard UI dependency.
         from raccoon.ui.step import _active_setup_timer, _SetupTimerState  # type: ignore[import]
+
         token = _active_setup_timer.set(_SetupTimerState(self.setup_time))
         try:
             yield

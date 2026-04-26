@@ -2,21 +2,31 @@
 Input screens for collecting user data.
 """
 
-from dataclasses import dataclass
-from typing import Optional
+from __future__ import annotations
 
+from dataclasses import dataclass
+
+from ..events import on_change, on_click, on_keypad, on_slider
 from ..screen import UIScreen
 from ..widgets import (
-    Widget, Text, Button, Spacer, Slider,
-    NumericKeypad, NumericInput, TextInput,
-    Center, Row, Column, Split,
+    Button,
+    Center,
+    NumericInput,
+    NumericKeypad,
+    Row,
+    Slider,
+    Spacer,
+    Split,
+    Text,
+    TextInput,
+    Widget,
 )
-from ..events import on_click, on_keypad, on_change, on_slider
 
 
 @dataclass
 class NumberInputResult:
     """Result from NumberInputScreen."""
+
     value: float
     confirmed: bool
 
@@ -24,6 +34,7 @@ class NumberInputResult:
 @dataclass
 class TextInputResult:
     """Result from TextInputScreen."""
+
     value: str
     confirmed: bool
 
@@ -31,6 +42,7 @@ class TextInputResult:
 @dataclass
 class SliderInputResult:
     """Result from SliderInputScreen."""
+
     value: float
     confirmed: bool
 
@@ -58,11 +70,11 @@ class NumberInputScreen(UIScreen[NumberInputResult]):
         prompt: str = "Enter value:",
         unit: str = "",
         initial_value: float = 0,
-        min_value: Optional[float] = None,
-        max_value: Optional[float] = None,
+        min_value: float | None = None,
+        max_value: float | None = None,
         # Legacy aliases
-        label: str = None,
-        default: float = None,
+        label: str | None = None,
+        default: float | None = None,
     ):
         super().__init__()
         self.title = title
@@ -94,10 +106,13 @@ class NumberInputScreen(UIScreen[NumberInputResult]):
                     max_value=self.max_value,
                 ),
                 Spacer(24),
-                Row(children=[
-                    Button("cancel", "Cancel", style="secondary"),
-                    Button("submit", "Submit", style="success", icon="check"),
-                ], spacing=12),
+                Row(
+                    children=[
+                        Button("cancel", "Cancel", style="secondary"),
+                        Button("submit", "Submit", style="success", icon="check"),
+                    ],
+                    spacing=12,
+                ),
             ],
             right=[
                 NumericKeypad(),
@@ -161,7 +176,7 @@ class TextInputScreen(UIScreen[TextInputResult]):
         default: str = "",
         placeholder: str = "",
         # Legacy alias
-        label: str = None,
+        label: str | None = None,
     ):
         super().__init__()
         self.title = title
@@ -170,20 +185,25 @@ class TextInputScreen(UIScreen[TextInputResult]):
         self.placeholder = placeholder
 
     def build(self) -> Widget:
-        return Center(children=[
-            Text(self.label, size="large"),
-            Spacer(24),
-            TextInput(
-                id="value",
-                value=self.value,
-                placeholder=self.placeholder,
-            ),
-            Spacer(24),
-            Row(children=[
-                Button("cancel", "Cancel", style="secondary"),
-                Button("submit", "Submit", style="success"),
-            ], spacing=16),
-        ])
+        return Center(
+            children=[
+                Text(self.label, size="large"),
+                Spacer(24),
+                TextInput(
+                    id="value",
+                    value=self.value,
+                    placeholder=self.placeholder,
+                ),
+                Spacer(24),
+                Row(
+                    children=[
+                        Button("cancel", "Cancel", style="secondary"),
+                        Button("submit", "Submit", style="success"),
+                    ],
+                    spacing=16,
+                ),
+            ]
+        )
 
     @on_change("value")
     async def on_change_value(self, value: str):
@@ -220,9 +240,9 @@ class SliderInputScreen(UIScreen[SliderInputResult]):
         prompt: str = "Select value:",
         min: float = 0,
         max: float = 100,
-        default: float = None,
+        default: float | None = None,
         # Legacy alias
-        label: str = None,
+        label: str | None = None,
     ):
         super().__init__()
         self.title = title
@@ -232,23 +252,28 @@ class SliderInputScreen(UIScreen[SliderInputResult]):
         self.value = default if default is not None else min
 
     def build(self) -> Widget:
-        return Center(children=[
-            Text(self.label, size="large"),
-            Spacer(16),
-            Text(f"{self.value:.1f}", size="title", bold=True),
-            Spacer(16),
-            Slider(
-                id="value",
-                min=self.min,
-                max=self.max,
-                value=self.value,
-            ),
-            Spacer(32),
-            Row(children=[
-                Button("cancel", "Cancel", style="secondary"),
-                Button("submit", "OK", style="success"),
-            ], spacing=16),
-        ])
+        return Center(
+            children=[
+                Text(self.label, size="large"),
+                Spacer(16),
+                Text(f"{self.value:.1f}", size="title", bold=True),
+                Spacer(16),
+                Slider(
+                    id="value",
+                    min=self.min,
+                    max=self.max,
+                    value=self.value,
+                ),
+                Spacer(32),
+                Row(
+                    children=[
+                        Button("cancel", "Cancel", style="secondary"),
+                        Button("submit", "OK", style="success"),
+                    ],
+                    spacing=16,
+                ),
+            ]
+        )
 
     @on_slider("value")
     async def on_slider_change(self, value: float):

@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import math
 import time
-from typing import TYPE_CHECKING, Callable, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from raccoon.hal import AnalogSensor, DigitalSensor, Motor
@@ -36,7 +37,6 @@ class StopCondition:
 
     def start(self, robot: "GenericRobot") -> None:
         """Called once when the motion step starts. Override to initialize state."""
-        pass
 
     def check(self, robot: "GenericRobot") -> bool:
         """Return True to stop the motion. Called each update cycle."""
@@ -63,12 +63,13 @@ class StopCondition:
         return _Then(self, other)
 
     def __bool__(self) -> bool:
-        raise TypeError(
+        msg = (
             "StopCondition cannot be used as a boolean. "
             "You may have written 'a > b > c' — Python treats this as a chained "
             "comparison, not (a > b) > c. Use parentheses: '(a > b) > c', "
             "or use the + operator: 'a + b + c'."
         )
+        raise TypeError(msg)
 
 
 class _Then(StopCondition):
@@ -79,13 +80,11 @@ class _Then(StopCondition):
 
     def __init__(self, first: StopCondition, second: StopCondition):
         if not isinstance(first, StopCondition):
-            raise TypeError(
-                f"Expected a StopCondition, got {type(first).__name__}"
-            )
+            msg = f"Expected a StopCondition, got {type(first).__name__}"
+            raise TypeError(msg)
         if not isinstance(second, StopCondition):
-            raise TypeError(
-                f"Expected a StopCondition, got {type(second).__name__}"
-            )
+            msg = f"Expected a StopCondition, got {type(second).__name__}"
+            raise TypeError(msg)
         self._first = first
         self._second = second
         self._first_done = False
@@ -109,10 +108,8 @@ class _AnyOf(StopCondition):
     def __init__(self, *conditions: StopCondition):
         for i, c in enumerate(conditions):
             if not isinstance(c, StopCondition):
-                raise TypeError(
-                    f"Expected StopCondition at position {i}, "
-                    f"got {type(c).__name__}"
-                )
+                msg = f"Expected StopCondition at position {i}, " f"got {type(c).__name__}"
+                raise TypeError(msg)
         self._conditions = conditions
 
     def start(self, robot: "GenericRobot") -> None:
@@ -129,10 +126,8 @@ class _AllOf(StopCondition):
     def __init__(self, *conditions: StopCondition):
         for i, c in enumerate(conditions):
             if not isinstance(c, StopCondition):
-                raise TypeError(
-                    f"Expected StopCondition at position {i}, "
-                    f"got {type(c).__name__}"
-                )
+                msg = f"Expected StopCondition at position {i}, " f"got {type(c).__name__}"
+                raise TypeError(msg)
         self._conditions = conditions
 
     def start(self, robot: "GenericRobot") -> None:
@@ -148,12 +143,11 @@ class on_black(StopCondition):
 
     def __init__(self, sensor: "IRSensor", threshold: float = 0.7):
         if not hasattr(sensor, "probabilityOfBlack"):
-            raise TypeError(
-                f"Expected an IRSensor with probabilityOfBlack(), "
-                f"got {type(sensor).__name__}"
-            )
+            msg = f"Expected an IRSensor with probabilityOfBlack(), " f"got {type(sensor).__name__}"
+            raise TypeError(msg)
         if not (0.0 <= threshold <= 1.0):
-            raise ValueError(f"threshold must be 0.0–1.0, got {threshold}")
+            msg = f"threshold must be 0.0–1.0, got {threshold}"
+            raise ValueError(msg)
         self._sensor = sensor
         self._threshold = threshold
 
@@ -166,12 +160,11 @@ class on_white(StopCondition):
 
     def __init__(self, sensor: "IRSensor", threshold: float = 0.7):
         if not hasattr(sensor, "probabilityOfWhite"):
-            raise TypeError(
-                f"Expected an IRSensor with probabilityOfWhite(), "
-                f"got {type(sensor).__name__}"
-            )
+            msg = f"Expected an IRSensor with probabilityOfWhite(), " f"got {type(sensor).__name__}"
+            raise TypeError(msg)
         if not (0.0 <= threshold <= 1.0):
-            raise ValueError(f"threshold must be 0.0–1.0, got {threshold}")
+            msg = f"threshold must be 0.0–1.0, got {threshold}"
+            raise ValueError(msg)
         self._sensor = sensor
         self._threshold = threshold
 
@@ -183,10 +176,12 @@ class after_seconds(StopCondition):
     """Stop after a fixed duration."""
 
     def __init__(self, seconds: float):
-        if not isinstance(seconds, (int, float)):
-            raise TypeError(f"seconds must be a number, got {type(seconds).__name__}")
+        if not isinstance(seconds, int | float):
+            msg = f"seconds must be a number, got {type(seconds).__name__}"
+            raise TypeError(msg)
         if seconds < 0:
-            raise ValueError(f"seconds must be >= 0, got {seconds}")
+            msg = f"seconds must be >= 0, got {seconds}"
+            raise ValueError(msg)
         self._duration = seconds
         self._deadline: float = 0
 
@@ -211,10 +206,12 @@ class after_cm(StopCondition):
     """
 
     def __init__(self, cm: float, *, absolute: bool = False):
-        if not isinstance(cm, (int, float)):
-            raise TypeError(f"cm must be a number, got {type(cm).__name__}")
+        if not isinstance(cm, int | float):
+            msg = f"cm must be a number, got {type(cm).__name__}"
+            raise TypeError(msg)
         if cm <= 0:
-            raise ValueError(f"cm must be > 0, got {cm}")
+            msg = f"cm must be > 0, got {cm}"
+            raise ValueError(msg)
         self._target_m = cm / 100.0
         self._absolute = absolute
         self._baseline_m: float = 0.0
@@ -253,10 +250,12 @@ class _AxisDisplacementCondition(StopCondition):
     _axis_name = ""  # for error messages
 
     def __init__(self, cm: float, *, absolute: bool = False):
-        if not isinstance(cm, (int, float)):
-            raise TypeError(f"cm must be a number, got {type(cm).__name__}")
+        if not isinstance(cm, int | float):
+            msg = f"cm must be a number, got {type(cm).__name__}"
+            raise TypeError(msg)
         if cm == 0:
-            raise ValueError(f"cm must be nonzero, got {cm}")
+            msg = f"cm must be nonzero, got {cm}"
+            raise ValueError(msg)
         self._target_m = cm / 100.0
         self._absolute = absolute
         self._origin_x_m: float = 0.0
@@ -356,10 +355,12 @@ class after_degrees(StopCondition):
     """
 
     def __init__(self, degrees: float):
-        if not isinstance(degrees, (int, float)):
-            raise TypeError(f"degrees must be a number, got {type(degrees).__name__}")
+        if not isinstance(degrees, int | float):
+            msg = f"degrees must be a number, got {type(degrees).__name__}"
+            raise TypeError(msg)
         if degrees <= 0:
-            raise ValueError(f"degrees must be > 0, got {degrees}")
+            msg = f"degrees must be > 0, got {degrees}"
+            raise ValueError(msg)
         self._target_rad = math.radians(abs(degrees))
         self._start_heading: float = 0.0
 
@@ -383,10 +384,8 @@ class on_digital(StopCondition):
 
     def __init__(self, sensor: "DigitalSensor", pressed: bool = True):
         if not hasattr(sensor, "read"):
-            raise TypeError(
-                f"Expected a DigitalSensor with read(), "
-                f"got {type(sensor).__name__}"
-            )
+            msg = f"Expected a DigitalSensor with read(), " f"got {type(sensor).__name__}"
+            raise TypeError(msg)
         self._sensor = sensor
         self._pressed = pressed
 
@@ -399,12 +398,11 @@ class on_analog_above(StopCondition):
 
     def __init__(self, sensor: "AnalogSensor", threshold: int):
         if not hasattr(sensor, "read"):
-            raise TypeError(
-                f"Expected an AnalogSensor with read(), "
-                f"got {type(sensor).__name__}"
-            )
-        if not isinstance(threshold, (int, float)):
-            raise TypeError(f"threshold must be a number, got {type(threshold).__name__}")
+            msg = f"Expected an AnalogSensor with read(), " f"got {type(sensor).__name__}"
+            raise TypeError(msg)
+        if not isinstance(threshold, int | float):
+            msg = f"threshold must be a number, got {type(threshold).__name__}"
+            raise TypeError(msg)
         self._sensor = sensor
         self._threshold = threshold
 
@@ -417,12 +415,11 @@ class on_analog_below(StopCondition):
 
     def __init__(self, sensor: "AnalogSensor", threshold: int):
         if not hasattr(sensor, "read"):
-            raise TypeError(
-                f"Expected an AnalogSensor with read(), "
-                f"got {type(sensor).__name__}"
-            )
-        if not isinstance(threshold, (int, float)):
-            raise TypeError(f"threshold must be a number, got {type(threshold).__name__}")
+            msg = f"Expected an AnalogSensor with read(), " f"got {type(sensor).__name__}"
+            raise TypeError(msg)
+        if not isinstance(threshold, int | float):
+            msg = f"threshold must be a number, got {type(threshold).__name__}"
+            raise TypeError(msg)
         self._sensor = sensor
         self._threshold = threshold
 
@@ -438,18 +435,16 @@ class stall_detected(StopCondition):
     continuously.
     """
 
-    def __init__(
-        self, motor: "Motor", threshold_tps: int = 10, duration: float = 0.25
-    ):
+    def __init__(self, motor: "Motor", threshold_tps: int = 10, duration: float = 0.25):
         if not hasattr(motor, "get_position"):
-            raise TypeError(
-                f"Expected a Motor with get_position(), "
-                f"got {type(motor).__name__}"
-            )
-        if not isinstance(threshold_tps, (int, float)) or threshold_tps <= 0:
-            raise ValueError(f"threshold_tps must be > 0, got {threshold_tps}")
-        if not isinstance(duration, (int, float)) or duration <= 0:
-            raise ValueError(f"duration must be > 0, got {duration}")
+            msg = f"Expected a Motor with get_position(), " f"got {type(motor).__name__}"
+            raise TypeError(msg)
+        if not isinstance(threshold_tps, int | float) or threshold_tps <= 0:
+            msg = f"threshold_tps must be > 0, got {threshold_tps}"
+            raise ValueError(msg)
+        if not isinstance(duration, int | float) or duration <= 0:
+            msg = f"duration must be > 0, got {duration}"
+            raise ValueError(msg)
         self._motor = motor
         self._threshold_tps = threshold_tps
         self._duration = duration
@@ -491,7 +486,8 @@ class custom(StopCondition):
 
     def __init__(self, fn: Callable[["GenericRobot"], bool]):
         if not callable(fn):
-            raise TypeError(f"fn must be callable, got {type(fn).__name__}")
+            msg = f"fn must be callable, got {type(fn).__name__}"
+            raise TypeError(msg)
         self._fn = fn
 
     def check(self, robot: "GenericRobot") -> bool:

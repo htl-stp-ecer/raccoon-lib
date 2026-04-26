@@ -1,4 +1,4 @@
-from typing import List
+from __future__ import annotations
 
 from raccoon import calibration_store as CalibrationStore
 from raccoon.calibration_store import CalibrationType
@@ -40,7 +40,7 @@ class SwitchCalibrationSet(UIStep):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         sensors = robot.defs.analog_sensors
-        ir_sensors: List[IRSensor] = [s for s in sensors if isinstance(s, IRSensor)]
+        ir_sensors: list[IRSensor] = [s for s in sensors if isinstance(s, IRSensor)]
 
         for sensor in ir_sensors:
             key = f"{self.set_name}_port{sensor.port}"
@@ -53,6 +53,5 @@ class SwitchCalibrationSet(UIStep):
             sensor.setCalibration(black_thresh, white_thresh)
 
             self.debug(
-                f"Applied calibration set '{key}': "
-                f"black={black_thresh}, white={white_thresh}"
+                f"Applied calibration set '{key}': " f"black={black_thresh}, white={white_thresh}"
             )

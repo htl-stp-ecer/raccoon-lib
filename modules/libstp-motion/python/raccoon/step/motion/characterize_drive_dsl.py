@@ -25,7 +25,7 @@ class CharacterizeDriveBuilder(StepBuilder):
         self._decel_timeout = 3.0
         self._persist = True
 
-    def axes(self, value: list[str]):
+    def axes(self, value: list[str] | None):
         self._axes = value
         return self
 
@@ -51,17 +51,24 @@ class CharacterizeDriveBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs['axes'] = self._axes
-        kwargs['trials'] = self._trials
-        kwargs['power_percent'] = self._power_percent
-        kwargs['accel_timeout'] = self._accel_timeout
-        kwargs['decel_timeout'] = self._decel_timeout
-        kwargs['persist'] = self._persist
+        kwargs["axes"] = self._axes
+        kwargs["trials"] = self._trials
+        kwargs["power_percent"] = self._power_percent
+        kwargs["accel_timeout"] = self._accel_timeout
+        kwargs["decel_timeout"] = self._decel_timeout
+        kwargs["persist"] = self._persist
         return CharacterizeDrive(**kwargs)
 
 
-@dsl(tags=['motion', 'calibration', 'characterize'])
-def characterize_drive(axes: list[str] = None, trials: int = 3, power_percent: int = 100, accel_timeout: float = 3.0, decel_timeout: float = 3.0, persist: bool = True):
+@dsl(tags=["motion", "calibration", "characterize"])
+def characterize_drive(
+    axes: list[str] | None = None,
+    trials: int = 3,
+    power_percent: int = 100,
+    accel_timeout: float = 3.0,
+    decel_timeout: float = 3.0,
+    persist: bool = True,
+):
     """
     Characterize the robot's physical drive limits at full motor power.
 
@@ -131,4 +138,4 @@ def characterize_drive(axes: list[str] = None, trials: int = 3, power_percent: i
     return b
 
 
-__all__ = ['CharacterizeDriveBuilder', 'characterize_drive']
+__all__ = ["CharacterizeDriveBuilder", "characterize_drive"]

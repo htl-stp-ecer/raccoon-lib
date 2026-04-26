@@ -10,16 +10,18 @@ of the filtered baseline for several consecutive samples.
 Based on: "Comprehensive Light-Start Methods in Botball" (Gosling et al.)
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
-
 from typing import TYPE_CHECKING
 
 from raccoon.hal import AnalogSensor
-from .annotation import dsl_step
 from raccoon.ui import UIStep
 from raccoon.ui.screens.wfl import WFLDetectScreen
 from raccoon.ui.step import set_setup_timer_paused
+
+from .annotation import dsl_step
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -361,5 +363,3 @@ class WaitForLightLegacy(UIStep):
 
         cal_step = calibrate_wait_for_light(self._sensor)
         await cal_step.run_step(robot)
-
-

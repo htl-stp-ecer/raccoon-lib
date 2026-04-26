@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import enum
 import math
-from typing import TYPE_CHECKING, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from raccoon.hal import Servo
 from raccoon.step import Step
@@ -12,9 +13,7 @@ from raccoon.step.annotation import dsl, dsl_step
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
-from .resolver import resolve_servo
 from .utility import estimate_servo_move_time
-
 
 # ---------------------------------------------------------------------------
 # Easing / interpolation helpers
@@ -79,7 +78,7 @@ class Easing(enum.Enum):
     EASE_IN_OUT_COSINE = _ease_in_out_cosine
     """Cosine-based ease-in-out — similar feel, slightly different curve shape."""
 
-    def __call__(self, t: float) -> float:  # noqa: D102 — makes ``Easing.XXX(t)`` work
+    def __call__(self, t: float) -> float:
         return self.value(t)
 
 
@@ -89,12 +88,12 @@ def _unwrap_servo(servo_or_preset):
     Raises TypeError if the argument is neither a Servo nor a ServoPreset.
     """
     from .preset import ServoPreset
+
     if isinstance(servo_or_preset, ServoPreset):
         return servo_or_preset.device
     if not hasattr(servo_or_preset, "set_position") or not hasattr(servo_or_preset, "port"):
-        raise TypeError(
-            f"Expected a Servo or ServoPreset, got {type(servo_or_preset).__name__}"
-        )
+        msg = f"Expected a Servo or ServoPreset, got {type(servo_or_preset).__name__}"
+        raise TypeError(msg)
     return servo_or_preset
 
 
@@ -103,14 +102,15 @@ class SetServoPosition(Step):
     """Set a servo to a target angle and optionally wait for the move to finish."""
 
     def __init__(
-        self, servo: Servo | ServoPreset, target_angle: float, duration: Optional[float] = None
+        self, servo: Servo | ServoPreset, target_angle: float, duration: float | None = None
     ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
         self._target_angle = float(target_angle)
         self._duration = float(duration) if duration is not None else None
         if self._duration is not None and self._duration < 0:
-            raise ValueError("Duration must be >= 0")
+            msg = "Duration must be >= 0"
+            raise ValueError(msg)
 
     def required_resources(self) -> frozenset[str]:
         return frozenset({f"servo:{self._servo_ref.port}"})
@@ -130,6 +130,7 @@ class SetServoPosition(Step):
         self._servo_ref.set_position(self._target_angle)
         if duration and duration > 0:
             await asyncio.sleep(duration)
+
 
 @dsl(tags=["servo", "actuator"])
 def servo(servo: Servo, angle: float) -> SetServoPosition:
@@ -163,7 +164,6 @@ def servo(servo: Servo, angle: float) -> SetServoPosition:
         )
     """
     return SetServoPosition(servo=servo, target_angle=angle, duration=None)
-
 
 
 @dsl_step(tags=["servo", "actuator"])
@@ -200,7 +200,8 @@ class ShakeServo(Step):
         self._angle_a = float(angle_a)
         self._angle_b = float(angle_b)
         if self._duration < 0:
-            raise ValueError("Duration must be >= 0")
+            msg = "Duration must be >= 0"
+            raise ValueError(msg)
 
     def required_resources(self) -> frozenset[str]:
         return frozenset({f"servo:{self._servo_ref.port}"})
@@ -295,14 +296,17 @@ class SlowServo(Step):
     ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
-        if not isinstance(angle, (int, float)):
-            raise TypeError(f"angle must be a number, got {type(angle).__name__}")
+        if not isinstance(angle, int | float):
+            msg = f"angle must be a number, got {type(angle).__name__}"
+            raise TypeError(msg)
         self._target_angle = float(angle)
         self._speed = float(speed)
         if self._speed <= 0:
-            raise ValueError(f"Speed must be > 0, got {self._speed}")
+            msg = f"Speed must be > 0, got {self._speed}"
+            raise ValueError(msg)
         if not callable(easing):
-            raise TypeError(f"easing must be an Easing member or callable, got {type(easing).__name__}")
+            msg = f"easing must be an Easing member or callable, got {type(easing).__name__}"
+            raise TypeError(msg)
         self._easing: EasingFunc = easing if callable(easing) else easing.value
 
     def required_resources(self) -> frozenset[str]:
@@ -310,7 +314,7 @@ class SlowServo(Step):
 
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
-        easing_name = getattr(self._easing, '__name__', None) or getattr(self._easing, 'name', '?')
+        easing_name = getattr(self._easing, "__name__", None) or getattr(self._easing, "name", "?")
         return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed},easing={easing_name})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:

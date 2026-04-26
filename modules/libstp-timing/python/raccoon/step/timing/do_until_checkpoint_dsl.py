@@ -32,14 +32,14 @@ class DoUntilCheckpointBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._checkpoint is not _UNSET:
-            kwargs['checkpoint'] = self._checkpoint
+            kwargs["checkpoint"] = self._checkpoint
         if self._step is not _UNSET:
-            kwargs['step'] = self._step
+            kwargs["step"] = self._step
         return DoUntilCheckpoint(**kwargs)
 
 
-@dsl(tags=['timing', 'sync'])
-def do_until_checkpoint(checkpoint: float = _UNSET, step = _UNSET):
+@dsl(tags=["timing", "sync"])
+def do_until_checkpoint(checkpoint: float = _UNSET, step=_UNSET):
     """
     Run a step until a mission-relative time checkpoint, then cancel it.
 
@@ -66,14 +66,20 @@ def do_until_checkpoint(checkpoint: float = _UNSET, step = _UNSET):
         from raccoon.step.logic import loop_forever
 
         # Search for objects until T=45s, then move on
-        search = loop_forever(seq([
-            scan_for_object(),
-            drive_forward(10),
-        ]))
-        seq([
-            do_until_checkpoint(45.0, search),
-            drive_to_start(),
-        ])
+        search = loop_forever(
+            seq(
+                [
+                    scan_for_object(),
+                    drive_forward(10),
+                ]
+            )
+        )
+        seq(
+            [
+                do_until_checkpoint(45.0, search),
+                drive_to_start(),
+            ]
+        )
     """
     b = DoUntilCheckpointBuilder()
     if checkpoint is not _UNSET:
@@ -83,4 +89,4 @@ def do_until_checkpoint(checkpoint: float = _UNSET, step = _UNSET):
     return b
 
 
-__all__ = ['DoUntilCheckpointBuilder', 'do_until_checkpoint']
+__all__ = ["DoUntilCheckpointBuilder", "do_until_checkpoint"]

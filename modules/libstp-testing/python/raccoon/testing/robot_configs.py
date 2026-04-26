@@ -11,6 +11,7 @@ Usage::
     with use_scene("empty_table.ftmap", robot=DRUMBOT, start=(50, 50, 0)):
         ...
 """
+
 from __future__ import annotations
 
 from .sim import SimRobotConfig
@@ -51,7 +52,7 @@ DRUMBOT = SimRobotConfig(
     # on physical hardware.
     viscous_drag_coeff=0.8,
     coulomb_friction_rad_s2=1.5,
-    bemf_noise_stddev=2.0,        # ~2 BEMF units of encoder noise
+    bemf_noise_stddev=2.0,  # ~2 BEMF units of encoder noise
 )
 
 # ---------------------------------------------------------------------------
@@ -93,7 +94,7 @@ PACKINGBOT = SimRobotConfig(
     # comment above.
     viscous_drag_coeff=1.2,
     coulomb_friction_rad_s2=2.0,
-    bemf_noise_stddev=2.0,        # ~2 BEMF units of encoder noise
+    bemf_noise_stddev=2.0,  # ~2 BEMF units of encoder noise
 )
 
 

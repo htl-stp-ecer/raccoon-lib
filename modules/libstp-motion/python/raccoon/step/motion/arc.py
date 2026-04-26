@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import math
-from raccoon.motion import ArcMotion, ArcMotionConfig
 from typing import TYPE_CHECKING
+
+from raccoon.motion import ArcMotion, ArcMotionConfig
 
 from .. import SimulationStep, SimulationStepDelta, dsl
 from ..annotation import dsl_step

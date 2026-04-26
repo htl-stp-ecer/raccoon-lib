@@ -1,6 +1,3 @@
-//
-// Created by tobias on 6/8/25.
-//
 #pragma once
 #include <functional>
 #include "pch.hpp"

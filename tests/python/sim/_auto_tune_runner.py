@@ -6,6 +6,7 @@ block the others.
 
 Accepts ``--config`` (default/drumbot/packingbot) to select the robot.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,22 +25,19 @@ os.environ.pop("LIBSTP_NO_CALIBRATE", None)
 
 def _build_robot(cfg):
     """Build a HAL robot matching the given SimRobotConfig."""
+    from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge
     from raccoon.kinematics_differential import DifferentialKinematics
-    from raccoon.drive import Drive, ChassisVelocityControlConfig
+    from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
     from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
-    from raccoon.motion import UnifiedMotionPidConfig, AxisConstraints
 
     left = Motor(cfg.left_motor_port, cfg.left_motor_inverted)
     right = Motor(cfg.right_motor_port, cfg.right_motor_inverted)
     imu = IMU()
-    kin = DifferentialKinematics(
-        left, right, cfg.track_width_m, cfg.wheel_radius_m)
+    kin = DifferentialKinematics(left, right, cfg.track_width_m, cfg.wheel_radius_m)
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
     bridge = OdometryBridge()
-    odom = Stm32Odometry(
-        imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig()
-    )
+    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
 
     # Start with conservative defaults — auto-tune will improve them
     pid_cfg = UnifiedMotionPidConfig()
@@ -61,23 +59,24 @@ def _get_config(name: str):
 
     if name == "drumbot":
         from raccoon.testing.robot_configs import DRUMBOT
+
         return DRUMBOT
-    elif name == "packingbot":
+    if name == "packingbot":
         from raccoon.testing.robot_configs import PACKINGBOT
+
         return PACKINGBOT
-    else:
-        return SimRobotConfig(
-            wheel_radius_m=0.03,
-            track_width_m=0.15,
-            wheelbase_m=0.15,
-            left_motor_port=0,
-            right_motor_port=1,
-            max_wheel_velocity_rad_s=30.0,
-            motor_time_constant_sec=0.05,
-            viscous_drag_coeff=0.5,
-            coulomb_friction_rad_s2=1.0,
-            bemf_noise_stddev=1.5,
-        )
+    return SimRobotConfig(
+        wheel_radius_m=0.03,
+        track_width_m=0.15,
+        wheelbase_m=0.15,
+        left_motor_port=0,
+        right_motor_port=1,
+        max_wheel_velocity_rad_s=30.0,
+        motor_time_constant_sec=0.05,
+        viscous_drag_coeff=0.5,
+        coulomb_friction_rad_s2=1.0,
+        bemf_noise_stddev=1.5,
+    )
 
 
 def _log(msg: str) -> None:
@@ -112,8 +111,10 @@ async def _run_characterize(robot, cfg):
                 "acceleration": r.acceleration,
                 "deceleration": r.deceleration,
             }
-            _log(f"  {axis}: v_max={r.max_velocity:.4f}, "
-                 f"accel={r.acceleration:.4f}, decel={r.deceleration:.4f}")
+            _log(
+                f"  {axis}: v_max={r.max_velocity:.4f}, "
+                f"accel={r.acceleration:.4f}, decel={r.deceleration:.4f}"
+            )
 
     return results
 
@@ -182,13 +183,14 @@ async def _run_motion_tune(robot, cfg):
                 "iterations": r.iterations,
             }
             improvement = (
-                (1 - r.final_score / r.initial_score) * 100
-                if r.initial_score > 0 else 0.0
+                (1 - r.final_score / r.initial_score) * 100 if r.initial_score > 0 else 0.0
             )
-            _log(f"  {name}: kp {r.initial_kp:.4f}->{r.final_kp:.4f}, "
-                 f"kd {r.initial_kd:.4f}->{r.final_kd:.4f} | "
-                 f"score {r.initial_score:.4f}->{r.final_score:.4f} "
-                 f"({improvement:+.1f}%)")
+            _log(
+                f"  {name}: kp {r.initial_kp:.4f}->{r.final_kp:.4f}, "
+                f"kd {r.initial_kd:.4f}->{r.final_kd:.4f} | "
+                f"score {r.initial_score:.4f}->{r.final_score:.4f} "
+                f"({improvement:+.1f}%)"
+            )
 
     return results
 
@@ -218,6 +220,7 @@ async def _scenarios(config_name: str):
         out["motion"] = await _run_motion_tune(robot, cfg)
     except Exception as e:
         import traceback
+
         _log(f"Phase 3 FAILED: {type(e).__name__}: {e}")
         traceback.print_exc(file=sys.stderr)
         out["motion"] = {"error": f"{type(e).__name__}: {e}"}
@@ -237,8 +240,9 @@ def main() -> None:
 
     try:
         asyncio.run(_scenarios(config_name))
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         import traceback
+
         sys.stderr.write(f"ERR: {type(e).__name__}: {e}\n")
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()

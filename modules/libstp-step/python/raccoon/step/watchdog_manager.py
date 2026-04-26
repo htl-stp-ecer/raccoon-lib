@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +46,8 @@ class WatchdogManager:
 
     def __init__(self) -> None:
         self._entries: dict[str, _WDEntry] = {}
-        self._main_task: Optional[asyncio.Task[None]] = None
-        self._expired_name: Optional[str] = None
+        self._main_task: asyncio.Task[None] | None = None
+        self._expired_name: str | None = None
 
     def attach_main_task(self, task: asyncio.Task[None]) -> None:
         """Register the task that should be cancelled when a watchdog fires."""
@@ -60,14 +59,15 @@ class WatchdogManager:
         self._main_task = None
 
     @property
-    def expired_name(self) -> Optional[str]:
+    def expired_name(self) -> str | None:
         """Name of the watchdog that fired, or ``None`` if no expiry occurred."""
         return self._expired_name
 
     def arm(self, name: str, timeout: float, source: str = "user") -> None:
         """Arm a watchdog. Replaces any existing entry with the same name."""
         if timeout <= 0:
-            raise ValueError(f"Watchdog timeout must be positive: {timeout}")
+            msg = f"Watchdog timeout must be positive: {timeout}"
+            raise ValueError(msg)
 
         existing = self._entries.get(name)
         if existing is not None:
@@ -106,7 +106,7 @@ class WatchdogManager:
         entry.task.cancel()
         logger.debug("Disarmed watchdog '%s'", name)
 
-    def active_names(self, source: Optional[str] = None) -> list[str]:
+    def active_names(self, source: str | None = None) -> list[str]:
         """Return names of currently armed watchdogs, optionally filtered by source."""
         if source is None:
             return list(self._entries.keys())
@@ -119,9 +119,7 @@ class WatchdogManager:
         for entry in entries:
             entry.task.cancel()
         if entries:
-            await asyncio.gather(
-                *[e.task for e in entries], return_exceptions=True
-            )
+            await asyncio.gather(*[e.task for e in entries], return_exceptions=True)
 
     async def _expiry_timer(self, name: str) -> None:
         """Sleep until the entry's deadline, then fire expiry."""

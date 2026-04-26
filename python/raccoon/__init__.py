@@ -3,9 +3,8 @@ from __future__ import annotations
 import atexit
 import signal
 from types import FrameType
-from typing import Dict
 
-from raccoon._core import __version__ as __version__
+from raccoon._core import __version__
 
 # Minimum project format_version required by this version of raccoon-lib.
 # Bump this when a breaking YAML change lands (e.g. a robot.yml key renamed)
@@ -20,17 +19,14 @@ except Exception:
 from raccoon.no_calibrate import is_no_calibrate as _is_no_calibrate
 from raccoon.no_checkpoints import is_no_checkpoints as _is_no_checkpoints
 
-_no_cal_label = " | --no-calibrate" if _is_no_calibrate() else ""
-_no_chk_label = " | --no-checkpoints" if _is_no_checkpoints() else ""
-print(f"raccoon v{__version__} | raccoon-transport v{_raccoon_version}{_no_cal_label}{_no_chk_label}")
-
 from raccoon import hal as _hal
 from raccoon.class_name_logger import ClassNameLogger
 from raccoon.foundation import initialize_logging
 from raccoon.log import error, info, debug, warn, trace
 from raccoon.sensor_ir import IRSensor, IRSensorCalibration
 from raccoon.sensor_et import ETSensor
-from raccoon.cam import CamSensor as CamSensor
+from raccoon.cam import CamSensor
+
 # Core hardware
 Motor = _hal.Motor
 Servo = _hal.Servo
@@ -47,6 +43,7 @@ from raccoon.robot import __all__ as _robot_all
 from raccoon.robot import *
 from raccoon.mission.api import Mission, MissionProtocol, SetupMission
 from raccoon.timing import StepTimingTracker
+
 # UI library (replaces legacy RenderScreen)
 from raccoon.ui import *
 from raccoon.drive import Drive, AxisVelocityControlConfig, ChassisVelocityControlConfig
@@ -54,7 +51,14 @@ from raccoon.motion import UnifiedMotionPidConfig
 from raccoon.kinematics_mecanum import MecanumKinematics
 from raccoon.odometry_fused import FusedOdometry, FusedOdometryConfig
 from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
-from raccoon.foundation import Feedforward, FeedforwardController, MotorCalibration, PidConfig, PidController, PidGains
+from raccoon.foundation import (
+    Feedforward,
+    FeedforwardController,
+    MotorCalibration,
+    PidConfig,
+    PidController,
+    PidGains,
+)
 from raccoon.motion import AxisConstraints
 from raccoon.hal import IMU
 from raccoon.hal import IOdometryBridge, OdometryBridge
@@ -124,14 +128,28 @@ __all__ = [
     "OdometryBridge",
     # Motion
     "AxisConstraints",
-    # All step exports
-    *_robot_all,
-    *_step_all,
-    *_ui_all,
 ]
+# Re-export everything from the bundled subpackages so callers can do
+# ``from raccoon import drive_forward`` without juggling submodule paths.
+# Splatting the upstream ``__all__`` lists into the literal would trip
+# PLE0604 (``__all__`` must contain string literals at module scope), so
+# extend the list explicitly.
+__all__ += list(_robot_all)
+__all__ += list(_step_all)
+__all__ += list(_ui_all)
 
-_PREVIOUS_SIGNAL_HANDLERS: Dict[int, signal.Handlers] = {}
-_HOOKS_INSTALLED = False
+_PREVIOUS_SIGNAL_HANDLERS: dict[int, signal.Handlers] = {}
+
+
+class _ShutdownHookState:
+    """Tracks one-shot installation of atexit + signal handlers.
+
+    Wrapping the toggle as a class attribute lets ``_install_shutdown_hooks``
+    flip the flag without ``global``, so the function stays self-contained
+    and the linter does not flag the assignment.
+    """
+
+    installed: bool = False
 
 
 def _disable_all_motors() -> None:
@@ -151,12 +169,15 @@ def _disable_all_motors() -> None:
         disable()
     except Exception as e:
         # ``error()`` itself routes through spdlog; if logging is already
-        # half-torn-down, fall back to stderr so the message isn't lost.
+        # half-torn-down, fall back to stderr via os.write so the message
+        # isn't lost. ``sys.stderr.write`` would also work but os.write
+        # avoids re-entering Python's IO layer during interpreter teardown.
         try:
             error(f"Failed to disable all motors via Motor.disable_all: {e!r}")
         except Exception:
-            import sys
-            print(f"raccoon: motor disarm failed: {e!r}", file=sys.stderr)
+            import os
+
+            os.write(2, f"raccoon: motor disarm failed: {e!r}\n".encode())
 
 
 def _shutdown_logging() -> None:
@@ -168,8 +189,9 @@ def _shutdown_logging() -> None:
     try:
         foundation.shutdown_logging()
     except Exception as e:
-        import sys
-        print(f"raccoon: logging shutdown failed: {e!r}", file=sys.stderr)
+        import os
+
+        os.write(2, f"raccoon: logging shutdown failed: {e!r}\n".encode())
 
 
 def _forward_signal(signum: int, frame: FrameType | None) -> None:
@@ -186,15 +208,20 @@ def _forward_signal(signum: int, frame: FrameType | None) -> None:
 
 
 def _install_shutdown_hooks() -> None:
-    global _HOOKS_INSTALLED
-    if _HOOKS_INSTALLED:
+    """Register atexit + SIGINT/SIGTERM hooks that disable all motors.
+
+    Idempotent. Safe to call from non-main threads — ``signal.signal()`` is
+    skipped with a debug log when it raises ``ValueError`` ("only from main
+    thread"), so importing raccoon from a worker thread does not crash.
+    """
+    if _ShutdownHookState.installed:
         return
 
-    _HOOKS_INSTALLED = True
+    _ShutdownHookState.installed = True
 
     atexit.register(_shutdown_logging)
     atexit.register(_disable_all_motors)
-    print("Registered atexit shutdown hook to disable all motors")
+    debug("Registered atexit shutdown hook to disable all motors")
 
     for sig_name in ("SIGINT", "SIGTERM"):
         sig = getattr(signal, sig_name, None)
@@ -207,7 +234,7 @@ def _install_shutdown_hooks() -> None:
             # OSError: invalid signal on this platform; ValueError: not
             # called from main thread. Both mean we should skip this
             # signal but keep installing the rest.
-            warn(f"Skipping shutdown handler for {sig_name}: {e!r}")
+            debug(f"Skipping shutdown handler for {sig_name}: {e!r}")
             continue
 
         _PREVIOUS_SIGNAL_HANDLERS[sig] = previous
@@ -216,9 +243,36 @@ def _install_shutdown_hooks() -> None:
             _disable_all_motors()
             _forward_signal(signum, frame)
 
-        signal.signal(sig, handler)
-        print(f"Registered signal handler for {sig_name}")
+        try:
+            signal.signal(sig, handler)
+        except (OSError, ValueError) as e:
+            # signal.signal() also enforces "main thread only" and may
+            # reject the call on platforms where the signal exists but
+            # cannot be re-handled. Log and skip — the C++ HAL still has
+            # its own atexit-registered fallback.
+            _PREVIOUS_SIGNAL_HANDLERS.pop(sig, None)
+            debug(f"Skipping shutdown handler for {sig_name}: {e!r}")
+            continue
+
+        debug(f"Registered signal handler for {sig_name}")
 
 
-_install_shutdown_hooks()
+def _log_startup_banner() -> None:
+    """Emit the version banner via the logger, not stdout.
+
+    Side note: this used to be a top-level ``print(...)``, which broke any
+    tool that imported raccoon and parsed stdout (CLI JSON output, doctest
+    runners, raccoon-cli subcommands). Routing it through the logger means
+    consumers can silence it by raising the log level.
+    """
+    no_cal_label = " | --no-calibrate" if _is_no_calibrate() else ""
+    no_chk_label = " | --no-checkpoints" if _is_no_checkpoints() else ""
+    info(
+        f"raccoon v{__version__} | raccoon-transport v{_raccoon_version}"
+        f"{no_cal_label}{no_chk_label}"
+    )
+
+
 initialize_logging()
+_log_startup_banner()
+_install_shutdown_hooks()

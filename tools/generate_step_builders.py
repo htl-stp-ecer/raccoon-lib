@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.util as _ilu
 import logging
 import sys
 from pathlib import Path
@@ -22,8 +23,6 @@ from pathlib import Path
 # which requires the C++ extension (raccoon._core) and other native deps.
 _LIB_ROOT = Path(__file__).resolve().parent.parent
 _CODEGEN_PATH = _LIB_ROOT / "python" / "raccoon" / "codegen" / "step_builder_gen.py"
-
-import importlib.util as _ilu
 
 _spec = _ilu.spec_from_file_location("step_builder_gen", _CODEGEN_PATH)
 _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
@@ -54,12 +53,18 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate StepBuilder classes from @dsl_step annotations"
     )
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Print what would be generated without writing files.")
-    parser.add_argument("--check", action="store_true",
-                        help="Verify on-disk *_dsl.py files match what the generator would emit. "
-                             "Exits non-zero if any file is out of date or missing. Used by the "
-                             "pre-commit hook to keep generated code in sync with sources.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be generated without writing files.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Verify on-disk *_dsl.py files match what the generator would emit. "
+        "Exits non-zero if any file is out of date or missing. Used by the "
+        "pre-commit hook to keep generated code in sync with sources.",
+    )
     parser.add_argument("--module", type=str, default=None)
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
@@ -98,7 +103,7 @@ def main():
         return
 
     total_builders = sum(
-        len([l for l in code.splitlines() if l.startswith("class ") and "Builder" in l])
+        sum(1 for line in code.splitlines() if line.startswith("class ") and "Builder" in line)
         for code in results.values()
     )
     action = "Would generate" if args.dry_run else "Generated"

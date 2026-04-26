@@ -20,19 +20,19 @@ class WaitForCheckpointBuilder(StepBuilder):
         super().__init__()
         self._checkpoint_seconds = _UNSET
 
-    def checkpoint_seconds(self, value: Union[float, int]):
+    def checkpoint_seconds(self, value: float | int):
         self._checkpoint_seconds = value
         return self
 
     def _build(self):
         kwargs = {}
         if self._checkpoint_seconds is not _UNSET:
-            kwargs['checkpoint_seconds'] = self._checkpoint_seconds
+            kwargs["checkpoint_seconds"] = self._checkpoint_seconds
         return WaitForCheckpoint(**kwargs)
 
 
-@dsl(tags=['timing', 'sync'])
-def wait_for_checkpoint(checkpoint_seconds: Union[float, int] = _UNSET):
+@dsl(tags=["timing", "sync"])
+def wait_for_checkpoint(checkpoint_seconds: float | int = _UNSET):
     """
     Wait until a mission-relative time checkpoint is reached.
 
@@ -58,15 +58,17 @@ def wait_for_checkpoint(checkpoint_seconds: Union[float, int] = _UNSET):
 
         from raccoon.step.timing import wait_for_checkpoint
 
-        seq([
-            drive_forward(50),
-            # Ensure we don't start the next action before T=10s
-            wait_for_checkpoint(10.0),
-            pick_up_tribble(),
-            # Gate the final action to T=25s
-            wait_for_checkpoint(25.0),
-            drive_to_bin(),
-        ])
+        seq(
+            [
+                drive_forward(50),
+                # Ensure we don't start the next action before T=10s
+                wait_for_checkpoint(10.0),
+                pick_up_tribble(),
+                # Gate the final action to T=25s
+                wait_for_checkpoint(25.0),
+                drive_to_bin(),
+            ]
+        )
     """
     b = WaitForCheckpointBuilder()
     if checkpoint_seconds is not _UNSET:
@@ -74,4 +76,4 @@ def wait_for_checkpoint(checkpoint_seconds: Union[float, int] = _UNSET):
     return b
 
 
-__all__ = ['WaitForCheckpointBuilder', 'wait_for_checkpoint']
+__all__ = ["WaitForCheckpointBuilder", "wait_for_checkpoint"]

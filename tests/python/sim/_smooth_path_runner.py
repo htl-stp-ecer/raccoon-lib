@@ -7,6 +7,7 @@ results, then ``os._exit``s before any C++ destructors run.
 Accepts an optional ``--config`` argument (``default``, ``drumbot``, or
 ``packingbot``) to select the robot configuration for the sim.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,22 +23,19 @@ SCENES_DIR = REPO_ROOT / "scenes"
 
 def _build_robot(cfg):
     """Build a HAL robot whose geometry matches the given SimRobotConfig."""
+    from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge
     from raccoon.kinematics_differential import DifferentialKinematics
-    from raccoon.drive import Drive, ChassisVelocityControlConfig
+    from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
     from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
-    from raccoon.motion import UnifiedMotionPidConfig, AxisConstraints
 
     left = Motor(cfg.left_motor_port, cfg.left_motor_inverted)
     right = Motor(cfg.right_motor_port, cfg.right_motor_inverted)
     imu = IMU()
-    kin = DifferentialKinematics(
-        left, right, cfg.track_width_m, cfg.wheel_radius_m)
+    kin = DifferentialKinematics(left, right, cfg.track_width_m, cfg.wheel_radius_m)
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
     bridge = OdometryBridge()
-    odom = Stm32Odometry(
-        imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig()
-    )
+    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
 
     pid_cfg = UnifiedMotionPidConfig()
     pid_cfg.linear = AxisConstraints(0.8, 1.5, 1.5)
@@ -58,20 +56,21 @@ def _get_config(name: str):
 
     if name == "drumbot":
         from raccoon.testing.robot_configs import DRUMBOT
+
         return DRUMBOT
-    elif name == "packingbot":
+    if name == "packingbot":
         from raccoon.testing.robot_configs import PACKINGBOT
+
         return PACKINGBOT
-    else:
-        return SimRobotConfig(
-            wheel_radius_m=0.03,
-            track_width_m=0.15,
-            wheelbase_m=0.15,
-            left_motor_port=0,
-            right_motor_port=1,
-            max_wheel_velocity_rad_s=30.0,
-            motor_time_constant_sec=0.02,
-        )
+    return SimRobotConfig(
+        wheel_radius_m=0.03,
+        track_width_m=0.15,
+        wheelbase_m=0.15,
+        left_motor_port=0,
+        right_motor_port=1,
+        max_wheel_velocity_rad_s=30.0,
+        motor_time_constant_sec=0.02,
+    )
 
 
 def _log(msg: str) -> None:
@@ -80,9 +79,9 @@ def _log(msg: str) -> None:
 
 
 async def _scenarios(config_name: str):
-    from raccoon.step.motion.smooth_path import smooth_path
     from raccoon.step.motion.drive_dsl import drive_forward
-    from raccoon.step.motion.turn_dsl import turn_left, turn_right
+    from raccoon.step.motion.smooth_path import smooth_path
+    from raccoon.step.motion.turn_dsl import turn_right
     from raccoon.step.sequential import seq
     from raccoon.testing.sim import pose, use_scene
 
@@ -150,11 +149,13 @@ async def _scenarios(config_name: str):
     # ---- Scenario 6: cross-type via seq() for comparison ----
     _log("scenario 6: seq drive(20) + turn_right(90) + drive(20)")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = seq([
-            drive_forward(cm=20.0),
-            turn_right(90),
-            drive_forward(cm=20.0),
-        ])
+        step = seq(
+            [
+                drive_forward(cm=20.0),
+                turn_right(90),
+                drive_forward(cm=20.0),
+            ]
+        )
         await asyncio.wait_for(step.run_step(robot), timeout=12.0)
         p = pose()
         out["drive_turn_drive_seq"] = [p.x, p.y, p.theta]
@@ -175,8 +176,9 @@ def main() -> None:
 
     try:
         asyncio.run(_scenarios(config_name))
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         import traceback
+
         sys.stderr.write(f"ERR: {type(e).__name__}: {e}\n")
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()

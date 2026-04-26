@@ -12,7 +12,7 @@ and a snake_case factory function is generated alongside.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from .base import Step, StepAnomalyCallback
 
@@ -34,11 +34,11 @@ class StepBuilder(Step):
 
     def __init__(self) -> None:
         super().__init__()
-        self._builder_anomaly_callback: Optional[StepAnomalyCallback] = None
+        self._builder_anomaly_callback: StepAnomalyCallback | None = None
         self._builder_skip_timing: bool = False
-        self._resolved: Optional[Step] = None
+        self._resolved: Step | None = None
 
-    def on_anomaly(self, callback_or_step: "Union[StepAnomalyCallback, Step]") -> "StepBuilder":
+    def on_anomaly(self, callback_or_step: "StepAnomalyCallback | Step") -> "StepBuilder":
         """Register a callback or step invoked when a timing anomaly is detected.
 
         Accepts either an async callback ``(step, robot) -> None`` or a
@@ -46,8 +46,9 @@ class StepBuilder(Step):
 
             drive_forward(25).on_anomaly(my_handler)
 
-            async def my_handler(step, robot):
-                ...
+
+            async def my_handler(step, robot): ...
+
 
             # Or pass a step directly:
             drive_forward(25).on_anomaly(play_sound())

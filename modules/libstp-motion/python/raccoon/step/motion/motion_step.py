@@ -5,6 +5,9 @@ All motion steps share the same async timing pattern: dt calculation, near-zero
 dt skip, sleep, and hard_stop cleanup. MotionStep owns this loop and exposes
 on_start / on_update / on_stop lifecycle hooks for subclasses.
 """
+
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -36,7 +39,6 @@ class MotionStep(Step):
 
     def on_start(self, robot: "GenericRobot") -> None:
         """Called once before the loop. Override to set up motion/velocity."""
-        pass
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
         """Called each cycle with dt in seconds. Return True when motion is complete."""
@@ -68,10 +70,8 @@ class MotionStep(Step):
                     await asyncio.sleep(update_rate)
                     continue
 
-                if dt < min_dt:
-                    min_dt = dt
-                if dt > max_dt:
-                    max_dt = dt
+                min_dt = min(dt, min_dt)
+                max_dt = max(dt, max_dt)
                 iterations += 1
 
                 if self.on_update(robot, dt):

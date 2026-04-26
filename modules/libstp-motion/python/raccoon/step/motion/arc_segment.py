@@ -1,9 +1,12 @@
 """Convenience wrapper that parameterises a drive arc by heading change + arc distance."""
 
+from __future__ import annotations
+
 import math
 
 from raccoon.step.annotation import dsl
 from raccoon.step.step_builder import StepBuilder
+
 from .arc_dsl import DriveArcLeftBuilder, DriveArcRightBuilder
 
 _UNSET = object()
@@ -59,19 +62,16 @@ def drive_arc_segment(
         return b
 
     if heading_degrees == 0:
-        raise ValueError(
-            "heading_degrees must be non-zero (use drive_forward for straight lines)"
-        )
+        msg = "heading_degrees must be non-zero (use drive_forward for straight lines)"
+        raise ValueError(msg)
     if distance_cm <= 0:
-        raise ValueError("distance_cm must be positive")
+        msg = "distance_cm must be positive"
+        raise ValueError(msg)
 
     theta_rad = math.radians(abs(heading_degrees))
     radius_cm = distance_cm / theta_rad
 
-    if heading_degrees > 0:
-        b = DriveArcLeftBuilder()
-    else:
-        b = DriveArcRightBuilder()
+    b = DriveArcLeftBuilder() if heading_degrees > 0 else DriveArcRightBuilder()
     b._radius_cm = radius_cm
     b._degrees = abs(heading_degrees)
     b._speed = speed

@@ -5,9 +5,10 @@ the robot forward or backward until the sensor reading crosses that threshold.
 Direction is determined automatically at start time by comparing the current
 reading to the calibrated target.
 """
+
 from __future__ import annotations
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from ..annotation import dsl_step
 from .motion_step import MotionStep
@@ -75,16 +76,17 @@ class DriveToAnalogTarget(MotionStep):
         sensor: "AnalogSensor",
         speed: float = 0.3,
         set_name: str = "default",
-        timeout_cm: Optional[float] = None,
+        timeout_cm: float | None = None,
     ) -> None:
         super().__init__()
         if not (0.0 < speed <= 1.0):
-            raise ValueError(f"speed must be in (0.0, 1.0], got {speed}")
+            msg = f"speed must be in (0.0, 1.0], got {speed}"
+            raise ValueError(msg)
         self._sensor = sensor
         self._speed = speed
         self._set_name = set_name
         self._timeout_cm = timeout_cm
-        self._target_value: Optional[float] = None
+        self._target_value: float | None = None
         self._driving_forward: bool = True
         self._motion = None
 
@@ -96,22 +98,23 @@ class DriveToAnalogTarget(MotionStep):
         )
 
     def on_start(self, robot: "GenericRobot") -> None:
-        from raccoon.motion import LinearMotion, LinearMotionConfig, LinearAxis
-        from raccoon.step.calibration.store import CalibrationStore
+        from raccoon.motion import LinearAxis, LinearMotion, LinearMotionConfig
         from raccoon.step.calibration.calibrate_analog_sensor import (
             ANALOG_SENSOR_STORE_SECTION,
             analog_sensor_store_key,
         )
+        from raccoon.step.calibration.store import CalibrationStore
 
         store = CalibrationStore()
         key = analog_sensor_store_key(self._sensor, self._set_name)
         data = store.load(ANALOG_SENSOR_STORE_SECTION, key)
         if data is None:
-            raise RuntimeError(
+            msg = (
                 f"No analog sensor calibration found for port {self._sensor.port} "
                 f"set '{self._set_name}'. "
                 f"Run calibrate_analog_sensor() first."
             )
+            raise RuntimeError(msg)
 
         self._target_value = float(data["target_value"])
         current = float(self._sensor.read())
@@ -124,9 +127,7 @@ class DriveToAnalogTarget(MotionStep):
         )
 
         distance_m = (
-            self._timeout_cm / 100.0
-            if self._timeout_cm is not None
-            else self._SENTINEL_DISTANCE_M
+            self._timeout_cm / 100.0 if self._timeout_cm is not None else self._SENTINEL_DISTANCE_M
         )
         sign = 1.0 if self._driving_forward else -1.0
 
@@ -134,9 +135,7 @@ class DriveToAnalogTarget(MotionStep):
         config.axis = LinearAxis.Forward
         config.distance_m = sign * distance_m
         config.speed_scale = self._speed
-        self._motion = LinearMotion(
-            robot.drive, robot.odometry, robot.motion_pid_config, config
-        )
+        self._motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
         self._motion.start()
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
@@ -144,9 +143,8 @@ class DriveToAnalogTarget(MotionStep):
         if self._driving_forward:
             if current >= self._target_value:
                 return True
-        else:
-            if current <= self._target_value:
-                return True
+        elif current <= self._target_value:
+            return True
 
         self._motion.update(dt)
         return self._motion.is_finished()

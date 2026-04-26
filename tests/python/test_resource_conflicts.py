@@ -1,16 +1,17 @@
 """Tests for hardware resource conflict detection in parallel step execution."""
+
+from __future__ import annotations
+
 import asyncio
+import importlib.util
 from unittest.mock import MagicMock
 
 import pytest
 
 
-def libstp_available():
-    try:
-        import raccoon
-        return True
-    except ImportError:
-        return False
+def libstp_available() -> bool:
+    """Check raccoon availability without importing the module."""
+    return importlib.util.find_spec("raccoon") is not None
 
 
 requires_libstp = pytest.mark.skipif(
@@ -98,14 +99,17 @@ def _make_robot():
 class TestResourcesOverlap:
     def test_no_overlap(self):
         from raccoon.step.resource import _resources_overlap
+
         assert _resources_overlap(frozenset({"drive"}), frozenset({"motor:0"})) == []
 
     def test_direct_overlap(self):
         from raccoon.step.resource import _resources_overlap
+
         assert _resources_overlap(frozenset({"drive"}), frozenset({"drive"})) == ["drive"]
 
     def test_multiple_overlap(self):
         from raccoon.step.resource import _resources_overlap
+
         result = _resources_overlap(
             frozenset({"drive", "motor:0"}),
             frozenset({"drive", "motor:0"}),
@@ -114,21 +118,25 @@ class TestResourcesOverlap:
 
     def test_wildcard_conflicts_with_specific(self):
         from raccoon.step.resource import _resources_overlap
+
         result = _resources_overlap(frozenset({"servo:*"}), frozenset({"servo:3"}))
         assert "servo:3" in result
 
     def test_specific_conflicts_with_wildcard(self):
         from raccoon.step.resource import _resources_overlap
+
         result = _resources_overlap(frozenset({"servo:0"}), frozenset({"servo:*"}))
         assert "servo:0" in result
 
     def test_wildcard_vs_wildcard(self):
         from raccoon.step.resource import _resources_overlap
+
         result = _resources_overlap(frozenset({"servo:*"}), frozenset({"servo:*"}))
         assert "servo:*" in result
 
     def test_empty_sets(self):
         from raccoon.step.resource import _resources_overlap
+
         assert _resources_overlap(frozenset(), frozenset()) == []
         assert _resources_overlap(frozenset({"drive"}), frozenset()) == []
 
@@ -142,17 +150,20 @@ class TestResourcesOverlap:
 class TestValidateNoOverlap:
     def test_no_conflict(self):
         from raccoon.step.resource import validate_no_overlap
+
         DriveStep, _, ServoStep, *_ = _make_step_classes()
         validate_no_overlap([DriveStep(), ServoStep(0)])
 
     def test_conflict_raises(self):
-        from raccoon.step.resource import validate_no_overlap, ResourceConflictError
+        from raccoon.step.resource import ResourceConflictError, validate_no_overlap
+
         DriveStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError, match="drive"):
             validate_no_overlap([DriveStep(), DriveStep()])
 
     def test_conflict_message_includes_context(self):
-        from raccoon.step.resource import validate_no_overlap, ResourceConflictError
+        from raccoon.step.resource import ResourceConflictError, validate_no_overlap
+
         DriveStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError) as exc_info:
             validate_no_overlap([DriveStep(), DriveStep()], context="Parallel")
@@ -168,12 +179,14 @@ class TestValidateNoOverlap:
 class TestParallelValidation:
     def test_independent_resources_ok(self):
         from raccoon.step.parallel import parallel
+
         DriveStep, MotorStep, ServoStep, *_ = _make_step_classes()
         parallel(DriveStep(), ServoStep(0), MotorStep(3))
 
     def test_two_drive_steps_conflict(self):
         from raccoon.step.parallel import parallel
         from raccoon.step.resource import ResourceConflictError
+
         DriveStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError, match="drive"):
             parallel(DriveStep(), DriveStep())
@@ -181,38 +194,44 @@ class TestParallelValidation:
     def test_same_motor_port_conflict(self):
         from raccoon.step.parallel import parallel
         from raccoon.step.resource import ResourceConflictError
+
         _, MotorStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError, match="motor:0"):
             parallel(MotorStep(0), MotorStep(0))
 
     def test_different_motor_ports_ok(self):
         from raccoon.step.parallel import parallel
+
         _, MotorStep, *_ = _make_step_classes()
         parallel(MotorStep(0), MotorStep(1))
 
     def test_same_servo_port_conflict(self):
         from raccoon.step.parallel import parallel
         from raccoon.step.resource import ResourceConflictError
+
         _, _, ServoStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError, match="servo:2"):
             parallel(ServoStep(2), ServoStep(2))
 
     def test_different_servo_ports_ok(self):
         from raccoon.step.parallel import parallel
+
         _, _, ServoStep, *_ = _make_step_classes()
         parallel(ServoStep(0), ServoStep(1))
 
     def test_all_servos_conflicts_with_specific(self):
         from raccoon.step.parallel import parallel
         from raccoon.step.resource import ResourceConflictError
+
         _, _, ServoStep, AllServosStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError, match="servo"):
             parallel(AllServosStep(), ServoStep(0))
 
     def test_sequential_branch_unions_resources(self):
         from raccoon.step.parallel import parallel
-        from raccoon.step.sequential import seq
         from raccoon.step.resource import ResourceConflictError
+        from raccoon.step.sequential import seq
+
         DriveStep, _, ServoStep, *_ = _make_step_classes()
         branch_a = seq([DriveStep(), ServoStep(0)])
         branch_b = seq([DriveStep()])
@@ -222,6 +241,7 @@ class TestParallelValidation:
     def test_sequential_branch_disjoint_ok(self):
         from raccoon.step.parallel import parallel
         from raccoon.step.sequential import seq
+
         DriveStep, MotorStep, ServoStep, *_ = _make_step_classes()
         branch_a = seq([DriveStep(), ServoStep(0)])
         branch_b = seq([MotorStep(3), ServoStep(1)])
@@ -229,12 +249,14 @@ class TestParallelValidation:
 
     def test_no_resource_steps_always_ok(self):
         from raccoon.step.parallel import parallel
+
         DriveStep, _, _, _, NoResourceStep, _ = _make_step_classes()
         parallel(NoResourceStep(), NoResourceStep(), DriveStep())
 
     def test_nested_parallel_resources_propagate(self):
         from raccoon.step.parallel import parallel
         from raccoon.step.resource import ResourceConflictError
+
         _, MotorStep, ServoStep, *_ = _make_step_classes()
         inner = parallel(ServoStep(0), MotorStep(1))
         with pytest.raises(ResourceConflictError, match="servo:0"):
@@ -250,12 +272,14 @@ class TestParallelValidation:
 class TestDoWhileActiveValidation:
     def test_disjoint_ok(self):
         from raccoon.step.logic.do_while import DoWhileActive
+
         DriveStep, _, ServoStep, *_ = _make_step_classes()
         DoWhileActive(DriveStep(), ServoStep(0))
 
     def test_overlap_raises(self):
         from raccoon.step.logic.do_while import DoWhileActive
         from raccoon.step.resource import ResourceConflictError
+
         DriveStep, *_ = _make_step_classes()
         with pytest.raises(ResourceConflictError, match="drive"):
             DoWhileActive(DriveStep(), DriveStep())
@@ -270,6 +294,7 @@ class TestDoWhileActiveValidation:
 class TestCompositeResourcePropagation:
     def test_sequential_collects(self):
         from raccoon.step.sequential import seq
+
         DriveStep, MotorStep, ServoStep, *_ = _make_step_classes()
         s = seq([DriveStep(), MotorStep(0), ServoStep(1)])
         assert s.collected_resources() == frozenset({"drive", "motor:0", "servo:1"})
@@ -278,6 +303,7 @@ class TestCompositeResourcePropagation:
 
     def test_parallel_collects(self):
         from raccoon.step.parallel import parallel
+
         _, MotorStep, ServoStep, *_ = _make_step_classes()
         p = parallel(ServoStep(0), MotorStep(1))
         assert p.collected_resources() == frozenset({"servo:0", "motor:1"})
@@ -285,6 +311,7 @@ class TestCompositeResourcePropagation:
 
     def test_loop_delegates(self):
         from raccoon.step.logic.loop import LoopFor, LoopForever
+
         DriveStep, MotorStep, *_ = _make_step_classes()
         lf = LoopFor(DriveStep(), iterations=3)
         assert lf.collected_resources() == frozenset({"drive"})
@@ -293,6 +320,7 @@ class TestCompositeResourcePropagation:
 
     def test_timeout_delegates(self):
         from raccoon.step.timeout import Timeout
+
         _, _, ServoStep, *_ = _make_step_classes()
         t = Timeout(ServoStep(0), seconds=5.0)
         assert t.collected_resources() == frozenset({"servo:0"})
@@ -312,13 +340,15 @@ class TestCompositeResourcePropagation:
 class TestResourceManager:
     def test_acquire_release(self):
         from raccoon.step.resource import ResourceManager
+
         mgr = ResourceManager()
         mgr.acquire(frozenset({"drive"}), "DriveForward")
         mgr.release(frozenset({"drive"}))
         mgr.acquire(frozenset({"drive"}), "TurnLeft")
 
     def test_double_acquire_raises(self):
-        from raccoon.step.resource import ResourceManager, ResourceConflictError
+        from raccoon.step.resource import ResourceConflictError, ResourceManager
+
         mgr = ResourceManager()
         mgr.acquire(frozenset({"drive"}), "DriveForward")
         with pytest.raises(ResourceConflictError, match="drive"):
@@ -326,19 +356,22 @@ class TestResourceManager:
 
     def test_independent_resources_ok(self):
         from raccoon.step.resource import ResourceManager
+
         mgr = ResourceManager()
         mgr.acquire(frozenset({"drive"}), "DriveForward")
         mgr.acquire(frozenset({"servo:0"}), "SetServo")
 
     def test_wildcard_conflicts(self):
-        from raccoon.step.resource import ResourceManager, ResourceConflictError
+        from raccoon.step.resource import ResourceConflictError, ResourceManager
+
         mgr = ResourceManager()
         mgr.acquire(frozenset({"servo:0"}), "SetServo")
         with pytest.raises(ResourceConflictError):
             mgr.acquire(frozenset({"servo:*"}), "FullyDisableServos")
 
     def test_wildcard_held_blocks_specific(self):
-        from raccoon.step.resource import ResourceManager, ResourceConflictError
+        from raccoon.step.resource import ResourceConflictError, ResourceManager
+
         mgr = ResourceManager()
         mgr.acquire(frozenset({"servo:*"}), "FullyDisableServos")
         with pytest.raises(ResourceConflictError):
@@ -356,6 +389,7 @@ class TestRuntimeResourceGuard:
     async def test_sequential_reuse_ok(self):
         """Sequential steps release resources before the next step acquires."""
         from raccoon.step.sequential import seq
+
         DriveStep, *_ = _make_step_classes()
         robot = _make_robot()
         s = seq([DriveStep(), DriveStep()])
@@ -367,6 +401,7 @@ class TestRuntimeResourceGuard:
         from raccoon.step.base import Step
         from raccoon.step.parallel import Parallel
         from raccoon.step.resource import ResourceConflictError
+
         *_, SlowStep = _make_step_classes()
         robot = _make_robot()
 
@@ -386,6 +421,7 @@ class TestRuntimeResourceGuard:
     async def test_parallel_independent_runtime_ok(self):
         """Independent resources work fine at runtime."""
         from raccoon.step.parallel import parallel
+
         *_, SlowStep = _make_step_classes()
         robot = _make_robot()
         p = parallel(

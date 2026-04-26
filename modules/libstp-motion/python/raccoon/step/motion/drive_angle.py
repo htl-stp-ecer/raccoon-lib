@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING
 
 from raccoon.motion import DiagonalMotion, DiagonalMotionConfig
-from typing import TYPE_CHECKING, Optional
 
 from .. import SimulationStep, SimulationStepDelta
 from ..annotation import dsl_step
@@ -44,18 +46,22 @@ class DriveAngle(MotionStep):
 
     _SENTINEL_DISTANCE_M = 100.0
 
-    def __init__(self, angle_deg: float, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None) -> None:
+    def __init__(
+        self,
+        angle_deg: float,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+    ) -> None:
         super().__init__()
         if cm is None and until is None:
-            raise ValueError(
-                "DriveAngle requires either 'cm' or 'until'"
-            )
+            msg = "DriveAngle requires either 'cm' or 'until'"
+            raise ValueError(msg)
         self._angle_deg = angle_deg
         self._cm = cm
         self._speed = speed
         self._until = until
-        self._motion: Optional[DiagonalMotion] = None
+        self._motion: DiagonalMotion | None = None
 
     def _generate_signature(self) -> str:
         mode = f"{self._cm:.1f}cm" if self._cm else "until"
@@ -78,11 +84,7 @@ class DriveAngle(MotionStep):
     def on_start(self, robot: "GenericRobot") -> None:
         config = DiagonalMotionConfig()
         config.angle_rad = math.radians(self._angle_deg)
-        config.distance_m = (
-            self._cm / 100.0
-            if self._cm is not None
-            else self._SENTINEL_DISTANCE_M
-        )
+        config.distance_m = self._cm / 100.0 if self._cm is not None else self._SENTINEL_DISTANCE_M
         config.speed_scale = self._speed
         self._motion = DiagonalMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
         self._motion.start()
@@ -125,8 +127,13 @@ class DriveAngleLeft(DriveAngle):
         drive_angle_left(90, speed=0.6).until(on_black(s))
     """
 
-    def __init__(self, angle_deg: float, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None) -> None:
+    def __init__(
+        self,
+        angle_deg: float,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+    ) -> None:
         super().__init__(angle_deg=-angle_deg, cm=cm, speed=speed, until=until)
 
 
@@ -158,6 +165,11 @@ class DriveAngleRight(DriveAngle):
         drive_angle_right(90, speed=0.6).until(on_black(s))
     """
 
-    def __init__(self, angle_deg: float, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None) -> None:
+    def __init__(
+        self,
+        angle_deg: float,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+    ) -> None:
         super().__init__(angle_deg=angle_deg, cm=cm, speed=speed, until=until)

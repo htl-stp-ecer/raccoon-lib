@@ -1,7 +1,9 @@
-import asyncio
+from __future__ import annotations
 
-from raccoon.foundation import initialize_logging
-from raccoon.log import error, info, debug, warn
+import asyncio
+import contextlib
+
+from raccoon.log import info, warn
 
 
 class Synchronizer:
@@ -22,13 +24,18 @@ class Synchronizer:
     async def wait_until_checkpoint(self, checkpoint_seconds):
         """Sleep until the mission-relative checkpoint or log that it was missed."""
         from raccoon.no_checkpoints import is_no_checkpoints
+
         if is_no_checkpoints():
-            info(f"[Synchroniser] --no-checkpoints: skipping wait for checkpoint at {checkpoint_seconds} seconds")
+            info(
+                f"[Synchroniser] --no-checkpoints: skipping wait for checkpoint at {checkpoint_seconds} seconds"
+            )
             return
 
         delta = checkpoint_seconds - self.get_time()
         if delta < 0:
-            warn(f"[Synchroniser] Scheduler has passed the checkpoint at {checkpoint_seconds} seconds, delta: {delta}")
+            warn(
+                f"[Synchroniser] Scheduler has passed the checkpoint at {checkpoint_seconds} seconds, delta: {delta}"
+            )
             return
 
         info(f"[Synchroniser] Scheduler waiting until {checkpoint_seconds} seconds, delta: {delta}")
@@ -47,16 +54,18 @@ class Synchronizer:
         """
         delta = checkpoint_seconds - self.get_time()
         if delta < 0:
-            warn(f"[Synchroniser] Scheduler has passed the checkpoint at {checkpoint_seconds} seconds, delta: {delta}")
+            warn(
+                f"[Synchroniser] Scheduler has passed the checkpoint at {checkpoint_seconds} seconds, delta: {delta}"
+            )
             return
 
-        info(f"[Synchroniser] Scheduler executing until {checkpoint_seconds} seconds, delta: {delta}")
+        info(
+            f"[Synchroniser] Scheduler executing until {checkpoint_seconds} seconds, delta: {delta}"
+        )
         task = asyncio.create_task(func(*args, **kwargs))
         await asyncio.sleep(delta)
 
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
         info(f"[Synchroniser] Scheduler has reached the checkpoint at {checkpoint_seconds} seconds")

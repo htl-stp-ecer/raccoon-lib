@@ -1,14 +1,16 @@
-//
-// Created by tobias on 9/15/25.
-//
-
 #pragma once
 
 #include <cmath>
+#include <numbers>
 #include <stdexcept>
 
 namespace libstp::foundation
 {
+    /// Default encoder ticks per output-shaft revolution.
+    /// Matches the KIPR Wombat motor encoder; override per-robot via
+    /// MotorCalibration::ticks_to_rad if your hardware differs.
+    inline constexpr double kDefaultEncoderTicksPerRev = 1440.0;
+
     /// Basic PID gains without integrator and output shaping parameters.
     struct PidGains
     {
@@ -26,7 +28,7 @@ namespace libstp::foundation
     /// Calibration constants commonly needed for motor encoder conversions.
     struct MotorCalibration
     {
-        double ticks_to_rad{2.0 * 3.14159265359 / 1440.0};
+        double ticks_to_rad{2.0 * std::numbers::pi / kDefaultEncoderTicksPerRev};
         double vel_lpf_alpha{0.5};
 
         /// Throws std::invalid_argument if the calibration would silently

@@ -46,28 +46,36 @@ class CalibrateDistanceBuilder(StepBuilder):
         self._ema_alpha = value
         return self
 
-    def calibration_sets(self, value: Optional[List[str]]):
+    def calibration_sets(self, value: list[str] | None):
         self._calibration_sets = value
         return self
 
-    def exclude_ir_sensors(self, value: Optional[List['IRSensor']]):
+    def exclude_ir_sensors(self, value: list["IRSensor"] | None):
         self._exclude_ir_sensors = value
         return self
 
     def _build(self):
         kwargs = {}
-        kwargs['distance_cm'] = self._distance_cm
-        kwargs['speed'] = self._speed
-        kwargs['calibrate_light_sensors'] = self._calibrate_light_sensors
-        kwargs['persist_to_yaml'] = self._persist_to_yaml
-        kwargs['ema_alpha'] = self._ema_alpha
-        kwargs['calibration_sets'] = self._calibration_sets
-        kwargs['exclude_ir_sensors'] = self._exclude_ir_sensors
+        kwargs["distance_cm"] = self._distance_cm
+        kwargs["speed"] = self._speed
+        kwargs["calibrate_light_sensors"] = self._calibrate_light_sensors
+        kwargs["persist_to_yaml"] = self._persist_to_yaml
+        kwargs["ema_alpha"] = self._ema_alpha
+        kwargs["calibration_sets"] = self._calibration_sets
+        kwargs["exclude_ir_sensors"] = self._exclude_ir_sensors
         return CalibrateDistance(**kwargs)
 
 
-@dsl(tags=['calibration', 'distance'])
-def calibrate_distance(distance_cm: float = 30.0, speed: float = 1.0, calibrate_light_sensors: bool = False, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: Optional[List[str]] = None, exclude_ir_sensors: Optional[List['IRSensor']] = None):
+@dsl(tags=["calibration", "distance"])
+def calibrate_distance(
+    distance_cm: float = 30.0,
+    speed: float = 1.0,
+    calibrate_light_sensors: bool = False,
+    persist_to_yaml: bool = True,
+    ema_alpha: float = 0.7,
+    calibration_sets: list[str] | None = None,
+    exclude_ir_sensors: list["IRSensor"] | None = None,
+):
     """
     Calibrate per-wheel distance estimation via encoder measurement.
 
@@ -120,4 +128,4 @@ def calibrate_distance(distance_cm: float = 30.0, speed: float = 1.0, calibrate_
     return b
 
 
-__all__ = ['CalibrateDistanceBuilder', 'calibrate_distance']
+__all__ = ["CalibrateDistanceBuilder", "calibrate_distance"]

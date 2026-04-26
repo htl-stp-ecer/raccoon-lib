@@ -32,12 +32,12 @@ class WaitUntilDegreesBuilder(StepBuilder):
     def _build(self):
         kwargs = {}
         if self._degrees is not _UNSET:
-            kwargs['degrees'] = self._degrees
-        kwargs['origin'] = self._origin
+            kwargs["degrees"] = self._degrees
+        kwargs["origin"] = self._origin
         return WaitUntilDegrees(**kwargs)
 
 
-@dsl(tags=['motion', 'wait'])
+@dsl(tags=["motion", "wait"])
 def wait_until_degrees(degrees: float = _UNSET, origin: HeadingOrigin = HeadingOrigin.STEP_START):
     """
     Wait until the robot has turned at least the given number of degrees.
@@ -64,22 +64,34 @@ def wait_until_degrees(degrees: float = _UNSET, origin: HeadingOrigin = HeadingO
         from raccoon.step.servo import servo
 
         # Default: fires 45° after this step starts executing
-        parallel([
-            turn_left(90),
-            seq([wait_until_degrees(45), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                turn_left(90),
+                seq([wait_until_degrees(45), servo(claw, 90)]),
+            ]
+        )
 
         # TURN_START: fires at 45° from the turn's own start
-        parallel([
-            turn_left(90),
-            seq([prepare_arm(), wait_until_degrees(45, origin=HeadingOrigin.TURN_START), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                turn_left(90),
+                seq(
+                    [
+                        prepare_arm(),
+                        wait_until_degrees(45, origin=HeadingOrigin.TURN_START),
+                        servo(claw, 90),
+                    ]
+                ),
+            ]
+        )
 
         # HEADING_REFERENCE: fires at 45° from the global reference
-        parallel([
-            turn_left(90),
-            seq([wait_until_degrees(45, origin=HeadingOrigin.HEADING_REFERENCE), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                turn_left(90),
+                seq([wait_until_degrees(45, origin=HeadingOrigin.HEADING_REFERENCE), servo(claw, 90)]),
+            ]
+        )
     """
     b = WaitUntilDegreesBuilder()
     if degrees is not _UNSET:
@@ -88,4 +100,4 @@ def wait_until_degrees(degrees: float = _UNSET, origin: HeadingOrigin = HeadingO
     return b
 
 
-__all__ = ['WaitUntilDegreesBuilder', 'wait_until_degrees']
+__all__ = ["WaitUntilDegreesBuilder", "wait_until_degrees"]

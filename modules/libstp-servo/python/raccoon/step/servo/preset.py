@@ -17,8 +17,8 @@ into ``defs.py``, so users just import and call::
     from src.hardware.defs import Defs
 
     # In a mission sequence:
-    Defs.pom_arm.down()            # instant
-    Defs.pom_arm.up(speed=250)     # eased at 250 deg/s
+    Defs.pom_arm.down()  # instant
+    Defs.pom_arm.up(speed=250)  # eased at 250 deg/s
 
 YAML definition::
 
@@ -32,13 +32,15 @@ YAML definition::
           above_pom: 50
           up: 90
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from raccoon.hal import Servo
 
-from .steps import servo as _servo_step, SlowServo, Easing, EasingFunc
+from .steps import Easing, EasingFunc, SlowServo
+from .steps import servo as _servo_step
 
 if TYPE_CHECKING:
     from raccoon.step import Step

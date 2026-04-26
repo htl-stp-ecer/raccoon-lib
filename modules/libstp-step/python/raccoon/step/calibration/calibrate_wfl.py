@@ -2,17 +2,18 @@
 Wait-for-light sensor calibration step using the new UI library.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.hal import AnalogSensor
 from raccoon.step.annotation import dsl_step
-from raccoon.ui.step import UIStep
 from raccoon.ui.screens.wfl import (
-    WFLMeasureScreen,
     WFLConfirmScreen,
-    WFLConfirmResult,
+    WFLMeasureScreen,
 )
+from raccoon.ui.step import UIStep
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 @dataclass
 class WFLCalibrationResult:
     """Result of wait-for-light sensor calibration."""
+
     light_off: float
     light_on: float
     threshold: float
@@ -51,10 +53,10 @@ class CalibrateWaitForLight(UIStep):
     def __init__(self, sensor: AnalogSensor) -> None:
         super().__init__()
         self.sensor = sensor
-        self.calibration_result: Optional[WFLCalibrationResult] = None
+        self.calibration_result: WFLCalibrationResult | None = None
 
     def _generate_signature(self) -> str:
-        port = getattr(self.sensor, 'port', 0)
+        port = getattr(self.sensor, "port", 0)
         return f"CalibrateWaitForLight(port={port})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
@@ -64,7 +66,7 @@ class CalibrateWaitForLight(UIStep):
             self.info("--no-calibrate: skipping wait-for-light calibration, using stored values")
             return
 
-        port = getattr(self.sensor, 'port', 0)
+        port = getattr(self.sensor, "port", 0)
 
         while True:
             # Step 1: Measure light OFF (covered)
@@ -89,7 +91,7 @@ class CalibrateWaitForLight(UIStep):
                 )
 
                 # Apply to sensor if it has a set_threshold method
-                if hasattr(self.sensor, 'set_threshold'):
+                if hasattr(self.sensor, "set_threshold"):
                     self.sensor.set_threshold(confirm_result.threshold)
 
                 self.debug(

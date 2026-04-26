@@ -9,6 +9,8 @@ Outside of a SetupMission — i.e. when there is no active setup-timer —
 both steps are no-ops.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from . import Step
@@ -35,13 +37,7 @@ class PauseSetupTimer(Step):
 
         # As the very first step of the setup sequence: idle until the
         # operator is ready, then kick off the real setup timer.
-        sequence(
-            pause_setup_timer(),
-            wait_for_button(),
-            start_setup_timer(),
-            calibrate_deadzone(),
-            ...
-        )
+        sequence(pause_setup_timer(), wait_for_button(), start_setup_timer(), calibrate_deadzone(), ...)
     """
 
     def _generate_signature(self) -> str:
@@ -49,6 +45,7 @@ class PauseSetupTimer(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.ui.step import set_setup_timer_paused
+
         set_setup_timer_paused(True)
 
 
@@ -70,8 +67,8 @@ class StartSetupTimer(Step):
 
         sequence(
             pause_setup_timer(),
-            wait_for_button(),       # idle here — timer stays frozen
-            start_setup_timer(),     # full setup_time begins now
+            wait_for_button(),  # idle here — timer stays frozen
+            start_setup_timer(),  # full setup_time begins now
             calibrate_deadzone(),
         )
     """
@@ -81,6 +78,7 @@ class StartSetupTimer(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.ui.step import reset_setup_timer
+
         reset_setup_timer()
 
 
@@ -101,7 +99,7 @@ class ResumeSetupTimer(Step):
         sequence(
             pause_setup_timer(),
             wait_for_button(),
-            resume_setup_timer(),   # continue from the frozen value
+            resume_setup_timer(),  # continue from the frozen value
         )
     """
 
@@ -110,4 +108,5 @@ class ResumeSetupTimer(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.ui.step import set_setup_timer_paused
+
         set_setup_timer_paused(False)

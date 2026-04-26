@@ -2,14 +2,22 @@
 Basic pre-built screens for common UI patterns.
 """
 
-from typing import Optional, List
+from __future__ import annotations
 
+from ..events import on_button_press, on_click
 from ..screen import UIScreen
 from ..widgets import (
-    Widget, Text, Icon, Button, Spacer, HintBox, ProgressSpinner,
-    Center, Row, Column,
+    Button,
+    Center,
+    Column,
+    HintBox,
+    Icon,
+    ProgressSpinner,
+    Row,
+    Spacer,
+    Text,
+    Widget,
 )
-from ..events import on_click, on_button_press
 
 
 class WaitForButtonScreen(UIScreen[None]):
@@ -22,21 +30,27 @@ class WaitForButtonScreen(UIScreen[None]):
 
     title = "Ready"
 
-    def __init__(self, message: str = "Press the button to continue",
-                 icon_name: str = "touch_app", icon_color: str = "amber"):
+    def __init__(
+        self,
+        message: str = "Press the button to continue",
+        icon_name: str = "touch_app",
+        icon_color: str = "amber",
+    ):
         super().__init__()
         self.message = message
         self.icon_name = icon_name
         self.icon_color = icon_color
 
     def build(self) -> Widget:
-        return Center(children=[
-            Icon(self.icon_name, size=64, color=self.icon_color),
-            Spacer(16),
-            Text(self.message, size="large", align="center"),
-            Spacer(24),
-            HintBox("Waiting for button press..."),
-        ])
+        return Center(
+            children=[
+                Icon(self.icon_name, size=64, color=self.icon_color),
+                Spacer(16),
+                Text(self.message, size="large", align="center"),
+                Spacer(24),
+                HintBox("Waiting for button press..."),
+            ]
+        )
 
     @on_button_press()
     async def on_press(self):
@@ -56,12 +70,16 @@ class ConfirmScreen(UIScreen[bool]):
 
     _primary_button_id = "confirm"
 
-    def __init__(self, title: str, message: str,
-                 confirm_label: str = "Confirm",
-                 cancel_label: str = "Cancel",
-                 confirm_style: str = "success",
-                 icon_name: str = "help_outline",
-                 icon_color: str = "blue"):
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        confirm_label: str = "Confirm",
+        cancel_label: str = "Cancel",
+        confirm_style: str = "success",
+        icon_name: str = "help_outline",
+        icon_color: str = "blue",
+    ):
         super().__init__()
         self.title = title
         self.message = message
@@ -72,16 +90,21 @@ class ConfirmScreen(UIScreen[bool]):
         self.icon_color = icon_color
 
     def build(self) -> Widget:
-        return Center(children=[
-            Icon(self.icon_name, size=48, color=self.icon_color),
-            Spacer(16),
-            Text(self.message, size="large", align="center"),
-            Spacer(32),
-            Row(children=[
-                Button("cancel", self.cancel_label, style="secondary"),
-                Button("confirm", self.confirm_label, style=self.confirm_style),
-            ], spacing=16),
-        ])
+        return Center(
+            children=[
+                Icon(self.icon_name, size=48, color=self.icon_color),
+                Spacer(16),
+                Text(self.message, size="large", align="center"),
+                Spacer(32),
+                Row(
+                    children=[
+                        Button("cancel", self.cancel_label, style="secondary"),
+                        Button("confirm", self.confirm_label, style=self.confirm_style),
+                    ],
+                    spacing=16,
+                ),
+            ]
+        )
 
     @on_click("confirm")
     async def on_confirm(self):
@@ -107,10 +130,14 @@ class MessageScreen(UIScreen[None]):
 
     _primary_button_id = "ok"
 
-    def __init__(self, title: str, message: str,
-                 button_label: str = "OK",
-                 icon_name: Optional[str] = None,
-                 icon_color: str = "blue"):
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        button_label: str = "OK",
+        icon_name: str | None = None,
+        icon_color: str = "blue",
+    ):
         super().__init__()
         self.title = title
         self.message = message
@@ -125,11 +152,13 @@ class MessageScreen(UIScreen[None]):
             children.append(Icon(self.icon_name, size=48, color=self.icon_color))
             children.append(Spacer(16))
 
-        children.extend([
-            Text(self.message, size="large", align="center"),
-            Spacer(32),
-            Button("ok", self.button_label, style="primary"),
-        ])
+        children.extend(
+            [
+                Text(self.message, size="large", align="center"),
+                Spacer(32),
+                Button("ok", self.button_label, style="primary"),
+            ]
+        )
 
         return Center(children=children)
 
@@ -154,9 +183,13 @@ class ChoiceScreen(UIScreen[str]):
         ))
     """
 
-    def __init__(self, title: str, message: str,
-                 choices: List[tuple],  # [(id, label, description?), ...]
-                 cancel_label: Optional[str] = "Cancel"):
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        choices: list[tuple],  # [(id, label, description?), ...]
+        cancel_label: str | None = "Cancel",
+    ):
         super().__init__()
         self.title = title
         self.message = message
@@ -165,14 +198,10 @@ class ChoiceScreen(UIScreen[str]):
 
         # Register handlers for each choice
         for choice_id, _, *_ in choices:
-            # Create a closure to capture choice_id
-            def make_handler(cid):
-                async def handler(self_inner=self):
-                    self_inner.close(cid)
-                return handler
-
-            handler = make_handler(choice_id)
-            handler._ui_event = ("click", choice_id)
+            # The lambda captures choice_id via the default-argument trick
+            # (binds at definition time, not at call time). The earlier
+            # `make_handler` factory + `_ui_event` attribute it produced
+            # were dead code — nothing read either back.
             self._event_handlers[("click", choice_id)] = lambda s=self, cid=choice_id: s.close(cid)
 
     def build(self) -> Widget:
@@ -185,10 +214,13 @@ class ChoiceScreen(UIScreen[str]):
 
             if description:
                 choice_buttons.append(
-                    Column(children=[
-                        Button(choice_id, label, style="primary"),
-                        Text(description, size="small", muted=True, align="center"),
-                    ], spacing=4)
+                    Column(
+                        children=[
+                            Button(choice_id, label, style="primary"),
+                            Text(description, size="small", muted=True, align="center"),
+                        ],
+                        spacing=4,
+                    )
                 )
             else:
                 choice_buttons.append(Button(choice_id, label, style="primary"))
@@ -200,10 +232,12 @@ class ChoiceScreen(UIScreen[str]):
         ]
 
         if self.cancel_label:
-            children.extend([
-                Spacer(16),
-                Button("_cancel", self.cancel_label, style="secondary"),
-            ])
+            children.extend(
+                [
+                    Spacer(16),
+                    Button("_cancel", self.cancel_label, style="secondary"),
+                ]
+            )
 
         return Center(children=children)
 

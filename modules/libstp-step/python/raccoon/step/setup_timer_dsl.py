@@ -24,7 +24,7 @@ class PauseSetupTimerBuilder(StepBuilder):
         return PauseSetupTimer(**kwargs)
 
 
-@dsl(tags=['timing', 'setup'])
+@dsl(tags=["timing", "setup"])
 def pause_setup_timer():
     """
     Freeze the setup-phase countdown at its current value.
@@ -45,13 +45,7 @@ def pause_setup_timer():
 
         # As the very first step of the setup sequence: idle until the
         # operator is ready, then kick off the real setup timer.
-        sequence(
-            pause_setup_timer(),
-            wait_for_button(),
-            start_setup_timer(),
-            calibrate_deadzone(),
-            ...
-        )
+        sequence(pause_setup_timer(), wait_for_button(), start_setup_timer(), calibrate_deadzone(), ...)
     """
     b = PauseSetupTimerBuilder()
     return b
@@ -68,7 +62,7 @@ class StartSetupTimerBuilder(StepBuilder):
         return StartSetupTimer(**kwargs)
 
 
-@dsl(tags=['timing', 'setup'])
+@dsl(tags=["timing", "setup"])
 def start_setup_timer():
     """
     Start (or restart) the setup-phase countdown from full duration.
@@ -90,8 +84,8 @@ def start_setup_timer():
 
         sequence(
             pause_setup_timer(),
-            wait_for_button(),       # idle here — timer stays frozen
-            start_setup_timer(),     # full setup_time begins now
+            wait_for_button(),  # idle here — timer stays frozen
+            start_setup_timer(),  # full setup_time begins now
             calibrate_deadzone(),
         )
     """
@@ -110,7 +104,7 @@ class ResumeSetupTimerBuilder(StepBuilder):
         return ResumeSetupTimer(**kwargs)
 
 
-@dsl(tags=['timing', 'setup'])
+@dsl(tags=["timing", "setup"])
 def resume_setup_timer():
     """
     Resume a paused setup-phase countdown without resetting it.
@@ -131,11 +125,18 @@ def resume_setup_timer():
         sequence(
             pause_setup_timer(),
             wait_for_button(),
-            resume_setup_timer(),   # continue from the frozen value
+            resume_setup_timer(),  # continue from the frozen value
         )
     """
     b = ResumeSetupTimerBuilder()
     return b
 
 
-__all__ = ['PauseSetupTimerBuilder', 'pause_setup_timer', 'StartSetupTimerBuilder', 'start_setup_timer', 'ResumeSetupTimerBuilder', 'resume_setup_timer']
+__all__ = [
+    "PauseSetupTimerBuilder",
+    "pause_setup_timer",
+    "StartSetupTimerBuilder",
+    "start_setup_timer",
+    "ResumeSetupTimerBuilder",
+    "resume_setup_timer",
+]

@@ -6,26 +6,29 @@ Supports two calibration modes:
 - Persistent learning: Update YAML baseline using EMA (converges over multiple runs)
 """
 
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
+from raccoon.log import warn
 from raccoon.project_yaml import (
     find_project_root as _find_project_root_util,
+)
+from raccoon.project_yaml import (
     read_project_value,
     update_project_value,
 )
-
 from raccoon.step.annotation import dsl_step
-from raccoon.ui.step import UIStep
 from raccoon.ui.screens.distance import (
-    DistancePrepareScreen,
+    DistanceConfirmScreen,
     DistanceDrivingScreen,
     DistanceMeasureScreen,
-    DistanceConfirmScreen,
+    DistancePrepareScreen,
 )
-from raccoon.log import warn
+from raccoon.ui.step import UIStep
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -43,33 +46,39 @@ _SENSOR_CAL_DRIVE_CM = 50.0
 
 class CalibrationRequiredError(Exception):
     """Raised when an operation requires calibration but none has been performed."""
-    pass
 
 
-# Simple calibration flag (runtime only)
-_calibrated: bool = False
+# Runtime calibration flag, kept on a single module-level container so
+# the toggle is a simple attribute write — no ``global`` statement at the
+# call sites and no ``object.__setattr__`` indirection.
+class _CalibrationState:
+    """Holds the runtime "have we calibrated yet?" flag."""
+
+    done: bool = False
 
 
 def is_distance_calibrated() -> bool:
     """Check if distance calibration has been performed."""
-    return _calibrated
+    return _CalibrationState.done
 
 
 def check_distance_calibration() -> None:
     """Log a warning when distance calibration has not been performed yet."""
-    if not _calibrated:
-        warn("Distance calibration highly suggested. Run calibrate() or calibrate_distance() first.")
+    if not _CalibrationState.done:
+        warn(
+            "Distance calibration highly suggested. Run calibrate() or calibrate_distance() first."
+        )
 
 
 def reset_distance_calibration() -> None:
     """Reset the calibration flag (for testing)."""
-    global _calibrated
-    _calibrated = False
+    _CalibrationState.done = False
 
 
 @dataclass
 class DistanceCalibrationResult:
     """Result of distance calibration."""
+
     requested_distance_cm: float
     measured_distance_cm: float
     scale_factor: float
@@ -78,17 +87,18 @@ class DistanceCalibrationResult:
 @dataclass
 class PerWheelCalibration:
     """Result of per-wheel distance calibration."""
+
     motor_port: int
     old_ticks_to_rad: float
     new_ticks_to_rad: float
     delta_ticks: int
     ema_baseline: float = 0.0  # EMA-filtered value for YAML persistence
-    motor_name: Optional[str] = None  # Motor name in YAML definitions
+    motor_name: str | None = None  # Motor name in YAML definitions
 
 
 def _load_stored_ir_calibration(
     ir_sensors: list,
-    calibration_sets: List[str],
+    calibration_sets: list[str],
     debug_fn,
     warn_fn,
 ) -> None:
@@ -107,17 +117,19 @@ def _load_stored_ir_calibration(
                     f"black={readings[1]:.1f} white={readings[0]:.1f}"
                 )
             else:
-                warn_fn(f"--no-calibrate: no stored readings for IR port {sensor.port} set '{set_name}'")
+                warn_fn(
+                    f"--no-calibrate: no stored readings for IR port {sensor.port} set '{set_name}'"
+                )
 
 
-def _find_project_root(start_path: Optional[Path] = None) -> Optional[Path]:
+def _find_project_root(start_path: Path | None = None) -> Path | None:
     """Find project root by searching upward for raccoon.project.yml."""
     return _find_project_root_util(start_path)
 
 
 def _update_yaml_calibration(
-    results: List[PerWheelCalibration],
-    project_root: Optional[Path] = None,
+    results: list[PerWheelCalibration],
+    project_root: Path | None = None,
 ) -> bool:
     """
     Update ticks_to_rad values, following !include refs.
@@ -137,34 +149,35 @@ def _update_yaml_calibration(
 
     updated = False
     for result in results:
-        if result.motor_name:
-            if update_project_value(
-                project_root,
-                ["definitions", result.motor_name, "calibration", "ticks_to_rad"],
-                result.new_ticks_to_rad,
-            ):
-                updated = True
+        if result.motor_name and update_project_value(
+            project_root,
+            ["definitions", result.motor_name, "calibration", "ticks_to_rad"],
+            result.new_ticks_to_rad,
+        ):
+            updated = True
 
     return updated
 
 
-def _find_motor_name_by_port(config: Dict, port: int) -> Optional[str]:
+def _find_motor_name_by_port(config: dict, port: int) -> str | None:
     """Find motor definition name by port number.
 
     When *config* has a 'definitions' key, searches there.  Falls back to
     reading definitions from the project YAML (following !include refs) when
     the in-memory dict is empty or missing.
     """
-    definitions = config.get('definitions', {})
+    definitions = config.get("definitions", {})
     if not definitions:
         project_root = _find_project_root()
         if project_root is not None:
             definitions = read_project_value(project_root, ["definitions"], {})
 
     for name, definition in definitions.items():
-        if (isinstance(definition, dict)
-                and definition.get('type') == 'Motor'
-                and definition.get('port') == port):
+        if (
+            isinstance(definition, dict)
+            and definition.get("type") == "Motor"
+            and definition.get("port") == port
+        ):
             return name
     return None
 
@@ -227,8 +240,8 @@ class CalibrateDistance(UIStep):
         calibrate_light_sensors: bool = False,
         persist_to_yaml: bool = True,
         ema_alpha: float = 0.7,
-        calibration_sets: Optional[List[str]] = None,
-        exclude_ir_sensors: Optional[List["IRSensor"]] = None,
+        calibration_sets: list[str] | None = None,
+        exclude_ir_sensors: list["IRSensor"] | None = None,
     ) -> None:
         super().__init__()
         self.calibration_distance_cm = distance_cm
@@ -237,9 +250,9 @@ class CalibrateDistance(UIStep):
         self.persist_to_yaml = persist_to_yaml
         self.ema_alpha = ema_alpha
         self.calibration_sets = calibration_sets or ["default"]
-        self.exclude_ir_sensors: List["IRSensor"] = exclude_ir_sensors or []
-        self.result: Optional[DistanceCalibrationResult] = None
-        self.per_wheel_results: List[PerWheelCalibration] = []
+        self.exclude_ir_sensors: list["IRSensor"] = exclude_ir_sensors or []
+        self.result: DistanceCalibrationResult | None = None
+        self.per_wheel_results: list[PerWheelCalibration] = []
 
     def _generate_signature(self) -> str:
         excluded = [s.port for s in self.exclude_ir_sensors]
@@ -253,11 +266,11 @@ class CalibrateDistance(UIStep):
 
     async def _sample_sensors(
         self,
-        sensors: List["IRSensor"],
+        sensors: list["IRSensor"],
         stop_event: asyncio.Event,
-    ) -> Dict[int, List[float]]:
+    ) -> dict[int, list[float]]:
         """Sample IR sensors at 10ms intervals until stop_event is set."""
-        samples: Dict[int, List[float]] = {sensor.port: [] for sensor in sensors}
+        samples: dict[int, list[float]] = {sensor.port: [] for sensor in sensors}
         while not stop_event.is_set():
             for sensor in sensors:
                 samples[sensor.port].append(float(sensor.read()))
@@ -266,9 +279,9 @@ class CalibrateDistance(UIStep):
 
     async def _sample_sensors_for_duration(
         self,
-        sensors: List["IRSensor"],
+        sensors: list["IRSensor"],
         duration_seconds: float,
-    ) -> Dict[int, List[float]]:
+    ) -> dict[int, list[float]]:
         stop_event = asyncio.Event()
         sampling_task = asyncio.create_task(self._sample_sensors(sensors, stop_event))
         try:
@@ -279,9 +292,9 @@ class CalibrateDistance(UIStep):
 
     def _collect_sensor_data(
         self,
-        ir_sensors: List["IRSensor"],
-        per_sensor_samples: Dict[int, List[float]],
-    ) -> List["SensorCalibrationData"]:
+        ir_sensors: list["IRSensor"],
+        per_sensor_samples: dict[int, list[float]],
+    ) -> list["SensorCalibrationData"]:
         """Build per-sensor calibration data for the dashboard."""
         from raccoon.step.calibration.sensors.dataclasses import SensorCalibrationData
 
@@ -295,23 +308,25 @@ class CalibrateDistance(UIStep):
                 black_threshold = 0.0
                 white_threshold = 0.0
 
-            sensor_data.append(SensorCalibrationData(
-                port=sensor.port,
-                samples=samples,
-                black_threshold=black_threshold,
-                white_threshold=white_threshold,
-                black_mean=float(getattr(sensor, 'blackMean', 0.0)),
-                white_mean=float(getattr(sensor, 'whiteMean', 0.0)),
-                black_std=float(getattr(sensor, 'blackStdDev', 0.0)),
-                white_std=float(getattr(sensor, 'whiteStdDev', 0.0)),
-            ))
+            sensor_data.append(
+                SensorCalibrationData(
+                    port=sensor.port,
+                    samples=samples,
+                    black_threshold=black_threshold,
+                    white_threshold=white_threshold,
+                    black_mean=float(getattr(sensor, "blackMean", 0.0)),
+                    white_mean=float(getattr(sensor, "whiteMean", 0.0)),
+                    black_std=float(getattr(sensor, "blackStdDev", 0.0)),
+                    white_std=float(getattr(sensor, "whiteStdDev", 0.0)),
+                )
+            )
         return sensor_data
 
     async def _drive_and_sample(
         self,
         robot: "GenericRobot",
-        ir_sensors: List["IRSensor"],
-    ) -> Dict[int, List[float]]:
+        ir_sensors: list["IRSensor"],
+    ) -> dict[int, list[float]]:
         """Drive forward while sampling IR sensors, then passive-brake."""
         from raccoon.step.motion.drive import _drive_forward_uncalibrated
 
@@ -319,9 +334,7 @@ class CalibrateDistance(UIStep):
         await self._render_screen(driving_screen)
 
         stop_sampling = asyncio.Event()
-        sampling_task = asyncio.create_task(
-            self._sample_sensors(ir_sensors, stop_sampling)
-        )
+        sampling_task = asyncio.create_task(self._sample_sensors(ir_sensors, stop_sampling))
         try:
             drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM, speed=self.speed)
             await drive_step.run_step(robot)
@@ -337,18 +350,18 @@ class CalibrateDistance(UIStep):
     async def _confirm_light_sensors(
         self,
         robot: "GenericRobot",
-        ir_sensors: List["IRSensor"],
-        initial_samples: Dict[int, List[float]],
+        ir_sensors: list["IRSensor"],
+        initial_samples: dict[int, list[float]],
         set_name: str = "default",
     ) -> None:
-        from raccoon.step.calibration.sensors.ir_results_screen import IRResultsDashboardScreen
         from raccoon import calibration_store as CalibrationStore
         from raccoon.calibration_store import CalibrationType
+        from raccoon.step.calibration.sensors.ir_results_screen import IRResultsDashboardScreen
 
         if not ir_sensors:
             return
 
-        ports = [sensor.port for sensor in ir_sensors]
+        [sensor.port for sensor in ir_sensors]
         samples = initial_samples
 
         if not any(samples.values()):
@@ -364,15 +377,13 @@ class CalibrateDistance(UIStep):
 
             sensor_data = self._collect_sensor_data(ir_sensors, samples)
 
-            dashboard_result = await self.show(
-                IRResultsDashboardScreen(sensors=sensor_data)
-            )
+            dashboard_result = await self.show(IRResultsDashboardScreen(sensors=sensor_data))
             if dashboard_result is None:
                 self.warn("Sensor calibration dashboard dismissed; aborting")
                 return
 
             if dashboard_result.confirmed:
-                for sensor, data in zip(ir_sensors, sensor_data):
+                for sensor, data in zip(ir_sensors, sensor_data, strict=False):
                     sensor.setCalibration(data.black_threshold, data.white_threshold)
                     CalibrationStore.store_readings(
                         CalibrationType.IR_SENSOR,
@@ -388,7 +399,7 @@ class CalibrateDistance(UIStep):
     async def _drive_and_sample_for_set(
         self,
         robot: "GenericRobot",
-        ir_sensors: List["IRSensor"],
+        ir_sensors: list["IRSensor"],
         set_name: str,
     ) -> None:
         """Drive forward and sample IR sensors for an additional calibration set."""
@@ -409,9 +420,7 @@ class CalibrateDistance(UIStep):
         await self._render_screen(driving_screen)
 
         stop_sampling = asyncio.Event()
-        sampling_task = asyncio.create_task(
-            self._sample_sensors(ir_sensors, stop_sampling)
-        )
+        sampling_task = asyncio.create_task(self._sample_sensors(ir_sensors, stop_sampling))
         try:
             drive_step = _drive_forward_uncalibrated(_SENSOR_CAL_DRIVE_CM, speed=self.speed)
             await drive_step.run_step(robot)
@@ -443,21 +452,24 @@ class CalibrateDistance(UIStep):
         from raccoon.no_calibrate import is_no_calibrate
 
         if is_no_calibrate():
-            global _calibrated
-            _calibrated = True
+            _CalibrationState.done = True
             self.info("--no-calibrate: skipping distance calibration, using stored values")
             if self.calibrate_light_sensors:
                 from raccoon.sensor_ir import IRSensor as _IRSensor
+
                 ir_sensors = [
-                    s for s in robot.defs.analog_sensors
+                    s
+                    for s in robot.defs.analog_sensors
                     if isinstance(s, _IRSensor) and s not in self.exclude_ir_sensors
                 ]
-                _load_stored_ir_calibration(ir_sensors, self.calibration_sets, self.debug, self.warn)
+                _load_stored_ir_calibration(
+                    ir_sensors, self.calibration_sets, self.debug, self.warn
+                )
             return
 
-        from raccoon.step.motion.drive import _drive_forward_uncalibrated
         from raccoon.foundation import MotorCalibration
         from raccoon.sensor_ir import IRSensor
+        from raccoon.step.motion.drive import _drive_forward_uncalibrated
 
         # Get wheel radius from kinematics
         wheel_radius = robot.drive.get_wheel_radius()
@@ -472,7 +484,7 @@ class CalibrateDistance(UIStep):
         self.debug(f"Found {len(drive_motors)} drive motor(s)")
 
         # Get IR sensors if light sensor calibration is enabled
-        ir_sensors: List[IRSensor] = []
+        ir_sensors: list[IRSensor] = []
         if self.calibrate_light_sensors:
             for sensor in robot.defs.analog_sensors:
                 if isinstance(sensor, IRSensor) and sensor not in self.exclude_ir_sensors:
@@ -488,7 +500,7 @@ class CalibrateDistance(UIStep):
             await self.show(DistancePrepareScreen(self.calibration_distance_cm))
 
             # Record encoder positions BEFORE drive
-            encoder_before: Dict[int, int] = {}
+            encoder_before: dict[int, int] = {}
             for motor in drive_motors:
                 encoder_before[motor.port] = motor.get_position()
                 self.debug(f"Motor {motor.port} encoder before: {encoder_before[motor.port]}")
@@ -499,13 +511,11 @@ class CalibrateDistance(UIStep):
 
             # Execute the drive (with concurrent sensor sampling if enabled)
             drive_step = _drive_forward_uncalibrated(self.calibration_distance_cm, speed=self.speed)
-            sensor_samples: Dict[int, List[float]] = {}
+            sensor_samples: dict[int, list[float]] = {}
 
             if ir_sensors:
                 stop_sampling = asyncio.Event()
-                sampling_task = asyncio.create_task(
-                    self._sample_sensors(ir_sensors, stop_sampling)
-                )
+                sampling_task = asyncio.create_task(self._sample_sensors(ir_sensors, stop_sampling))
                 try:
                     await drive_step.run_step(robot)
                 finally:
@@ -519,16 +529,14 @@ class CalibrateDistance(UIStep):
                 motor.set_speed(0)
 
             # Record encoder positions AFTER drive
-            encoder_after: Dict[int, int] = {}
+            encoder_after: dict[int, int] = {}
             for motor in drive_motors:
                 encoder_after[motor.port] = motor.get_position()
                 self.debug(f"Motor {motor.port} encoder after: {encoder_after[motor.port]}")
 
             # Phase 3: Measure - user enters measured distance
             self.debug("Distance calibration: measure phase")
-            measured_cm = await self.show(
-                DistanceMeasureScreen(self.calibration_distance_cm)
-            )
+            measured_cm = await self.show(DistanceMeasureScreen(self.calibration_distance_cm))
 
             measured_m = measured_cm / 100.0
             self.debug(f"Measured distance: {measured_m:.4f}m")
@@ -546,12 +554,14 @@ class CalibrateDistance(UIStep):
                 theta_rad = measured_m / wheel_radius
                 new_ticks_to_rad = theta_rad / abs(delta_ticks)
 
-                self.per_wheel_results.append(PerWheelCalibration(
-                    motor_port=motor.port,
-                    old_ticks_to_rad=old_calibration.ticks_to_rad,
-                    new_ticks_to_rad=new_ticks_to_rad,
-                    delta_ticks=delta_ticks
-                ))
+                self.per_wheel_results.append(
+                    PerWheelCalibration(
+                        motor_port=motor.port,
+                        old_ticks_to_rad=old_calibration.ticks_to_rad,
+                        new_ticks_to_rad=new_ticks_to_rad,
+                        delta_ticks=delta_ticks,
+                    )
+                )
 
             if not self.per_wheel_results:
                 self.warn("No motors were calibrated due to insufficient movement")
@@ -575,7 +585,7 @@ class CalibrateDistance(UIStep):
 
             if confirm_result.confirmed:
                 # Find project root for motor name lookup and persistence
-                project_root: Optional[Path] = None
+                project_root: Path | None = None
                 if self.persist_to_yaml:
                     project_root = _find_project_root()
                     if not project_root:
@@ -609,18 +619,22 @@ class CalibrateDistance(UIStep):
                         self.warn("Failed to persist calibration to raccoon.project.yml")
 
                 # Mark as calibrated
-                _calibrated = True
+                _CalibrationState.done = True
 
                 self.result = DistanceCalibrationResult(
                     requested_distance_cm=self.calibration_distance_cm,
                     measured_distance_cm=measured_cm,
-                    scale_factor=avg_scale_factor
+                    scale_factor=avg_scale_factor,
                 )
-                self.debug(f"Distance calibration applied: {len(self.per_wheel_results)} motor(s) calibrated")
+                self.debug(
+                    f"Distance calibration applied: {len(self.per_wheel_results)} motor(s) calibrated"
+                )
 
                 if self.calibrate_light_sensors and ir_sensors:
                     # First set uses samples from the distance calibration drive
-                    await self._confirm_light_sensors(robot, ir_sensors, sensor_samples, self.calibration_sets[0])
+                    await self._confirm_light_sensors(
+                        robot, ir_sensors, sensor_samples, self.calibration_sets[0]
+                    )
 
                     # Remaining sets each get their own drive-and-sample cycle
                     for cal_set in self.calibration_sets[1:]:
@@ -628,5 +642,3 @@ class CalibrateDistance(UIStep):
                 return
 
             # User wants to retry - loop continues
-
-

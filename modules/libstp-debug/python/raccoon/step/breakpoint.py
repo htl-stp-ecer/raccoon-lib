@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Optional
-from . import Step, dsl
 from raccoon.robot.api import GenericRobot
+
+from . import Step, dsl
+
 
 @dsl(hidden=True)
 class BreakpointStep(Step):
     """Step-level breakpoint marker that currently only emits a log line."""
 
-    def __init__(self, label: Optional[str] = None) -> None:
+    def __init__(self, label: str | None = None) -> None:
         """
         Initialize a lightweight breakpoint marker step.
 
@@ -28,7 +29,7 @@ class BreakpointStep(Step):
 
 
 @dsl(hidden=True)
-def breakpoint(label: Optional[str] = None) -> BreakpointStep:
+def breakpoint(label: str | None = None) -> BreakpointStep:
     """
     Create a breakpoint marker step.
 

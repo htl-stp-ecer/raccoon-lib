@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Optional, List
 
 from raccoon import calibration_store as CalibrationStore
 from raccoon.calibration_store import CalibrationType
@@ -49,13 +50,13 @@ class CalibrateSensors(UIStep):
         self,
         calibration_time: float = 5.0,
         allow_use_existing: bool = True,
-        calibration_sets: Optional[List[str]] = None,
+        calibration_sets: list[str] | None = None,
     ) -> None:
         super().__init__()
         self.calibration_time = calibration_time
         self.allow_use_existing = allow_use_existing
         self.calibration_sets = calibration_sets or ["default"]
-        self.calibration_result: Optional[IRSensorCalibrationResult] = None
+        self.calibration_result: IRSensorCalibrationResult | None = None
 
     def _generate_signature(self) -> str:
         return (
@@ -65,9 +66,9 @@ class CalibrateSensors(UIStep):
         )
 
     async def _calibrate_sensors(
-            self,
-            ir_sensors: List[IRSensor],
-            set_name: str = "default",
+        self,
+        ir_sensors: list[IRSensor],
+        set_name: str = "default",
     ) -> bool:
         """Run the blocking calibration in a thread."""
         return await asyncio.to_thread(
@@ -78,13 +79,15 @@ class CalibrateSensors(UIStep):
             set_name,
         )
 
-    def _collect_sensor_data(self, ir_sensors: List[IRSensor], ports: List[int]) -> List[SensorCalibrationData]:
+    def _collect_sensor_data(
+        self, ir_sensors: list[IRSensor], ports: list[int]
+    ) -> list[SensorCalibrationData]:
         """Collect per-sensor calibration data after calibration run."""
         sensor_data = []
-        for sensor, port in zip(ir_sensors, ports):
+        for sensor, port in zip(ir_sensors, ports, strict=False):
             samples = []
             try:
-                if hasattr(sensor, '_calibration_values'):
+                if hasattr(sensor, "_calibration_values"):
                     samples = [float(v) for v in sensor._calibration_values]
             except Exception:
                 pass
@@ -101,10 +104,10 @@ class CalibrateSensors(UIStep):
                 samples=samples,
                 black_threshold=black_threshold,
                 white_threshold=white_threshold,
-                black_mean=float(getattr(sensor, 'blackMean', 0.0)),
-                white_mean=float(getattr(sensor, 'whiteMean', 0.0)),
-                black_std=float(getattr(sensor, 'blackStdDev', 0.0)),
-                white_std=float(getattr(sensor, 'whiteStdDev', 0.0)),
+                black_mean=float(getattr(sensor, "blackMean", 0.0)),
+                white_mean=float(getattr(sensor, "whiteMean", 0.0)),
+                black_std=float(getattr(sensor, "blackStdDev", 0.0)),
+                white_std=float(getattr(sensor, "whiteStdDev", 0.0)),
             )
             sensor_data.append(data)
         return sensor_data
@@ -112,8 +115,8 @@ class CalibrateSensors(UIStep):
     async def _calibrate_single_set(
         self,
         robot: "GenericRobot",
-        ir_sensors: List[IRSensor],
-        ports: List[int],
+        ir_sensors: list[IRSensor],
+        ports: list[int],
         set_name: str,
     ) -> bool:
         """Run the calibration flow for a single named set. Returns True if completed."""
@@ -124,10 +127,12 @@ class CalibrateSensors(UIStep):
 
         while True:
             show_existing = self.allow_use_existing and has_existing
-            choice = await self.show(IROverviewScreen(
-                has_existing=show_existing,
-                set_name=set_name,
-            ))
+            choice = await self.show(
+                IROverviewScreen(
+                    has_existing=show_existing,
+                    set_name=set_name,
+                )
+            )
             await self.close_ui()
 
             if choice is None:
@@ -155,9 +160,7 @@ class CalibrateSensors(UIStep):
             # Collect per-sensor data for the dashboard
             sensor_data = self._collect_sensor_data(ir_sensors, ports)
 
-            dashboard_result = await self.show(
-                IRResultsDashboardScreen(sensors=sensor_data)
-            )
+            dashboard_result = await self.show(IRResultsDashboardScreen(sensors=sensor_data))
             await self.close_ui()
 
             if dashboard_result is None:
@@ -166,7 +169,7 @@ class CalibrateSensors(UIStep):
 
             if dashboard_result.confirmed:
                 # Apply per-sensor thresholds
-                for sensor, data in zip(ir_sensors, sensor_data):
+                for sensor, data in zip(ir_sensors, sensor_data, strict=False):
                     sensor.setCalibration(data.black_threshold, data.white_threshold)
                     self.debug(
                         f"IR calibration for set '{set_name}' port {data.port}: "
@@ -185,12 +188,15 @@ class CalibrateSensors(UIStep):
         if is_no_calibrate():
             self.info("--no-calibrate: skipping sensor calibration, loading stored values")
             from raccoon.step.calibration.calibrate_distance import _load_stored_ir_calibration
-            ir_sensors_nc: List[IRSensor] = [s for s in robot.defs.analog_sensors if isinstance(s, IRSensor)]
+
+            ir_sensors_nc: list[IRSensor] = [
+                s for s in robot.defs.analog_sensors if isinstance(s, IRSensor)
+            ]
             _load_stored_ir_calibration(ir_sensors_nc, self.calibration_sets, self.debug, self.warn)
             return
 
         sensors = robot.defs.analog_sensors
-        ir_sensors: List[IRSensor] = [s for s in sensors if isinstance(s, IRSensor)]
+        ir_sensors: list[IRSensor] = [s for s in sensors if isinstance(s, IRSensor)]
 
         if not ir_sensors:
             self.warn("No IR sensors found in robot.defs.analog_sensors")
@@ -214,5 +220,3 @@ class CalibrateSensors(UIStep):
             completed = await self._calibrate_single_set(robot, ir_sensors, ports, set_name)
             if not completed:
                 return
-
-

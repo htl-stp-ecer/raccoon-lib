@@ -1,7 +1,3 @@
-//
-// Created by tobias on 9/8/25.
-//
-
 #include "kinematics/mecanum/mecanum.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"

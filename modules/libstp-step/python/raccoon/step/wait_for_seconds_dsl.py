@@ -20,19 +20,19 @@ class WaitForSecondsBuilder(StepBuilder):
         super().__init__()
         self._seconds = _UNSET
 
-    def seconds(self, value: Union[float, int]):
+    def seconds(self, value: float | int):
         self._seconds = value
         return self
 
     def _build(self):
         kwargs = {}
         if self._seconds is not _UNSET:
-            kwargs['seconds'] = self._seconds
+            kwargs["seconds"] = self._seconds
         return WaitForSeconds(**kwargs)
 
 
-@dsl(tags=['timing', 'wait'])
-def wait_for_seconds(seconds: Union[float, int] = _UNSET):
+@dsl(tags=["timing", "wait"])
+def wait_for_seconds(seconds: float | int = _UNSET):
     """
     Pause execution for a fixed number of seconds.
 
@@ -68,4 +68,4 @@ def wait_for_seconds(seconds: Union[float, int] = _UNSET):
     return b
 
 
-__all__ = ['WaitForSecondsBuilder', 'wait_for_seconds']
+__all__ = ["WaitForSecondsBuilder", "wait_for_seconds"]

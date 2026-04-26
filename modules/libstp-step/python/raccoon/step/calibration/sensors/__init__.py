@@ -1,3 +1,4 @@
+from __future__ import annotations
 from .step import CalibrateSensors
 from .step_dsl import calibrate_sensors
 from .switch_set_step import SwitchCalibrationSet

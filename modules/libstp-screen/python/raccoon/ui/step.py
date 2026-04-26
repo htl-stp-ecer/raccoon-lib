@@ -5,15 +5,24 @@ The Step orchestrates the flow, screens handle their own UI/events.
 """
 
 from __future__ import annotations
-from abc import ABC
-from typing import Optional, TypeVar, TYPE_CHECKING, Callable, Awaitable, Any, List, Union
-from contextlib import asynccontextmanager
-from contextvars import ContextVar
+
 import asyncio
 import json
-
 import time
+from abc import ABC
+from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
+from contextvars import ContextVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+from raccoon.button import is_pressed
+from raccoon.step.base import Step
 from raccoon_transport import Transport
+
+from .raccoon.screen_render_answer_t import screen_render_answer_t
+from .raccoon.screen_render_t import screen_render_t
+from .screen import UIScreen
+from .widgets import Button, Center, Column, Row, Spacer, Text
 
 
 class _SetupTimerState:
@@ -27,6 +36,7 @@ class _SetupTimerState:
     genuinely freezes during the pause rather than merely hiding it in
     the UI.
     """
+
     __slots__ = ("duration", "start_monotonic", "paused", "_pause_start")
 
     def __init__(self, duration: int) -> None:
@@ -59,7 +69,7 @@ class _SetupTimerState:
 
 
 # Set by SetupMission.setup_timer_context(); None outside a setup phase.
-_active_setup_timer: ContextVar[Optional[_SetupTimerState]] = ContextVar(
+_active_setup_timer: ContextVar[_SetupTimerState | None] = ContextVar(
     "active_setup_timer", default=None
 )
 
@@ -87,18 +97,12 @@ def reset_setup_timer() -> None:
     state = _active_setup_timer.get()
     if state is not None:
         state.reset()
-from raccoon.step.base import Step
-from raccoon.button import is_pressed
-from .raccoon.screen_render_t import screen_render_t
-from .raccoon.screen_render_answer_t import screen_render_answer_t
 
-from .screen import UIScreen
-from .widgets import Text, Button, Center, Column, Row, Spacer
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class UIStep(Step, ABC):
@@ -133,13 +137,13 @@ class UIStep(Step, ABC):
 
     def __init__(self):
         super().__init__()
-        self._robot: Optional[GenericRobot] = None
-        self._current_screen: Optional[UIScreen] = None
+        self._robot: GenericRobot | None = None
+        self._current_screen: UIScreen | None = None
         self._transport = Transport()
-        self._lcm_pump_task: Optional[asyncio.Task] = None
+        self._lcm_pump_task: asyncio.Task | None = None
         self._ui_active: bool = False  # Track if any UI has been shown
         # Persistent subscription state for non-blocking display/pump_events
-        self._pump_queue: Optional[asyncio.Queue] = None
+        self._pump_queue: asyncio.Queue | None = None
         self._pump_sub = None
 
     async def show(self, screen: UIScreen[T]) -> T:
@@ -197,7 +201,7 @@ class UIStep(Step, ABC):
         event_queue: asyncio.Queue = asyncio.Queue()
 
         # LCM message handler — receives unwrapped payload from reliable envelope
-        def lcm_handler(channel, data):
+        def lcm_handler(_channel, data):
             msg = screen_render_answer_t.decode(data)
             if msg.screen_name == self._SCREEN_NAME:
                 try:
@@ -205,12 +209,16 @@ class UIStep(Step, ABC):
                 except json.JSONDecodeError:
                     event = {}
                 event["_action"] = msg.value
-                self.debug(f"[LCM RX] screen_answer <- action={msg.value}, data={msg.reason[:100] if msg.reason else 'none'}...")
+                self.debug(
+                    f"[LCM RX] screen_answer <- action={msg.value}, data={msg.reason[:100] if msg.reason else 'none'}..."
+                )
                 loop.call_soon_threadsafe(event_queue.put_nowait, event)
 
         # Subscribe with reliable=True to receive Flutter's reliable-published answers
         sub = self._transport.subscribe(
-            "raccoon/screen_render/answer", lcm_handler, reliable=True,
+            "raccoon/screen_render/answer",
+            lcm_handler,
+            reliable=True,
         )
 
         # Start button listener task
@@ -231,10 +239,8 @@ class UIStep(Step, ABC):
                 await asyncio.sleep(0.01)
         finally:
             button_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await button_task
-            except asyncio.CancelledError:
-                pass
             self._transport._lcm.unsubscribe(sub)
 
     async def _button_listener(self, queue: asyncio.Queue) -> None:
@@ -321,7 +327,7 @@ class UIStep(Step, ABC):
         self._pump_queue = asyncio.Queue()
         queue = self._pump_queue  # capture for closure
 
-        def lcm_handler(channel, data):
+        def lcm_handler(_channel, data):
             msg = screen_render_answer_t.decode(data)
             if msg.screen_name == self._SCREEN_NAME:
                 try:
@@ -333,7 +339,9 @@ class UIStep(Step, ABC):
                 loop.call_soon_threadsafe(queue.put_nowait, event)
 
         self._pump_sub = self._transport.subscribe(
-            "raccoon/screen_render/answer", lcm_handler, reliable=True,
+            "raccoon/screen_render/answer",
+            lcm_handler,
+            reliable=True,
         )
 
     def _teardown_pump_sub(self) -> None:
@@ -397,7 +405,7 @@ class UIStep(Step, ABC):
     async def run_with_ui(
         self,
         screen: UIScreen,
-        task: Union[Callable[[], Awaitable[Any]], Awaitable[Any]],
+        task: Callable[[], Awaitable[Any]] | Awaitable[Any],
         poll_interval: float = 0.05,
     ) -> Any:
         """
@@ -431,7 +439,8 @@ class UIStep(Step, ABC):
         elif callable(task):
             coro = task()
         else:
-            raise TypeError(f"task must be a coroutine or callable, got {type(task)}")
+            msg = f"task must be a coroutine or callable, got {type(task)}"
+            raise TypeError(msg)
 
         task_obj = asyncio.create_task(coro)
 
@@ -487,9 +496,9 @@ class UIStep(Step, ABC):
         title: str = "Input",
         default: float = 0,
         unit: str = "",
-        min_value: Optional[float] = None,
-        max_value: Optional[float] = None,
-    ) -> Optional[float]:
+        min_value: float | None = None,
+        max_value: float | None = None,
+    ) -> float | None:
         """
         Get a numeric value from the user.
 
@@ -500,6 +509,7 @@ class UIStep(Step, ABC):
             speed = await self.input_number("Speed:", min_value=0, max_value=100)
         """
         from .screens.input import NumberInputScreen
+
         screen = NumberInputScreen(
             title=title,
             prompt=prompt,
@@ -514,9 +524,9 @@ class UIStep(Step, ABC):
     async def choose(
         self,
         prompt: str,
-        options: List[str],
+        options: list[str],
         title: str = "Choose",
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Let user choose from a list of options.
 
@@ -528,7 +538,9 @@ class UIStep(Step, ABC):
         screen = _QuickChoiceScreen(prompt, options, title)
         return await self.show(screen)
 
-    async def wait_for_button(self, text: str = "Press button to continue", title: str = "Ready") -> None:
+    async def wait_for_button(
+        self, text: str = "Press button to continue", title: str = "Ready"
+    ) -> None:
         """
         Wait for physical button press.
 
@@ -544,7 +556,7 @@ class UIStep(Step, ABC):
         title: str = "Input",
         default: str = "",
         placeholder: str = "",
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Get text input from the user.
 
@@ -554,6 +566,7 @@ class UIStep(Step, ABC):
             name = await self.input_text("Enter robot name:")
         """
         from .screens.input import TextInputScreen
+
         screen = TextInputScreen(
             title=title,
             prompt=prompt,
@@ -569,8 +582,8 @@ class UIStep(Step, ABC):
         min: float,
         max: float,
         title: str = "Input",
-        default: float = None,
-    ) -> Optional[float]:
+        default: float | None = None,
+    ) -> float | None:
         """
         Get a value using a slider.
 
@@ -580,6 +593,7 @@ class UIStep(Step, ABC):
             speed = await self.input_slider("Select speed:", min=0, max=100)
         """
         from .screens.input import SliderInputScreen
+
         screen = SliderInputScreen(
             title=title,
             prompt=prompt,
@@ -593,6 +607,7 @@ class UIStep(Step, ABC):
 
 class _ShowingContext:
     """Context for `showing()` context manager."""
+
     def __init__(self, screen: UIScreen, step: UIStep):
         self.screen = screen
         self._step = step
@@ -606,6 +621,7 @@ class _ShowingContext:
 # QUICK SCREEN IMPLEMENTATIONS
 # =============================================================================
 
+
 class _QuickMessageScreen(UIScreen[None]):
     """Simple message screen."""
 
@@ -618,20 +634,23 @@ class _QuickMessageScreen(UIScreen[None]):
         self._button_label = button_label
 
     def build(self):
-        return Center(children=[
-            Column(children=[
-                Text(self._text, size="large", align="center"),
-                Spacer(height=24),
-                Button("ok", self._button_label, style="primary"),
-            ], align="center"),
-        ])
+        return Center(
+            children=[
+                Column(
+                    children=[
+                        Text(self._text, size="large", align="center"),
+                        Spacer(height=24),
+                        Button("ok", self._button_label, style="primary"),
+                    ],
+                    align="center",
+                ),
+            ]
+        )
 
     async def _dispatch_event(self, event: dict) -> None:
         await super()._dispatch_event(event)
         action = event.get("_action")
-        if action == "click" and event.get("button_id") == "ok":
-            self.close()
-        elif action == "button_press":
+        if action == "click" and event.get("button_id") == "ok" or action == "button_press":
             self.close()
 
 
@@ -648,16 +667,25 @@ class _QuickConfirmScreen(UIScreen[bool]):
         self._no_label = no_label
 
     def build(self):
-        return Center(children=[
-            Column(children=[
-                Text(self._text, size="large", align="center"),
-                Spacer(height=24),
-                Row(children=[
-                    Button("no", self._no_label, style="secondary"),
-                    Button("yes", self._yes_label, style="success"),
-                ], align="center", spacing=16),
-            ], align="center"),
-        ])
+        return Center(
+            children=[
+                Column(
+                    children=[
+                        Text(self._text, size="large", align="center"),
+                        Spacer(height=24),
+                        Row(
+                            children=[
+                                Button("no", self._no_label, style="secondary"),
+                                Button("yes", self._yes_label, style="success"),
+                            ],
+                            align="center",
+                            spacing=16,
+                        ),
+                    ],
+                    align="center",
+                ),
+            ]
+        )
 
     async def _dispatch_event(self, event: dict) -> None:
         await super()._dispatch_event(event)
@@ -672,29 +700,31 @@ class _QuickConfirmScreen(UIScreen[bool]):
             self.close(True)
 
 
-class _QuickChoiceScreen(UIScreen[Optional[str]]):
+class _QuickChoiceScreen(UIScreen[str | None]):
     """Choice selection screen."""
 
-    def __init__(self, prompt: str, options: List[str], title: str):
+    def __init__(self, prompt: str, options: list[str], title: str):
         super().__init__()
         self.title = title
         self._prompt = prompt
         self._options = options
 
     def build(self):
-        buttons = [
-            Button(f"opt_{i}", opt, style="primary")
-            for i, opt in enumerate(self._options)
-        ]
-        return Center(children=[
-            Column(children=[
-                Text(self._prompt, size="large", align="center"),
-                Spacer(height=16),
-                Column(children=buttons, spacing=8),
-                Spacer(height=16),
-                Button("cancel", "Cancel", style="secondary"),
-            ], align="center"),
-        ])
+        buttons = [Button(f"opt_{i}", opt, style="primary") for i, opt in enumerate(self._options)]
+        return Center(
+            children=[
+                Column(
+                    children=[
+                        Text(self._prompt, size="large", align="center"),
+                        Spacer(height=16),
+                        Column(children=buttons, spacing=8),
+                        Spacer(height=16),
+                        Button("cancel", "Cancel", style="secondary"),
+                    ],
+                    align="center",
+                ),
+            ]
+        )
 
     async def _dispatch_event(self, event: dict) -> None:
         await super()._dispatch_event(event)
@@ -717,13 +747,19 @@ class _QuickWaitButtonScreen(UIScreen[None]):
 
     def build(self):
         from .widgets import HintBox
-        return Center(children=[
-            Column(children=[
-                Text(self._text, size="large", align="center"),
-                Spacer(height=24),
-                HintBox("Press the button to continue", icon="touch_app"),
-            ], align="center"),
-        ])
+
+        return Center(
+            children=[
+                Column(
+                    children=[
+                        Text(self._text, size="large", align="center"),
+                        Spacer(height=24),
+                        HintBox("Press the button to continue", icon="touch_app"),
+                    ],
+                    align="center",
+                ),
+            ]
+        )
 
     async def _dispatch_event(self, event: dict) -> None:
         await super()._dispatch_event(event)

@@ -23,7 +23,7 @@ class DriveForwardBuilder(StepBuilder):
         self._until = None
         self._heading = None
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -35,21 +35,26 @@ class DriveForwardBuilder(StepBuilder):
         self._until = value
         return self
 
-    def heading(self, value: float):
+    def heading(self, value: float | None):
         self._heading = value
         return self
 
     def _build(self):
         kwargs = {}
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
-        kwargs['heading'] = self._heading
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
+        kwargs["heading"] = self._heading
         return DriveForward(**kwargs)
 
 
-@dsl(tags=['motion', 'drive'])
-def drive_forward(cm: float = None, speed: float = 1.0, until: StopCondition = None, heading: float = None):
+@dsl(tags=["motion", "drive"])
+def drive_forward(
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+    heading: float | None = None,
+):
     """
     Drive forward with distance or condition-based termination.
 
@@ -74,8 +79,8 @@ def drive_forward(cm: float = None, speed: float = 1.0, until: StopCondition = N
 
     Example::
 
-        drive_forward(25)                            # 25 cm, relative heading
-        drive_forward(25, heading=90)                # hold 90° absolute
+        drive_forward(25)  # 25 cm, relative heading
+        drive_forward(25, heading=90)  # hold 90° absolute
         drive_forward(speed=0.8).until(on_black(s))  # until sensor
     """
     b = DriveForwardBuilder()
@@ -96,7 +101,7 @@ class DriveBackwardBuilder(StepBuilder):
         self._until = None
         self._heading = None
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -108,21 +113,26 @@ class DriveBackwardBuilder(StepBuilder):
         self._until = value
         return self
 
-    def heading(self, value: float):
+    def heading(self, value: float | None):
         self._heading = value
         return self
 
     def _build(self):
         kwargs = {}
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
-        kwargs['heading'] = self._heading
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
+        kwargs["heading"] = self._heading
         return DriveBackward(**kwargs)
 
 
-@dsl(tags=['motion', 'drive'])
-def drive_backward(cm: float = None, speed: float = 1.0, until: StopCondition = None, heading: float = None):
+@dsl(tags=["motion", "drive"])
+def drive_backward(
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+    heading: float | None = None,
+):
     """
     Drive backward with distance or condition-based termination.
 
@@ -145,7 +155,7 @@ def drive_backward(cm: float = None, speed: float = 1.0, until: StopCondition = 
     Example::
 
         drive_backward(20)
-        drive_backward(20, heading=0)                # hold 0° absolute
+        drive_backward(20, heading=0)  # hold 0° absolute
         drive_backward(speed=0.5).until(on_white(s))
     """
     b = DriveBackwardBuilder()
@@ -166,7 +176,7 @@ class StrafeLeftBuilder(StepBuilder):
         self._until = None
         self._heading = None
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -178,21 +188,26 @@ class StrafeLeftBuilder(StepBuilder):
         self._until = value
         return self
 
-    def heading(self, value: float):
+    def heading(self, value: float | None):
         self._heading = value
         return self
 
     def _build(self):
         kwargs = {}
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
-        kwargs['heading'] = self._heading
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
+        kwargs["heading"] = self._heading
         return StrafeLeft(**kwargs)
 
 
-@dsl(tags=['motion', 'strafe'])
-def strafe_left(cm: float = None, speed: float = 1.0, until: StopCondition = None, heading: float = None):
+@dsl(tags=["motion", "strafe"])
+def strafe_left(
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+    heading: float | None = None,
+):
     """
     Strafe left with distance or condition-based termination.
 
@@ -214,7 +229,7 @@ def strafe_left(cm: float = None, speed: float = 1.0, until: StopCondition = Non
     Example::
 
         strafe_left(15)
-        strafe_left(15, heading=90)                  # hold 90° absolute
+        strafe_left(15, heading=90)  # hold 90° absolute
         strafe_left(speed=0.6).until(on_black(s))
     """
     b = StrafeLeftBuilder()
@@ -235,7 +250,7 @@ class StrafeRightBuilder(StepBuilder):
         self._until = None
         self._heading = None
 
-    def cm(self, value: float):
+    def cm(self, value: float | None):
         self._cm = value
         return self
 
@@ -247,21 +262,26 @@ class StrafeRightBuilder(StepBuilder):
         self._until = value
         return self
 
-    def heading(self, value: float):
+    def heading(self, value: float | None):
         self._heading = value
         return self
 
     def _build(self):
         kwargs = {}
-        kwargs['cm'] = self._cm
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
-        kwargs['heading'] = self._heading
+        kwargs["cm"] = self._cm
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
+        kwargs["heading"] = self._heading
         return StrafeRight(**kwargs)
 
 
-@dsl(tags=['motion', 'strafe'])
-def strafe_right(cm: float = None, speed: float = 1.0, until: StopCondition = None, heading: float = None):
+@dsl(tags=["motion", "strafe"])
+def strafe_right(
+    cm: float | None = None,
+    speed: float = 1.0,
+    until: StopCondition = None,
+    heading: float | None = None,
+):
     """
     Strafe right with distance or condition-based termination.
 
@@ -283,7 +303,7 @@ def strafe_right(cm: float = None, speed: float = 1.0, until: StopCondition = No
     Example::
 
         strafe_right(15)
-        strafe_right(15, heading=0)                  # hold 0° absolute
+        strafe_right(15, heading=0)  # hold 0° absolute
         strafe_right(speed=0.6).until(on_black(s))
     """
     b = StrafeRightBuilder()
@@ -294,4 +314,13 @@ def strafe_right(cm: float = None, speed: float = 1.0, until: StopCondition = No
     return b
 
 
-__all__ = ['DriveForwardBuilder', 'drive_forward', 'DriveBackwardBuilder', 'drive_backward', 'StrafeLeftBuilder', 'strafe_left', 'StrafeRightBuilder', 'strafe_right']
+__all__ = [
+    "DriveForwardBuilder",
+    "drive_forward",
+    "DriveBackwardBuilder",
+    "drive_backward",
+    "StrafeLeftBuilder",
+    "strafe_left",
+    "StrafeRightBuilder",
+    "strafe_right",
+]

@@ -1,5 +1,7 @@
 """Deadzone calibration module."""
 
+from __future__ import annotations
+
 from .step import CalibrateDeadzone, DeadzoneCalibrationResult
 from .step_dsl import calibrate_deadzone
 from .screens import (

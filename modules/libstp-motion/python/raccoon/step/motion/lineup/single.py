@@ -8,6 +8,9 @@ Then executes a corrective turn.
 The direction of the correction cannot be determined from a single crossing,
 so it must be provided by the caller.
 """
+
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from enum import Enum
@@ -15,11 +18,11 @@ from typing import TYPE_CHECKING
 
 from raccoon.foundation import ChassisVelocity
 from raccoon.sensor_ir import IRSensor
-from raccoon.step import Sequential, seq, defer
+from raccoon.step import Sequential, defer, seq
 
-from ..turn_dsl import turn_left, turn_right
 from ... import SimulationStep, SimulationStepDelta, dsl
 from ..motion_step import MotionStep
+from ..turn_dsl import turn_left, turn_right
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -27,6 +30,7 @@ if TYPE_CHECKING:
 
 class CorrectionSide(Enum):
     """Which direction to apply the angular correction."""
+
     LEFT = "left"
     RIGHT = "right"
 
@@ -84,8 +88,7 @@ class SingleSensorCrossing(MotionStep):
     def _generate_signature(self) -> str:
         direction = "forward" if self.config.forward_speed > 0 else "backward"
         return (
-            f"SingleSensorCrossing({direction}, "
-            f"line_width={self.config.line_width_cm:.1f}cm)"
+            f"SingleSensorCrossing({direction}, " f"line_width={self.config.line_width_cm:.1f}cm)"
         )
 
     def to_simulation_step(self) -> SimulationStep:
@@ -102,9 +105,7 @@ class SingleSensorCrossing(MotionStep):
         self._leading_edge_pos = 0.0
         self._trailing_edge_pos = 0.0
         robot.odometry.reset()
-        robot.drive.set_velocity(
-            ChassisVelocity(self.config.forward_speed, 0.0, 0.0)
-        )
+        robot.drive.set_velocity(ChassisVelocity(self.config.forward_speed, 0.0, 0.0))
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
         robot.odometry.update(dt)
@@ -113,27 +114,24 @@ class SingleSensorCrossing(MotionStep):
         current = robot.odometry.get_distance_from_origin().forward
         confidence = self.config.sensor.probabilityOfBlack()
 
-        if self._phase == 0:
+        if self._phase == 0 and confidence >= self.config.entry_threshold:
             # Searching for leading edge
-            if confidence >= self.config.entry_threshold:
-                self._leading_edge_pos = current
-                self._phase = 1
-                self.debug(
-                    f"Leading edge at {current * 100:.1f}cm "
-                    f"(confidence={confidence:.2f})"
-                )
+            self._leading_edge_pos = current
+            self._phase = 1
+            self.debug(f"Leading edge at {current * 100:.1f}cm (confidence={confidence:.2f})")
         elif self._phase == 1:
             # On the line, waiting for trailing edge
             if confidence <= self.config.exit_threshold:
                 self._trailing_edge_pos = current
-                self.apparent_width_m = abs(
-                    self._trailing_edge_pos - self._leading_edge_pos
-                )
+                self.apparent_width_m = abs(self._trailing_edge_pos - self._leading_edge_pos)
                 actual_width_m = self.config.line_width_cm / 100.0
 
                 # acos(actual / apparent) — clamp ratio to [0, 1] for safety
-                ratio = min(actual_width_m / self.apparent_width_m, 1.0) \
-                    if self.apparent_width_m > 0 else 1.0
+                ratio = (
+                    min(actual_width_m / self.apparent_width_m, 1.0)
+                    if self.apparent_width_m > 0
+                    else 1.0
+                )
                 self.crossing_angle_rad = math.acos(ratio)
 
                 self.debug(
@@ -251,7 +249,8 @@ def forward_single_lineup(
     Example::
 
         from raccoon.step.motion.lineup.single import (
-            forward_single_lineup, CorrectionSide,
+            forward_single_lineup,
+            CorrectionSide,
         )
 
         step = forward_single_lineup(
@@ -309,7 +308,8 @@ def backward_single_lineup(
     Example::
 
         from raccoon.step.motion.lineup.single import (
-            backward_single_lineup, CorrectionSide,
+            backward_single_lineup,
+            CorrectionSide,
         )
 
         step = backward_single_lineup(

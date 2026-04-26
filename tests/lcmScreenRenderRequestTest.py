@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import random
 
 import lcm
-
 from libstp_api import render_screen
+
 from python.libstp_api.exlcm import screen_render_t
 
 
@@ -23,13 +25,13 @@ lc = lcm.LCM()
 render = render_screen.RenderScreen()
 try:
     while True:
-        i = random.randint(1,100) <= 50
+        i = random.randint(1, 100) <= 50
 
         if i:
             print("Request Time")
-            if random.randint(1,3) == 2:
-                render.render_wait_for_light_screen({"Hallo" : "hallo"})
+            if random.randint(1, 3) == 2:
+                render.render_wait_for_light_screen({"Hallo": "hallo"})
             else:
-                render.render_wait_for_light_screen({"Hallo" : "hallo"})
+                render.render_wait_for_light_screen({"Hallo": "hallo"})
 except KeyboardInterrupt:
     print("Exiting...")

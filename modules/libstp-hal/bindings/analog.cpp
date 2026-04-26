@@ -1,6 +1,3 @@
-//
-// Created by tobias on 6/1/25.
-//
 #include <pybind11/pybind11.h>
 #include "hal/Analog.hpp"
 
@@ -8,9 +5,12 @@ namespace py = pybind11;
 
 void init_analog(const py::module& m)
 {
-    // Mirrors the thin C++ wrapper: constructor + raw read + public port field.
+    // Port is read-only at the binding level: mutating it from Python would
+    // desync the platform-side PortRegistry without rebinding the underlying
+    // hardware channel. Construct a new AnalogSensor instead.
     py::class_<libstp::hal::analog::AnalogSensor>(m, "AnalogSensor")
         .def(py::init<int>(), py::arg("port"))
         .def("read", &libstp::hal::analog::AnalogSensor::read)
-        .def_readwrite("port", &libstp::hal::analog::AnalogSensor::port);
+        .def_property_readonly("port",
+            [](const libstp::hal::analog::AnalogSensor& s) { return s.port; });
 }

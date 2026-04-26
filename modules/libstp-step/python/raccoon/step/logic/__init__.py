@@ -1,3 +1,4 @@
+from __future__ import annotations
 from .do_while import DoWhileActive
 from .do_while_dsl import do_while_active
 from .if_then import IfThen

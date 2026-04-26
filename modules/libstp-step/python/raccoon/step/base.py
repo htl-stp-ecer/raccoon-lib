@@ -1,22 +1,25 @@
+from __future__ import annotations
+
 import asyncio
+import contextlib
 import contextvars
 import time
 from abc import abstractmethod
-from typing import Any, Awaitable, Callable, List, Optional, TYPE_CHECKING
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
+
+from raccoon.class_name_logger import ClassNameLogger
+from raccoon.timing import StepTimingTracker
 
 from .model import SimulationStep, SimulationStepDelta
 from .resource import get_resource_manager
-from raccoon.class_name_logger import ClassNameLogger
-from raccoon.timing import StepTimingTracker
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
 StepAnomalyCallback = Callable[["Step", "GenericRobot"], Awaitable[Any]]
 
-_step_path: contextvars.ContextVar[List[str]] = contextvars.ContextVar(
-    "step_path", default=[]
-)
+_step_path: contextvars.ContextVar[list[str]] = contextvars.ContextVar("step_path", default=[])
 
 _in_background: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "_in_background", default=False
@@ -30,7 +33,7 @@ class Step(ClassNameLogger):
 
     def __init__(self) -> None:
         self._skip_timing: bool = False
-        self._anomaly_callback: Optional[StepAnomalyCallback] = None
+        self._anomaly_callback: StepAnomalyCallback | None = None
 
     def required_resources(self) -> frozenset[str]:
         """Return the hardware resources this step requires exclusive access to.
@@ -65,7 +68,7 @@ class Step(ClassNameLogger):
         return self
 
     @staticmethod
-    def _push_path(segment: str) -> contextvars.Token[List[str]]:
+    def _push_path(segment: str) -> contextvars.Token[list[str]]:
         path = _step_path.get()
         return _step_path.set([*path, segment])
 
@@ -85,8 +88,8 @@ class Step(ClassNameLogger):
         else:
             self.debug(f"Executing {self.__class__.__name__} step")
 
-        signature: Optional[str] = None
-        start_time: Optional[float] = None
+        signature: str | None = None
+        start_time: float | None = None
 
         tracker = StepTimingTracker.get_instance()
         track_timing = tracker.config.enabled and not self._skip_timing
@@ -95,7 +98,7 @@ class Step(ClassNameLogger):
             start_time = time.perf_counter()
 
         # Launch a live watchdog if there is a per-step anomaly callback.
-        watchdog_task: Optional[asyncio.Task[None]] = None
+        watchdog_task: asyncio.Task[None] | None = None
         if track_timing and self._anomaly_callback and signature is not None:
             upper = await tracker.get_upper_bound(signature)
             if upper is not None and start_time is not None:
@@ -112,9 +115,7 @@ class Step(ClassNameLogger):
 
             bg_mgr = get_background_manager(robot)
             if bg_mgr.active_count > 0:
-                await bg_mgr.preempt_conflicts(
-                    resources, self._generate_signature()
-                )
+                await bg_mgr.preempt_conflicts(resources, self._generate_signature())
 
         mgr = get_resource_manager(robot) if resources else None
         if mgr is not None:
@@ -132,17 +133,13 @@ class Step(ClassNameLogger):
             # cancel and, if caught, consume it — silently defeating the outer
             # cancellation (see shutdown-timer regression).
             current_task = asyncio.current_task()
-            outer_cancelling = (
-                current_task is not None and current_task.cancelling() > 0
-            )
+            outer_cancelling = current_task is not None and current_task.cancelling() > 0
 
             if watchdog_task is not None:
                 watchdog_task.cancel()
                 if not outer_cancelling:
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await watchdog_task
-                    except asyncio.CancelledError:
-                        pass
 
             elapsed = time.perf_counter() - step_start
             self.debug(f"Finished {self.__class__.__name__} step in {elapsed:.3f}s")
@@ -225,6 +222,7 @@ class Step(ClassNameLogger):
                 )
                 if len(durations) >= 2:
                     import statistics
+
                     mean_s = statistics.mean(durations)
                     stddev_s = statistics.stdev(durations)
                     return mean_s * 1000.0, stddev_s * 1000.0
@@ -232,7 +230,7 @@ class Step(ClassNameLogger):
 
             # Run in event loop if one exists, otherwise use default values
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
                 # Can't await in sync context, use defaults
             except RuntimeError:
                 # No running loop, can create one

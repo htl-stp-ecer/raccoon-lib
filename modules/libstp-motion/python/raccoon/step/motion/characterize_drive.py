@@ -10,10 +10,13 @@ direction signs while commanding raw open-loop power.
 Results are persisted to raccoon.project.yml under robot.motion_pid and applied
 in-memory.
 """
+
+from __future__ import annotations
+
 import asyncio
 import statistics
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar
 
 from raccoon.foundation import ChassisVelocity
 from raccoon.project_yaml import find_project_root, update_project_value
@@ -50,6 +53,7 @@ _AXIS_DIRECTION = {
 @dataclass
 class AxisResult:
     """Measured limits for a single axis."""
+
     max_velocity: float = 0.0
     acceleration: float = 0.0
     deceleration: float = 0.0
@@ -68,10 +72,7 @@ def _compute_velocities(samples: list[_Sample]) -> None:
         return
     # Seed from first finite difference so decel phase starts at actual velocity
     dt0 = samples[1].time - samples[0].time
-    if dt0 > 1e-6:
-        seed_vel = (samples[1].position - samples[0].position) / dt0
-    else:
-        seed_vel = 0.0
+    seed_vel = (samples[1].position - samples[0].position) / dt0 if dt0 > 1e-06 else 0.0
     samples[0].velocity = seed_vel
     prev_vel = seed_vel
     for i in range(1, len(samples)):
@@ -85,7 +86,7 @@ def _compute_velocities(samples: list[_Sample]) -> None:
         prev_vel = filtered
 
 
-def _find_plateau(samples: list[_Sample]) -> Optional[int]:
+def _find_plateau(samples: list[_Sample]) -> int | None:
     """Find the index where velocity plateaus. Returns None if no plateau."""
     if len(samples) < _PLATEAU_HOLD_CYCLES + 2:
         return None
@@ -163,8 +164,6 @@ def _analyze_decel(samples: list[_Sample]) -> float:
     return (high - low) / (t_low - t_high)
 
 
-
-
 @dsl_step(tags=["motion", "calibration", "characterize"])
 class CharacterizeDrive(Step):
     """Characterize the robot's physical drive limits at full motor power.
@@ -232,7 +231,7 @@ class CharacterizeDrive(Step):
 
     def __init__(
         self,
-        axes: list[str] = None,
+        axes: list[str] | None = None,
         trials: int = 3,
         power_percent: int = 100,
         accel_timeout: float = 3.0,
@@ -369,9 +368,7 @@ class CharacterizeDrive(Step):
 
         return samples
 
-    async def _run_single_trial(
-        self, robot: "GenericRobot", axis: str
-    ) -> AxisResult:
+    async def _run_single_trial(self, robot: "GenericRobot", axis: str) -> AxisResult:
         """Run one accel + decel trial for a single axis."""
         result = AxisResult()
 
@@ -381,9 +378,7 @@ class CharacterizeDrive(Step):
         robot.odometry.update(0.05)
 
         # Phase 1: Acceleration at full power
-        accel_samples = await self._record_accel_samples(
-            robot, axis, self.accel_timeout
-        )
+        accel_samples = await self._record_accel_samples(robot, axis, self.accel_timeout)
         self._stop_motors(robot)
 
         _compute_velocities(accel_samples)
@@ -395,9 +390,7 @@ class CharacterizeDrive(Step):
         # Find max velocity
         plateau_idx = _find_plateau(accel_samples)
         if plateau_idx is not None:
-            result.max_velocity = _analyze_max_velocity(
-                accel_samples, plateau_idx
-            )
+            result.max_velocity = _analyze_max_velocity(accel_samples, plateau_idx)
         else:
             # No plateau found — use 90th percentile instead of max to
             # reject noise spikes from finite-difference jitter.
@@ -437,9 +430,7 @@ class CharacterizeDrive(Step):
             await asyncio.sleep(0.01)
 
         # Cut power and record coast-down
-        decel_samples = await self._record_decel_samples(
-            robot, axis, self.decel_timeout
-        )
+        decel_samples = await self._record_decel_samples(robot, axis, self.decel_timeout)
         self._stop_motors(robot)
 
         _compute_velocities(decel_samples)
@@ -457,8 +448,7 @@ class CharacterizeDrive(Step):
 
         for trial_num in range(1, self.trials + 1):
             self.info(
-                f"  [{axis}] Trial {trial_num}/{self.trials} "
-                f"(power={self.power_percent}%)"
+                f"  [{axis}] Trial {trial_num}/{self.trials} " f"(power={self.power_percent}%)"
             )
             result = await self._run_single_trial(robot, axis)
             trial_results.append(result)
@@ -490,15 +480,14 @@ class CharacterizeDrive(Step):
             # Report spread
             vel_spread = max(r.max_velocity for r in valid) - min(r.max_velocity for r in valid)
             self.info(
-                f"  [{axis}] Median of {len(valid)} trials "
-                f"(vel spread={vel_spread:.4f} {unit})"
+                f"  [{axis}] Median of {len(valid)} trials " f"(vel spread={vel_spread:.4f} {unit})"
             )
 
         return final
 
     # Mapping from axis name to the AxisConstraints attribute name on
     # UnifiedMotionPidConfig (for in-memory and YAML persistence).
-    _AXIS_ATTR = {
+    _AXIS_ATTR: ClassVar[dict[str, str]] = {
         "forward": "linear",
         "lateral": "lateral",
         "angular": "angular",
@@ -517,16 +506,19 @@ class CharacterizeDrive(Step):
                 continue
             base = ("robot", "motion_pid", attr)
             if result.acceleration > 0:
-                update_project_value(project_root, [*base, "acceleration"],
-                                     round(result.acceleration, 4))
+                update_project_value(
+                    project_root, [*base, "acceleration"], round(result.acceleration, 4)
+                )
                 updated = True
             if result.deceleration > 0:
-                update_project_value(project_root, [*base, "deceleration"],
-                                     round(result.deceleration, 4))
+                update_project_value(
+                    project_root, [*base, "deceleration"], round(result.deceleration, 4)
+                )
                 updated = True
             if result.max_velocity > 0:
-                update_project_value(project_root, [*base, "max_velocity"],
-                                     round(result.max_velocity, 4))
+                update_project_value(
+                    project_root, [*base, "max_velocity"], round(result.max_velocity, 4)
+                )
                 updated = True
 
         return updated
@@ -555,8 +547,10 @@ class CharacterizeDrive(Step):
 
         self.info("=" * 60)
         self.info("  DRIVE CHARACTERIZATION (raw motor power)")
-        self.info(f"  Axes: {', '.join(self.axes)}, Trials: {self.trials}, "
-                  f"Power: {self.power_percent}%")
+        self.info(
+            f"  Axes: {', '.join(self.axes)}, Trials: {self.trials}, "
+            f"Power: {self.power_percent}%"
+        )
         self.info("=" * 60)
 
         for axis in self.axes:

@@ -10,6 +10,7 @@ persistent storage.  The base class takes care of:
 * Honouring ``--no-calibrate``: loading stored values instead of running the
   interactive flow.
 """
+
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -84,8 +85,7 @@ class CalibrateStep(UIStep, Generic[T]):
             if data is not None:
                 self._apply(robot, self._deserialize(data))
                 self.info(
-                    f"--no-calibrate: loaded stored "
-                    f"{self._store_section}/{self._store_set}",
+                    f"--no-calibrate: loaded stored " f"{self._store_section}/{self._store_set}",
                 )
                 return
             self.warn(

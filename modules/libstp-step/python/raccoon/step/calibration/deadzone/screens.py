@@ -5,28 +5,42 @@ These screens guide the user through finding the minimum motor power
 where the wheel starts turning.
 """
 
-from dataclasses import dataclass
-from typing import Optional
+from __future__ import annotations
 
+from dataclasses import dataclass
+
+from raccoon.ui.events import on_button_press, on_click
 from raccoon.ui.screen import UIScreen
 from raccoon.ui.widgets import (
-    Widget, Text, Icon, Button, Spacer, HintBox, StatusBadge,
-    Center, Row, Column, Card, ResultsTable, StatusIcon,
+    Button,
+    Card,
+    Center,
+    Column,
+    HintBox,
+    Icon,
+    ResultsTable,
+    Row,
+    Spacer,
+    StatusBadge,
+    StatusIcon,
+    Text,
+    Widget,
 )
-from raccoon.ui.events import on_click, on_button_press
 
 
 @dataclass
 class DeadzoneTestResult:
     """Result from the testing screen."""
+
     is_turning: bool
 
 
 @dataclass
 class DeadzoneConfirmResult:
     """Result from the confirmation screen."""
+
     confirmed: bool
-    retry_motor: Optional[str] = None  # Motor name to retry, if any
+    retry_motor: str | None = None  # Motor name to retry, if any
 
 
 class DeadzoneIntroScreen(UIScreen[None]):
@@ -56,27 +70,31 @@ class DeadzoneIntroScreen(UIScreen[None]):
     def build(self) -> Widget:
         direction_color = "green" if self.direction == "FORWARD" else "blue"
 
-        return Center(children=[
-            Icon("settings", size=48, color="cyan"),
-            Spacer(16),
-            Text(f"Motor: {self.motor_name}", size="title", bold=True),
-            Text(f"Port {self.motor_port}", size="medium", muted=True),
-            Spacer(24),
-            StatusBadge(self.direction, color=direction_color),
-            Spacer(24),
-            Card(children=[
-                Text("Watch the wheel carefully!", size="medium", align="center"),
-                Spacer(8),
-                Text(
-                    f"Testing power from {self.start_percent}% to {self.max_percent}%",
-                    size="small",
-                    muted=True,
-                    align="center"
+        return Center(
+            children=[
+                Icon("settings", size=48, color="cyan"),
+                Spacer(16),
+                Text(f"Motor: {self.motor_name}", size="title", bold=True),
+                Text(f"Port {self.motor_port}", size="medium", muted=True),
+                Spacer(24),
+                StatusBadge(self.direction, color=direction_color),
+                Spacer(24),
+                Card(
+                    children=[
+                        Text("Watch the wheel carefully!", size="medium", align="center"),
+                        Spacer(8),
+                        Text(
+                            f"Testing power from {self.start_percent}% to {self.max_percent}%",
+                            size="small",
+                            muted=True,
+                            align="center",
+                        ),
+                    ]
                 ),
-            ]),
-            Spacer(32),
-            HintBox("Press button to start testing", icon="touch_app"),
-        ])
+                Spacer(32),
+                HintBox("Press button to start testing", icon="touch_app"),
+            ]
+        )
 
     @on_button_press()
     async def on_press(self):
@@ -111,36 +129,44 @@ class DeadzoneTestingScreen(UIScreen[DeadzoneTestResult]):
     def build(self) -> Widget:
         direction_color = "green" if self.direction == "FORWARD" else "blue"
 
-        return Center(children=[
-            Row(children=[
-                StatusBadge(self.direction, color=direction_color),
-                Spacer(16),
-                Text(f"{self.motor_name}", size="medium", muted=True),
-            ], align="center"),
-            Spacer(24),
-            Text(f"{self.current_percent}%", size="title", bold=True, color="cyan"),
-            Spacer(8),
-            Text(f"of {self.max_percent}% max", size="small", muted=True),
-            Spacer(32),
-            Text("Is the wheel turning?", size="large", align="center"),
-            Spacer(24),
-            Row(children=[
-                Button(
-                    "not_turning",
-                    "Not Turning",
-                    style="secondary",
-                    icon="close",
+        return Center(
+            children=[
+                Row(
+                    children=[
+                        StatusBadge(self.direction, color=direction_color),
+                        Spacer(16),
+                        Text(f"{self.motor_name}", size="medium", muted=True),
+                    ],
+                    align="center",
                 ),
-                Button(
-                    "turning",
-                    "It's Turning!",
-                    style="success",
-                    icon="check",
+                Spacer(24),
+                Text(f"{self.current_percent}%", size="title", bold=True, color="cyan"),
+                Spacer(8),
+                Text(f"of {self.max_percent}% max", size="small", muted=True),
+                Spacer(32),
+                Text("Is the wheel turning?", size="large", align="center"),
+                Spacer(24),
+                Row(
+                    children=[
+                        Button(
+                            "not_turning",
+                            "Not Turning",
+                            style="secondary",
+                            icon="close",
+                        ),
+                        Button(
+                            "turning",
+                            "It's Turning!",
+                            style="success",
+                            icon="check",
+                        ),
+                    ],
+                    spacing=24,
                 ),
-            ], spacing=24),
-            Spacer(32),
-            HintBox("Watch the wheel carefully", icon="visibility", style="normal"),
-        ])
+                Spacer(32),
+                HintBox("Watch the wheel carefully", icon="visibility", style="normal"),
+            ]
+        )
 
     @on_click("turning")
     async def on_turning(self):
@@ -201,31 +227,46 @@ class DeadzoneResultsScreen(UIScreen[DeadzoneConfirmResult]):
         status_color = "green" if self.is_symmetric else "orange"
         status_text = "Good calibration" if self.is_symmetric else "Asymmetric friction"
 
-        return Center(children=[
-            Row(children=[
-                StatusIcon(icon=status_icon, color=status_color),
-                Spacer(12),
-                Column(children=[
-                    Text(self.motor_name, size="title", bold=True),
-                    Text(f"Port {self.motor_port}", size="small", muted=True),
-                ], spacing=4),
-            ], align="center"),
-            Spacer(16),
-            Text(status_text, size="medium", color=status_color),
-            Spacer(24),
-            Card(children=[
-                ResultsTable(rows=[
-                    ("Forward Start", f"{self.forward_percent}%", "green"),
-                    ("Reverse Start", f"{self.reverse_percent}%", "blue"),
-                    ("ff.kS", f"{self.kS:.4f}", "cyan"),
-                ]),
-            ]),
-            Spacer(32),
-            Row(children=[
-                Button("retry", "Retry Motor", style="secondary", icon="refresh"),
-                Button("confirm", "Confirm", style="success", icon="check"),
-            ], spacing=16),
-        ])
+        return Center(
+            children=[
+                Row(
+                    children=[
+                        StatusIcon(icon=status_icon, color=status_color),
+                        Spacer(12),
+                        Column(
+                            children=[
+                                Text(self.motor_name, size="title", bold=True),
+                                Text(f"Port {self.motor_port}", size="small", muted=True),
+                            ],
+                            spacing=4,
+                        ),
+                    ],
+                    align="center",
+                ),
+                Spacer(16),
+                Text(status_text, size="medium", color=status_color),
+                Spacer(24),
+                Card(
+                    children=[
+                        ResultsTable(
+                            rows=[
+                                ("Forward Start", f"{self.forward_percent}%", "green"),
+                                ("Reverse Start", f"{self.reverse_percent}%", "blue"),
+                                ("ff.kS", f"{self.kS:.4f}", "cyan"),
+                            ]
+                        ),
+                    ]
+                ),
+                Spacer(32),
+                Row(
+                    children=[
+                        Button("retry", "Retry Motor", style="secondary", icon="refresh"),
+                        Button("confirm", "Confirm", style="success", icon="check"),
+                    ],
+                    spacing=16,
+                ),
+            ]
+        )
 
     @on_click("confirm")
     async def on_confirm(self):
@@ -257,33 +298,44 @@ class DeadzoneSummaryScreen(UIScreen[bool]):
     def build(self) -> Widget:
         rows = []
         for r in self.results:
-            rows.append((
-                f"{r['motor_name']} (port {r['port']})",
-                f"F:{r['forward']}% R:{r['reverse']}%",
-                None,
-            ))
-            rows.append((
-                "",
-                f"ff.kS = {r['kS']:.4f}",
-                "cyan",
-            ))
+            rows.append(
+                (
+                    f"{r['motor_name']} (port {r['port']})",
+                    f"F:{r['forward']}% R:{r['reverse']}%",
+                    None,
+                )
+            )
+            rows.append(
+                (
+                    "",
+                    f"ff.kS = {r['kS']:.4f}",
+                    "cyan",
+                )
+            )
 
-        return Center(children=[
-            Icon("check_circle", size=48, color="green"),
-            Spacer(16),
-            Text("Static Friction Calibration Complete", size="title", bold=True),
-            Spacer(8),
-            Text(f"{len(self.results)} motor(s) calibrated", size="medium", muted=True),
-            Spacer(24),
-            Card(children=[
-                ResultsTable(rows=rows),
-            ]),
-            Spacer(32),
-            Row(children=[
-                Button("cancel", "Cancel", style="secondary"),
-                Button("apply", "Apply All", style="success", icon="save"),
-            ], spacing=16),
-        ])
+        return Center(
+            children=[
+                Icon("check_circle", size=48, color="green"),
+                Spacer(16),
+                Text("Static Friction Calibration Complete", size="title", bold=True),
+                Spacer(8),
+                Text(f"{len(self.results)} motor(s) calibrated", size="medium", muted=True),
+                Spacer(24),
+                Card(
+                    children=[
+                        ResultsTable(rows=rows),
+                    ]
+                ),
+                Spacer(32),
+                Row(
+                    children=[
+                        Button("cancel", "Cancel", style="secondary"),
+                        Button("apply", "Apply All", style="success", icon="save"),
+                    ],
+                    spacing=16,
+                ),
+            ]
+        )
 
     @on_click("apply")
     async def on_apply(self):

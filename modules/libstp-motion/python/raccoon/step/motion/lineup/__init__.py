@@ -1,3 +1,4 @@
+from __future__ import annotations
 from .forward import (
     SurfaceColor,
     lineup,

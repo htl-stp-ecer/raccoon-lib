@@ -4,19 +4,18 @@ Tests the algebraic merge pass, corner-cut pass, spline waypoint
 computation, and construction-time error handling.  No simulator or
 C++ runtime is required beyond the raccoon package being installed.
 """
+
 from __future__ import annotations
 
+import importlib.util
 import math
 
 import pytest
 
 
 def _libstp_available() -> bool:
-    try:
-        import raccoon  # noqa: F401
-        return True
-    except ImportError:
-        return False
+    """Check raccoon availability without importing the module."""
+    return importlib.util.find_spec("raccoon") is not None
 
 
 requires_libstp = pytest.mark.skipif(
@@ -29,15 +28,8 @@ requires_libstp = pytest.mark.skipif(
 # Imports — deferred behind requires_libstp so collection doesn't fail
 # ---------------------------------------------------------------------------
 
+
 def _imports():
-    from raccoon.step.motion.smooth_path import (
-        _Segment, _SideAction,
-        _can_merge, _merge_two, _pass_merge,
-        _try_corner_arc, _pass_corner_cut,
-        _segments_to_spline_waypoints, _build_spline_step,
-        _optimize_nodes,
-    )
-    from raccoon.motion import LinearAxis
     return locals()
 
 
@@ -45,9 +37,11 @@ def _imports():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fwd(distance_m: float, speed: float = 1.0, condition=None) -> "_Segment":
-    from raccoon.step.motion.smooth_path import _Segment
     from raccoon.motion import LinearAxis
+    from raccoon.step.motion.smooth_path import _Segment
+
     return _Segment(
         kind="linear",
         axis=LinearAxis.Forward,
@@ -60,8 +54,9 @@ def _fwd(distance_m: float, speed: float = 1.0, condition=None) -> "_Segment":
 
 
 def _lat(distance_m: float, speed: float = 1.0) -> "_Segment":
-    from raccoon.step.motion.smooth_path import _Segment
     from raccoon.motion import LinearAxis
+    from raccoon.step.motion.smooth_path import _Segment
+
     return _Segment(
         kind="linear",
         axis=LinearAxis.Lateral,
@@ -73,6 +68,7 @@ def _lat(distance_m: float, speed: float = 1.0) -> "_Segment":
 
 def _turn(deg: float, speed: float = 1.0) -> "_Segment":
     from raccoon.step.motion.smooth_path import _Segment
+
     rad = math.radians(deg)
     return _Segment(
         kind="turn",
@@ -84,12 +80,14 @@ def _turn(deg: float, speed: float = 1.0) -> "_Segment":
 
 def _side() -> "_SideAction":
     from raccoon.step.motion.smooth_path import _SideAction
+
     return _SideAction(step=None, is_background=False)
 
 
 # ===========================================================================
 # Merge pass
 # ===========================================================================
+
 
 class TestPassMerge:
     @requires_libstp
@@ -158,13 +156,16 @@ class TestPassMerge:
     @requires_libstp
     def test_heading_mismatch_not_merged(self):
         """Two forward drives with different heading targets must not merge."""
-        from raccoon.step.motion.smooth_path import _Segment
         from raccoon.motion import LinearAxis
+        from raccoon.step.motion.smooth_path import _Segment
+
         imp = _imports()
-        seg_a = _Segment(kind="linear", axis=LinearAxis.Forward, sign=1.0,
-                         distance_m=0.3, heading_deg=0.0)
-        seg_b = _Segment(kind="linear", axis=LinearAxis.Forward, sign=1.0,
-                         distance_m=0.2, heading_deg=10.0)
+        seg_a = _Segment(
+            kind="linear", axis=LinearAxis.Forward, sign=1.0, distance_m=0.3, heading_deg=0.0
+        )
+        seg_b = _Segment(
+            kind="linear", axis=LinearAxis.Forward, sign=1.0, distance_m=0.2, heading_deg=10.0
+        )
         result = imp["_pass_merge"]([seg_a, seg_b])
         assert len(result) == 2
 
@@ -172,6 +173,7 @@ class TestPassMerge:
 # ===========================================================================
 # Corner-cut pass
 # ===========================================================================
+
 
 class TestCornerCut:
     @requires_libstp
@@ -249,15 +251,13 @@ class TestCornerCut:
         # the side action breaks the three-consecutive-segment check.
         assert any(isinstance(n, imp["_SideAction"]) for n in result)
         # No arc should appear since the triple was interrupted
-        assert not any(
-            isinstance(n, imp["_Segment"]) and n.kind == "arc"
-            for n in result
-        )
+        assert not any(isinstance(n, imp["_Segment"]) and n.kind == "arc" for n in result)
 
 
 # ===========================================================================
 # Spline waypoint computation
 # ===========================================================================
+
 
 class TestSplineWaypoints:
     @requires_libstp
@@ -311,7 +311,7 @@ class TestSplineWaypoints:
         wps = imp["_segments_to_spline_waypoints"]([_fwd(0.5), _turn(180), _fwd(0.3)])
         assert len(wps) == 2
         fwd_cm, left_cm = wps[1]
-        assert abs(fwd_cm - 20.0) < 1e-4    # 50 - 30
+        assert abs(fwd_cm - 20.0) < 1e-4  # 50 - 30
         assert abs(left_cm) < 1e-4
 
 
@@ -319,11 +319,12 @@ class TestSplineWaypoints:
 # Construction-time validation via smooth_path()
 # ===========================================================================
 
+
 class TestSmoothPathConstruction:
     @requires_libstp
     def test_optimize_merges_in_nodes(self):
-        from raccoon.step.motion.smooth_path import _Segment, smooth_path
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import _Segment, smooth_path
 
         step = smooth_path(drive_forward(20), drive_forward(30), optimize=True)
         seg_nodes = [n for n in step._nodes if isinstance(n, _Segment)]
@@ -332,12 +333,14 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_corner_cut_inserts_arc(self):
-        from raccoon.step.motion.smooth_path import _Segment, smooth_path
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import _Segment, smooth_path
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(
-            drive_forward(50), turn_right(90), drive_forward(40),
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(40),
             corner_cut_cm=5.0,
         )
         seg_nodes = [n for n in step._nodes if isinstance(n, _Segment)]
@@ -348,22 +351,30 @@ class TestSmoothPathConstruction:
     @requires_libstp
     def test_side_action_preserved_with_optimize(self):
         """A background() between two drives is kept; the drives are NOT merged."""
-        from raccoon.step.motion.smooth_path import _Segment, _SideAction, smooth_path
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.logic.background import background
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import _Segment, _SideAction, smooth_path
 
         class _NullStep:
-            def required_resources(self): return frozenset()
-            def collected_resources(self): return frozenset()
+            def required_resources(self):
+                return frozenset()
+
+            def collected_resources(self):
+                return frozenset()
 
         # We need a real non-drive step to pass to background().
         # Use the servo stub approach via dynamic class.
         from raccoon.step.base import Step
 
         class _NullNonDrive(Step):
-            def required_resources(self): return frozenset({"servo:0"})
-            def _generate_signature(self): return "Null()"
-            async def _execute_step(self, robot): pass
+            def required_resources(self):
+                return frozenset({"servo:0"})
+
+            def _generate_signature(self):
+                return "Null()"
+
+            async def _execute_step(self, robot):
+                pass
 
         step = smooth_path(
             drive_forward(20),
@@ -378,9 +389,9 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_spline_true_stores_spline_step(self):
+        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.spline_path import SplinePath
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
@@ -390,8 +401,8 @@ class TestSmoothPathConstruction:
     @requires_libstp
     def test_spline_waypoints_correct(self):
         """Check that spline waypoints match hand-computed expected values."""
-        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
@@ -406,33 +417,39 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_spline_and_corner_cut_mutually_exclusive(self):
-        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.turn_dsl import turn_right
 
         with pytest.raises(ValueError, match="mutually exclusive"):
             smooth_path(
-                drive_forward(50), turn_right(90), drive_forward(30),
-                spline=True, corner_cut_cm=5.0,
+                drive_forward(50),
+                turn_right(90),
+                drive_forward(30),
+                spline=True,
+                corner_cut_cm=5.0,
             )
 
     @requires_libstp
     def test_spline_requires_two_linears(self):
-        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
 
         with pytest.raises(ValueError, match="at least 2 linear"):
             smooth_path(drive_forward(50), spline=True)
 
     @requires_libstp
     def test_spline_rejects_condition_based(self):
-        from raccoon.step.motion.smooth_path import smooth_path
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.condition import Condition
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
 
         class _AlwaysFalse(Condition):
-            def start(self, robot): pass
-            def check(self, robot) -> bool: return False
+            def start(self, robot):
+                pass
+
+            def check(self, robot) -> bool:
+                return False
 
         with pytest.raises(ValueError, match="condition-based"):
             smooth_path(
@@ -443,15 +460,20 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_spline_rejects_side_action(self):
-        from raccoon.step.motion.smooth_path import smooth_path
-        from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.logic.background import background
         from raccoon.step.base import Step
+        from raccoon.step.logic.background import background
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
 
         class _NullNonDrive(Step):
-            def required_resources(self): return frozenset({"servo:0"})
-            def _generate_signature(self): return "Null()"
-            async def _execute_step(self, robot): pass
+            def required_resources(self):
+                return frozenset({"servo:0"})
+
+            def _generate_signature(self):
+                return "Null()"
+
+            async def _execute_step(self, robot):
+                pass
 
         with pytest.raises(ValueError, match="side actions"):
             smooth_path(
@@ -463,9 +485,9 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_spline_rejects_arc_segments(self):
-        from raccoon.step.motion.smooth_path import smooth_path
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.arc import DriveArcRight
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
 
         with pytest.raises(ValueError, match="arc segments"):
             smooth_path(
@@ -477,19 +499,27 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_signature_reflects_flags(self):
-        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.turn_dsl import turn_right
 
-        sig_opt = smooth_path(drive_forward(30), drive_forward(20), optimize=True)._generate_signature()
+        sig_opt = smooth_path(
+            drive_forward(30), drive_forward(20), optimize=True
+        )._generate_signature()
         assert "opt" in sig_opt
 
         sig_cut = smooth_path(
-            drive_forward(50), turn_right(90), drive_forward(40), corner_cut_cm=5.0,
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(40),
+            corner_cut_cm=5.0,
         )._generate_signature()
         assert "cut=5cm" in sig_cut
 
         sig_spline = smooth_path(
-            drive_forward(50), turn_right(90), drive_forward(40), spline=True,
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(40),
+            spline=True,
         )._generate_signature()
         assert "spline" in sig_spline

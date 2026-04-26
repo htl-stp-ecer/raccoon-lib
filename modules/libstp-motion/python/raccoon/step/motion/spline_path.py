@@ -1,11 +1,13 @@
 """Spline path motion step — smooth curved path through waypoints."""
 
+from __future__ import annotations
+
 import math
 from typing import TYPE_CHECKING
 
 from raccoon.motion import SplineMotion, SplineMotionConfig
 
-from .. import Step, dsl
+from .. import dsl
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -31,20 +33,23 @@ class SplinePath(MotionStep):
     ) -> None:
         super().__init__()
         if len(waypoints) < 2:
-            raise ValueError("spline() requires at least 2 waypoints")
+            msg = "spline() requires at least 2 waypoints"
+            raise ValueError(msg)
 
         first_len = len(waypoints[0])
         if first_len not in (2, 3):
-            raise ValueError(
+            msg = (
                 f"Waypoints must be 2-tuples (fwd, left) or "
                 f"3-tuples (fwd, left, heading_deg), got {first_len}-tuple"
             )
+            raise ValueError(msg)
         for i, wp in enumerate(waypoints):
             if len(wp) != first_len:
-                raise ValueError(
+                msg = (
                     f"All waypoints must have the same length; "
                     f"waypoint 0 has {first_len} elements but waypoint {i} has {len(wp)}"
                 )
+                raise ValueError(msg)
 
         self._waypoints = waypoints
         self._speed = speed
@@ -55,7 +60,8 @@ class SplinePath(MotionStep):
 
     def _generate_signature(self) -> str:
         pts = ", ".join(
-            f"({wp[0]:.1f}, {wp[1]:.1f})" if len(wp) == 2
+            f"({wp[0]:.1f}, {wp[1]:.1f})"
+            if len(wp) == 2
             else f"({wp[0]:.1f}, {wp[1]:.1f}, {wp[2]:.1f}°)"
             for wp in self._waypoints
         )
@@ -63,23 +69,19 @@ class SplinePath(MotionStep):
 
     def on_start(self, robot: "GenericRobot") -> None:
         if self._has_headings and not robot.drive.supports_lateral_motion():
-            raise ValueError(
+            msg = (
                 "Explicit headings in spline() require an omni drivetrain "
                 "(robot.drive.supports_lateral_motion() is False)"
             )
+            raise ValueError(msg)
 
         config = SplineMotionConfig()
 
         # Convert cm → meters; negate lateral (left_cm → right_m for odometry convention)
-        config.waypoints_m = [
-            (wp[0] / 100.0, -wp[1] / 100.0)
-            for wp in self._waypoints
-        ]
+        config.waypoints_m = [(wp[0] / 100.0, -wp[1] / 100.0) for wp in self._waypoints]
 
         if self._has_headings:
-            config.headings_rad = [
-                math.radians(wp[2]) for wp in self._waypoints
-            ]
+            config.headings_rad = [math.radians(wp[2]) for wp in self._waypoints]
 
         config.speed_scale = self._speed
         config.use_absolute_heading = self._absolute_heading
@@ -91,16 +93,22 @@ class SplinePath(MotionStep):
                 # the C++ addition of initial_absolute_heading_rad_ produces
                 # the correct absolute target at the end of the path.
                 from raccoon.robot.heading_reference import HeadingReferenceService
+
                 ref_svc = robot.get_service(HeadingReferenceService)
                 sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
-                abs_target_rad = ref_svc._reference_rad + sign * math.radians(self._final_heading_deg)
+                abs_target_rad = ref_svc._reference_rad + sign * math.radians(
+                    self._final_heading_deg
+                )
                 current_abs_rad = robot.odometry.get_absolute_heading()
                 config.final_heading_rad = abs_target_rad - current_abs_rad
             else:
                 config.final_heading_rad = math.radians(self._final_heading_deg)
 
         self._motion = SplineMotion(
-            robot.drive, robot.odometry, robot.motion_pid_config, config,
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            config,
         )
         self._motion.start()
 
@@ -204,5 +212,6 @@ def spline(
         spline((30, 0), (50, 20), absolute_heading=True, final_heading=0)
     """
     if len(waypoints) < 2:
-        raise ValueError("spline() requires at least 2 waypoints")
+        msg = "spline() requires at least 2 waypoints"
+        raise ValueError(msg)
     return SplinePath(list(waypoints), speed, absolute_heading, final_heading)

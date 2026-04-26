@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import runtime_checkable, Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -15,13 +17,15 @@ class StepProtocol(Protocol):
 
     def collected_resources(self) -> frozenset[str]: ...
 
+
 @dataclass
 class SimulationStepDelta:
     """Estimated pose change caused by a step in simulation space."""
 
-    forward: float # in meters
-    strafe: float # in meters
-    angular: float # in radians
+    forward: float  # in meters
+    strafe: float  # in meters
+    angular: float  # in radians
+
 
 @dataclass
 class SimulationStep:

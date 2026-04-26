@@ -26,31 +26,32 @@ Step classes:
     AutoTuneVelocity     - phase 2 only
     AutoTuneMotion       - phase 3 only
 """
+
+from __future__ import annotations
+
 import asyncio
 import csv
 import math
-import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from raccoon.project_yaml import find_project_root, update_project_value
-
+from raccoon.drive import (
+    AxisVelocityControlConfig,
+)
 from raccoon.foundation import (
     ChassisVelocity,
     Feedforward,
     PidGains,
 )
-from raccoon.drive import (
-    AxisVelocityControlConfig,
-    ChassisVelocityControlConfig,
-)
 from raccoon.motion import (
+    LinearAxis,
     LinearMotion,
     LinearMotionConfig,
-    LinearAxis,
-    TurnMotion,
     TurnConfig,
+    TurnMotion,
 )
+from raccoon.project_yaml import find_project_root, update_project_value
 
 from .. import Step
 from ..annotation import dsl_step
@@ -76,7 +77,7 @@ _REGRESSION_HALF_WINDOW = 3
 
 # CHR set-point-follow scaling (reduced because kV=1.0 FF handles steady-state)
 _CHR_KP_SCALE = 0.3
-_CHR_KI_SCALE = 0.6   # ki = scale * kp / Tg  (slow integral to remove steady-state error)
+_CHR_KI_SCALE = 0.6  # ki = scale * kp / Tg  (slow integral to remove steady-state error)
 _CHR_KD_SCALE = 0.15
 
 # Coordinate descent
@@ -119,18 +120,21 @@ _MOTION_WATCH_SPEED_SCALES = (0.5, 0.3)
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PlantParams:
     """Identified plant parameters from step response."""
-    Ks: float = 0.0   # static gain (output / input at steady state)
-    Tu: float = 0.0   # dead time (s)
-    Tg: float = 0.0   # time constant (s)
-    method: str = ""   # "inflection" or "rise_time"
+
+    Ks: float = 0.0  # static gain (output / input at steady state)
+    Tu: float = 0.0  # dead time (s)
+    Tg: float = 0.0  # time constant (s)
+    method: str = ""  # "inflection" or "rise_time"
 
 
 @dataclass
 class StepResponseData:
     """Raw step response recording."""
+
     times: list[float] = field(default_factory=list)
     commanded: list[float] = field(default_factory=list)
     measured: list[float] = field(default_factory=list)
@@ -139,6 +143,7 @@ class StepResponseData:
 @dataclass
 class VelocityTuneResult:
     """Result of velocity controller tuning for one axis."""
+
     axis: str = ""
     plant: PlantParams = field(default_factory=PlantParams)
     pid: PidGains = field(default_factory=PidGains)
@@ -151,6 +156,7 @@ class VelocityTuneResult:
 @dataclass
 class MotionTuneResult:
     """Result of motion controller tuning for one parameter set."""
+
     param_name: str = ""  # "distance" or "heading"
     initial_kp: float = 0.0
     initial_kd: float = 0.0
@@ -164,6 +170,7 @@ class MotionTuneResult:
 # ---------------------------------------------------------------------------
 # Plant identification (inflection tangent method)
 # ---------------------------------------------------------------------------
+
 
 def _local_regression_derivatives(
     times: list[float], values: list[float], idx: int, half_w: int
@@ -247,7 +254,7 @@ def _local_regression_derivatives(
 
 def _identify_plant_inflection(
     times: list[float], measured: list[float], command: float
-) -> Optional[PlantParams]:
+) -> PlantParams | None:
     """
     Inflection tangent method: find where second derivative changes sign,
     draw tangent at that point, extract Tu and Tg from x-intercepts.
@@ -262,9 +269,7 @@ def _identify_plant_inflection(
     indices: list[int] = []
 
     for i in range(_REGRESSION_HALF_WINDOW, n - _REGRESSION_HALF_WINDOW):
-        d1, d2 = _local_regression_derivatives(
-            times, measured, i, _REGRESSION_HALF_WINDOW
-        )
+        d1, d2 = _local_regression_derivatives(times, measured, i, _REGRESSION_HALF_WINDOW)
         derivs_1.append(d1)
         derivs_2.append(d2)
         indices.append(i)
@@ -277,12 +282,11 @@ def _identify_plant_inflection(
     inflection_pos = None
     max_d1 = 0.0
     for j in range(1, len(derivs_2)):
-        if derivs_2[j - 1] * derivs_2[j] < 0:
-            # Pick the side with larger |d1| (steepest slope)
-            if abs(derivs_1[j]) > max_d1:
-                max_d1 = abs(derivs_1[j])
-                inflection_idx = j
-                inflection_pos = indices[j]
+        # Sign change in d2 *and* steeper |d1| than any previous candidate.
+        if derivs_2[j - 1] * derivs_2[j] < 0 and abs(derivs_1[j]) > max_d1:
+            max_d1 = abs(derivs_1[j])
+            inflection_idx = j
+            inflection_pos = indices[j]
 
     if inflection_idx is None or inflection_pos is None:
         return None
@@ -308,7 +312,7 @@ def _identify_plant_inflection(
     t_ss = t_infl + (y_ss - y_infl) / slope
 
     Tu = max(t_zero - times[0], 0.001)  # dead time
-    Tg = max(t_ss - t_zero, 0.001)      # time constant
+    Tg = max(t_ss - t_zero, 0.001)  # time constant
     Ks = y_ss / command if abs(command) > 1e-10 else 0.0
 
     if Tu <= 0 or Tg <= 0 or Ks <= 0:
@@ -372,9 +376,7 @@ def _compute_chr_gains(plant: PlantParams) -> PidGains:
     return PidGains(kp, ki, kd)
 
 
-def _compute_ise(
-    times: list[float], commanded: list[float], measured: list[float]
-) -> float:
+def _compute_ise(times: list[float], commanded: list[float], measured: list[float]) -> float:
     """Integral of squared error (trapezoidal integration)."""
     if len(times) < 2:
         return float("inf")
@@ -390,6 +392,7 @@ def _compute_ise(
 # ---------------------------------------------------------------------------
 # Step response recording
 # ---------------------------------------------------------------------------
+
 
 async def _run_step_response(
     robot: "GenericRobot",
@@ -414,7 +417,8 @@ async def _run_step_response(
     elif axis == "wz":
         vel = ChassisVelocity(0.0, 0.0, command)
     else:
-        raise ValueError(f"Unknown velocity axis: {axis}")
+        msg = f"Unknown velocity axis: {axis}"
+        raise ValueError(msg)
 
     robot.drive.set_velocity(vel)
     loop = asyncio.get_event_loop()
@@ -461,26 +465,29 @@ async def _run_step_response(
 # CSV output helpers
 # ---------------------------------------------------------------------------
 
-def _write_step_csv(
-    path: str, data: StepResponseData, label: str = ""
-) -> None:
+
+def _write_step_csv(path: str | Path, data: StepResponseData, label: str = "") -> None:
     """Write step response data to CSV."""
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", newline="") as f:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["time_s", "commanded", "measured", "label"])
         for i in range(len(data.times)):
-            writer.writerow([
-                f"{data.times[i]:.4f}",
-                f"{data.commanded[i]:.4f}",
-                f"{data.measured[i]:.4f}",
-                label,
-            ])
+            writer.writerow(
+                [
+                    f"{data.times[i]:.4f}",
+                    f"{data.commanded[i]:.4f}",
+                    f"{data.measured[i]:.4f}",
+                    label,
+                ]
+            )
 
 
 # ---------------------------------------------------------------------------
 # YAML persistence (follows characterize_drive.py pattern)
 # ---------------------------------------------------------------------------
+
 
 def _persist_velocity_config(
     results: dict[str, VelocityTuneResult],
@@ -495,16 +502,24 @@ def _persist_velocity_config(
         if not result.accepted:
             continue
         base = ["robot", "drive", "vel_config", axis_name]
-        update_project_value(project_root, [*base, "pid"], {
-            "kp": round(result.pid.kp, 6),
-            "ki": round(result.pid.ki, 6),
-            "kd": round(result.pid.kd, 6),
-        })
-        update_project_value(project_root, [*base, "ff"], {
-            "kS": round(result.ff.kS, 6),
-            "kV": round(result.ff.kV, 6),
-            "kA": round(result.ff.kA, 6),
-        })
+        update_project_value(
+            project_root,
+            [*base, "pid"],
+            {
+                "kp": round(result.pid.kp, 6),
+                "ki": round(result.pid.ki, 6),
+                "kd": round(result.pid.kd, 6),
+            },
+        )
+        update_project_value(
+            project_root,
+            [*base, "ff"],
+            {
+                "kS": round(result.ff.kS, 6),
+                "kV": round(result.ff.kV, 6),
+                "kA": round(result.ff.kA, 6),
+            },
+        )
         updated = True
 
     return updated
@@ -523,10 +538,8 @@ def _persist_motion_config(
         # "lateral" shares the distance PID
         yaml_key = "distance" if param_name == "lateral" else param_name
         base = ["robot", "motion_pid", yaml_key]
-        update_project_value(project_root, [*base, "kp"],
-                             round(result.final_kp, 4))
-        update_project_value(project_root, [*base, "kd"],
-                             round(result.final_kd, 4))
+        update_project_value(project_root, [*base, "kp"], round(result.final_kp, 4))
+        update_project_value(project_root, [*base, "kd"], round(result.final_kd, 4))
         updated = True
 
     return updated
@@ -536,9 +549,8 @@ def _persist_motion_config(
 # Apply gains in-memory
 # ---------------------------------------------------------------------------
 
-def _apply_velocity_gains(
-    robot: "GenericRobot", results: dict[str, VelocityTuneResult]
-) -> None:
+
+def _apply_velocity_gains(robot: "GenericRobot", results: dict[str, VelocityTuneResult]) -> None:
     """Apply tuned velocity controller gains to the drive system.
 
     Reads the current config first so non-tuned axes keep their gains.
@@ -558,9 +570,7 @@ def _apply_velocity_gains(
     robot.drive.reset_velocity_controllers()
 
 
-def _apply_motion_gains(
-    robot: "GenericRobot", results: dict[str, MotionTuneResult]
-) -> None:
+def _apply_motion_gains(robot: "GenericRobot", results: dict[str, MotionTuneResult]) -> None:
     """Apply tuned motion PID gains to the in-memory config."""
     cfg = robot.motion_pid_config
     for param_name, result in results.items():
@@ -577,16 +587,17 @@ def _apply_motion_gains(
 # Phase 1: Velocity Controller Tuning
 # ---------------------------------------------------------------------------
 
+
 def _get_max_velocity(robot: "GenericRobot", axis: str) -> float:
     """Get max velocity for an axis from characterization, or fallback."""
     cfg = robot.motion_pid_config
     if axis == "vx":
         v = cfg.linear.max_velocity
         return v if v > 0 else 0.3  # conservative fallback m/s
-    elif axis == "vy":
+    if axis == "vy":
         v = cfg.lateral.max_velocity
         return v if v > 0 else 0.3  # conservative fallback m/s
-    elif axis == "wz":
+    if axis == "wz":
         v = cfg.angular.max_velocity
         return v if v > 0 else 2.0  # conservative fallback rad/s
     return 1.0
@@ -595,7 +606,7 @@ def _get_max_velocity(robot: "GenericRobot", axis: str) -> float:
 async def _tune_velocity_axis(
     robot: "GenericRobot",
     axis: str,
-    csv_dir: Optional[str],
+    csv_dir: str | None,
     log_fn,
 ) -> VelocityTuneResult:
     """Tune velocity controller for one axis via step response identification."""
@@ -605,21 +616,18 @@ async def _tune_velocity_axis(
     command = max_vel * _STEP_COMMAND_FRAC
     unit = "rad/s" if axis == "wz" else "m/s"
 
-    log_fn(f"  [{axis}] Step response: cmd={command:.3f} {unit} "
-           f"(max={max_vel:.3f}, frac={_STEP_COMMAND_FRAC})")
+    log_fn(
+        f"  [{axis}] Step response: cmd={command:.3f} {unit} "
+        f"(max={max_vel:.3f}, frac={_STEP_COMMAND_FRAC})"
+    )
 
     # 1. Baseline step response (with current gains, typically kV=1 passthrough)
     baseline = await _run_step_response(robot, axis, command)
 
     if csv_dir:
-        _write_step_csv(
-            os.path.join(csv_dir, f"vel_{axis}_baseline.csv"),
-            baseline, "baseline"
-        )
+        _write_step_csv(Path(csv_dir) / f"vel_{axis}_baseline.csv", baseline, "baseline")
 
-    result.baseline_ise = _compute_ise(
-        baseline.times, baseline.commanded, baseline.measured
-    )
+    result.baseline_ise = _compute_ise(baseline.times, baseline.commanded, baseline.measured)
     log_fn(f"  [{axis}] Baseline ISE: {result.baseline_ise:.4f}")
 
     if len(baseline.times) < 10:
@@ -627,18 +635,16 @@ async def _tune_velocity_axis(
         return result
 
     # 2. Plant identification
-    plant = _identify_plant_inflection(
-        baseline.times, baseline.measured, command
-    )
+    plant = _identify_plant_inflection(baseline.times, baseline.measured, command)
     if plant is None:
         log_fn(f"  [{axis}] Inflection method failed, using rise-time fallback")
-        plant = _identify_plant_rise_time(
-            baseline.times, baseline.measured, command
-        )
+        plant = _identify_plant_rise_time(baseline.times, baseline.measured, command)
 
     result.plant = plant
-    log_fn(f"  [{axis}] Plant: Ks={plant.Ks:.4f}, Tu={plant.Tu:.4f}s, "
-           f"Tg={plant.Tg:.4f}s ({plant.method})")
+    log_fn(
+        f"  [{axis}] Plant: Ks={plant.Ks:.4f}, Tu={plant.Tu:.4f}s, "
+        f"Tg={plant.Tg:.4f}s ({plant.method})"
+    )
 
     # 3. Compute PID gains via CHR
     pid = _compute_chr_gains(plant)
@@ -668,22 +674,20 @@ async def _tune_velocity_axis(
     tuned_data = await _run_step_response(robot, axis, command)
 
     if csv_dir:
-        _write_step_csv(
-            os.path.join(csv_dir, f"vel_{axis}_tuned.csv"),
-            tuned_data, "tuned"
-        )
+        _write_step_csv(Path(csv_dir) / f"vel_{axis}_tuned.csv", tuned_data, "tuned")
 
-    result.tuned_ise = _compute_ise(
-        tuned_data.times, tuned_data.commanded, tuned_data.measured
+    result.tuned_ise = _compute_ise(tuned_data.times, tuned_data.commanded, tuned_data.measured)
+    log_fn(
+        f"  [{axis}] Tuned ISE: {result.tuned_ise:.4f} " f"(baseline: {result.baseline_ise:.4f})"
     )
-    log_fn(f"  [{axis}] Tuned ISE: {result.tuned_ise:.4f} "
-           f"(baseline: {result.baseline_ise:.4f})")
 
     # 5. Accept or revert
     if result.tuned_ise < result.baseline_ise:
         result.accepted = True
-        log_fn(f"  [{axis}] ACCEPTED (ISE improved by "
-               f"{(1 - result.tuned_ise / result.baseline_ise) * 100:.1f}%)")
+        log_fn(
+            f"  [{axis}] ACCEPTED (ISE improved by "
+            f"{(1 - result.tuned_ise / result.baseline_ise) * 100:.1f}%)"
+        )
     else:
         result.accepted = False
         # Revert to config before this axis test
@@ -697,6 +701,7 @@ async def _tune_velocity_axis(
 # ---------------------------------------------------------------------------
 # Phase 2: Motion Controller Tuning (coordinate descent)
 # ---------------------------------------------------------------------------
+
 
 async def _run_linear_trial(
     robot: "GenericRobot",
@@ -712,9 +717,7 @@ async def _run_linear_trial(
     config.distance_m = distance_m
     config.speed_scale = speed_scale
 
-    motion = LinearMotion(
-        robot.drive, robot.odometry, robot.motion_pid_config, config
-    )
+    motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
 
     robot.odometry.reset()
     await asyncio.sleep(0.05)
@@ -771,9 +774,7 @@ async def _run_turn_trial(
     config.target_angle_rad = angle_rad
     config.speed_scale = speed_scale
 
-    motion = TurnMotion(
-        robot.drive, robot.odometry, robot.motion_pid_config, config
-    )
+    motion = TurnMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
 
     robot.odometry.reset()
     await asyncio.sleep(0.05)
@@ -823,9 +824,7 @@ async def _run_turn_trial(
     return settle_time, overshoot, final_error
 
 
-def _score_trial(
-    settle_time: float, overshoot: float, final_error: float
-) -> float:
+def _score_trial(settle_time: float, overshoot: float, final_error: float) -> float:
     """Weighted score: lower is better."""
     return (
         _SCORE_SETTLE_WEIGHT * settle_time
@@ -894,12 +893,16 @@ async def _evaluate_gains(
     if param_name == "distance":
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
         settle, overshoot, error = await _run_linear_trial(
-            robot, sign * _LINEAR_TEST_DISTANCE_M, speed_scale=speed_scale,
+            robot,
+            sign * _LINEAR_TEST_DISTANCE_M,
+            speed_scale=speed_scale,
         )
     elif param_name == "lateral":
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
         settle, overshoot, error = await _run_linear_trial(
-            robot, sign * _LINEAR_TEST_DISTANCE_M, speed_scale=speed_scale,
+            robot,
+            sign * _LINEAR_TEST_DISTANCE_M,
+            speed_scale=speed_scale,
             axis=LinearAxis.Lateral,
         )
     else:  # heading
@@ -965,8 +968,7 @@ async def _coordinate_descent(
     best_score = await _evaluate_gains(robot, param_name, kp, kd, trial_idx)
     trial_idx += 1
     result.initial_score = best_score
-    log_fn(f"  [{param_name}] Initial: kp={kp:.4f}, kd={kd:.4f}, "
-           f"score={best_score:.4f}")
+    log_fn(f"  [{param_name}] Initial: kp={kp:.4f}, kd={kd:.4f}, " f"score={best_score:.4f}")
 
     for iteration in range(_CD_MAX_ITERATIONS):
         improved = False
@@ -975,39 +977,35 @@ async def _coordinate_descent(
         for kp_candidate in [kp + delta_kp, kp - delta_kp]:
             if kp_candidate <= 0:
                 continue
-            score = await _evaluate_gains(
-                robot, param_name, kp_candidate, kd, trial_idx
-            )
+            score = await _evaluate_gains(robot, param_name, kp_candidate, kd, trial_idx)
             trial_idx += 1
             if score < best_score:
                 best_score = score
                 kp = kp_candidate
                 improved = True
-                log_fn(f"  [{param_name}] iter {iteration}: kp={kp:.4f} "
-                       f"(score={score:.4f})")
+                log_fn(f"  [{param_name}] iter {iteration}: kp={kp:.4f} " f"(score={score:.4f})")
                 break
 
         # Try kd +/- delta
         for kd_candidate in [kd + delta_kd, kd - delta_kd]:
             if kd_candidate < 0:
                 continue
-            score = await _evaluate_gains(
-                robot, param_name, kp, kd_candidate, trial_idx
-            )
+            score = await _evaluate_gains(robot, param_name, kp, kd_candidate, trial_idx)
             trial_idx += 1
             if score < best_score:
                 best_score = score
                 kd = kd_candidate
                 improved = True
-                log_fn(f"  [{param_name}] iter {iteration}: kd={kd:.4f} "
-                       f"(score={score:.4f})")
+                log_fn(f"  [{param_name}] iter {iteration}: kd={kd:.4f} " f"(score={score:.4f})")
                 break
 
         if not improved:
             delta_kp *= _CD_DELTA_SHRINK
             delta_kd *= _CD_DELTA_SHRINK
-            log_fn(f"  [{param_name}] iter {iteration}: no improvement, "
-                   f"deltas -> ({delta_kp:.4f}, {delta_kd:.4f})")
+            log_fn(
+                f"  [{param_name}] iter {iteration}: no improvement, "
+                f"deltas -> ({delta_kp:.4f}, {delta_kd:.4f})"
+            )
             if delta_kp < _CD_MIN_DELTA and delta_kd < _CD_MIN_DELTA:
                 log_fn(f"  [{param_name}] Deltas below minimum, stopping")
                 break
@@ -1023,6 +1021,7 @@ async def _coordinate_descent(
 # ---------------------------------------------------------------------------
 # Step classes
 # ---------------------------------------------------------------------------
+
 
 @dsl_step(tags=["motion", "calibration", "auto-tune"])
 class AutoTuneVelocity(Step):
@@ -1081,9 +1080,9 @@ class AutoTuneVelocity(Step):
 
     def __init__(
         self,
-        axes: list[str] = None,
+        axes: list[str] | None = None,
         persist: bool = True,
-        csv_dir: Optional[str] = "/tmp/auto_tune",
+        csv_dir: str | None = "/tmp/auto_tune",
     ):
         super().__init__()
         self.axes = axes  # None = auto-detect from kinematics
@@ -1092,9 +1091,7 @@ class AutoTuneVelocity(Step):
         self.results: dict[str, VelocityTuneResult] = {}
 
     def _generate_signature(self) -> str:
-        return (
-            f"AutoTuneVelocity(axes={self.axes}, persist={self.persist})"
-        )
+        return f"AutoTuneVelocity(axes={self.axes}, persist={self.persist})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.no_calibrate import is_no_calibrate
@@ -1112,7 +1109,7 @@ class AutoTuneVelocity(Step):
                 self.info("  Kinematics does not support lateral motion — skipping vy")
 
         if self.csv_dir:
-            os.makedirs(self.csv_dir, exist_ok=True)
+            Path(self.csv_dir).mkdir(parents=True, exist_ok=True)
 
         self.info("=" * 60)
         self.info("  AUTO-TUNE: VELOCITY CONTROLLERS (Phase 2)")
@@ -1121,9 +1118,7 @@ class AutoTuneVelocity(Step):
 
         for axis in axes:
             self.info(f"\n--- {axis.upper()} ---")
-            result = await _tune_velocity_axis(
-                robot, axis, self.csv_dir, self.info
-            )
+            result = await _tune_velocity_axis(robot, axis, self.csv_dir, self.info)
             self.results[axis] = result
             robot.drive.hard_stop()
             await asyncio.sleep(0.5)
@@ -1139,8 +1134,7 @@ class AutoTuneVelocity(Step):
         # Persist
         if self.persist and accepted:
             if _persist_velocity_config(self.results):
-                self.info("  Saved to raccoon.project.yml "
-                          "(robot.drive.vel_config)")
+                self.info("  Saved to raccoon.project.yml " "(robot.drive.vel_config)")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")
 
@@ -1220,9 +1214,9 @@ class AutoTuneMotion(Step):
 
     def __init__(
         self,
-        axes: list[str] = None,
+        axes: list[str] | None = None,
         persist: bool = True,
-        csv_dir: Optional[str] = "/tmp/auto_tune",
+        csv_dir: str | None = "/tmp/auto_tune",
     ):
         super().__init__()
         self.axes = axes  # None = auto-detect from kinematics
@@ -1231,9 +1225,7 @@ class AutoTuneMotion(Step):
         self.results: dict[str, MotionTuneResult] = {}
 
     def _generate_signature(self) -> str:
-        return (
-            f"AutoTuneMotion(axes={self.axes}, persist={self.persist})"
-        )
+        return f"AutoTuneMotion(axes={self.axes}, persist={self.persist})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.no_calibrate import is_no_calibrate
@@ -1253,8 +1245,7 @@ class AutoTuneMotion(Step):
         self.info("=" * 60)
         self.info("  AUTO-TUNE: MOTION CONTROLLERS (Phase 3)")
         self.info(f"  Parameters: {', '.join(axes)}")
-        self.info(f"  Primary objective speed_scale={_MOTION_PRIMARY_SPEED_SCALE:.2f} "
-                  "(fastest)")
+        self.info(f"  Primary objective speed_scale={_MOTION_PRIMARY_SPEED_SCALE:.2f} " "(fastest)")
         if _MOTION_WATCH_SPEED_SCALES:
             watch_s = ", ".join(f"{s:.2f}" for s in _MOTION_WATCH_SPEED_SCALES)
             self.info(f"  Lower-speed watch (secondary only): {watch_s}")
@@ -1271,12 +1262,9 @@ class AutoTuneMotion(Step):
                 continue
 
             self.info(f"\n--- {param_name.upper()} ---")
-            self.info(f"  [{param_name}] Current: kp={pid_cfg.kp:.4f}, "
-                       f"kd={pid_cfg.kd:.4f}")
+            self.info(f"  [{param_name}] Current: kp={pid_cfg.kp:.4f}, " f"kd={pid_cfg.kd:.4f}")
 
-            result = await _coordinate_descent(
-                robot, param_name, pid_cfg.kp, pid_cfg.kd, self.info
-            )
+            result = await _coordinate_descent(robot, param_name, pid_cfg.kp, pid_cfg.kd, self.info)
             self.results[param_name] = result
 
             if _MOTION_WATCH_SPEED_SCALES:
@@ -1300,8 +1288,7 @@ class AutoTuneMotion(Step):
         # Persist
         if self.persist and self.results:
             if _persist_motion_config(self.results):
-                self.info("  Saved to raccoon.project.yml "
-                          "(robot.motion_pid.{distance,heading})")
+                self.info("  Saved to raccoon.project.yml " "(robot.motion_pid.{distance,heading})")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")
 
@@ -1311,8 +1298,7 @@ class AutoTuneMotion(Step):
         self.info("=" * 60)
         for name, r in self.results.items():
             improvement = (
-                (1 - r.final_score / r.initial_score) * 100
-                if r.initial_score > 0 else 0.0
+                (1 - r.final_score / r.initial_score) * 100 if r.initial_score > 0 else 0.0
             )
             self.info(
                 f"  {name}: kp {r.initial_kp:.4f}->{r.final_kp:.4f}, "
@@ -1405,16 +1391,16 @@ class AutoTune(Step):
 
     def __init__(
         self,
-        vel_axes: list[str] = None,
-        characterize_axes: list[str] = None,
-        motion_axes: list[str] = None,
+        vel_axes: list[str] | None = None,
+        characterize_axes: list[str] | None = None,
+        motion_axes: list[str] | None = None,
         tune_characterize: bool = True,
         tune_velocity: bool = True,
         tune_motion: bool = True,
         characterize_trials: int = 3,
         characterize_power_percent: int = 100,
         persist: bool = True,
-        csv_dir: Optional[str] = "/tmp/auto_tune",
+        csv_dir: str | None = "/tmp/auto_tune",
     ):
         super().__init__()
         # None = auto-detect from kinematics at execution time
@@ -1448,12 +1434,13 @@ class AutoTune(Step):
         characterize_axes = self.characterize_axes
         if characterize_axes is None:
             characterize_axes = (
-                ["forward", "lateral", "angular"] if has_lateral
-                else ["forward", "angular"]
+                ["forward", "lateral", "angular"] if has_lateral else ["forward", "angular"]
             )
             if not has_lateral:
-                self.info("  Kinematics does not support lateral motion — "
-                          "skipping lateral axes across all phases")
+                self.info(
+                    "  Kinematics does not support lateral motion — "
+                    "skipping lateral axes across all phases"
+                )
 
         self.info("=" * 60)
         self.info("  AUTO-TUNE PID CONTROLLERS")
@@ -1479,19 +1466,13 @@ class AutoTune(Step):
             await char_step._execute_step(robot)
 
         if self.tune_velocity:
-            vel_step = AutoTuneVelocity(
-                self.vel_axes, self.persist, self.csv_dir
-            )
+            vel_step = AutoTuneVelocity(self.vel_axes, self.persist, self.csv_dir)
             await vel_step._execute_step(robot)
 
         if self.tune_motion:
-            motion_step = AutoTuneMotion(
-                self.motion_axes, self.persist, self.csv_dir
-            )
+            motion_step = AutoTuneMotion(self.motion_axes, self.persist, self.csv_dir)
             await motion_step._execute_step(robot)
 
         self.info("\n" + "=" * 60)
         self.info("  AUTO-TUNE COMPLETE")
         self.info("=" * 60)
-
-

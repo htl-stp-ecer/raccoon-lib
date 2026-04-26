@@ -9,6 +9,7 @@ migrate; ``libstp.X`` is the same module object as ``raccoon.X``, so
 Update your imports to use ``raccoon`` directly. This shim will be removed
 in a future release.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -46,7 +47,7 @@ def _alias_recursive(pkg, old_name: str, new_name: str) -> None:
         sub_old = f"{old_name}.{info.name}"
         try:
             sub_pkg = importlib.import_module(sub_new)
-        except Exception:  # noqa: BLE001 — best-effort alias, skip failures
+        except Exception:
             continue
         _alias_recursive(sub_pkg, sub_old, sub_new)
 

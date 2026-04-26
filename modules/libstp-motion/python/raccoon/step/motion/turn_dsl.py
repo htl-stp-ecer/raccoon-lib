@@ -22,7 +22,7 @@ class TurnLeftBuilder(StepBuilder):
         self._speed = 1.0
         self._until = None
 
-    def degrees(self, value: float):
+    def degrees(self, value: float | None):
         self._degrees = value
         return self
 
@@ -36,14 +36,14 @@ class TurnLeftBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs['degrees'] = self._degrees
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
+        kwargs["degrees"] = self._degrees
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
         return TurnLeft(**kwargs)
 
 
-@dsl(tags=['motion', 'turn'])
-def turn_left(degrees: float = None, speed: float = 1.0, until: StopCondition = None):
+@dsl(tags=["motion", "turn"])
+def turn_left(degrees: float | None = None, speed: float = 1.0, until: StopCondition = None):
     """
     Turn left (counter-clockwise) with angle or condition-based termination.
 
@@ -80,7 +80,7 @@ class TurnRightBuilder(StepBuilder):
         self._speed = 1.0
         self._until = None
 
-    def degrees(self, value: float):
+    def degrees(self, value: float | None):
         self._degrees = value
         return self
 
@@ -94,14 +94,14 @@ class TurnRightBuilder(StepBuilder):
 
     def _build(self):
         kwargs = {}
-        kwargs['degrees'] = self._degrees
-        kwargs['speed'] = self._speed
-        kwargs['until'] = self._until
+        kwargs["degrees"] = self._degrees
+        kwargs["speed"] = self._speed
+        kwargs["until"] = self._until
         return TurnRight(**kwargs)
 
 
-@dsl(tags=['motion', 'turn'])
-def turn_right(degrees: float = None, speed: float = 1.0, until: StopCondition = None):
+@dsl(tags=["motion", "turn"])
+def turn_right(degrees: float | None = None, speed: float = 1.0, until: StopCondition = None):
     """
     Turn right (clockwise) with angle or condition-based termination.
 
@@ -129,4 +129,4 @@ def turn_right(degrees: float = None, speed: float = 1.0, until: StopCondition =
     return b
 
 
-__all__ = ['TurnLeftBuilder', 'turn_left', 'TurnRightBuilder', 'turn_right']
+__all__ = ["TurnLeftBuilder", "turn_left", "TurnRightBuilder", "turn_right"]

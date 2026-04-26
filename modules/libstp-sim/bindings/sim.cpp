@@ -21,6 +21,7 @@
   #define RACCOON_SIM_HAS_MOCK 1
 #endif
 
+#include <numbers>
 #include <optional>
 #include <string>
 #include <utility>
@@ -30,7 +31,7 @@ using namespace libstp::sim;
 
 namespace
 {
-    constexpr float kPi = 3.14159265358979323846f;
+    constexpr float kPi = std::numbers::pi_v<float>;
 
     float degToRad(float deg) { return deg * kPi / 180.0f; }
     float radToDeg(float rad) { return rad * 180.0f / kPi; }

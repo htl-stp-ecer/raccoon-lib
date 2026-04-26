@@ -5,19 +5,21 @@ BEMF is unreliable at low RPM, so we use human observation via the UI
 to find the exact motor percentage where the wheel starts turning.
 """
 
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.step.annotation import dsl_step
-from raccoon.ui.step import UIStep
 from raccoon.ui.screens.basic import MessageScreen
+from raccoon.ui.step import UIStep
 
 from .screens import (
     DeadzoneIntroScreen,
-    DeadzoneTestingScreen,
     DeadzoneResultsScreen,
     DeadzoneSummaryScreen,
+    DeadzoneTestingScreen,
 )
 
 if TYPE_CHECKING:
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
 @dataclass
 class DeadzoneCalibrationResult:
     """Result of deadzone calibration for a single motor."""
+
     motor_port: int
     motor_name: str
     start_percent_forward: int
@@ -71,7 +74,7 @@ class CalibrateDeadzone(UIStep):
 
     def __init__(
         self,
-        motor_ports: Optional[List[int]] = None,
+        motor_ports: list[int] | None = None,
         start_percent: int = 1,
         max_percent: int = 30,
         settle_time: float = 0.3,
@@ -81,7 +84,7 @@ class CalibrateDeadzone(UIStep):
         self.start_percent = start_percent
         self.max_percent = max_percent
         self.settle_time = settle_time
-        self.results: List[DeadzoneCalibrationResult] = []
+        self.results: list[DeadzoneCalibrationResult] = []
 
     def _generate_signature(self) -> str:
         ports = self.motor_ports or "all"
@@ -102,13 +105,15 @@ class CalibrateDeadzone(UIStep):
         Returns the first percentage where user indicates movement.
         """
         # Show intro screen
-        await self.show(DeadzoneIntroScreen(
-            motor_name=motor_name,
-            motor_port=motor_port,
-            direction=direction_name,
-            start_percent=self.start_percent,
-            max_percent=self.max_percent,
-        ))
+        await self.show(
+            DeadzoneIntroScreen(
+                motor_name=motor_name,
+                motor_port=motor_port,
+                direction=direction_name,
+                start_percent=self.start_percent,
+                max_percent=self.max_percent,
+            )
+        )
 
         # Test each power level
         for percent in range(self.start_percent, self.max_percent + 1):
@@ -117,13 +122,15 @@ class CalibrateDeadzone(UIStep):
             await asyncio.sleep(self.settle_time)
 
             # Show testing screen and wait for user response
-            result = await self.show(DeadzoneTestingScreen(
-                motor_name=motor_name,
-                motor_port=motor_port,
-                current_percent=percent,
-                direction=direction_name,
-                max_percent=self.max_percent,
-            ))
+            result = await self.show(
+                DeadzoneTestingScreen(
+                    motor_name=motor_name,
+                    motor_port=motor_port,
+                    current_percent=percent,
+                    direction=direction_name,
+                    max_percent=self.max_percent,
+                )
+            )
 
             if result.is_turning:
                 motor.brake()
@@ -140,13 +147,12 @@ class CalibrateDeadzone(UIStep):
         motor,
         motor_name: str,
         motor_port: int,
-    ) -> Optional[DeadzoneCalibrationResult]:
+    ) -> DeadzoneCalibrationResult | None:
         """Calibrate a single motor's deadzone."""
         try:
             # Test forward direction
             start_fwd = await self._find_deadzone_for_direction(
-                robot, motor, motor_name, motor_port,
-                direction=1, direction_name="FORWARD"
+                robot, motor, motor_name, motor_port, direction=1, direction_name="FORWARD"
             )
             self.debug(f"{motor_name} forward start: {start_fwd}%")
 
@@ -154,8 +160,7 @@ class CalibrateDeadzone(UIStep):
 
             # Test reverse direction
             start_rev = await self._find_deadzone_for_direction(
-                robot, motor, motor_name, motor_port,
-                direction=-1, direction_name="REVERSE"
+                robot, motor, motor_name, motor_port, direction=-1, direction_name="REVERSE"
             )
             self.debug(f"{motor_name} reverse start: {start_rev}%")
 
@@ -175,19 +180,20 @@ class CalibrateDeadzone(UIStep):
         )
 
         # Show results and ask for confirmation
-        confirm = await self.show(DeadzoneResultsScreen(
-            motor_name=motor_name,
-            motor_port=motor_port,
-            forward_percent=start_fwd,
-            reverse_percent=start_rev,
-            release_percent=release,
-        ))
+        confirm = await self.show(
+            DeadzoneResultsScreen(
+                motor_name=motor_name,
+                motor_port=motor_port,
+                forward_percent=start_fwd,
+                reverse_percent=start_rev,
+                release_percent=release,
+            )
+        )
 
         if confirm.confirmed:
             return result
-        else:
-            # User wants to retry this motor
-            return await self._calibrate_motor(robot, motor, motor_name, motor_port)
+        # User wants to retry this motor
+        return await self._calibrate_motor(robot, motor, motor_name, motor_port)
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """
@@ -210,7 +216,7 @@ class CalibrateDeadzone(UIStep):
         from raccoon.hal import Motor
 
         # Find motors to calibrate
-        motors_to_calibrate: List[tuple] = []
+        motors_to_calibrate: list[tuple] = []
 
         if self.motor_ports:
             # Calibrate specific ports
@@ -226,12 +232,14 @@ class CalibrateDeadzone(UIStep):
                 motors_to_calibrate.append((motor_def.name, motor_def.port, motor_def.inverted))
 
         if not motors_to_calibrate:
-            await self.show(MessageScreen(
-                "No Motors Found",
-                "No motors found to calibrate. Define motors in your project first.",
-                icon_name="error",
-                icon_color="red",
-            ))
+            await self.show(
+                MessageScreen(
+                    "No Motors Found",
+                    "No motors found to calibrate. Define motors in your project first.",
+                    icon_name="error",
+                    icon_color="red",
+                )
+            )
             return
 
         self.debug(f"Calibrating {len(motors_to_calibrate)} motor(s)")
@@ -269,24 +277,27 @@ class CalibrateDeadzone(UIStep):
             # Apply calibration to each motor
             for result in self.results:
                 motor_def = robot.defs.get_motor_by_port(result.motor_port)
-                if motor_def:
-                    # Update ff.kS (static friction coefficient)
-                    # start_percent (0-100) → kS (0-1 normalized)
-                    if hasattr(motor_def, 'calibration') and motor_def.calibration:
-                        cal = motor_def.calibration
-                        if hasattr(cal, 'ff') and cal.ff:
-                            cal.ff.kS = result.start_percent / 100.0
-                            self.debug(f"Applied ff.kS={cal.ff.kS:.4f} to {result.motor_name}")
+                # Update ff.kS (static friction coefficient): the deadzone
+                # start_percent (0-100) maps onto kS as a 0-1 normalised
+                # gain. Skip motors that lack the nested calibration shape.
+                if (
+                    motor_def
+                    and getattr(motor_def, "calibration", None)
+                    and getattr(motor_def.calibration, "ff", None)
+                ):
+                    cal = motor_def.calibration
+                    cal.ff.kS = result.start_percent / 100.0
+                    self.debug(f"Applied ff.kS={cal.ff.kS:.4f} to {result.motor_name}")
 
             self.info(f"ff.kS calibration applied to {len(self.results)} motor(s)")
 
-            await self.show(MessageScreen(
-                "Calibration Applied",
-                f"ff.kS (static friction) calibration applied to {len(self.results)} motor(s).",
-                icon_name="check",
-                icon_color="green",
-            ))
+            await self.show(
+                MessageScreen(
+                    "Calibration Applied",
+                    f"ff.kS (static friction) calibration applied to {len(self.results)} motor(s).",
+                    icon_name="check",
+                    icon_color="green",
+                )
+            )
         else:
             self.info("ff.kS calibration cancelled by user")
-
-

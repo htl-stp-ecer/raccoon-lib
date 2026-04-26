@@ -14,12 +14,12 @@ Runs in a subprocess so any pybind11 / mock-HAL teardown quirks stay
 isolated from this outer pytest session — same pattern as
 ``test_drive_mission.py``.
 """
+
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -27,7 +27,8 @@ import pytest
 
 def _sim_available() -> bool:
     try:
-        from raccoon import sim as _sim  # noqa: F401
+        from raccoon import sim as _sim
+
         return hasattr(_sim, "mock")
     except ImportError:
         return False
@@ -177,9 +178,7 @@ def _scaffold_project(root: Path) -> None:
     # bundled scenes.
     scenes_dir = root / "scenes"
     scenes_dir.mkdir()
-    src_scene = (
-        Path(__file__).resolve().parents[3] / "scenes" / "empty_table.ftmap"
-    )
+    src_scene = Path(__file__).resolve().parents[3] / "scenes" / "empty_table.ftmap"
     (scenes_dir / "empty_table.ftmap").write_bytes(src_scene.read_bytes())
 
 
@@ -196,15 +195,20 @@ def test_plugin_runs_in_synthetic_project(tmp_path: Path) -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            "-m", "pytest",
+            "-m",
+            "pytest",
             # Force-load the plugin by module path. When the wheel ships
             # the pytest11 entry point this is redundant, but it keeps
             # the test working on a raccoon install that predates the
             # entry point being registered.
-            "-p", "raccoon.testing.pytest_plugin",
-            "-p", "no:cacheprovider",
-            "-o", "filterwarnings=",  # tolerate the deprecation warning path
-            "-o", "addopts=",
+            "-p",
+            "raccoon.testing.pytest_plugin",
+            "-p",
+            "no:cacheprovider",
+            "-o",
+            "filterwarnings=",  # tolerate the deprecation warning path
+            "-o",
+            "addopts=",
             "tests/test_user_step.py",
             "-v",
         ],
@@ -218,10 +222,11 @@ def test_plugin_runs_in_synthetic_project(tmp_path: Path) -> None:
 
     # Dump output on failure so debugging the scaffold is tractable.
     if proc.returncode != 0:
-        raise AssertionError(
+        msg = (
             f"pytest subprocess failed (exit={proc.returncode})\n"
             f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
         )
+        raise AssertionError(msg)
 
     # Both synthetic tests should have passed. We look for per-test
     # PASSED markers rather than the "2 passed" summary line because the

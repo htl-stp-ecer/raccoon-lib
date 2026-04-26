@@ -1,6 +1,3 @@
-//
-// Created by tobias on 6/1/25.
-//
 #include "hal/Servo.hpp"
 
 #include "core/LcmReader.hpp"

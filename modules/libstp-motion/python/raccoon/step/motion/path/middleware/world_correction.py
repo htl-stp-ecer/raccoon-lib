@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
-from ..ir import Segment, Correction
+from ..ir import Correction, Segment
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -43,7 +43,7 @@ class WorldPoseTracker:
 
     MAX_DISTANCE_CORRECTION_M = 0.03
     MAX_HEADING_CORRECTION_RAD = 0.087  # ~5 deg
-    MAX_TURN_CORRECTION_RAD = 0.087     # ~5 deg
+    MAX_TURN_CORRECTION_RAD = 0.087  # ~5 deg
 
     def __init__(self, start_heading: float) -> None:
         # Expected cumulative world pose (from geometry)
@@ -140,7 +140,9 @@ class WorldPoseTracker:
     # -- Correction computation -------------------------------------------
 
     def compute_correction(
-        self, robot: "GenericRobot", next_seg: Segment,
+        self,
+        robot: "GenericRobot",
+        next_seg: Segment,
     ) -> Correction:
         """Compute parameter adjustments for the next segment."""
         actual_x, actual_y = self.get_actual_xy(robot)
@@ -153,7 +155,7 @@ class WorldPoseTracker:
         # Decompose into along-track / cross-track relative to expected heading
         cos_h = math.cos(self.expected_heading)
         sin_h = math.sin(self.expected_heading)
-        along_track_err = dx * cos_h + dy * sin_h   # positive = overshot
+        along_track_err = dx * cos_h + dy * sin_h  # positive = overshot
         cross_track_err = -dx * sin_h + dy * cos_h  # positive = drifted left
 
         # Heading error
@@ -162,9 +164,15 @@ class WorldPoseTracker:
         _log.debug(
             "WorldPoseTracker: expected=(%.4f, %.4f, %.1f°) actual=(%.4f, %.4f, %.1f°) "
             "along=%.4fm cross=%.4fm hdg=%.2f°",
-            self.expected_x, self.expected_y, math.degrees(self.expected_heading),
-            actual_x, actual_y, math.degrees(actual_heading),
-            along_track_err, cross_track_err, math.degrees(heading_err),
+            self.expected_x,
+            self.expected_y,
+            math.degrees(self.expected_heading),
+            actual_x,
+            actual_y,
+            math.degrees(actual_heading),
+            along_track_err,
+            cross_track_err,
+            math.degrees(heading_err),
         )
 
         correction = Correction()
@@ -172,31 +180,34 @@ class WorldPoseTracker:
         if next_seg.kind == "linear":
             # Along-track: adjust distance
             if next_seg.distance_m is not None:
-                adj = max(-self.MAX_DISTANCE_CORRECTION_M,
-                          min(self.MAX_DISTANCE_CORRECTION_M, along_track_err))
+                adj = max(
+                    -self.MAX_DISTANCE_CORRECTION_M,
+                    min(self.MAX_DISTANCE_CORRECTION_M, along_track_err),
+                )
                 correction.distance_adjust_m = adj
 
             # Cross-track: bias heading to steer back
             remaining = abs(next_seg.distance_m or 0.3)
             remaining = max(remaining, 0.05)  # avoid division by tiny number
             heading_bias = math.atan2(-cross_track_err, remaining)
-            heading_bias = max(-self.MAX_HEADING_CORRECTION_RAD,
-                               min(self.MAX_HEADING_CORRECTION_RAD, heading_bias))
+            heading_bias = max(
+                -self.MAX_HEADING_CORRECTION_RAD, min(self.MAX_HEADING_CORRECTION_RAD, heading_bias)
+            )
 
             # Target heading = expected heading + cross-track bias
             correction.heading_target_rad = self.expected_heading + heading_bias
 
         elif next_seg.kind in ("turn", "arc"):
             # Correct heading error by adjusting turn/arc angle
-            adj = max(-self.MAX_TURN_CORRECTION_RAD,
-                      min(self.MAX_TURN_CORRECTION_RAD, heading_err))
+            adj = max(-self.MAX_TURN_CORRECTION_RAD, min(self.MAX_TURN_CORRECTION_RAD, heading_err))
             correction.angle_adjust_rad = adj
 
         _log.debug(
             "WorldPoseTracker: correction dist=%.4fm hdg=%s angle=%.2f°",
             correction.distance_adjust_m,
             f"{math.degrees(correction.heading_target_rad):.1f}°"
-            if correction.heading_target_rad is not None else "None",
+            if correction.heading_target_rad is not None
+            else "None",
             math.degrees(correction.angle_adjust_rad),
         )
 
@@ -213,7 +224,7 @@ class WorldCorrectionMiddleware:
     """
 
     def __init__(self) -> None:
-        self._tracker: Optional[WorldPoseTracker] = None
+        self._tracker: WorldPoseTracker | None = None
         self._is_first: bool = True
 
     def on_path_start(self, robot: "GenericRobot") -> None:
@@ -225,8 +236,11 @@ class WorldCorrectionMiddleware:
         self._is_first = True
 
     def on_segment_start(
-        self, seg: Segment, is_first: bool, robot: "GenericRobot",
-    ) -> Optional[Correction]:
+        self,
+        seg: Segment,
+        is_first: bool,
+        robot: "GenericRobot",
+    ) -> Correction | None:
         if is_first or self._tracker is None:
             return None
         return self._tracker.compute_correction(robot, seg)
@@ -243,9 +257,8 @@ class WorldCorrectionMiddleware:
         # deviated from the ideal predicted geometry, so reset the expected
         # pose to whatever the robot actually achieved rather than stacking
         # corrections on stale predictions.
-        was_condition_based = (
-            not seg.has_known_endpoint
-            or (seg.condition is not None and not seg.has_known_endpoint)
+        was_condition_based = not seg.has_known_endpoint or (
+            seg.condition is not None and not seg.has_known_endpoint
         )
         was_opaque = seg.kind in ("follow_line", "spline")
         if was_condition_based or was_opaque:
@@ -255,6 +268,6 @@ class WorldCorrectionMiddleware:
         pass
 
     @property
-    def tracker(self) -> Optional[WorldPoseTracker]:
+    def tracker(self) -> WorldPoseTracker | None:
         """Expose the underlying tracker for diagnostics/inspection."""
         return self._tracker

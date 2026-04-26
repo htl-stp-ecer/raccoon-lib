@@ -12,7 +12,7 @@ void init_servo(const py::module& m)
         .def("get_position", &libstp::hal::servo::Servo::getPosition)
         .def("enable", &libstp::hal::servo::Servo::enable)
         .def("disable", &libstp::hal::servo::Servo::disable)
-        .def_readwrite("port", &libstp::hal::servo::Servo::port)
+        .def_property_readonly("port", [](const libstp::hal::servo::Servo& s) { return s.port; })
         .def_static("fully_disable_all", &libstp::hal::servo::Servo::fullyDisableAll)
         .def("set_smooth_position", &libstp::hal::servo::Servo::setSmoothPosition,
              py::arg("target_deg"), py::arg("speed_deg_per_sec"), py::arg("easing") = 3);
