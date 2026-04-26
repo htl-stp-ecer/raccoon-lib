@@ -144,17 +144,17 @@ namespace libstp::kinematics::mecanum
         LIBSTP_LOG_TRACE("MecanumKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
-    std::vector<hal::motor::IMotor*> MecanumKinematics::getMotors() const
+    std::vector<hal::motor::IMotor*> MecanumKinematics::getMotors()
     {
         return {
-            &const_cast<hal::motor::IMotor&>(front_left_motor_.motor()),
-            &const_cast<hal::motor::IMotor&>(front_right_motor_.motor()),
-            &const_cast<hal::motor::IMotor&>(back_left_motor_.motor()),
-            &const_cast<hal::motor::IMotor&>(back_right_motor_.motor())
+            &front_left_motor_.motor(),
+            &front_right_motor_.motor(),
+            &back_left_motor_.motor(),
+            &back_right_motor_.motor()
         };
     }
 
-    IKinematics::StmOdometryConfig MecanumKinematics::getStmOdometryConfig() const
+    IKinematics::StmOdometryConfig MecanumKinematics::getStmOdometryConfig()
     {
         const double R = m_wheelRadius;
         const double L = (m_wheelbase + m_trackWidth) / 2.0;

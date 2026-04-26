@@ -118,15 +118,12 @@ namespace libstp::kinematics::differential
         LIBSTP_LOG_TRACE("DifferentialKinematics::resetEncoders - reset all motor encoder tracking");
     }
 
-    std::vector<hal::motor::IMotor*> DifferentialKinematics::getMotors() const
+    std::vector<hal::motor::IMotor*> DifferentialKinematics::getMotors()
     {
-        return {
-            &const_cast<hal::motor::IMotor&>(left_motor_.motor()),
-            &const_cast<hal::motor::IMotor&>(right_motor_.motor())
-        };
+        return {&left_motor_.motor(), &right_motor_.motor()};
     }
 
-    IKinematics::StmOdometryConfig DifferentialKinematics::getStmOdometryConfig() const
+    IKinematics::StmOdometryConfig DifferentialKinematics::getStmOdometryConfig()
     {
         const double R = m_wheelRadius;
 
