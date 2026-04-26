@@ -1,4 +1,5 @@
 #include "motion/linear_motion.hpp"
+#include "motion/motion_config.hpp"
 #include "motion/motion_pid.hpp"
 
 #include <algorithm>
@@ -260,7 +261,7 @@ namespace libstp::motion
             const double prev_speed_scale = speed_scale_;
             const double prev_heading_scale = heading_scale_;
 
-            if (speed_scale_ > ctx_.pid_config.saturation_min_scale + 1e-6)
+            if (speed_scale_ > ctx_.pid_config.saturation_min_scale + kMotionEpsilon)
             {
                 speed_scale_ = std::max(
                     ctx_.pid_config.saturation_min_scale,
