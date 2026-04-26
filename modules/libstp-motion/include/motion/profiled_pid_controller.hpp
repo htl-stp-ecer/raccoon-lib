@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "foundation/pid.hpp"
+#include "motion/motion_config.hpp"
 #include "motion/trapezoidal_profile.hpp"
 
 namespace libstp::motion
@@ -108,8 +109,8 @@ namespace libstp::motion
          */
         [[nodiscard]] bool profileComplete() const
         {
-            return std::abs(goal_.position - setpoint_.position) < 1e-6
-                && std::abs(goal_.velocity - setpoint_.velocity) < 1e-6;
+            return std::abs(goal_.position - setpoint_.position) < kMotionEpsilon
+                && std::abs(goal_.velocity - setpoint_.velocity) < kMotionEpsilon;
         }
 
     private:

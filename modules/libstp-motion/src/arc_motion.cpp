@@ -1,4 +1,5 @@
 #include "motion/arc_motion.hpp"
+#include "motion/motion_config.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +18,7 @@ namespace libstp::motion
         // Angular velocity is limited by both angular and linear axis constraints.
         // Since vx = |omega| * radius, we need: |omega| * radius <= linear.max_velocity.
         double angular_limit = pid_config.angular.max_velocity;
-        double linear_limit = (config.radius_m > 1e-6)
+        double linear_limit = (config.radius_m > kMotionEpsilon)
             ? pid_config.linear.max_velocity / config.radius_m
             : angular_limit;
 
@@ -36,7 +37,7 @@ namespace libstp::motion
         // linear acceleration exceeding the linear axis limits.
         double angular_accel = pid_config.angular.acceleration;
         double angular_decel = pid_config.angular.deceleration;
-        if (config.radius_m > 1e-6)
+        if (config.radius_m > kMotionEpsilon)
         {
             angular_accel = std::min(angular_accel, pid_config.linear.acceleration / config.radius_m);
             angular_decel = std::min(angular_decel, pid_config.linear.deceleration / config.radius_m);

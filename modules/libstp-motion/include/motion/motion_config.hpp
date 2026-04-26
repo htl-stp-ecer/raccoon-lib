@@ -4,6 +4,14 @@
 
 namespace libstp::motion
 {
+    /// Numerical tolerance for "is this float effectively zero" checks across
+    /// the motion / kinematics layer. One value, one rationale: at our scales
+    /// (meters, rad/s, normalised speed scales) anything below 1e-6 is below
+    /// the resolution of the underlying float32 sensor data and the int-based
+    /// firmware feedback path. Don't introduce new ad-hoc thresholds — use
+    /// this constant or document a deliberate exception.
+    inline constexpr double kMotionEpsilon = 1e-6;
+
     /**
      * Per-axis motion profile constraints (max velocity, acceleration, deceleration).
      * Measured from actual robot response via characterize_drive().
