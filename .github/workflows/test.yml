@@ -88,10 +88,12 @@ jobs:
           echo "::endgroup::"
 
           echo "Running C++ tests..."
-          # Exclude MockSimIntegration tests — they pass individually but
-          # segfault during singleton teardown between test cases (pre-existing).
+          # MockSimIntegration is excluded because it segfaults during singleton
+          # teardown between test cases. This is a real bug in MockPlatform,
+          # not a test bug. Tracked in TESTING_DEBT.md — fix before claiming
+          # full test coverage.
           run_docker "ctest --test-dir /src/build-test --output-on-failure -E MockSimIntegration"
-          echo "✓ C++ tests passed"
+          echo "✓ C++ tests passed (MockSimIntegration excluded — see TESTING_DEBT.md)"
 
       # --- Python tests (mock bundle, ARM64 via QEMU) ---
       - name: Run Python tests
@@ -125,6 +127,9 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Run fast Python tests (skip sim + known-broken)"
+          # The five --ignore'd files are tracked in TESTING_DEBT.md with
+          # per-file reasons and a triage plan. Do not add new ignores
+          # without an entry there.
           run_docker "
             python -m pytest tests/python \
               --ignore=tests/python/sim \
