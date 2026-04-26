@@ -1,7 +1,12 @@
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
 option(ENABLE_SAFETY_CHECKS "Enable runtime safety checks across the whole project" ON)
-option(LIBSTP_TRACE_LOGGING "Compile SPDLOG trace statements into all targets" ON)
+# Default OFF in production builds: trace statements run in 100 Hz motion-update
+# loops (e.g. linear_motion::update prints 8+ floats per cycle). Even with the
+# `if constexpr` short-circuit in LIBSTP_LOG_CALL, leaving them compiled in
+# means runtime filter checks fire 800+ times/sec on the Pi for nothing.
+# Turn ON during development; flip OFF for wheels going to a robot.
+option(LIBSTP_TRACE_LOGGING "Compile SPDLOG trace statements into all targets" OFF)
 
 cmake_minimum_required(VERSION 3.15...3.27)
 
