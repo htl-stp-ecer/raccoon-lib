@@ -83,18 +83,25 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(eigen)
+# Eigen3::Eigen is exported by the FetchContent project and carries its own
+# include directories — modules pick it up transitively via foundation
+# (which links it PUBLIC). No need for a global include_directories().
 
-# Add include directory for Eigen
-include_directories(${eigen_SOURCE_DIR})
+# All vendored deps build STATIC so the produced wheel is self-contained
+# and doesn't depend on a system liblcm.so / libspdlog.so / libyaml-cpp.so.
+# Subprojects that respect their own *_BUILD_SHARED variable still have it
+# set explicitly below; raccoon-transport's LCM only honours BUILD_SHARED_LIBS.
+# Module shared/static (libfoundation.so, libbutton.so) is decided per-target
+# in modules/CMakeLists.txt with explicit STATIC/SHARED, not via this flag.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build vendored libraries as shared" FORCE)
 
 # ---------- raccoon-transport (brings LCM + message types) ----------
-# Force static LCM so the wheel is self-contained (no external liblcm.so needed).
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         raccoon_transport
         SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/raccoon-transport
 )
 FetchContent_MakeAvailable(raccoon_transport)
+
 set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
         spdlog
@@ -102,8 +109,6 @@ FetchContent_Declare(
         GIT_TAG v1.14.1
 )
 FetchContent_MakeAvailable(spdlog)
-set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
-
 
 set(YAML_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -130,7 +135,6 @@ target_link_libraries(_core PRIVATE
 add_subdirectory(modules)
 
 target_compile_features(_core PRIVATE cxx_std_23)
-target_include_directories(_core PRIVATE ${eigen_SOURCE_DIR})
 target_compile_definitions(_core PRIVATE VERSION_INFO=${PROJECT_VERSION})
 
 install(TARGETS _core DESTINATION raccoon)
