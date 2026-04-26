@@ -51,6 +51,25 @@ filterwarnings = [
 testpaths = ["tests"]
 
 
+[tool.ruff]
+# Target the lowest supported Python so the linter does not flag
+# 3.12-only syntax we cannot ship; matches `requires-python = ">=3.11"`.
+target-version = "py311"
+line-length = 100
+src = ["python", "modules", "tests", "tools"]
+extend-exclude = [
+  "build", "build-*", "_skbuild*", ".cmake-cache*",
+  "raccoon-transport",          # vendored submodule, not our style
+  "**/*_dsl.py",                # generated; check-step-builders gates drift
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+skip-magic-trailing-comma = false
+
 [tool.ruff.lint]
 extend-select = [
   "B",           # flake8-bugbear
@@ -76,10 +95,69 @@ extend-select = [
   "PD",          # pandas-vet
 ]
 ignore = [
-  "PLR09",    # Too many X
-  "PLR2004",  # Magic comparison
+  "PLR09",    # Too many X — fine for control-rich step lifecycle code
+  "PLR2004",  # Magic comparison — robotics constants are inherently magic
+  # F401 / F403 / F405 are scoped via per-file-ignores below: package
+  # __init__.py files use `from .x import *` as a deliberate re-export.
+  "PT011",    # pytest.raises(Exception) is intentional in binding tests
+  "RUF001",   # Unicode dashes / ellipsis appear in user-facing messages
+  "RUF002",   # ditto, in docstrings
+  "RUF003",   # ditto, in comments
+  # UP037 (quoted-annotation): leave forward-ref strings alone. The DSL
+  # codegen in python/raccoon/codegen/step_builder_gen.py inspects each
+  # @dsl_step parameter annotation via AST and re-emits a runtime import
+  # for every bare `ast.Name` node it finds so generated `_dsl.py` files
+  # can call `get_type_hints()`. Stripping the quotes around forward-refs
+  # like `"GenericRobot"` (kept behind `if TYPE_CHECKING:`) would turn
+  # them from `ast.Constant` into `ast.Name`, causing the codegen to add
+  # a runtime import and re-introduce the circular import the quoted
+  # form was working around. Keep the quotes.
+  "UP037",
+  # F821 (undefined-name) inside annotations: ruff cannot follow
+  # `if TYPE_CHECKING: from x import Y` + `def f(x: "Y")` and reports a
+  # false positive. The annotation is a string literal at runtime; mypy /
+  # pyright resolve it correctly. Re-enable per-file once ruff's TC scope
+  # support catches up.
+  "F821",
+  # ARG002 (unused method argument): step lifecycle hooks
+  # (`_execute_step(self, robot)`, `on_update(self, robot, dt)`) must
+  # match the abstract base signature even when the subclass doesn't
+  # touch every parameter. Renaming to `_robot` would defeat readability
+  # for every reader of step source.
+  "ARG002",
 ]
 isort.required-imports = ["from __future__ import annotations"]
+# Treat raccoon and its codegen partner as first-party regardless of cwd —
+# ruff's auto-detection via ``src`` doesn't survive being invoked from a
+# CMake build dir, so list them explicitly.
+isort.known-first-party = ["raccoon", "raccoon_cli", "raccoon_transport"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["T20"]
+# Tests legitimately use print() for diagnostics, broad asserts, and may
+# define helpers in unusual places.
+"tests/**" = ["T20", "PLR", "ARG", "PT", "B"]
+# Top-level package __init__.py files re-export with star imports and run
+# import-order-sensitive setup; lint that matters lives in the modules.
+"**/__init__.py" = ["F401", "F403", "F405", "E402", "I001"]
+# Generated DSL wrappers: the codegen owns formatting; spurious imports
+# are by design (forward refs, conditional helpers).
+"**/*_dsl.py" = ["ALL"]
+# LCM-generated message types — file header says "DO NOT MODIFY BY HAND".
+# Re-running `lcm-gen` would overwrite anything we change. The pattern is
+# kept loose (suffix-only) so it matches both relative and absolute paths
+# that ruff sees when invoked from CMake build dirs.
+"**/screen_render_t.py" = ["ALL"]
+"**/screen_render_answer_t.py" = ["ALL"]
+# Compatibility shim re-exports everything; the warning is intentional.
+"python/libstp_compat/**" = ["F401", "F403", "F405", "E402"]
+# Tools and scripts are entry points; they print and they call into
+# subprocess. Keep ruff useful but don't lint scripts as if they were
+# library code.
+"tools/**" = ["T20", "EXE001", "EXE002"]
+# UI/screen modules use `from raccoon.ui import *` to pull in the widget
+# vocabulary (Card, Row, Split, Text, ...). Star-import is the documented
+# layout pattern; don't lint the resulting "may be undefined" noise.
+"**/screens/**" = ["F401", "F403", "F405"]
+"**/screen.py" = ["F401", "F403", "F405"]
+"**/widgets.py" = ["F401", "F403", "F405"]
+"**/*screen*.py" = ["F401", "F403", "F405"]
