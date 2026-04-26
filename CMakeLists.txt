@@ -12,6 +12,8 @@ cmake_minimum_required(VERSION 3.15...3.27)
 
 set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/.cmake-cache" CACHE PATH "")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Required for clang-tidy / clangd / scripts/run-clang-tidy.sh to find sources.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Emit compile_commands.json")
 
 # Set C++20 as the standard for coroutine support
 set(CMAKE_CXX_STANDARD 20)
