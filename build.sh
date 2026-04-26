@@ -33,7 +33,16 @@ RACCOON_ORIGINAL_VERSION=""
 
 patch_version_file() {
   local file="$1" version="$2"
-  sed "s/^version = .*/version = \"$version\"/" "$file" > "$file.tmp"
+  # PEP 440 versions only contain digits, dots, dashes, plus, alpha (a/b/rc),
+  # underscores. Reject anything else up front so a malformed BUILD_NUMBER
+  # like "1/2" can't break sed or inject arbitrary content into pyproject.
+  if [[ ! "$version" =~ ^[A-Za-z0-9.+_-]+$ ]]; then
+    echo "ERROR: refusing to patch version with non-PEP-440 value: $version" >&2
+    exit 1
+  fi
+  # Use | as the sed delimiter so a / in $version (still rejected above, but
+  # belt-and-braces) doesn't terminate the s command.
+  sed "s|^version = .*|version = \"$version\"|" "$file" > "$file.tmp"
   mv "$file.tmp" "$file"
 }
 
