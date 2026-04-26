@@ -57,6 +57,24 @@ class HeadingReferenceService(RobotService):
             return None
         return math.degrees(self._reference_rad)
 
+    def target_absolute_rad(self, target_deg: float) -> float:
+        """Convert a relative target (degrees from reference) to absolute IMU radians.
+
+        Used by motion controllers that want to *hold* an absolute heading
+        rather than *turn* to it — they need the raw absolute target
+        without [-180, 180] normalisation, since the chassis controller
+        carries continuous heading state across consecutive commands.
+
+        Raises:
+            RuntimeError: If no reference has been marked yet.
+        """
+        if self._reference_rad is None:
+            raise RuntimeError(
+                "No heading reference set. Call mark_heading_reference() first."
+            )
+        sign = 1.0 if self._positive_direction == "left" else -1.0
+        return self._reference_rad + sign * math.radians(target_deg)
+
     def compute_turn(
         self,
         target_deg: float,
