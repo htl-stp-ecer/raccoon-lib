@@ -37,8 +37,8 @@ namespace libstp::foundation
         if (!first_update_)
         {
             const double raw_derivative = (deriv_signal - prev_error_) / dt;
-            filtered_derivative_ = cfg_.derivative_lpf_alpha * raw_derivative +
-                                  (1.0 - cfg_.derivative_lpf_alpha) * filtered_derivative_;
+            const double alpha = std::clamp(cfg_.derivative_lpf_alpha, 0.0, 1.0);
+            filtered_derivative_ = alpha * raw_derivative + (1.0 - alpha) * filtered_derivative_;
             derivative = filtered_derivative_;
         }
         else
