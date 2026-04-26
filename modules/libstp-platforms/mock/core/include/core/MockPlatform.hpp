@@ -139,24 +139,30 @@ namespace platform::mock::core
             uint16_t position = 1500;  // Default center position
         };
 
+        // Two locks, with a strict order: m_mutex (HAL state) first, then
+        // m_simMutex (simulation). This lets a long sim physics step run
+        // without gating cheap HAL reads (analog, digital, IMU) on the
+        // same mutex. Methods that touch both (setMotor, getBemf, getAnalog,
+        // getGyroZ) take them in order.
         mutable std::mutex m_mutex;
         std::array<MotorState, 4> m_motors;
         std::array<ServoState, 4> m_servos;
         std::array<uint16_t, 6> m_analog_values;
         uint16_t m_digital_values;
-        
+
         // IMU simulation
         mutable std::mt19937 m_rng;
         mutable std::normal_distribution<float> m_noise_dist;
-        
+
         struct IMUState {
             float gyro_x = 0.0f, gyro_y = 0.0f, gyro_z = 0.0f;
             float accel_x = 0.0f, accel_y = 0.0f, accel_z = 9.81f;  // Default gravity
             float mag_x = 0.0f, mag_y = 0.0f, mag_z = 1.0f;        // Default magnetic field
         } m_imu;
-        
+
         std::chrono::high_resolution_clock::time_point m_start_time;
 
+        mutable std::mutex m_simMutex;
         std::unique_ptr<libstp::sim::SimWorld> m_sim;
         libstp::sim::Pose2D m_simOrigin{};
         bool m_autoTick{false};
@@ -167,7 +173,7 @@ namespace platform::mock::core
         void updateMotorSimulation();
         float addNoise(float value) const;
         int motorCommandToSignedPercent(MotorDir dir, uint32_t value) const;
-        void autoTickLocked();  // caller holds m_mutex
+        void autoTickLocked();  // caller holds m_simMutex
     };
 
     // Free functions keep mock driver code shaped similarly to wombat driver code.
