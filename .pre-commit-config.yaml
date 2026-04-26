@@ -2,9 +2,9 @@
 #
 #     pre-commit run -a
 #
-# Or:
+# Or, to install both pre-commit and pre-push gates in this clone:
 #
-#     pre-commit install  # (runs every time you commit in git)
+#     pre-commit install --hook-type pre-commit --hook-type pre-push
 #
 # To update this file:
 #
@@ -15,6 +15,10 @@
 ci:
   autoupdate_commit_msg: "chore: update pre-commit hooks"
   autofix_commit_msg: "style: pre-commit fixes"
+
+# Install both stages by default — `pre-commit install` alone now wires
+# clang-tidy into pre-push without requiring the --hook-type flag.
+default_install_hook_types: [pre-commit, pre-push]
 
 repos:
 # Standard hooks
@@ -69,9 +73,24 @@ repos:
       pass_filenames: false
       files: '(^modules/.*/python/raccoon/.*\.py$|^tools/generate_step_builders\.py$|^python/raccoon/codegen/.*\.py$)'
 
-# C++ static analysis (clang-tidy) is intentionally NOT a pre-commit hook.
-# It needs compile_commands.json from a known-good CMake build dir, which
-# pre-commit can't guarantee on every contributor's machine. Instead:
-#   bash scripts/run-clang-tidy.sh
-# Run this locally before opening a PR; CI runs the same script on a
-# fresh build. The .clang-tidy config defines the active checks.
+# C++ static analysis (clang-tidy) runs as a pre-PUSH gate, not pre-commit.
+# Reasoning: clang-tidy needs compile_commands.json, which only exists after
+# `cmake -B <dir>`. Running it on every commit would surface stale-build
+# noise that trains contributors to ignore the output. Pre-push is the right
+# point — by the time you're pushing, you've usually built locally — and the
+# wrapper auto-refreshes compile_commands.json (cmake configure only, no
+# rebuild) when the file is missing or doesn't cover the changed sources.
+#
+# Skip in an emergency with `SKIP_CLANG_TIDY=1 git push`. Override the diff
+# base or build dir with UPSTREAM=<ref> / BUILD_DIR=<dir>. CI runs the
+# original `scripts/run-clang-tidy.sh` against the full source tree as the
+# authoritative gate.
+- repo: local
+  hooks:
+    - id: clang-tidy-prepush
+      name: clang-tidy (changed C++ files vs upstream)
+      stages: [pre-push]
+      language: system
+      entry: bash scripts/clang-tidy-prepush.sh
+      pass_filenames: false
+      always_run: true
