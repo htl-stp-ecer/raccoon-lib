@@ -48,6 +48,7 @@ namespace libstp::motion
         speed_scale_ = 1.0;
         heading_scale_ = 1.0;
         unsaturated_cycles_ = 0;
+        off_path_warned_ = false;
         at_goal_cycles_ = 0;
         s_measured_ = 0.0;
         prev_s_measured_ = 0.0;
@@ -242,6 +243,14 @@ namespace libstp::motion
         Eigen::Vector2d path_tangent = spline_->tangentAt(s_measured_);
         double cross_track = -diff.x() * path_tangent.y() + diff.y() * path_tangent.x();
 
+        const bool off_path = std::abs(cross_track) > kOffPathThreshold;
+        if (off_path && !off_path_warned_)
+        {
+            LIBSTP_LOG_WARN("SplineMotion: cross-track error {:.3f} m exceeds threshold at s={:.3f}/{:.3f} m",
+                cross_track, s_measured_, spline_->totalLength());
+            off_path_warned_ = true;
+        }
+
         // Record telemetry
         telemetry_.push_back(SplineMotionTelemetry{
             .time_s = elapsed_time_,
@@ -259,6 +268,7 @@ namespace libstp::motion
             .setpoint_position_m = sp.position,
             .setpoint_velocity_mps = sp.velocity,
             .saturated = motor_cmd.saturated_any,
+            .off_path = off_path,
         });
 
         // Saturation feedback with hysteresis (same pattern as LinearMotion)
