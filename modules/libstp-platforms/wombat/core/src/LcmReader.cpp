@@ -83,8 +83,11 @@ LcmReader::LcmReader()
         transport_.subscribe<raccoon::scalar_i32_t>(
             Channels::backEmf(idx),
             [this, idx](const raccoon::scalar_i32_t& msg) {
-                std::lock_guard<std::mutex> lock(cache_mutex_);
-                bemf_cache_[idx] = msg.value;
+                {
+                    std::lock_guard<std::mutex> lock(cache_mutex_);
+                    bemf_cache_[idx] = msg.value;
+                }
+                bemf_received_.store(true, std::memory_order_release);
             }, retainedOpts);
     }
 
@@ -393,5 +396,19 @@ bool LcmReader::waitForImuReady(int timeout_ms) {
     }
 
     LIBSTP_LOG_TRACE("[LcmReader] IMU heading data received");
+    return true;
+}
+
+bool LcmReader::waitForBemfData(int timeout_ms) {
+    const auto start = std::chrono::steady_clock::now();
+    const auto timeout = std::chrono::milliseconds(timeout_ms);
+
+    while (!bemf_received_.load(std::memory_order_acquire)) {
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        if (elapsed >= timeout) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
     return true;
 }

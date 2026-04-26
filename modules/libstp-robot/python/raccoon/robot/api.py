@@ -305,6 +305,38 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         except ValueError:
             return set()
 
+    def _run_platform_probe(self) -> None:
+        """Run the hardware health-check before any mission code executes.
+
+        Refuses to start when the STM32 bridge or IMU is unreachable. Set
+        LIBSTP_SKIP_PROBE=1 to bypass (useful for offline development and
+        headless tests where the LCM bridge is intentionally absent).
+        """
+        import os
+        if os.environ.get("LIBSTP_SKIP_PROBE") == "1":
+            self.info("LIBSTP_SKIP_PROBE=1 — skipping platform probe")
+            return
+
+        from raccoon.hal import platform as _platform
+
+        try:
+            result = _platform.Platform.probe()
+        except Exception as e:
+            self.error(f"Platform probe raised an unexpected error: {e!r}")
+            raise
+
+        for component in result.components:
+            line = f"  - {component.component.name.lower()}: {'ok' if component.ok else 'FAIL'}"
+            if component.detail:
+                line += f" ({component.detail})"
+            (self.info if component.ok else self.error)(line)
+
+        if not result.ok:
+            failed = ", ".join(c.component.name.lower() for c in result.failed_components())
+            raise _platform.ProbeFailedError(
+                f"Platform probe failed: {failed}\n{result.summary()}"
+            )
+
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
         all_missions = list(self.missions)
@@ -317,6 +349,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         shutdown_mission = self.shutdown_mission
 
         self._preload_missions(missions, setup_mission, shutdown_mission)
+
+        # Hardware health-check before any code-driven motion. Confirms the
+        # STM32 bridge, IMU and motor telemetry are reachable so missions don't
+        # silently run on a half-attached robot. Skipped when LIBSTP_SKIP_PROBE=1
+        # so headless test environments can opt out.
+        self._run_platform_probe()
 
         initialize_timer() # reset clock to 0
         if setup_mission is not None:
