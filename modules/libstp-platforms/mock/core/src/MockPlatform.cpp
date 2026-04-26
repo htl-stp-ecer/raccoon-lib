@@ -45,13 +45,19 @@ namespace platform::mock::core
     {
         if (port >= m_motors.size()) return;
 
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_motors[port].direction = dir;
-        m_motors[port].speed = value;
-
+        int signedPercent;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_motors[port].direction = dir;
+            m_motors[port].speed = value;
+            signedPercent = motorCommandToSignedPercent(dir, value);
+        }
+        // Hand off to the sim under its own lock so a slow physics tick
+        // doesn't block other HAL reads waiting on m_mutex.
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (m_sim)
         {
-            m_sim->setMotorCommand(port, motorCommandToSignedPercent(dir, value));
+            m_sim->setMotorCommand(port, signedPercent);
         }
     }
 
@@ -59,12 +65,14 @@ namespace platform::mock::core
     {
         if (port >= m_motors.size()) return;
 
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_motors[port].direction =
-            signedBemfUnits > 0 ? MotorDir::CW :
-            signedBemfUnits < 0 ? MotorDir::CCW : MotorDir::Off;
-        m_motors[port].speed = static_cast<uint32_t>(std::abs(signedBemfUnits));
-
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_motors[port].direction =
+                signedBemfUnits > 0 ? MotorDir::CW :
+                signedBemfUnits < 0 ? MotorDir::CCW : MotorDir::Off;
+            m_motors[port].speed = static_cast<uint32_t>(std::abs(signedBemfUnits));
+        }
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (m_sim)
         {
             m_sim->setMotorVelocityCommand(port, signedBemfUnits);
@@ -85,21 +93,22 @@ namespace platform::mock::core
     {
         if (port >= m_motors.size()) return 0.0f;
 
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_sim)
         {
-            // Live BEMF derived from the sim's actual wheel angular velocity.
-            // Lets the chassis velocity controller close the loop against
-            // the same physics that's integrating the pose.
-            return static_cast<float>(m_sim->motorBemf(port));
+            std::lock_guard<std::mutex> simLock(m_simMutex);
+            if (m_sim)
+            {
+                // Live BEMF derived from the sim's actual wheel angular velocity.
+                return static_cast<float>(m_sim->motorBemf(port));
+            }
         }
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_motors[port].bemf;
     }
 
     void MockPlatform::setServo(uint8_t port, ServoMode mode, uint16_t pos)
     {
         if (port >= m_servos.size()) return;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
         m_servos[port].mode = mode;
         m_servos[port].position = pos;
@@ -109,25 +118,30 @@ namespace platform::mock::core
     {
         if (port >= m_analog_values.size()) return 0;
 
-        std::lock_guard<std::mutex> lock(m_mutex);
-        const_cast<MockPlatform*>(this)->autoTickLocked();
-        if (m_sim)
+        // Tick under the sim-only mutex so the (potentially multi-millisecond)
+        // physics step doesn't pin every HAL read on the same lock.
         {
-            if (auto sampled = m_sim->readAnalog(port))
+            std::lock_guard<std::mutex> simLock(m_simMutex);
+            const_cast<MockPlatform*>(this)->autoTickLocked();
+            if (m_sim)
             {
-                return *sampled;
+                if (auto sampled = m_sim->readAnalog(port))
+                {
+                    return *sampled;
+                }
             }
         }
         // Fall through to the stock static value when no sim sensor is bound.
+        std::lock_guard<std::mutex> lock(m_mutex);
         float base_value = static_cast<float>(m_analog_values[port]);
-        float noisy_value = base_value + addNoise(base_value) * 10.0f;  // Small variation
+        float noisy_value = base_value + addNoise(base_value) * 10.0f;
         return static_cast<uint16_t>(std::clamp(noisy_value, 0.0f, 1023.0f));
     }
 
     bool MockPlatform::getDigital(uint8_t bit) const
     {
         if (bit >= 16) return false;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
         return (m_digital_values & (1u << bit)) != 0;
     }
@@ -151,10 +165,8 @@ namespace platform::mock::core
 
     float MockPlatform::getGyroZ() const
     {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            const_cast<MockPlatform*>(this)->autoTickLocked();
-        }
+        std::lock_guard<std::mutex> simLock(m_simMutex);
+        const_cast<MockPlatform*>(this)->autoTickLocked();
         if (m_sim)
         {
             return addNoise(m_sim->yawRateRadS());
@@ -203,7 +215,7 @@ namespace platform::mock::core
     void MockPlatform::setAnalogValue(uint8_t port, uint16_t value)
     {
         if (port >= m_analog_values.size()) return;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
         m_analog_values[port] = std::clamp(value, static_cast<uint16_t>(0), static_cast<uint16_t>(1023));
     }
@@ -211,7 +223,7 @@ namespace platform::mock::core
     void MockPlatform::setDigitalValue(uint8_t bit, bool value)
     {
         if (bit >= 16) return;
-        
+
         std::lock_guard<std::mutex> lock(m_mutex);
         if (value) {
             m_digital_values |= (1u << bit);
@@ -242,14 +254,14 @@ namespace platform::mock::core
                 motor.bemf = 0.0f;
                 continue;
             }
-            
+
             // Simulate motor behavior
             float speed_factor = static_cast<float>(motor.speed) / 400.0f;  // 0-400 range to 0-1
             float direction_factor = (motor.direction == MotorDir::CW) ? 1.0f : -1.0f;
-            
+
             // Update position (encoder simulation)
             motor.position += speed_factor * direction_factor * 0.1f;  // Arbitrary scaling
-            
+
             // Simulate BEMF (back electromotive force) - proportional to speed with some noise
             motor.bemf = speed_factor * direction_factor * 12.0f + addNoise(0.0f) * 0.5f;  // ~12V max with noise
         }
@@ -267,7 +279,7 @@ namespace platform::mock::core
                                     libstp::sim::WorldMap map,
                                     const libstp::sim::Pose2D& startPose)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         m_sim = std::make_unique<libstp::sim::SimWorld>();
         m_sim->configure(robot, motors);
         m_sim->setMap(std::move(map));
@@ -279,13 +291,13 @@ namespace platform::mock::core
 
     void MockPlatform::detachSim()
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         m_sim.reset();
     }
 
     bool MockPlatform::hasSim() const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         return m_sim != nullptr;
     }
 
@@ -293,14 +305,14 @@ namespace platform::mock::core
 
     libstp::sim::Pose2D MockPlatform::simPose() const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (!m_sim) return {};
         return m_sim->pose();
     }
 
     libstp::sim::Pose2D MockPlatform::simRelativePose() const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (!m_sim) return {};
         const auto p = m_sim->pose();
         const float dx = p.x - m_simOrigin.x;
@@ -316,41 +328,41 @@ namespace platform::mock::core
 
     void MockPlatform::resetSimOrigin()
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (!m_sim) return;
         m_simOrigin = m_sim->pose();
     }
 
     float MockPlatform::simYawRate() const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (!m_sim) return 0.0f;
         return m_sim->yawRateRadS();
     }
 
     void MockPlatform::tickSim(float dtSeconds)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (!m_sim) return;
         m_sim->tick(dtSeconds);
     }
 
     void MockPlatform::setAutoTickEnabled(bool enabled)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         m_autoTick = enabled;
         m_lastTickTime = m_clock ? m_clock() : 0.0;
     }
 
     bool MockPlatform::isAutoTickEnabled() const
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         return m_autoTick;
     }
 
     void MockPlatform::setClockSource(ClockFn clock)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         m_clock = std::move(clock);
         if (!m_clock) m_clock = &defaultClockSeconds;
         m_lastTickTime = m_clock();
@@ -358,13 +370,13 @@ namespace platform::mock::core
 
     void MockPlatform::setAutoTickMaxStep(float maxDtSeconds)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         if (maxDtSeconds > 0.0f) m_autoTickMaxStep = maxDtSeconds;
     }
 
     void MockPlatform::autoTickIfEnabled()
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::mutex> simLock(m_simMutex);
         autoTickLocked();
     }
 
