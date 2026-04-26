@@ -272,6 +272,27 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         )
         await bg_mgr.cancel_all()
 
+    def _force_quit(self, reason: str) -> None:
+        """Last-resort shutdown when asyncio cancellation is ignored.
+
+        Sets the STM32 shutdown flag and fully disables servos via the HAL
+        (firmware-side stop is instant and survives process death), then
+        terminates the process with ``os._exit`` to bypass any Python-level
+        code still swallowing cancels. A brief sleep gives the LCM publisher
+        a chance to flush the shutdown command before the process dies.
+        """
+        self.error(f"{reason} — forcing process exit")
+        try:
+            from raccoon.hal import Motor, Servo
+            Motor.disable_all()
+            Servo.fully_disable_all()
+        except Exception as e:
+            self.error(f"Failed to set STM32 shutdown flag: {e}")
+        import time as _time
+        _time.sleep(0.05)
+        import os
+        os._exit(2)
+
     @staticmethod
     def _get_skip_mission_indices() -> set:
         """Return mission order indices to skip, from LIBSTP_SKIP_MISSIONS env var."""
@@ -338,9 +359,16 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 )
                 main_task.cancel()
                 try:
-                    await main_task
-                except (asyncio.CancelledError, Exception):
+                    await asyncio.wait_for(
+                        asyncio.shield(main_task), timeout=2.0
+                    )
+                except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
                     pass
+
+                if not main_task.done():
+                    self._force_quit(
+                        "Main task ignored cancellation after 2s grace period"
+                    )
             elif main_task.cancelled():
                 expired = wdt.expired_name
                 if expired is not None:

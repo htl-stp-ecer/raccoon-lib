@@ -237,6 +237,14 @@ class ShakeServo(Step):
 
 _EASE_SERVO_TICK = 1 / 10
 
+_EASING_INT: dict[Easing, int] = {
+    Easing.LINEAR: 0,
+    Easing.EASE_IN: 1,
+    Easing.EASE_OUT: 2,
+    Easing.EASE_IN_OUT: 3,
+    Easing.EASE_IN_OUT_COSINE: 4,
+}
+
 
 @dsl_step(tags=["servo", "actuator"])
 class SlowServo(Step):
@@ -315,22 +323,27 @@ class SlowServo(Step):
 
         duration = abs(delta) / self._speed
 
-        loop = asyncio.get_running_loop()
-        start_time = loop.time()
+        easing_int = _EASING_INT.get(self._easing)
+        if easing_int is not None:
+            self._servo_ref.set_smooth_position(self._target_angle, self._speed, easing_int)
+            await asyncio.sleep(duration)
+        else:
+            loop = asyncio.get_running_loop()
+            start_time = loop.time()
 
-        while True:
-            elapsed = loop.time() - start_time
-            t = min(elapsed / duration, 1.0)
-            eased = self._easing(t)
-            current_angle = start_angle + delta * eased
-            self._servo_ref.set_position(current_angle)
+            while True:
+                elapsed = loop.time() - start_time
+                t = min(elapsed / duration, 1.0)
+                eased = self._easing(t)
+                current_angle = start_angle + delta * eased
+                self._servo_ref.set_position(current_angle)
 
-            if t >= 1.0:
-                break
+                if t >= 1.0:
+                    break
 
-            await asyncio.sleep(_EASE_SERVO_TICK)
+                await asyncio.sleep(_EASE_SERVO_TICK)
 
-        self._servo_ref.set_position(self._target_angle)
+            self._servo_ref.set_position(self._target_angle)
 
 
 @dsl_step(tags=["servo", "actuator"])
