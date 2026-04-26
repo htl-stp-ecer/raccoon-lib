@@ -3,6 +3,16 @@ name: Build & Release
 on:
   push:
     branches: [main]
+    # Don't burn a release on doc-only changes — README/docs/CLAUDE.md edits
+    # don't change the wheel, and shipping a new version number forces every
+    # downstream robot to redeploy for nothing. Code changes that legitimately
+    # touch docs (e.g. a new public API) include the .py/.cpp file in the same
+    # commit and still trigger a release.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'TESTING_DEBT.md'
+      - '.github/workflows/test.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
