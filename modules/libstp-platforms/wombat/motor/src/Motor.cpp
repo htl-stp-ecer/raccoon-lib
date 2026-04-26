@@ -18,6 +18,7 @@ constexpr int MAX_SPEED = 100;
 
 libstp::hal::motor::Motor::Motor(const int port, const bool inverted, const foundation::MotorCalibration& calibration): port_(port), inverted_(inverted), calibration_(calibration)
 {
+    calibration_.validate();
 #ifdef SAFETY_CHECKS_ENABLED
     if (port < MIN_PORT || port > MAX_PORT)
     {
@@ -149,6 +150,7 @@ const libstp::foundation::MotorCalibration& libstp::hal::motor::Motor::getCalibr
 
 void libstp::hal::motor::Motor::setCalibration(const foundation::MotorCalibration& calibration)
 {
+    calibration.validate();
     calibration_ = calibration;
     LIBSTP_LOG_DEBUG("Wombat Motor port={} setCalibration ticks_to_rad={}", port_, calibration_.ticks_to_rad);
 }
