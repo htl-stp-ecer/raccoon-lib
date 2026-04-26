@@ -20,38 +20,23 @@ RPI_HOST=10.101.156.206 bash deploy.sh
 
 ## DSL Step Conventions
 
-Steps are the user-facing building blocks of robot missions. They follow a strict two-layer pattern:
+Steps are the user-facing building blocks of robot missions. They follow a two-layer pattern: a **hidden Step subclass** plus a **public factory** that users actually call. There are two ways to write that pair — pick one consistently within a module.
 
-### Architecture: Hidden Class + Public Factory Function
+### Default: `@dsl_step` (codegen-generated factory)
 
-Every step is a **hidden Step subclass** paired with one or more **public factory functions**:
+Most new steps should use `@dsl_step` on the class. The `tools/generate_step_builders.py` codegen reads the class signature and emits the public factory + builder into a sibling `*_dsl.py` file. Less boilerplate, the docstring on the class becomes the factory docstring.
 
 ```python
 from typing import TYPE_CHECKING
-from .. import Step, dsl
+from .. import Step
+from ..annotation import dsl_step
 
 if TYPE_CHECKING:
-    from libstp.robot.api import GenericRobot
+    from raccoon.robot.api import GenericRobot
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["category", "subcategory"])
 class MyStep(Step):
-    """Brief description of the step implementation."""
-
-    def __init__(self, param: float) -> None:
-        super().__init__()
-        self._param = param
-
-    def _generate_signature(self) -> str:
-        return f"MyStep(param={self._param:.2f})"
-
-    async def _execute_step(self, robot: "GenericRobot") -> None:
-        # Step logic here
-        pass
-
-
-@dsl(tags=["category", "subcategory"])
-def my_step(param: float = 1.0) -> MyStep:
     """One-line summary of what the step does.
 
     Paragraph explaining how it works internally — what controllers,
@@ -63,27 +48,59 @@ def my_step(param: float = 1.0) -> MyStep:
     Args:
         param: Description of the parameter with units and default.
 
-    Returns:
-        A MyStep instance configured for the described behavior.
-
     Example::
 
-        from libstp.step.xxx import my_step
+        from raccoon.step.mymodule import my_step
 
-        # Brief comment explaining the example
         my_step(param=2.0)
     """
-    return MyStep(param)
+
+    def __init__(self, param: float = 1.0) -> None:
+        super().__init__()
+        self._param = param
+
+    def _generate_signature(self) -> str:
+        return f"MyStep(param={self._param:.2f})"
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
+        # Step logic here
+        pass
+```
+
+The codegen produces `mymodule_dsl.py` next to the source. Generated files are committed and verified by a pre-commit hook (`python3 tools/generate_step_builders.py --check`) so drift is caught before CI.
+
+### Manual: `@dsl(hidden=True)` + hand-written factory
+
+Use the manual two-decorator pattern only when the factory needs logic the codegen can't express — e.g. converting user-friendly units (cm → m, deg → rad), wrapping multiple constructors behind one entry point, or branching on input type.
+
+```python
+from raccoon.step.annotation import dsl
+
+@dsl(hidden=True)
+class MyStep(Step):
+    """Internal step — users go through my_step() below."""
+
+    def __init__(self, distance_m: float) -> None:
+        super().__init__()
+        self._distance_m = distance_m
+
+    # _generate_signature() and _execute_step() as above.
+
+
+@dsl(tags=["category", "subcategory"])
+def my_step(cm: float) -> MyStep:
+    """User-facing factory — accepts centimeters, converts to meters."""
+    return MyStep(distance_m=cm / 100.0)
 ```
 
 ### Key Rules
 
-1. **Step classes are always `@dsl(hidden=True)`** — users never instantiate them directly.
-2. **Factory functions are `@dsl(tags=[...])`** — these are the public API. Tags control grouping in the docs catalog. Always provide at least two tags (category + subcategory).
+1. **Pick one decorator pattern per module** and stay consistent. New code should default to `@dsl_step`.
+2. **Tags control documentation grouping** — always provide at least two tags (category + subcategory). The first tag is the primary category.
 3. **Factory functions use user-friendly units** — centimeters (not meters), degrees (not radians). Convert internally.
 4. **`_generate_signature()`** is required on every Step class — returns a string representation for logging/debugging.
 5. **`_execute_step()`** for simple one-shot steps (async), or **`on_start()`/`on_update()`/`on_stop()`** lifecycle hooks for motion steps that subclass `MotionStep`.
-6. **`TYPE_CHECKING` guard** — always put `from libstp.robot.api import GenericRobot` behind `if TYPE_CHECKING:` and use string annotation `"GenericRobot"`.
+6. **`TYPE_CHECKING` guard** — always put `from raccoon.robot.api import GenericRobot` behind `if TYPE_CHECKING:` and use string annotation `"GenericRobot"`.
 
 ### Motion Steps
 
@@ -92,7 +109,7 @@ Motion steps subclass `MotionStep` instead of `Step` and use a fixed-rate update
 ```python
 from .motion_step import MotionStep
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "drive"])
 class MyMotion(MotionStep):
     def on_start(self, robot: "GenericRobot") -> None:
         # Initialize motion controller, set velocity, etc.
