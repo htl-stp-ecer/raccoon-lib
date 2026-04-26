@@ -2,14 +2,11 @@
 // Created by eternalRose on 12/18/25.
 //
 
-#ifndef VERSION_SCREENRENDER_HPP
-#define VERSION_SCREENRENDER_HPP
+#pragma once
+
 #include <string>
 
 #include <raccoon/Transport.h>
-
-#endif //VERSION_SCREENRENDER_HPP
-
 
 namespace libstp::hal::screen_render {
     /**
