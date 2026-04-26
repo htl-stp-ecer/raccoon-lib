@@ -158,3 +158,10 @@ build-test
 
 qemu_python*
 build*/
+_skbuild*/
+
+# Runtime/test artifacts
+logs/
+*.db
+*.sqlite
+*.sqlite-journal
