@@ -8,17 +8,14 @@
 #ifdef SAFETY_CHECKS_ENABLED
 void libstp::hal::servo::Servo::registerServoPort(int port)
 {
-    if (used_servo_ports.contains(port))
+    if (!registry_.tryRegister(port))
     {
         LIBSTP_LOG_WARN("Servo port {} is already in use!", port);
-        return;
     }
-
-    used_servo_ports.insert(port);
 }
 
 void libstp::hal::servo::Servo::unregisterServoPort(const int port)
 {
-    used_servo_ports.erase(port);
+    registry_.unregister(port);
 }
 #endif

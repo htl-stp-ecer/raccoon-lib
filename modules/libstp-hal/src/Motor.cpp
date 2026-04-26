@@ -16,19 +16,16 @@ using namespace libstp::hal::motor;
 void Motor::registerMotorPort(int port)
 {
     LIBSTP_LOG_DEBUG("Registering motor port {}", port);
-    if (used_motor_ports.contains(port))
+    if (!registry_.tryRegister(port))
     {
         LIBSTP_LOG_WARN("Motor port {} is already in use!", port);
-        return;
     }
-
-    used_motor_ports.insert(port);
 }
 
 void Motor::unregisterMotorPort(const int port)
 {
     LIBSTP_LOG_DEBUG("Unregistering motor port {}", port);
-    used_motor_ports.erase(port);
+    registry_.unregister(port);
 }
 #endif
 

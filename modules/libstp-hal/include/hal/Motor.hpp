@@ -3,11 +3,9 @@
 //
 #pragma once
 
-#ifdef SAFETY_CHECKS_ENABLED
-#include <set>
-#endif
 #include "foundation/motor.hpp"
 #include "hal/IMotor.hpp"
+#include "hal/PortRegistry.hpp"
 
 namespace libstp::hal::motor
 {
@@ -22,7 +20,7 @@ namespace libstp::hal::motor
     class Motor : public IMotor
     {
 #ifdef SAFETY_CHECKS_ENABLED
-        static inline std::set<int> used_motor_ports{};
+        static inline detail::PortRegistry registry_{};
 
         static void registerMotorPort(int port);
 

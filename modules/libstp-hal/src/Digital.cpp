@@ -7,16 +7,14 @@
 #ifdef SAFETY_CHECKS_ENABLED
 void libstp::hal::digital::DigitalSensor::registerDigitalPort(int port)
 {
-    if (used_digital_ports.contains(port))
+    if (!registry_.tryRegister(port))
     {
         LIBSTP_LOG_WARN("Digital port {} is already in use!", port);
-        return;
     }
-
-    used_digital_ports.insert(port);
 }
+
 void libstp::hal::digital::DigitalSensor::unregisterDigitalPort(const int port)
 {
-    used_digital_ports.erase(port);
+    registry_.unregister(port);
 }
 #endif
