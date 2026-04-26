@@ -1,3 +1,8 @@
 [submodule "raccoon-transport"]
 	path = raccoon-transport
 	url = git@github.com:htl-stp-ecer/raccoon-transport.git
+	# No `branch =` line: the submodule is pinned to the exact commit
+	# recorded in the parent tree. `git submodule update` resets to that
+	# SHA, so the build is reproducible. Add `branch = main` only if you
+	# want `git submodule update --remote` to follow the remote tip.
+
