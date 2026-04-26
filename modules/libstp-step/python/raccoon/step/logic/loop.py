@@ -1,7 +1,8 @@
-from typing import Any
+from __future__ import annotations
+
 from .. import Step, StepProtocol
-from ..base import _step_path
 from ..annotation import dsl_step
+from ..base import _step_path
 
 
 @dsl_step(tags=["control", "loop"])
@@ -22,12 +23,14 @@ class LoopForever(Step):
         from raccoon.step.timing import do_until_checkpoint
 
         # Continuously toggle a motor on and off until T=30s
-        toggle = seq([
-            motor_power(robot.motor(0), 100),
-            wait(0.5),
-            motor_off(robot.motor(0)),
-            wait(0.5),
-        ])
+        toggle = seq(
+            [
+                motor_power(robot.motor(0), 100),
+                wait(0.5),
+                motor_off(robot.motor(0)),
+                wait(0.5),
+            ]
+        )
         do_until_checkpoint(30.0, loop_forever(toggle))
     """
 
@@ -35,7 +38,8 @@ class LoopForever(Step):
         super().__init__()
 
         if not isinstance(step, StepProtocol):
-            raise TypeError(f"Expected step to be a Step instance, got {type(step)}")
+            msg = f"Expected step to be a Step instance, got {type(step)}"
+            raise TypeError(msg)
 
         self.step = step.resolve()
 
@@ -83,10 +87,12 @@ class LoopFor(Step):
         super().__init__()
 
         if not isinstance(step, StepProtocol):
-            raise TypeError(f"Expected step to be a Step instance, got {type(step)}")
+            msg = f"Expected step to be a Step instance, got {type(step)}"
+            raise TypeError(msg)
 
         if not isinstance(iterations, int) or iterations <= 0:
-            raise ValueError(f"Iterations must be a positive integer, got {iterations}")
+            msg = f"Iterations must be a positive integer, got {iterations}"
+            raise ValueError(msg)
 
         self.step = step.resolve()
         self.iterations = iterations

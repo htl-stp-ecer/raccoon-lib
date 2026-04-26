@@ -4,9 +4,11 @@ Invoked as a subprocess by ``test_drive_mission.py`` so the C++ extension
 state stays isolated from pytest's process. Prints a single JSON line of
 results, then ``os._exit``s before any C++ destructors run.
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -18,11 +20,11 @@ SCENES_DIR = REPO_ROOT / "scenes"
 
 
 def _build_robot():
+    from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge
     from raccoon.kinematics_differential import DifferentialKinematics
-    from raccoon.drive import Drive, ChassisVelocityControlConfig
+    from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
     from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
-    from raccoon.motion import UnifiedMotionPidConfig, AxisConstraints
 
     left = Motor(0, False)
     right = Motor(1, False)
@@ -30,9 +32,7 @@ def _build_robot():
     kin = DifferentialKinematics(left, right, 0.15, 0.03)
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
     bridge = OdometryBridge()
-    odom = Stm32Odometry(
-        imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig()
-    )
+    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
 
     pid_cfg = UnifiedMotionPidConfig()
     pid_cfg.linear = AxisConstraints(0.8, 1.5, 1.5)
@@ -50,6 +50,7 @@ def _build_robot():
 
 def _sim_config():
     from raccoon.testing.sim import SimRobotConfig
+
     return SimRobotConfig(
         wheel_radius_m=0.03,
         track_width_m=0.15,
@@ -91,12 +92,8 @@ async def _scenarios():
 
     _log("scenario 3: wall_box")
     with use_scene(SCENES_DIR / "wall_box.ftmap", robot=cfg, start=(80.0, 50.0, 0.0)):
-        try:
-            await asyncio.wait_for(
-                drive_forward(cm=50.0).run_step(robot), timeout=3.0
-            )
-        except asyncio.TimeoutError:
-            pass
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(drive_forward(cm=50.0).run_step(robot), timeout=3.0)
         p = pose()
         out["wall"] = [p.x, p.y, p.theta]
         _log(f"  ended at x={p.x:.2f}")
@@ -114,8 +111,9 @@ async def _scenarios():
 def main() -> None:
     try:
         results = asyncio.run(_scenarios())
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         import traceback
+
         sys.stderr.write(f"ERR: {type(e).__name__}: {e}\n")
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()

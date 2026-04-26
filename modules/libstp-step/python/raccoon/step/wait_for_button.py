@@ -1,9 +1,8 @@
-import asyncio
+from __future__ import annotations
 
-from .base import Step
-from .annotation import dsl_step
-from raccoon.button import is_pressed
 from raccoon.ui import UIStep
+
+from .annotation import dsl_step
 
 
 @dsl_step(tags=["timing", "button"])

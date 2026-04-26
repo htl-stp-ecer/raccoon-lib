@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import asyncio
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from . import Step, StepProtocol
 from .annotation import dsl
@@ -14,15 +16,18 @@ class TimeoutOr(Step):
 
     _composite = True
 
-    def __init__(self, step: Step, seconds: Union[float, int], fallback: Step) -> None:
+    def __init__(self, step: Step, seconds: float | int, fallback: Step) -> None:
         super().__init__()
 
         if not isinstance(step, StepProtocol):
-            raise TypeError(f"Expected step to be a Step instance, got {type(step)}")
+            msg = f"Expected step to be a Step instance, got {type(step)}"
+            raise TypeError(msg)
         if not isinstance(fallback, StepProtocol):
-            raise TypeError(f"Expected fallback to be a Step instance, got {type(fallback)}")
+            msg = f"Expected fallback to be a Step instance, got {type(fallback)}"
+            raise TypeError(msg)
         if seconds <= 0:
-            raise ValueError(f"Timeout duration must be positive: {seconds}")
+            msg = f"Timeout duration must be positive: {seconds}"
+            raise ValueError(msg)
 
         self.step = step.resolve()
         self.seconds = float(seconds)
@@ -41,7 +46,7 @@ class TimeoutOr(Step):
     async def _execute_step(self, robot: "GenericRobot") -> None:
         try:
             await asyncio.wait_for(self.step.run_step(robot), timeout=self.seconds)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.warn(
                 f"Step timed out after {self.seconds}s — running fallback "
                 f"{self.fallback.__class__.__name__}"
@@ -50,7 +55,7 @@ class TimeoutOr(Step):
 
 
 @dsl(tags=["control", "timeout"])
-def timeout_or(step: Step, seconds: Union[float, int], fallback: Step) -> TimeoutOr:
+def timeout_or(step: Step, seconds: float | int, fallback: Step) -> TimeoutOr:
     """Run a step with a time limit, executing a fallback step if it times out.
 
     Executes ``step`` normally and enforces a maximum wall-clock duration. If

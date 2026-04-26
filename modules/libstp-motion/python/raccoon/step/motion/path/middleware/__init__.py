@@ -36,8 +36,11 @@ class PathMiddleware(Protocol):
         """Called once before the first segment starts."""
 
     def on_segment_start(
-        self, seg: Segment, is_first: bool, robot: "GenericRobot",
-    ) -> Optional[Correction]:
+        self,
+        seg: Segment,
+        is_first: bool,
+        robot: "GenericRobot",
+    ) -> Correction | None:
         """Called before each segment's motion is constructed.
 
         Return a ``Correction`` to influence the next motion's parameters,

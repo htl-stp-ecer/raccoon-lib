@@ -21,13 +21,16 @@ method, enabling patterns like::
     follow_line(left, right, speed=0.5).until(on_black(left) & on_black(right))
     follow_line_single(sensor, speed=0.4).until(on_black(stop_sensor))
 """
+
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
 from raccoon.foundation import ChassisVelocity, PidConfig, PidController
-from raccoon.motion import LinearMotion, LinearMotionConfig, LinearAxis
+from raccoon.motion import LinearAxis, LinearMotion, LinearMotionConfig
 from raccoon.sensor_ir import IRSensor
 
 from .. import SimulationStep, SimulationStepDelta, dsl
@@ -42,6 +45,7 @@ if TYPE_CHECKING:
 @dataclass
 class LineFollowConfig:
     """Configuration for LineFollow step with two sensors."""
+
     left_sensor: IRSensor
     right_sensor: IRSensor
     speed_scale: float  # 0-1 fraction of max velocity
@@ -53,6 +57,7 @@ class LineFollowConfig:
 
 class LineSide(Enum):
     """Which edge of the line to track with a single sensor."""
+
     LEFT = "left"
     RIGHT = "right"
 
@@ -66,6 +71,7 @@ class SingleLineFollowConfig:
     from the left (steers right when it sees black), RIGHT is the
     opposite.
     """
+
     sensor: IRSensor
     speed_scale: float  # 0-1 fraction of max velocity
     distance_cm: float | None = None  # None = run until condition stops
@@ -92,8 +98,7 @@ class LineFollow(MotionStep):
     ``.until()``, or both (whichever triggers first).
     """
 
-    def __init__(self, config: LineFollowConfig,
-                 until: StopCondition | None = None):
+    def __init__(self, config: LineFollowConfig, until: StopCondition | None = None):
         super().__init__()
         self.config = config
         self._until = until
@@ -107,9 +112,7 @@ class LineFollow(MotionStep):
         if self._until is not None:
             parts.append("until")
         mode = "+".join(parts) if parts else "indefinite"
-        return (
-            f"LineFollow(mode={mode}, speed={self.config.speed_scale:.2f})"
-        )
+        return f"LineFollow(mode={mode}, speed={self.config.speed_scale:.2f})"
 
     def to_simulation_step(self) -> SimulationStep:
         base = super().to_simulation_step()
@@ -133,14 +136,23 @@ class LineFollow(MotionStep):
         motion_config.speed_scale = cfg.speed_scale
 
         self._motion = LinearMotion(
-            robot.drive, robot.odometry, robot.motion_pid_config, motion_config,
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            motion_config,
         )
         self._motion.start()
 
-        self._pid = PidController(PidConfig(
-            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
-            integral_max=1.0, output_min=-1.0, output_max=1.0,
-        ))
+        self._pid = PidController(
+            PidConfig(
+                kp=cfg.kp,
+                ki=cfg.ki,
+                kd=cfg.kd,
+                integral_max=1.0,
+                output_min=-1.0,
+                output_max=1.0,
+            )
+        )
 
         if self._until is not None:
             self._until.start(robot)
@@ -172,9 +184,7 @@ class LineFollow(MotionStep):
         wz = self._pid.update(error, dt)
         self._motion.set_omega_override(wz)
 
-        self.debug(
-            f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}"
-        )
+        self.debug(f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} wz={wz:.3f} dt={dt:.4f}")
 
         # LinearMotion handles odometry, profiled velocity, drive commands
         self._motion.update(dt)
@@ -195,8 +205,7 @@ class SingleSensorLineFollow(MotionStep):
     ``.until()``, or both (whichever triggers first).
     """
 
-    def __init__(self, config: SingleLineFollowConfig,
-                 until: StopCondition | None = None):
+    def __init__(self, config: SingleLineFollowConfig, until: StopCondition | None = None):
         super().__init__()
         self.config = config
         self._until = until
@@ -237,14 +246,23 @@ class SingleSensorLineFollow(MotionStep):
         motion_config.speed_scale = cfg.speed_scale
 
         self._motion = LinearMotion(
-            robot.drive, robot.odometry, robot.motion_pid_config, motion_config,
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            motion_config,
         )
         self._motion.start()
 
-        self._pid = PidController(PidConfig(
-            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
-            integral_max=1.0, output_min=-1.0, output_max=1.0,
-        ))
+        self._pid = PidController(
+            PidConfig(
+                kp=cfg.kp,
+                ki=cfg.ki,
+                kd=cfg.kd,
+                integral_max=1.0,
+                output_min=-1.0,
+                output_max=1.0,
+            )
+        )
 
         if self._until is not None:
             self._until.start(robot)
@@ -352,9 +370,8 @@ class FollowLine(LineFollow):
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
-            raise ValueError(
-                "FollowLine requires either 'distance_cm' or 'until'"
-            )
+            msg = "FollowLine requires either 'distance_cm' or 'until'"
+            raise ValueError(msg)
         self._left_sensor = left_sensor
         self._right_sensor = right_sensor
         self._distance_cm = distance_cm
@@ -367,7 +384,9 @@ class FollowLine(LineFollow):
             right_sensor=right_sensor,
             speed_scale=speed,
             distance_cm=distance_cm,
-            kp=kp, ki=ki, kd=kd,
+            kp=kp,
+            ki=ki,
+            kd=kd,
         )
         super().__init__(config, until=until)
 
@@ -378,9 +397,7 @@ class FollowLine(LineFollow):
         if self._until is not None:
             parts.append("until")
         mode = "+".join(parts)
-        return (
-            f"FollowLine(mode={mode}, speed={self._speed:.2f})"
-        )
+        return f"FollowLine(mode={mode}, speed={self._speed:.2f})"
 
 
 @dsl_step(tags=["motion", "line-follow"])
@@ -448,9 +465,8 @@ class FollowLineSingle(SingleSensorLineFollow):
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
-            raise ValueError(
-                "FollowLineSingle requires either 'distance_cm' or 'until'"
-            )
+            msg = "FollowLineSingle requires either 'distance_cm' or 'until'"
+            raise ValueError(msg)
         self._sensor = sensor
         self._distance_cm = distance_cm
         self._speed = speed
@@ -463,7 +479,9 @@ class FollowLineSingle(SingleSensorLineFollow):
             speed_scale=speed,
             side=side,
             distance_cm=distance_cm,
-            kp=kp, ki=ki, kd=kd,
+            kp=kp,
+            ki=ki,
+            kd=kd,
         )
         super().__init__(config, until=until)
 
@@ -475,8 +493,7 @@ class FollowLineSingle(SingleSensorLineFollow):
             parts.append("until")
         mode = "+".join(parts)
         return (
-            f"FollowLineSingle(mode={mode}, "
-            f"side={self._side.value}, speed={self._speed:.2f})"
+            f"FollowLineSingle(mode={mode}, " f"side={self._side.value}, speed={self._speed:.2f})"
         )
 
 
@@ -497,10 +514,11 @@ class DirectionalLineFollowConfig:
     velocity (vy) instead of angular velocity (wz), keeping the robot's
     heading constant while correcting position by strafing.
     """
+
     left_sensor: IRSensor
     right_sensor: IRSensor
-    heading_speed: float    # -1..1 fraction of max forward velocity
-    strafe_speed: float     # -1..1 fraction of max lateral velocity (positive = right)
+    heading_speed: float  # -1..1 fraction of max forward velocity
+    strafe_speed: float  # -1..1 fraction of max lateral velocity (positive = right)
     distance_cm: float | None = None  # None = run until condition stops
     kp: float = 0.4
     ki: float = 0.0
@@ -523,8 +541,7 @@ class DirectionalLineFollow(MotionStep):
     ``StopCondition``, or both.
     """
 
-    def __init__(self, config: DirectionalLineFollowConfig,
-                 until: StopCondition | None = None):
+    def __init__(self, config: DirectionalLineFollowConfig, until: StopCondition | None = None):
         super().__init__()
         self.config = config
         self._until = until
@@ -581,19 +598,31 @@ class DirectionalLineFollow(MotionStep):
 
         robot.odometry.reset()
 
-        self._pid = PidController(PidConfig(
-            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
-            integral_max=1.0, output_min=-1.0, output_max=1.0,
-        ))
+        self._pid = PidController(
+            PidConfig(
+                kp=cfg.kp,
+                ki=cfg.ki,
+                kd=cfg.kd,
+                integral_max=1.0,
+                output_min=-1.0,
+                output_max=1.0,
+            )
+        )
 
         # Heading hold PID for lateral correction mode
         if cfg.lateral_correction:
             self._initial_heading = robot.odometry.get_heading()
             h = pid_cfg.heading
-            self._heading_pid = PidController(PidConfig(
-                kp=h.kp, ki=h.ki, kd=h.kd,
-                integral_max=1.0, output_min=-1.0, output_max=1.0,
-            ))
+            self._heading_pid = PidController(
+                PidConfig(
+                    kp=h.kp,
+                    ki=h.ki,
+                    kd=h.kd,
+                    integral_max=1.0,
+                    output_min=-1.0,
+                    output_max=1.0,
+                )
+            )
 
         if self._until is not None:
             self._until.start(robot)
@@ -664,9 +693,10 @@ class DirectionalSingleLineFollowConfig:
     velocity (vy) instead of angular velocity (wz), keeping the robot's
     heading constant while correcting position by strafing.
     """
+
     sensor: IRSensor
-    heading_speed: float    # -1..1 fraction of max forward velocity
-    strafe_speed: float     # -1..1 fraction of max lateral velocity (positive = right)
+    heading_speed: float  # -1..1 fraction of max forward velocity
+    strafe_speed: float  # -1..1 fraction of max lateral velocity (positive = right)
     distance_cm: float | None = None  # None = run until condition stops
     side: LineSide = LineSide.LEFT
     kp: float = 0.4
@@ -688,8 +718,9 @@ class DirectionalSingleLineFollow(MotionStep):
     termination.
     """
 
-    def __init__(self, config: DirectionalSingleLineFollowConfig,
-                 until: StopCondition | None = None):
+    def __init__(
+        self, config: DirectionalSingleLineFollowConfig, until: StopCondition | None = None
+    ):
         super().__init__()
         self.config = config
         self._until = until
@@ -745,19 +776,31 @@ class DirectionalSingleLineFollow(MotionStep):
 
         robot.odometry.reset()
 
-        self._pid = PidController(PidConfig(
-            kp=cfg.kp, ki=cfg.ki, kd=cfg.kd,
-            integral_max=1.0, output_min=-1.0, output_max=1.0,
-        ))
+        self._pid = PidController(
+            PidConfig(
+                kp=cfg.kp,
+                ki=cfg.ki,
+                kd=cfg.kd,
+                integral_max=1.0,
+                output_min=-1.0,
+                output_max=1.0,
+            )
+        )
 
         # Heading hold PID for lateral correction mode
         if cfg.lateral_correction:
             self._initial_heading = robot.odometry.get_heading()
             h = pid_cfg.heading
-            self._heading_pid = PidController(PidConfig(
-                kp=h.kp, ki=h.ki, kd=h.kd,
-                integral_max=1.0, output_min=-1.0, output_max=1.0,
-            ))
+            self._heading_pid = PidController(
+                PidConfig(
+                    kp=h.kp,
+                    ki=h.ki,
+                    kd=h.kd,
+                    integral_max=1.0,
+                    output_min=-1.0,
+                    output_max=1.0,
+                )
+            )
 
         if self._until is not None:
             self._until.start(robot)
@@ -805,9 +848,7 @@ class DirectionalSingleLineFollow(MotionStep):
         robot.odometry.update(dt)
         robot.drive.update(dt)
 
-        self.debug(
-            f"black={reading:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}"
-        )
+        self.debug(f"black={reading:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}")
 
         return False
 
@@ -871,9 +912,7 @@ class DirectionalFollowLine(DirectionalLineFollow):
         directional_follow_line(left, right, distance_cm=50, strafe_speed=0.5)
 
         # Follow until both sensors see black
-        directional_follow_line(left, right, strafe_speed=0.4).until(
-            on_black(left) & on_black(right)
-        )
+        directional_follow_line(left, right, strafe_speed=0.4).until(on_black(left) & on_black(right))
     """
 
     def __init__(
@@ -889,9 +928,8 @@ class DirectionalFollowLine(DirectionalLineFollow):
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
-            raise ValueError(
-                "DirectionalFollowLine requires either 'distance_cm' or 'until'"
-            )
+            msg = "DirectionalFollowLine requires either 'distance_cm' or 'until'"
+            raise ValueError(msg)
         self._left_sensor = left_sensor
         self._right_sensor = right_sensor
         self._distance_cm = distance_cm
@@ -900,14 +938,19 @@ class DirectionalFollowLine(DirectionalLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
-        super().__init__(DirectionalLineFollowConfig(
-            left_sensor=left_sensor,
-            right_sensor=right_sensor,
-            heading_speed=heading_speed,
-            strafe_speed=strafe_speed,
-            distance_cm=distance_cm,
-            kp=kp, ki=ki, kd=kd,
-        ), until=until)
+        super().__init__(
+            DirectionalLineFollowConfig(
+                left_sensor=left_sensor,
+                right_sensor=right_sensor,
+                heading_speed=heading_speed,
+                strafe_speed=strafe_speed,
+                distance_cm=distance_cm,
+                kp=kp,
+                ki=ki,
+                kd=kd,
+            ),
+            until=until,
+        )
 
     def _generate_signature(self) -> str:
         parts = []
@@ -964,9 +1007,7 @@ class StrafeFollowLine(DirectionalLineFollow):
         strafe_follow_line(left, right, distance_cm=40, speed=0.4)
 
         # Follow until both sensors see black
-        strafe_follow_line(left, right, speed=0.4).until(
-            on_black(left) & on_black(right)
-        )
+        strafe_follow_line(left, right, speed=0.4).until(on_black(left) & on_black(right))
     """
 
     def __init__(
@@ -981,9 +1022,8 @@ class StrafeFollowLine(DirectionalLineFollow):
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
-            raise ValueError(
-                "StrafeFollowLine requires either 'distance_cm' or 'until'"
-            )
+            msg = "StrafeFollowLine requires either 'distance_cm' or 'until'"
+            raise ValueError(msg)
         self._left_sensor = left_sensor
         self._right_sensor = right_sensor
         self._distance_cm = distance_cm
@@ -991,15 +1031,20 @@ class StrafeFollowLine(DirectionalLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
-        super().__init__(DirectionalLineFollowConfig(
-            left_sensor=left_sensor,
-            right_sensor=right_sensor,
-            heading_speed=speed,
-            strafe_speed=0.0,
-            distance_cm=distance_cm,
-            kp=kp, ki=ki, kd=kd,
-            lateral_correction=True,
-        ), until=until)
+        super().__init__(
+            DirectionalLineFollowConfig(
+                left_sensor=left_sensor,
+                right_sensor=right_sensor,
+                heading_speed=speed,
+                strafe_speed=0.0,
+                distance_cm=distance_cm,
+                kp=kp,
+                ki=ki,
+                kd=kd,
+                lateral_correction=True,
+            ),
+            until=until,
+        )
 
     def _generate_signature(self) -> str:
         parts = []
@@ -1008,9 +1053,7 @@ class StrafeFollowLine(DirectionalLineFollow):
         if self._until is not None:
             parts.append("until")
         mode = "+".join(parts)
-        return (
-            f"StrafeFollowLine(mode={mode}, speed={self._speed:.2f})"
-        )
+        return f"StrafeFollowLine(mode={mode}, speed={self._speed:.2f})"
 
 
 @dsl_step(tags=["motion", "line-follow"])
@@ -1069,9 +1112,8 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
-            raise ValueError(
-                "StrafeFollowLineSingle requires either 'distance_cm' or 'until'"
-            )
+            msg = "StrafeFollowLineSingle requires either 'distance_cm' or 'until'"
+            raise ValueError(msg)
         self._sensor = sensor
         self._distance_cm = distance_cm
         self._speed = speed
@@ -1079,15 +1121,20 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
-        super().__init__(DirectionalSingleLineFollowConfig(
-            sensor=sensor,
-            heading_speed=speed,
-            strafe_speed=0.0,
-            distance_cm=distance_cm,
-            side=side,
-            kp=kp, ki=ki, kd=kd,
-            lateral_correction=True,
-        ), until=until)
+        super().__init__(
+            DirectionalSingleLineFollowConfig(
+                sensor=sensor,
+                heading_speed=speed,
+                strafe_speed=0.0,
+                distance_cm=distance_cm,
+                side=side,
+                kp=kp,
+                ki=ki,
+                kd=kd,
+                lateral_correction=True,
+            ),
+            until=until,
+        )
 
     def _generate_signature(self) -> str:
         parts = []
@@ -1161,9 +1208,8 @@ class DirectionalFollowLineSingle(DirectionalSingleLineFollow):
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
-            raise ValueError(
-                "DirectionalFollowLineSingle requires either 'distance_cm' or 'until'"
-            )
+            msg = "DirectionalFollowLineSingle requires either 'distance_cm' or 'until'"
+            raise ValueError(msg)
         self._sensor = sensor
         self._distance_cm = distance_cm
         self._heading_speed = heading_speed
@@ -1172,14 +1218,19 @@ class DirectionalFollowLineSingle(DirectionalSingleLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
-        super().__init__(DirectionalSingleLineFollowConfig(
-            sensor=sensor,
-            heading_speed=heading_speed,
-            strafe_speed=strafe_speed,
-            distance_cm=distance_cm,
-            side=side,
-            kp=kp, ki=ki, kd=kd,
-        ), until=until)
+        super().__init__(
+            DirectionalSingleLineFollowConfig(
+                sensor=sensor,
+                heading_speed=heading_speed,
+                strafe_speed=strafe_speed,
+                distance_cm=distance_cm,
+                side=side,
+                kp=kp,
+                ki=ki,
+                kd=kd,
+            ),
+            until=until,
+        )
 
     def _generate_signature(self) -> str:
         parts = []

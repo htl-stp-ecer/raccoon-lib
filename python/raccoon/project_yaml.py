@@ -26,10 +26,11 @@ Convenience wrappers for ``raccoon.project.yml``::
     root = find_project_root()
     update_project_value(root, ["robot", "motion_pid", "angular", "max_velocity"], 1.23)
 """
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
@@ -42,8 +43,10 @@ _SENTINEL = object()
 # Include-aware YAML loader
 # ---------------------------------------------------------------------------
 
+
 class _IncludeRef:
     """Marker object that records an ``!include`` or ``!include-merge`` tag."""
+
     __slots__ = ("path", "merge")
 
     def __init__(self, path: str, *, merge: bool = False) -> None:
@@ -57,6 +60,7 @@ class _IncludeRef:
 
 def _make_include_loader():
     """Create a YAML loader subclass that turns include tags into markers."""
+
     class IncludeLoader(yaml.SafeLoader):
         pass
 
@@ -77,8 +81,8 @@ _IncludeLoader = _make_include_loader()
 def _load_with_includes(path: Path) -> Any:
     """Load a YAML file, preserving ``!include`` / ``!include-merge`` as markers."""
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return yaml.load(f, Loader=_IncludeLoader)  # noqa: S506
+        with Path(path).open(encoding="utf-8") as f:
+            return yaml.load(f, Loader=_IncludeLoader)
     except (yaml.YAMLError, OSError):
         return {}
 
@@ -105,7 +109,9 @@ def _resolve_includes(data: Any, base_dir: Path, *, _depth: int = 0) -> Any:
                 merged = _load_with_includes(include_path)
                 if isinstance(merged, dict):
                     resolved = _resolve_includes(
-                        merged, include_path.parent, _depth=_depth + 1,
+                        merged,
+                        include_path.parent,
+                        _depth=_depth + 1,
                     )
                     if isinstance(resolved, dict):
                         result.update(resolved)
@@ -114,11 +120,15 @@ def _resolve_includes(data: Any, base_dir: Path, *, _depth: int = 0) -> Any:
                 include_path = (base_dir / v.path).resolve()
                 included = _load_with_includes(include_path)
                 result[k] = _resolve_includes(
-                    included, include_path.parent, _depth=_depth + 1,
+                    included,
+                    include_path.parent,
+                    _depth=_depth + 1,
                 )
             else:
                 result[k] = _resolve_includes(
-                    v, base_dir, _depth=_depth + 1,
+                    v,
+                    base_dir,
+                    _depth=_depth + 1,
                 )
         return result
 
@@ -140,8 +150,8 @@ def _load_plain(path: Path) -> dict:
     and ``!include-merge`` refs merge their keys into the parent dict.
     """
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = yaml.load(f, Loader=_IncludeLoader)  # noqa: S506
+        with Path(path).open(encoding="utf-8") as f:
+            data = yaml.load(f, Loader=_IncludeLoader)
         if not isinstance(data, dict):
             return {}
         return _resolve_includes(data, path.parent)
@@ -151,6 +161,7 @@ def _load_plain(path: Path) -> dict:
 
 def _make_include_dumper():
     """Create a YAML dumper that serializes ``_IncludeRef`` back to tags."""
+
     class IncludeDumper(yaml.SafeDumper):
         pass
 
@@ -198,13 +209,9 @@ def _save_yaml(path: Path, data: dict) -> bool:
         path.parent.mkdir(parents=True, exist_ok=True)
         # Load original to preserve _IncludeRef entries
         original = _load_with_includes(path)
-        if isinstance(original, dict):
-            merged = _deep_merge_preserving_refs(original, data)
-        else:
-            merged = data
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(merged, f, Dumper=_IncludeDumper,
-                      sort_keys=False, default_flow_style=False)
+        merged = _deep_merge_preserving_refs(original, data) if isinstance(original, dict) else data
+        with Path(path).open("w", encoding="utf-8") as f:
+            yaml.dump(merged, f, Dumper=_IncludeDumper, sort_keys=False, default_flow_style=False)
         return True
     except OSError:
         return False
@@ -213,6 +220,7 @@ def _save_yaml(path: Path, data: dict) -> bool:
 # ---------------------------------------------------------------------------
 # Recursive path resolution
 # ---------------------------------------------------------------------------
+
 
 def _resolve_path(
     file_path: Path,
@@ -268,14 +276,12 @@ def _resolve_path(
             if isinstance(val, dict):
                 data = val
                 continue
-            else:
-                # Leaf value — remaining path (if any) can't be navigated further.
-                break
+            # Leaf value — remaining path (if any) can't be navigated further.
+            break
 
         # --- Check !include-merge sources ---
         # The segment might be a key that was merged from another file.
-        found_in_merge = False
-        for key, val in data.items():
+        for _key, val in data.items():
             if not isinstance(val, _IncludeRef) or not val.merge:
                 continue
             include_path = (file_path.parent / val.path).resolve()
@@ -294,6 +300,7 @@ def _resolve_path(
 # ---------------------------------------------------------------------------
 # Core public API (file-based, no project assumptions)
 # ---------------------------------------------------------------------------
+
 
 def yaml_read(
     file_path: Path,
@@ -317,7 +324,8 @@ def yaml_read(
     for segment in remaining:
         if not isinstance(data, dict) or segment not in data:
             if default is _SENTINEL:
-                raise KeyError(f"Path not found: {'.'.join(key_path)}")
+                msg = f"Path not found: {'.'.join(key_path)}"
+                raise KeyError(msg)
             return default
         data = data[segment]
     return data
@@ -403,7 +411,8 @@ def yaml_write_many(
 # Project convenience wrappers (raccoon.project.yml)
 # ---------------------------------------------------------------------------
 
-def find_project_root(start: Path | None = None) -> Optional[Path]:
+
+def find_project_root(start: Path | None = None) -> Path | None:
     """Search upward from *start* (default: cwd) for ``raccoon.project.yml``."""
     try:
         current = (start or Path.cwd()).resolve()

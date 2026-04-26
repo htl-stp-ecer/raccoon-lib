@@ -1,16 +1,18 @@
 """Tests for background step execution, preemption, and wait_for_background."""
+
+from __future__ import annotations
+
 import asyncio
+import contextlib
+import importlib.util
 from unittest.mock import MagicMock
 
 import pytest
 
 
-def libstp_available():
-    try:
-        import raccoon
-        return True
-    except ImportError:
-        return False
+def libstp_available() -> bool:
+    """Check raccoon availability without importing the module."""
+    return importlib.util.find_spec("raccoon") is not None
 
 
 requires_libstp = pytest.mark.skipif(
@@ -90,6 +92,7 @@ class TestBackgroundBasic:
     async def test_background_does_not_block(self):
         """background() returns immediately while the step runs."""
         from raccoon.step.logic.background import background
+
         SlowStep, _ = _make_step_classes()
 
         step = SlowStep(duration=0.5)
@@ -111,17 +114,20 @@ class TestBackgroundBasic:
         """wait_for_background() blocks until all bg steps finish."""
         from raccoon.step.logic.background import background, wait_for_background
         from raccoon.step.sequential import seq
+
         SlowStep, _ = _make_step_classes()
 
         step_a = SlowStep(duration=0.1)
         step_b = SlowStep(duration=0.15)
         robot = _make_robot()
 
-        s = seq([
-            background(step_a),
-            background(step_b),
-            wait_for_background(),
-        ])
+        s = seq(
+            [
+                background(step_a),
+                background(step_b),
+                wait_for_background(),
+            ]
+        )
         await s.run_step(robot)
 
         assert step_a.finished
@@ -132,17 +138,20 @@ class TestBackgroundBasic:
         """wait_for_background(name) blocks only for the named step."""
         from raccoon.step.logic.background import background, wait_for_background
         from raccoon.step.sequential import seq
+
         SlowStep, _ = _make_step_classes()
 
         fast = SlowStep(duration=0.05)
         slow = SlowStep(duration=0.3)
         robot = _make_robot()
 
-        s = seq([
-            background(fast, name="fast"),
-            background(slow, name="slow"),
-            wait_for_background("fast"),
-        ])
+        s = seq(
+            [
+                background(fast, name="fast"),
+                background(slow, name="slow"),
+                wait_for_background("fast"),
+            ]
+        )
         await s.run_step(robot)
 
         assert fast.finished
@@ -155,16 +164,19 @@ class TestBackgroundBasic:
         """wait_for_background returns immediately if step already finished."""
         from raccoon.step.logic.background import background, wait_for_background
         from raccoon.step.sequential import seq
+
         SlowStep, _ = _make_step_classes()
 
         step = SlowStep(duration=0.01)
         robot = _make_robot()
 
-        s = seq([
-            background(step, name="quick"),
-            SlowStep(duration=0.1),  # Give bg time to finish
-            wait_for_background("quick"),  # Should return immediately
-        ])
+        s = seq(
+            [
+                background(step, name="quick"),
+                SlowStep(duration=0.1),  # Give bg time to finish
+                wait_for_background("quick"),  # Should return immediately
+            ]
+        )
         await s.run_step(robot)
         assert step.finished
 
@@ -172,6 +184,7 @@ class TestBackgroundBasic:
     async def test_wait_for_nonexistent_name(self):
         """wait_for_background with unknown name returns immediately."""
         from raccoon.step.logic.background import wait_for_background
+
         robot = _make_robot()
         w = wait_for_background("does_not_exist")
         await w.run_step(robot)  # Should not raise
@@ -189,17 +202,20 @@ class TestBackgroundPreemption:
         """Foreground step cancels a background step using the same resource."""
         from raccoon.step.logic.background import background
         from raccoon.step.sequential import seq
+
         SlowStep, InstantStep = _make_step_classes()
 
         bg_step = SlowStep(resources=frozenset({"drive"}), duration=5.0)
         fg_step = InstantStep(resources=frozenset({"drive"}))
         robot = _make_robot()
 
-        s = seq([
-            background(bg_step),
-            SlowStep(duration=0.05),  # Let bg start
-            fg_step,  # Should preempt bg
-        ])
+        s = seq(
+            [
+                background(bg_step),
+                SlowStep(duration=0.05),  # Let bg start
+                fg_step,  # Should preempt bg
+            ]
+        )
         await s.run_step(robot)
 
         assert bg_step.started
@@ -211,17 +227,20 @@ class TestBackgroundPreemption:
         """Background step continues when foreground uses different resource."""
         from raccoon.step.logic.background import background, wait_for_background
         from raccoon.step.sequential import seq
+
         SlowStep, InstantStep = _make_step_classes()
 
         bg_step = SlowStep(resources=frozenset({"servo:0"}), duration=0.1)
         fg_step = InstantStep(resources=frozenset({"drive"}))
         robot = _make_robot()
 
-        s = seq([
-            background(bg_step),
-            fg_step,
-            wait_for_background(),
-        ])
+        s = seq(
+            [
+                background(bg_step),
+                fg_step,
+                wait_for_background(),
+            ]
+        )
         await s.run_step(robot)
 
         assert bg_step.finished
@@ -232,17 +251,20 @@ class TestBackgroundPreemption:
         """servo:* foreground preempts servo:0 background."""
         from raccoon.step.logic.background import background
         from raccoon.step.sequential import seq
+
         SlowStep, InstantStep = _make_step_classes()
 
         bg_step = SlowStep(resources=frozenset({"servo:0"}), duration=5.0)
         fg_step = InstantStep(resources=frozenset({"servo:*"}))
         robot = _make_robot()
 
-        s = seq([
-            background(bg_step),
-            SlowStep(duration=0.05),
-            fg_step,
-        ])
+        s = seq(
+            [
+                background(bg_step),
+                SlowStep(duration=0.05),
+                fg_step,
+            ]
+        )
         await s.run_step(robot)
 
         assert bg_step.started
@@ -253,6 +275,7 @@ class TestBackgroundPreemption:
         """Only the conflicting background step is preempted."""
         from raccoon.step.logic.background import background, wait_for_background
         from raccoon.step.sequential import seq
+
         SlowStep, InstantStep = _make_step_classes()
 
         bg_drive = SlowStep(resources=frozenset({"drive"}), duration=5.0)
@@ -260,13 +283,15 @@ class TestBackgroundPreemption:
         fg_drive = InstantStep(resources=frozenset({"drive"}))
         robot = _make_robot()
 
-        s = seq([
-            background(bg_drive),
-            background(bg_servo),
-            SlowStep(duration=0.05),
-            fg_drive,  # Preempts bg_drive only
-            wait_for_background(),  # Wait for bg_servo
-        ])
+        s = seq(
+            [
+                background(bg_drive),
+                background(bg_servo),
+                SlowStep(duration=0.05),
+                fg_drive,  # Preempts bg_drive only
+                wait_for_background(),  # Wait for bg_servo
+            ]
+        )
         await s.run_step(robot)
 
         assert bg_drive.started
@@ -278,18 +303,20 @@ class TestBackgroundPreemption:
         """Background steps do not preempt each other via the preemption check."""
         from raccoon.step.logic.background import background
         from raccoon.step.sequential import seq
-        from raccoon.step.resource import ResourceConflictError
+
         SlowStep, _ = _make_step_classes()
 
         bg1 = SlowStep(resources=frozenset({"drive"}), duration=0.5)
         bg2 = SlowStep(resources=frozenset({"drive"}), duration=0.1)
         robot = _make_robot()
 
-        s = seq([
-            background(bg1),
-            SlowStep(duration=0.05),  # Let bg1 start and acquire "drive"
-            background(bg2),          # bg2 will fail to acquire "drive"
-        ])
+        s = seq(
+            [
+                background(bg1),
+                SlowStep(duration=0.05),  # Let bg1 start and acquire "drive"
+                background(bg2),  # bg2 will fail to acquire "drive"
+            ]
+        )
         # bg2's inner run_step will hit ResourceConflictError at runtime
         # because bg1 holds "drive" and bg-vs-bg doesn't preempt.
         # The error is caught inside the background task wrapper.
@@ -313,6 +340,7 @@ class TestBackgroundPreemption:
 class TestBackgroundMeta:
     def test_signature_includes_inner_step(self):
         from raccoon.step.logic.background import Background
+
         SlowStep, _ = _make_step_classes()
         step = SlowStep(resources=frozenset({"drive"}), duration=1.0)
         bg = Background(step)
@@ -322,6 +350,7 @@ class TestBackgroundMeta:
 
     def test_signature_includes_name(self):
         from raccoon.step.logic.background import Background
+
         SlowStep, _ = _make_step_classes()
         bg = Background(SlowStep(), name="my_bg")
         assert "my_bg" in bg._generate_signature()
@@ -329,6 +358,7 @@ class TestBackgroundMeta:
     def test_collected_resources_empty(self):
         """Background reports empty resources (preemptable, not exclusive)."""
         from raccoon.step.logic.background import Background
+
         SlowStep, _ = _make_step_classes()
         step = SlowStep(resources=frozenset({"drive", "servo:0"}))
         bg = Background(step)
@@ -336,11 +366,13 @@ class TestBackgroundMeta:
 
     def test_wait_signature(self):
         from raccoon.step.logic.background import WaitForBackground
+
         assert "all" in WaitForBackground()._generate_signature()
         assert "my_step" in WaitForBackground("my_step")._generate_signature()
 
     def test_type_validation(self):
         from raccoon.step.logic.background import Background
+
         with pytest.raises(TypeError):
             Background("not a step")
 
@@ -404,10 +436,8 @@ class TestBackgroundManager:
 
         assert not task.done()
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
     @pytest.mark.asyncio
     async def test_wait_all(self):

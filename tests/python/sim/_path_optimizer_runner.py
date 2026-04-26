@@ -29,6 +29,7 @@ merge_with_barrier
     Side action is a barrier — both drive segments fire separately.
     Endpoint should match drive(40) reference.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -43,11 +44,11 @@ SCENES_DIR = REPO_ROOT / "scenes"
 
 
 def _build_robot(cfg):
+    from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge
     from raccoon.kinematics_differential import DifferentialKinematics
-    from raccoon.drive import Drive, ChassisVelocityControlConfig
+    from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
     from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
-    from raccoon.motion import UnifiedMotionPidConfig, AxisConstraints
 
     left = Motor(cfg.left_motor_port, cfg.left_motor_inverted)
     right = Motor(cfg.right_motor_port, cfg.right_motor_inverted)
@@ -73,11 +74,14 @@ def _build_robot(cfg):
 
 def _get_config(name: str):
     from raccoon.testing.sim import SimRobotConfig
+
     if name == "drumbot":
         from raccoon.testing.robot_configs import DRUMBOT
+
         return DRUMBOT
-    elif name == "packingbot":
+    if name == "packingbot":
         from raccoon.testing.robot_configs import PACKINGBOT
+
         return PACKINGBOT
     return SimRobotConfig(
         wheel_radius_m=0.03,
@@ -96,18 +100,23 @@ def _log(msg: str) -> None:
 
 
 async def _scenarios(config_name: str) -> None:
-    from raccoon.step.motion.smooth_path import smooth_path
-    from raccoon.step.motion.drive_dsl import drive_forward
-    from raccoon.step.motion.turn_dsl import turn_right
-    from raccoon.step.logic.background import background
     from raccoon.step.base import Step
+    from raccoon.step.logic.background import background
+    from raccoon.step.motion.drive_dsl import drive_forward
+    from raccoon.step.motion.smooth_path import smooth_path
+    from raccoon.step.motion.turn_dsl import turn_right
     from raccoon.testing.sim import pose, use_scene
 
     # Non-drive step used as a background() barrier
     class _Noop(Step):
-        def required_resources(self): return frozenset({"servo:99"})
-        def _generate_signature(self): return "Noop()"
-        async def _execute_step(self, robot): pass
+        def required_resources(self):
+            return frozenset({"servo:99"})
+
+        def _generate_signature(self):
+            return "Noop()"
+
+        async def _execute_step(self, robot):
+            pass
 
     cfg = _get_config(config_name)
     robot = _build_robot(cfg)
@@ -144,7 +153,9 @@ async def _scenarios(config_name: str) -> None:
     _log("corner_cut: drive(50) + turn_right(90) + drive(30) + corner_cut_cm=5")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
         step = smooth_path(
-            drive_forward(50), turn_right(90), drive_forward(30),
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(30),
             corner_cut_cm=5.0,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
@@ -190,8 +201,9 @@ def main() -> None:
 
     try:
         asyncio.run(_scenarios(config_name))
-    except BaseException as e:  # noqa: BLE001
+    except BaseException as e:
         import traceback
+
         sys.stderr.write(f"ERR: {type(e).__name__}: {e}\n")
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()

@@ -20,6 +20,7 @@ Tolerances are tight:
 The runner subprocess pattern matches ``test_drive_mission.py`` to isolate
 the C++ mock-HAL singleton teardown from pytest.
 """
+
 from __future__ import annotations
 
 import json
@@ -38,8 +39,8 @@ ROBOT_CONFIGS = ["default", "drumbot", "packingbot"]
 
 def _raccoon_available() -> bool:
     try:
-        import raccoon  # noqa: F401
-        from raccoon import sim  # noqa: F401
+        from raccoon import sim
+
         return hasattr(sim, "mock")
     except ImportError:
         return False
@@ -48,7 +49,7 @@ def _raccoon_available() -> bool:
 pytestmark = pytest.mark.skipif(
     not _raccoon_available(),
     reason="raccoon mock-bundle wheel not installed (rebuild with "
-           "`pip install -e . --config-settings=cmake.define.DRIVER_BUNDLE=mock`)",
+    "`pip install -e . --config-settings=cmake.define.DRIVER_BUNDLE=mock`)",
 )
 
 
@@ -68,18 +69,20 @@ def _run_runner(config_name: str) -> dict:
         check=False,
     )
     if proc.returncode != 0:
-        raise AssertionError(
+        msg = (
             f"runner failed (exit={proc.returncode}, config={config_name})\n"
             f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
         )
+        raise AssertionError(msg)
 
     for line in proc.stdout.splitlines():
         if line.startswith("RESULTS:"):
-            return json.loads(line[len("RESULTS:"):])
-    raise AssertionError(
+            return json.loads(line[len("RESULTS:") :])
+    msg = (
         f"runner did not emit RESULTS line (config={config_name})\n"
         f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     )
+    raise AssertionError(msg)
 
 
 @pytest.fixture(scope="module", params=ROBOT_CONFIGS)
@@ -92,6 +95,7 @@ def results(request):
 # Scenario 1: single drive — should behave like a normal drive step
 # Target: start x=50, drive 30 cm → x ≈ 80
 # --------------------------------------------------------------------------
+
 
 class TestSingleSegment:
     def test_reaches_target_distance(self, results):
@@ -112,12 +116,11 @@ class TestSingleSegment:
 # Target: start x=50, drive 20+20=40 cm → x ≈ 90
 # --------------------------------------------------------------------------
 
+
 class TestSameTypeDrives:
     def test_reaches_total_distance(self, results):
         x, y, theta = results["two_drives"]
-        assert 89.0 < x < 91.0, (
-            f"smooth_path two drives: x={x:.3f}, expected ~90"
-        )
+        assert 89.0 < x < 91.0, f"smooth_path two drives: x={x:.3f}, expected ~90"
 
     def test_heading_stable(self, results):
         _, _, theta = results["two_drives"]
@@ -136,12 +139,11 @@ class TestSameTypeDrives:
 # Scenario 4: three drives — target x=75 (start 30, drive 45 cm)
 # --------------------------------------------------------------------------
 
+
 class TestThreeDrives:
     def test_reaches_total_distance(self, results):
         x, y, theta = results["three_drives"]
-        assert 74.0 < x < 76.0, (
-            f"smooth_path three drives: x={x:.3f}, expected ~75"
-        )
+        assert 74.0 < x < 76.0, f"smooth_path three drives: x={x:.3f}, expected ~75"
 
     def test_heading_stable(self, results):
         _, _, theta = results["three_drives"]
@@ -154,6 +156,7 @@ class TestThreeDrives:
 # Expected endpoint: x ≈ 70, y ≈ 30, theta ≈ -π/2
 # --------------------------------------------------------------------------
 
+
 class TestCrossType:
     def test_completes_without_error(self, results):
         assert "drive_turn_drive" in results, "drive+turn+drive scenario missing"
@@ -161,9 +164,9 @@ class TestCrossType:
     def test_turned_approximately_90_degrees(self, results):
         _, _, theta = results["drive_turn_drive"]
         expected = -math.pi / 2
-        assert abs(theta - expected) < 0.12, (
-            f"heading after turn: theta={theta:.4f}, expected {expected:.4f}"
-        )
+        assert (
+            abs(theta - expected) < 0.12
+        ), f"heading after turn: theta={theta:.4f}, expected {expected:.4f}"
 
     def test_moved_in_both_directions(self, results):
         x, y, _ = results["drive_turn_drive"]

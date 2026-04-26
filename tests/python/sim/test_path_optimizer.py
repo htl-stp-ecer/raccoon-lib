@@ -8,6 +8,7 @@ Tolerances are intentionally tight:
   physical curves reach approximately the same endpoint.
 - Heading: ±0.08 rad (≈5°) for straight drives; ±0.12 rad (≈7°) for turns.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,8 +26,8 @@ ROBOT_CONFIGS = ["default", "drumbot", "packingbot"]
 
 def _raccoon_available() -> bool:
     try:
-        import raccoon  # noqa: F401
-        from raccoon import sim  # noqa: F401
+        from raccoon import sim
+
         return hasattr(sim, "mock")
     except ImportError:
         return False
@@ -53,17 +54,17 @@ def _run_runner(config_name: str) -> dict:
         check=False,
     )
     if proc.returncode != 0:
-        raise AssertionError(
+        msg = (
             f"runner failed (exit={proc.returncode}, config={config_name})\n"
             f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
         )
+        raise AssertionError(msg)
 
     for line in proc.stdout.splitlines():
         if line.startswith("RESULTS:"):
-            return json.loads(line[len("RESULTS:"):])
-    raise AssertionError(
-        f"runner did not emit RESULTS line\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
-    )
+            return json.loads(line[len("RESULTS:") :])
+    msg = f"runner did not emit RESULTS line\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    raise AssertionError(msg)
 
 
 @pytest.fixture(scope="module", params=ROBOT_CONFIGS)
@@ -82,6 +83,7 @@ def _dist2d(a, b) -> float:
 # Merge endpoint (start 50,50,0 → drive40):
 #   x ≈ 90 cm,   y ≈ 50 cm,  theta ≈ 0
 # ---------------------------------------------------------------------------
+
 
 class TestMergeTwoDrives:
     def test_reaches_correct_distance(self, results):
@@ -112,15 +114,16 @@ class TestMergeTwoDrives:
 # Theoretical endpoint: same as reference ≈ (100, 20, -π/2)
 # ---------------------------------------------------------------------------
 
+
 class TestCornerCut5cm:
     def test_completes_without_error(self, results):
         assert "corner_cut_5cm" in results
 
     def test_heading_correct(self, results):
         _, _, theta = results["corner_cut_5cm"]
-        assert abs(theta - (-math.pi / 2)) < 0.12, (
-            f"heading after corner cut: {theta:.4f} rad, expected {-math.pi/2:.4f}"
-        )
+        assert (
+            abs(theta - (-math.pi / 2)) < 0.12
+        ), f"heading after corner cut: {theta:.4f} rad, expected {-math.pi/2:.4f}"
 
     def test_endpoint_near_reference(self, results):
         """Corner-cut path ends within 2 cm of the unoptimized path."""
@@ -143,15 +146,16 @@ class TestCornerCut5cm:
 # Same theoretical endpoint ≈ (100, 20, -π/2) but via a smooth curve
 # ---------------------------------------------------------------------------
 
+
 class TestSplineDriveTurnDrive:
     def test_completes_without_error(self, results):
         assert "spline_drive_turn_drive" in results
 
     def test_heading_correct(self, results):
         _, _, theta = results["spline_drive_turn_drive"]
-        assert abs(theta - (-math.pi / 2)) < 0.20, (
-            f"heading after spline: {theta:.4f} rad, expected {-math.pi/2:.4f}"
-        )
+        assert (
+            abs(theta - (-math.pi / 2)) < 0.20
+        ), f"heading after spline: {theta:.4f} rad, expected {-math.pi/2:.4f}"
 
     def test_endpoint_near_reference(self, results):
         """Spline path should end within 4 cm of the unoptimized path endpoint."""
@@ -175,12 +179,13 @@ class TestSplineDriveTurnDrive:
 # Net motion is still 40 cm forward → same endpoint as merged case.
 # ---------------------------------------------------------------------------
 
+
 class TestMergeWithBarrier:
     def test_reaches_correct_distance(self, results):
         x, y, _ = results["merge_with_barrier"]
-        assert 89.0 < x < 91.0, (
-            f"barrier test: x={x:.3f}, expected ~90 (both 20 cm drives must run)"
-        )
+        assert (
+            89.0 < x < 91.0
+        ), f"barrier test: x={x:.3f}, expected ~90 (both 20 cm drives must run)"
 
     def test_matches_merged_case(self, results):
         """Two warm-started segments must end within 1 mm of the single merged drive."""

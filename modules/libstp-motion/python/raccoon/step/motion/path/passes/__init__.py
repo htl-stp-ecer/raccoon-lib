@@ -28,25 +28,35 @@ from .spline import segments_to_spline_waypoints, build_spline_step
 
 __all__ = [
     # Lowering
-    "extract_segment", "resolve_step", "is_same_type",
-    "flatten_one", "flatten_parallel", "flatten_steps",
+    "extract_segment",
+    "resolve_step",
+    "is_same_type",
+    "flatten_one",
+    "flatten_parallel",
+    "flatten_steps",
     # Merge
-    "can_merge", "merge_two", "run_merge", "MergePass",
+    "can_merge",
+    "merge_two",
+    "run_merge",
+    "MergePass",
     # Corner cut
-    "try_corner_arc", "run_corner_cut", "CornerCutPass",
+    "try_corner_arc",
+    "run_corner_cut",
+    "CornerCutPass",
     # Spline
-    "segments_to_spline_waypoints", "build_spline_step",
+    "segments_to_spline_waypoints",
+    "build_spline_step",
     # Orchestrator
     "optimize_nodes",
 ]
 
 
 def optimize_nodes(
-    nodes: list[Optional[PathNode]],
+    nodes: list[PathNode | None],
     *,
     merge: bool,
     corner_cut_m: float,
-) -> list[Optional[PathNode]]:
+) -> list[PathNode | None]:
     """Apply optimization passes to a flattened path node list.
 
     ``SideAction`` and ``None`` (deferred) barriers are preserved and never
@@ -66,7 +76,7 @@ def optimize_nodes(
     if not merge and corner_cut_m <= 0.0:
         return nodes
 
-    result: list[Optional[PathNode]] = list(nodes)
+    result: list[PathNode | None] = list(nodes)
     if merge:
         result = run_merge(result)
     if corner_cut_m > 0.0:

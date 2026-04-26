@@ -22,15 +22,18 @@ adapter that translates the ``MotionStep`` lifecycle (``on_start``,
 from __future__ import annotations
 
 import math
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.motion import (
-    LinearMotion, LinearMotionConfig,
-    TurnMotion, TurnConfig,
-    ArcMotion, ArcMotionConfig,
+    ArcMotion,
+    ArcMotionConfig,
+    LinearMotion,
+    LinearMotionConfig,
+    TurnConfig,
+    TurnMotion,
 )
 
-from .ir import Segment, Correction, SENTINEL_DISTANCE_M
+from .ir import SENTINEL_DISTANCE_M, Correction, Segment
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -45,13 +48,14 @@ if TYPE_CHECKING:
 # checks the actual position manually and triggers the transition while the
 # profile is still in cruise phase.
 
-OVERSHOOT_M = 1.0     # 1m overshoot (decel zone ~0.2m at typical params)
-OVERSHOOT_RAD = 3.0   # ~172° overshoot (decel zone ~1.5rad at typical params)
+OVERSHOOT_M = 1.0  # 1m overshoot (decel zone ~0.2m at typical params)
+OVERSHOOT_RAD = 3.0  # ~172° overshoot (decel zone ~1.5rad at typical params)
 
 
 # ---------------------------------------------------------------------------
 # Opaque motion adapters (follow_line, spline)
 # ---------------------------------------------------------------------------
+
 
 class LineFollowAdapter:
     """Adapts a LineFollow/SingleSensorLineFollow step to the C++ motion API.
@@ -121,10 +125,7 @@ class SplineAdapter:
         self._step.on_update(self._robot, dt)
 
     def is_finished(self) -> bool:
-        return (
-            self._step._motion is not None
-            and self._step._motion.is_finished()
-        )
+        return self._step._motion is not None and self._step._motion.is_finished()
 
     def has_reached_distance(self) -> bool:
         return self.is_finished()
@@ -140,17 +141,16 @@ class SplineAdapter:
 # Per-kind motion constructors
 # ---------------------------------------------------------------------------
 
+
 def _create_linear_motion(
-    robot: "GenericRobot", seg: Segment, is_last: bool,
-    correction: Optional[Correction] = None,
+    robot: "GenericRobot",
+    seg: Segment,
+    is_last: bool,
+    correction: Correction | None = None,
 ) -> LinearMotion:
     config = LinearMotionConfig()
     config.axis = seg.axis
-    actual = (
-        seg.distance_m
-        if seg.distance_m is not None
-        else seg.sign * SENTINEL_DISTANCE_M
-    )
+    actual = seg.distance_m if seg.distance_m is not None else seg.sign * SENTINEL_DISTANCE_M
 
     # Apply along-track correction
     if correction and seg.distance_m is not None:
@@ -170,15 +170,16 @@ def _create_linear_motion(
         config.target_heading_rad = correction.heading_target_rad
     elif seg.heading_deg is not None:
         from raccoon.robot.heading_reference import HeadingReferenceService
+
         ref_svc = robot.get_service(HeadingReferenceService)
         sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
-        config.target_heading_rad = (
-            ref_svc._reference_rad + sign * math.radians(seg.heading_deg)
-        )
+        config.target_heading_rad = ref_svc._reference_rad + sign * math.radians(seg.heading_deg)
 
     motion = LinearMotion(
-        robot.drive, robot.odometry,
-        robot.motion_pid_config, config,
+        robot.drive,
+        robot.odometry,
+        robot.motion_pid_config,
+        config,
     )
     if not is_last:
         motion.set_suppress_hard_stop(True)
@@ -186,8 +187,10 @@ def _create_linear_motion(
 
 
 def _create_turn_motion(
-    robot: "GenericRobot", seg: Segment, is_last: bool,
-    correction: Optional[Correction] = None,
+    robot: "GenericRobot",
+    seg: Segment,
+    is_last: bool,
+    correction: Correction | None = None,
 ) -> TurnMotion:
     config = TurnConfig()
     actual = (
@@ -207,8 +210,10 @@ def _create_turn_motion(
     config.speed_scale = seg.speed_scale
 
     motion = TurnMotion(
-        robot.drive, robot.odometry,
-        robot.motion_pid_config, config,
+        robot.drive,
+        robot.odometry,
+        robot.motion_pid_config,
+        config,
     )
     if not is_last:
         motion.set_suppress_hard_stop(True)
@@ -216,8 +221,10 @@ def _create_turn_motion(
 
 
 def _create_arc_motion(
-    robot: "GenericRobot", seg: Segment, is_last: bool,
-    correction: Optional[Correction] = None,
+    robot: "GenericRobot",
+    seg: Segment,
+    is_last: bool,
+    correction: Correction | None = None,
 ) -> ArcMotion:
     config = ArcMotionConfig()
     config.radius_m = seg.radius_m
@@ -235,8 +242,10 @@ def _create_arc_motion(
     config.lateral = seg.lateral
 
     motion = ArcMotion(
-        robot.drive, robot.odometry,
-        robot.motion_pid_config, config,
+        robot.drive,
+        robot.odometry,
+        robot.motion_pid_config,
+        config,
     )
     if not is_last:
         motion.set_suppress_hard_stop(True)
@@ -247,19 +256,23 @@ def _create_arc_motion(
 # Public dispatch
 # ---------------------------------------------------------------------------
 
+
 def create_motion(
-    robot: "GenericRobot", seg: Segment, is_last: bool,
-    correction: Optional[Correction] = None,
+    robot: "GenericRobot",
+    seg: Segment,
+    is_last: bool,
+    correction: Correction | None = None,
 ):
     """Construct a controller for the given segment kind."""
     if seg.kind == "linear":
         return _create_linear_motion(robot, seg, is_last, correction)
-    elif seg.kind == "turn":
+    if seg.kind == "turn":
         return _create_turn_motion(robot, seg, is_last, correction)
-    elif seg.kind == "arc":
+    if seg.kind == "arc":
         return _create_arc_motion(robot, seg, is_last, correction)
-    elif seg.kind == "follow_line":
+    if seg.kind == "follow_line":
         return LineFollowAdapter(seg.opaque_step, robot)
-    elif seg.kind == "spline":
+    if seg.kind == "spline":
         return SplineAdapter(seg.opaque_step, robot)
-    raise ValueError(f"Unknown segment kind: {seg.kind}")
+    msg = f"Unknown segment kind: {seg.kind}"
+    raise ValueError(msg)

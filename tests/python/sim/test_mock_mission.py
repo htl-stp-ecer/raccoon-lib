@@ -12,12 +12,12 @@ in the post-install suite. But the HAL → sim → odometry contract we're
 proving here is exactly what those steps consume, so if this passes, the
 sim is ready for them.
 """
+
 from __future__ import annotations
 
 import math
 
 import pytest
-
 from conftest import SCENES_DIR  # type: ignore[import-not-found]
 
 
@@ -45,13 +45,16 @@ def _make_cfg(sim_module):
     return robot, motors
 
 
-def _configure(sim_module, mock, scene_name="empty_table.ftmap",
-               start_x=50.0, start_y=50.0, start_theta=0.0):
+def _configure(
+    sim_module, mock, scene_name="empty_table.ftmap", start_x=50.0, start_y=50.0, start_theta=0.0
+):
     robot, motors = _make_cfg(sim_module)
     world_map = sim_module.WorldMap()
     world_map.load_ftmap(str(SCENES_DIR / scene_name))
     mock.configure(
-        robot, motors, world_map,
+        robot,
+        motors,
+        world_map,
         sim_module.Pose2D(start_x, start_y, start_theta),
     )
 
@@ -132,8 +135,7 @@ def test_mock_brake_stops_sim(sim_module, mock):
 
 
 def test_mock_line_sensor_through_hal(sim_module, mock):
-    _configure(sim_module, mock, scene_name="single_line.ftmap",
-               start_x=100.0, start_y=50.0)
+    _configure(sim_module, mock, scene_name="single_line.ftmap", start_x=100.0, start_y=50.0)
     mock.attach_line_sensor(2, 0.0, 0.0, "center")
 
     # Centered on the horizontal line (y=50, runs x=50..150) → sensor = 0.
@@ -141,8 +143,7 @@ def test_mock_line_sensor_through_hal(sim_module, mock):
 
     # Move off the line (change pose by setting motor command and ticking).
     # Simpler: reconfigure at a different pose.
-    _configure(sim_module, mock, scene_name="single_line.ftmap",
-               start_x=100.0, start_y=20.0)
+    _configure(sim_module, mock, scene_name="single_line.ftmap", start_x=100.0, start_y=20.0)
     mock.attach_line_sensor(2, 0.0, 0.0, "center")
     assert mock.read_analog(2) == 1023
 
@@ -160,6 +161,7 @@ def test_mock_auto_tick_advances_sim_without_manual_tick(sim_module, mock):
 
     # Burn wall-clock time — the sim should advance on each read_odometry.
     import time
+
     deadline = time.monotonic() + 0.5
     while time.monotonic() < deadline:
         mock.read_odometry()
@@ -175,9 +177,9 @@ def test_mock_auto_tick_advances_sim_without_manual_tick(sim_module, mock):
 
 def test_mock_determinism_with_explicit_ticks(sim_module, mock):
     """Explicit tick(dt) loops produce identical results across runs."""
+
     def run_once():
-        _configure(sim_module, mock, start_x=10.0, start_y=10.0,
-                   start_theta=0.1)
+        _configure(sim_module, mock, start_x=10.0, start_y=10.0, start_theta=0.1)
         mock.set_motor_command(0, 75)
         mock.set_motor_command(1, 50)
         _tick(mock, 1.5)

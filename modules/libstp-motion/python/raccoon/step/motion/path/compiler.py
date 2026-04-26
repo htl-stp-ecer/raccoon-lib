@@ -9,14 +9,14 @@ on the resulting node list.  The result is a ``CompiledPlan`` that the
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Protocol, runtime_checkable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .ir import PathNode
 from .passes import flatten_steps
 
 if TYPE_CHECKING:
-    from .. import Step
     from ...logic.defer import Defer
+    from .. import Step
 
 
 @runtime_checkable
@@ -31,8 +31,9 @@ class CompilerPass(Protocol):
     name: str
 
     def run(
-        self, nodes: list[Optional[PathNode]],
-    ) -> list[Optional[PathNode]]: ...
+        self,
+        nodes: list[PathNode | None],
+    ) -> list[PathNode | None]: ...
 
 
 @dataclass
@@ -48,9 +49,9 @@ class CompiledPlan:
     ``passes_applied`` — names of passes that ran, for diagnostics.
     """
 
-    nodes: list[Optional[PathNode]]
+    nodes: list[PathNode | None]
     deferred: list[tuple[int, "Defer"]]
-    spline_step: Optional["Step"] = None
+    spline_step: "Step" | None = None
     passes_applied: list[str] = field(default_factory=list)
 
 
@@ -66,7 +67,7 @@ class PathCompiler:
         >>> plan = compiler.compile([drive(50), turn(90), drive(30)])
     """
 
-    def __init__(self, passes: Optional[list[CompilerPass]] = None) -> None:
+    def __init__(self, passes: list[CompilerPass] | None = None) -> None:
         self._passes: list[CompilerPass] = list(passes or [])
 
     def compile(self, steps: list) -> CompiledPlan:

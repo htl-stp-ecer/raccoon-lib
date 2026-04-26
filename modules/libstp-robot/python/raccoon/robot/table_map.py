@@ -17,8 +17,8 @@ Example usage::
     table_map = TableMap.load("config/table_map.ftmap")
 
     # Query
-    table_map.is_on_line(50.0, 30.0)       # True/False
-    table_map.is_on_wall(0.0, 50.0)        # True/False
+    table_map.is_on_line(50.0, 30.0)  # True/False
+    table_map.is_on_wall(0.0, 50.0)  # True/False
     table_map.distance_to_nearest_line(50.0, 30.0)  # cm
 """
 
@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from raccoon.robot.geometry import SensorPosition
@@ -51,9 +52,12 @@ class MapSegment:
 
 
 def _point_to_segment_distance(
-    px: float, py: float,
-    ax: float, ay: float,
-    bx: float, by: float,
+    px: float,
+    py: float,
+    ax: float,
+    ay: float,
+    bx: float,
+    by: float,
 ) -> float:
     """Shortest distance from point (px, py) to line segment (ax,ay)-(bx,by)."""
     dx = bx - ax
@@ -81,8 +85,8 @@ class TableMap:
     ) -> None:
         self.width_cm = width_cm
         self.height_cm = height_cm
-        self._lines: List[MapSegment] = []
-        self._walls: List[MapSegment] = []
+        self._lines: list[MapSegment] = []
+        self._walls: list[MapSegment] = []
         for seg in segments:
             if seg.kind == "wall":
                 self._walls.append(seg)
@@ -90,21 +94,21 @@ class TableMap:
                 self._lines.append(seg)
 
     @property
-    def lines(self) -> List[MapSegment]:
+    def lines(self) -> list[MapSegment]:
         return list(self._lines)
 
     @property
-    def walls(self) -> List[MapSegment]:
+    def walls(self) -> list[MapSegment]:
         return list(self._walls)
 
     @property
-    def all_segments(self) -> List[MapSegment]:
+    def all_segments(self) -> list[MapSegment]:
         return self._lines + self._walls
 
     # ── Construction ─────────────────────────────────────────────
 
     @classmethod
-    def from_ftmap(cls, data: Dict[str, Any]) -> "TableMap":
+    def from_ftmap(cls, data: dict[str, Any]) -> "TableMap":
         """Create a TableMap from an ftmap dict (as stored in project config).
 
         Args:
@@ -118,25 +122,29 @@ class TableMap:
         """
         fmt = data.get("format")
         if fmt != "flowchart-table-map":
-            raise ValueError(f"Unsupported table map format: {fmt!r}")
+            msg = f"Unsupported table map format: {fmt!r}"
+            raise ValueError(msg)
         version = data.get("version")
         if version != 1:
-            raise ValueError(f"Unsupported table map version: {version!r}")
+            msg = f"Unsupported table map version: {version!r}"
+            raise ValueError(msg)
 
         table = data.get("table", {})
         width_cm = float(table.get("widthCm", 0))
         height_cm = float(table.get("heightCm", 0))
 
-        segments: List[MapSegment] = []
+        segments: list[MapSegment] = []
         for entry in data.get("lines", []):
-            segments.append(MapSegment(
-                start_x=float(entry["startX"]),
-                start_y=float(entry["startY"]),
-                end_x=float(entry["endX"]),
-                end_y=float(entry["endY"]),
-                width_cm=float(entry["widthCm"]),
-                kind=str(entry.get("kind", "line")),
-            ))
+            segments.append(
+                MapSegment(
+                    start_x=float(entry["startX"]),
+                    start_y=float(entry["startY"]),
+                    end_x=float(entry["endX"]),
+                    end_y=float(entry["endY"]),
+                    width_cm=float(entry["widthCm"]),
+                    kind=str(entry.get("kind", "line")),
+                )
+            )
 
         return cls(width_cm, height_cm, segments)
 
@@ -154,7 +162,7 @@ class TableMap:
         data = json.loads(text)
         return cls.from_ftmap(data)
 
-    def to_ftmap(self) -> Dict[str, Any]:
+    def to_ftmap(self) -> dict[str, Any]:
         """Serialize this TableMap back to the ftmap dict format."""
         return {
             "format": "flowchart-table-map",
@@ -191,9 +199,7 @@ class TableMap:
         if not self._lines:
             return float("inf")
         return min(
-            _point_to_segment_distance(
-                x_cm, y_cm, s.start_x, s.start_y, s.end_x, s.end_y
-            )
+            _point_to_segment_distance(x_cm, y_cm, s.start_x, s.start_y, s.end_x, s.end_y)
             for s in self._lines
         )
 
@@ -210,9 +216,7 @@ class TableMap:
         if not self._walls:
             return float("inf")
         return min(
-            _point_to_segment_distance(
-                x_cm, y_cm, s.start_x, s.start_y, s.end_x, s.end_y
-            )
+            _point_to_segment_distance(x_cm, y_cm, s.start_x, s.start_y, s.end_x, s.end_y)
             for s in self._walls
         )
 
@@ -303,9 +307,7 @@ class TableMap:
         Returns:
             True if the sensor's field position overlaps a line.
         """
-        sx, sy = self.sensor_field_position(
-            robot_x_cm, robot_y_cm, robot_heading_rad, sensor
-        )
+        sx, sy = self.sensor_field_position(robot_x_cm, robot_y_cm, robot_heading_rad, sensor)
         return self.is_on_line(sx, sy)
 
     def sensor_is_on_wall(
@@ -326,9 +328,7 @@ class TableMap:
         Returns:
             True if the sensor's field position overlaps a wall.
         """
-        sx, sy = self.sensor_field_position(
-            robot_x_cm, robot_y_cm, robot_heading_rad, sensor
-        )
+        sx, sy = self.sensor_field_position(robot_x_cm, robot_y_cm, robot_heading_rad, sensor)
         return self.is_on_wall(sx, sy)
 
     def __repr__(self) -> str:

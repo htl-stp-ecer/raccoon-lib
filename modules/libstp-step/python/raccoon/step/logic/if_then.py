@@ -1,4 +1,7 @@
-from typing import Callable, Optional, TYPE_CHECKING
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from .. import Step, StepProtocol
 from ..annotation import dsl_step
@@ -46,31 +49,25 @@ class IfThen(Step):
         self,
         condition: Callable[["GenericRobot"], bool],
         then_step: StepProtocol,
-        else_step: Optional[StepProtocol] = None,
+        else_step: StepProtocol | None = None,
     ) -> None:
         super().__init__()
 
         if not callable(condition):
-            raise TypeError(
-                f"condition must be callable, got {type(condition).__name__}"
-            )
+            msg = f"condition must be callable, got {type(condition).__name__}"
+            raise TypeError(msg)
         if not isinstance(then_step, StepProtocol):
-            raise TypeError(
-                f"then_step must be a Step, got {type(then_step).__name__}"
-            )
+            msg = f"then_step must be a Step, got {type(then_step).__name__}"
+            raise TypeError(msg)
         if else_step is not None and not isinstance(else_step, StepProtocol):
-            raise TypeError(
-                f"else_step must be a Step or None, got {type(else_step).__name__}"
-            )
+            msg = f"else_step must be a Step or None, got {type(else_step).__name__}"
+            raise TypeError(msg)
 
         self.condition = condition
         self.then_step = then_step.resolve()
         self.else_step = else_step.resolve() if else_step is not None else None
 
-        branches = (
-            [self.then_step] if self.else_step is None
-            else [self.then_step, self.else_step]
-        )
+        branches = [self.then_step] if self.else_step is None else [self.then_step, self.else_step]
         validate_no_overlap(branches, context="IfThen")
 
     def collected_resources(self) -> frozenset[str]:

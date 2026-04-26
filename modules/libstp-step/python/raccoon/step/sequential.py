@@ -1,8 +1,8 @@
-from typing import List, Optional
+from __future__ import annotations
 
-from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
-from .base import _step_path
+from . import SimulationStep, SimulationStepDelta, Step, StepProtocol
 from .annotation import dsl
+from .base import _step_path
 
 
 @dsl(hidden=True)
@@ -13,27 +13,29 @@ class Sequential(Step):
 
     _composite = True
 
-    def __init__(self, steps: List[Step]) -> None:
+    def __init__(self, steps: list[Step]) -> None:
         """
         Initialize Sequential step executor.
-    
+
         Args:
             steps: List of Step objects to execute sequentially.
-            
+
         Raises:
             TypeError: If any element in steps is not a Step instance.
         """
         super().__init__()
-        
+
         if not isinstance(steps, list):
-            raise TypeError(f"Expected steps to be a List[Step], got {type(steps)}")
+            msg = f"Expected steps to be a List[Step], got {type(steps)}"
+            raise TypeError(msg)
 
         for i, step in enumerate(steps):
             if not isinstance(step, StepProtocol):
-                raise TypeError(f"Element at index {i} is not a Step instance: {type(step)}")
+                msg = f"Element at index {i} is not a Step instance: {type(step)}"
+                raise TypeError(msg)
 
-        self.steps: List[Step] = [step.resolve() for step in steps]
-        self._last_internal_step: Optional[Step] = self.steps[-1] if self.steps else None
+        self.steps: list[Step] = [step.resolve() for step in steps]
+        self._last_internal_step: Step | None = self.steps[-1] if self.steps else None
 
     def collected_resources(self) -> frozenset[str]:
         result: set[str] = set()
@@ -60,14 +62,14 @@ class Sequential(Step):
             total_strafe += child.delta.strafe
             total_angular += child.delta.angular
             total_duration_ms += child.average_duration_ms
-            total_variance += child.duration_stddev_ms ** 2
+            total_variance += child.duration_stddev_ms**2
         base.delta = SimulationStepDelta(
             forward=total_forward,
             strafe=total_strafe,
             angular=total_angular,
         )
         base.average_duration_ms = total_duration_ms
-        base.duration_stddev_ms = total_variance ** 0.5
+        base.duration_stddev_ms = total_variance**0.5
         return base
 
     async def _execute_step(self, robot) -> None:
@@ -82,7 +84,8 @@ class Sequential(Step):
             finally:
                 _step_path.reset(token)
 
+
 @dsl(hidden=True)
-def seq(steps: List[Step]) -> Sequential:
+def seq(steps: list[Step]) -> Sequential:
     """Create a sequential composite from an explicit list of steps."""
     return Sequential(steps)

@@ -1,6 +1,3 @@
-//
-// Created by tobias on 6/9/25.
-//
 #include "hal/Analog.hpp"
 #include "foundation/config.hpp"
 

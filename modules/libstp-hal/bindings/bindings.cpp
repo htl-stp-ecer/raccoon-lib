@@ -1,6 +1,3 @@
-//
-// Created by tobias on 5/19/25.
-//
 #include <pybind11/pybind11.h>
 namespace py = pybind11;
 

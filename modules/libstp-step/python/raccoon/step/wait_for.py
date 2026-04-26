@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 from typing import TYPE_CHECKING
 
-from .base import Step
 from .annotation import dsl_step
+from .base import Step
 from .condition import StopCondition
 
 if TYPE_CHECKING:
@@ -38,9 +40,8 @@ class WaitFor(Step):
     def __init__(self, condition: StopCondition) -> None:
         super().__init__()
         if not isinstance(condition, StopCondition):
-            raise TypeError(
-                f"Expected a StopCondition, got {type(condition).__name__}"
-            )
+            msg = f"Expected a StopCondition, got {type(condition).__name__}"
+            raise TypeError(msg)
         self._condition = condition
 
     def _generate_signature(self) -> str:

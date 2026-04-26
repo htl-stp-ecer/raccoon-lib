@@ -1,6 +1,3 @@
-//
-// Created by tobias on 9/5/25.
-//
 #include "drive/drive.hpp"
 #include "hal/IIMU.hpp"
 #include "foundation/config.hpp"

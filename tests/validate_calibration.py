@@ -1,39 +1,35 @@
 #!/usr/bin/env python3
 """Simple validation script for per-wheel distance calibration."""
+
+from __future__ import annotations
+
 import sys
+
 
 def test_imports():
     """Test that all new imports work."""
     print("Testing imports...", end=" ")
     try:
-        from raccoon.step.calibrate_distance import (
-            calibrate_distance,
-            CalibrateDistance,
-            CalibrationRequiredError,
-            PerWheelCalibration,
-            is_distance_calibrated,
-            check_distance_calibration,
-            reset_distance_calibration,
-        )
         print("OK")
         return True
     except Exception as e:
         print(f"FAILED: {e}")
         return False
 
+
 def test_calibration_functions():
     """Test calibration flag functions."""
     print("Testing calibration functions...", end=" ")
     try:
         from raccoon.step.calibrate_distance import (
-            is_distance_calibrated,
+            CalibrationRequiredError,
             check_distance_calibration,
+            is_distance_calibrated,
             reset_distance_calibration,
-            CalibrationRequiredError
         )
 
         reset_distance_calibration()
-        assert is_distance_calibrated() == False, "Expected uncalibrated"
+        assert is_distance_calibrated() is False, "Expected uncalibrated"
 
         try:
             check_distance_calibration()
@@ -48,6 +44,7 @@ def test_calibration_functions():
         print(f"FAILED: {e}")
         return False
 
+
 def test_per_wheel_calibration_dataclass():
     """Test PerWheelCalibration dataclass."""
     print("Testing PerWheelCalibration...", end=" ")
@@ -55,10 +52,7 @@ def test_per_wheel_calibration_dataclass():
         from raccoon.step.calibrate_distance import PerWheelCalibration
 
         result = PerWheelCalibration(
-            motor_port=0,
-            old_ticks_to_rad=0.001,
-            new_ticks_to_rad=0.0012,
-            delta_ticks=1000
+            motor_port=0, old_ticks_to_rad=0.001, new_ticks_to_rad=0.0012, delta_ticks=1000
         )
 
         assert result.motor_port == 0
@@ -72,20 +66,22 @@ def test_per_wheel_calibration_dataclass():
         print(f"FAILED: {e}")
         return False
 
+
 def test_motor_set_calibration():
     """Test Motor.set_calibration exists."""
     print("Testing Motor.set_calibration...", end=" ")
     try:
         from raccoon.hal import Motor
 
-        assert hasattr(Motor, 'set_calibration'), "Motor missing set_calibration"
-        assert hasattr(Motor, 'get_calibration'), "Motor missing get_calibration"
+        assert hasattr(Motor, "set_calibration"), "Motor missing set_calibration"
+        assert hasattr(Motor, "get_calibration"), "Motor missing get_calibration"
 
         print("OK")
         return True
     except Exception as e:
         print(f"FAILED: {e}")
         return False
+
 
 def test_kinematics_wheel_radius():
     """Test kinematics get_wheel_radius."""
@@ -94,14 +90,17 @@ def test_kinematics_wheel_radius():
         from raccoon.kinematics_differential import DifferentialKinematics
         from raccoon.kinematics_mecanum import MecanumKinematics
 
-        assert hasattr(DifferentialKinematics, 'get_wheel_radius'), "Differential missing get_wheel_radius"
-        assert hasattr(MecanumKinematics, 'get_wheel_radius'), "Mecanum missing get_wheel_radius"
+        assert hasattr(
+            DifferentialKinematics, "get_wheel_radius"
+        ), "Differential missing get_wheel_radius"
+        assert hasattr(MecanumKinematics, "get_wheel_radius"), "Mecanum missing get_wheel_radius"
 
         print("OK")
         return True
     except Exception as e:
         print(f"FAILED: {e}")
         return False
+
 
 def test_drive_wheel_radius():
     """Test Drive.get_wheel_radius."""
@@ -109,7 +108,7 @@ def test_drive_wheel_radius():
     try:
         from raccoon.drive import Drive
 
-        assert hasattr(Drive, 'get_wheel_radius'), "Drive missing get_wheel_radius"
+        assert hasattr(Drive, "get_wheel_radius"), "Drive missing get_wheel_radius"
 
         print("OK")
         return True
@@ -117,12 +116,16 @@ def test_drive_wheel_radius():
         print(f"FAILED: {e}")
         return False
 
+
 def test_drive_requires_calibration():
     """Test that drive_forward/backward require calibration."""
     print("Testing drive requires calibration...", end=" ")
     try:
-        from raccoon.step.calibrate_distance import reset_distance_calibration, CalibrationRequiredError
-        from raccoon.step.drive import drive_forward, drive_backward
+        from raccoon.step.calibrate_distance import (
+            CalibrationRequiredError,
+            reset_distance_calibration,
+        )
+        from raccoon.step.drive import drive_backward, drive_forward
 
         reset_distance_calibration()
 
@@ -146,15 +149,17 @@ def test_drive_requires_calibration():
         print(f"FAILED: {e}")
         return False
 
+
 def test_robot_protocol():
     """Test RobotDefinitionsProtocol has drive_motors."""
     print("Testing RobotDefinitionsProtocol...", end=" ")
     try:
-        from raccoon.robot.api import RobotDefinitionsProtocol
         import typing
 
+        from raccoon.robot.api import RobotDefinitionsProtocol
+
         hints = typing.get_type_hints(RobotDefinitionsProtocol)
-        assert 'drive_motors' in hints, "Protocol missing drive_motors"
+        assert "drive_motors" in hints, "Protocol missing drive_motors"
 
         print("OK")
         return True
@@ -162,12 +167,13 @@ def test_robot_protocol():
         print(f"FAILED: {e}")
         return False
 
+
 def test_ticks_to_rad_calculation():
     """Test the mathematical calculation of ticks_to_rad."""
     print("Testing ticks_to_rad calculation...", end=" ")
 
     wheel_radius = 0.05  # 50mm
-    measured_m = 0.30    # 30cm
+    measured_m = 0.30  # 30cm
     delta_ticks = 1000
 
     theta_rad = measured_m / wheel_radius

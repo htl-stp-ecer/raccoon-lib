@@ -1,7 +1,3 @@
-//
-// Created by tobias on 12/29/24.
-//
-
 #include <pybind11/pybind11.h>
 #include <pybind11/chrono.h>
 

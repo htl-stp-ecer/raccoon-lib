@@ -1,13 +1,14 @@
+from __future__ import annotations
+
 import asyncio
-from typing import List, Optional
 
 from raccoon.robot.api import GenericRobot
 
-from . import Step, StepProtocol, SimulationStep, SimulationStepDelta
-from .base import _step_path
-from .sequential import seq, Sequential
+from . import SimulationStep, SimulationStepDelta, Step, StepProtocol
 from .annotation import dsl
+from .base import _step_path
 from .resource import validate_no_overlap
+from .sequential import Sequential, seq
 
 
 @dsl(hidden=True)
@@ -18,7 +19,7 @@ class Parallel(Step):
 
     _composite = True
 
-    def __init__(self, steps: List[Step]) -> None:
+    def __init__(self, steps: list[Step]) -> None:
         """
         Initialize Parallel step executor.
 
@@ -31,14 +32,16 @@ class Parallel(Step):
         super().__init__()
 
         if not isinstance(steps, list):
-            raise TypeError(f"Expected steps to be a List[Step], got {type(steps)}")
+            msg = f"Expected steps to be a List[Step], got {type(steps)}"
+            raise TypeError(msg)
 
         for i, step in enumerate(steps):
             if not isinstance(step, StepProtocol):
-                raise TypeError(f"Element at index {i} is not a Step instance: {type(step)}")
+                msg = f"Element at index {i} is not a Step instance: {type(step)}"
+                raise TypeError(msg)
 
-        self.steps: List[Step] = [step.resolve() for step in steps]
-        self._last_completed_step: Optional[Step] = None
+        self.steps: list[Step] = [step.resolve() for step in steps]
+        self._last_completed_step: Step | None = None
 
         # Pre-execution resource conflict check
         validate_no_overlap(self.steps, context="Parallel")
@@ -94,10 +97,7 @@ class Parallel(Step):
                 _step_path.reset(token)
             completed_steps.append(step)
 
-        tasks = [
-            asyncio.create_task(step_callback(i, step))
-            for i, step in enumerate(self.steps)
-        ]
+        tasks = [asyncio.create_task(step_callback(i, step)) for i, step in enumerate(self.steps)]
 
         await asyncio.gather(*tasks)
 
@@ -134,6 +134,7 @@ def parallel(*args) -> Parallel:
                 # Wrap individual step in a sequence
                 steps.append(seq([arg]))
         else:
-            raise TypeError(f"Expected arg to be a Step, Sequential, or List[Step], got {type(arg)}")
+            msg = f"Expected arg to be a Step, Sequential, or List[Step], got {type(arg)}"
+            raise TypeError(msg)
 
     return Parallel(steps)

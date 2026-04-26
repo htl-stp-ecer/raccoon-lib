@@ -5,6 +5,7 @@ It re-exports the public API from :mod:`raccoon.testing.sim` and emits a
 ``DeprecationWarning`` on first import. It will be removed in a future
 release.
 """
+
 from __future__ import annotations
 
 import warnings
@@ -16,7 +17,7 @@ warnings.warn(
     stacklevel=2,
 )
 
-from raccoon.testing.sim import (  # noqa: E402,F401
+from raccoon.testing.sim import (
     DistanceSensorMount,
     LineSensorMount,
     SimRobotConfig,

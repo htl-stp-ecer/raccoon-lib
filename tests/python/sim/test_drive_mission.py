@@ -20,6 +20,7 @@ otherwise crashes pytest's test loop.
 
 Skipped if the wheel was built without DRIVER_BUNDLE=mock.
 """
+
 from __future__ import annotations
 
 import json
@@ -36,8 +37,8 @@ RUNNER = Path(__file__).parent / "_drive_mission_runner.py"
 
 def _raccoon_available() -> bool:
     try:
-        import raccoon  # noqa: F401
-        from raccoon import sim  # noqa: F401
+        from raccoon import sim
+
         return hasattr(sim, "mock")
     except ImportError:
         return False
@@ -46,7 +47,7 @@ def _raccoon_available() -> bool:
 pytestmark = pytest.mark.skipif(
     not _raccoon_available(),
     reason="raccoon mock-bundle wheel not installed (rebuild with "
-           "`pip install -e . --config-settings=cmake.define.DRIVER_BUNDLE=mock`)",
+    "`pip install -e . --config-settings=cmake.define.DRIVER_BUNDLE=mock`)",
 )
 
 
@@ -65,18 +66,17 @@ def _run_runner() -> dict:
         check=False,
     )
     if proc.returncode != 0:
-        raise AssertionError(
+        msg = (
             f"runner failed (exit={proc.returncode})\n"
             f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
         )
+        raise AssertionError(msg)
 
     for line in proc.stdout.splitlines():
         if line.startswith("RESULTS:"):
-            return json.loads(line[len("RESULTS:"):])
-    raise AssertionError(
-        f"runner did not emit RESULTS line\n"
-        f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
-    )
+            return json.loads(line[len("RESULTS:") :])
+    msg = f"runner did not emit RESULTS line\n" f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    raise AssertionError(msg)
 
 
 def test_drive_steps_against_sim():
@@ -100,6 +100,4 @@ def test_drive_steps_against_sim():
 
     # Scenario 3: wall_box scene blocks the robot before it reaches its goal.
     x, _, _ = results["wall"]
-    assert 80.0 < x < 95.0, (
-        f"wall didn't stop robot in expected range — x={x:.2f}"
-    )
+    assert 80.0 < x < 95.0, f"wall didn't stop robot in expected range — x={x:.2f}"

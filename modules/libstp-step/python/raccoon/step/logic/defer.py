@@ -1,4 +1,7 @@
-from typing import Callable, Awaitable, Union, TYPE_CHECKING
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from .. import Step
 from ..annotation import dsl_step
@@ -27,18 +30,19 @@ class Defer(Step):
         from raccoon.step.logic import defer
 
         # Turn by an angle computed from a sensor reading at runtime
-        seq([
-            scan_step,
-            defer(lambda robot: turn_left(
-                compute_angle_from_scan(robot)
-            )),
-        ])
+        seq(
+            [
+                scan_step,
+                defer(lambda robot: turn_left(compute_angle_from_scan(robot))),
+            ]
+        )
     """
 
     def __init__(self, factory: Callable[["GenericRobot"], Step]) -> None:
         super().__init__()
         if not callable(factory):
-            raise TypeError(f"factory must be callable, got {type(factory).__name__}")
+            msg = f"factory must be callable, got {type(factory).__name__}"
+            raise TypeError(msg)
         self.factory = factory
 
     _composite = True
@@ -72,20 +76,23 @@ class Run(Step):
         from raccoon.step.logic import run
 
         # Log the current heading between two drive steps
-        seq([
-            drive_forward(25),
-            run(lambda robot: print(f"Heading: {robot.odometry.get_heading()}")),
-            drive_forward(25),
-        ])
+        seq(
+            [
+                drive_forward(25),
+                run(lambda robot: print(f"Heading: {robot.odometry.get_heading()}")),
+                drive_forward(25),
+            ]
+        )
     """
 
     def __init__(
         self,
-        action: Callable[["GenericRobot"], Union[None, Awaitable[None]]],
+        action: Callable[["GenericRobot"], None | Awaitable[None]],
     ) -> None:
         super().__init__()
         if not callable(action):
-            raise TypeError(f"action must be callable, got {type(action).__name__}")
+            msg = f"action must be callable, got {type(action).__name__}"
+            raise TypeError(msg)
         self.action = action
 
     def _generate_signature(self) -> str:

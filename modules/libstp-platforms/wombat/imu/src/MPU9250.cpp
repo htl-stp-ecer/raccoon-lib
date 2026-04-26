@@ -1,6 +1,3 @@
-//
-// Created by tobias on 4/21/25.
-//
 #include "foundation/logging.hpp"
 #include <cmath>
 
@@ -182,7 +179,7 @@ void libstp::hal::imu::IMU::calibrate()
         MagnetoSensor magneto;
     };
 
-    
+
 void libstp::sensors::GyroSensor::calibrate(std::shared_ptr<MatrixX3d> calibrationMatrix)
 {
     const int rows = calibrationMatrix->rows();
@@ -211,7 +208,7 @@ void libstp::sensors::GyroSensor::calibrate(std::shared_ptr<MatrixX3d> calibrati
     variance = std::make_shared<Vector3d>(applied->array().square().colwise().mean());
 
     LIBSTP_LOG_INFO("[IMU] Calibrated gyro sensors with bias: ({}, {}, {}), variance: ({}, {}, {})",
-                (*offset)[0], (*offset)[1], (*offset)[2], 
+                (*offset)[0], (*offset)[1], (*offset)[2],
                 (*variance)[0], (*variance)[1], (*variance)[2]);
 }
 
@@ -274,9 +271,9 @@ void libstp::sensors::AccelSensor::calibrate(std::shared_ptr<MatrixX3d> calibrat
         diffMatrix->row(i) = calibrationMatrix->row(i) - offset->transpose();
     }
     variance = std::make_shared<Vector3d>(diffMatrix->array().square().colwise().mean());
-    
+
     LIBSTP_LOG_INFO("[IMU] Calibrated accel sensors with bias: ({}, {}, {}), variance: ({}, {}, {})",
-                (*offset)[0], (*offset)[1], (*offset)[2], 
+                (*offset)[0], (*offset)[1], (*offset)[2],
                 (*variance)[0], (*variance)[1], (*variance)[2]);
 }
 

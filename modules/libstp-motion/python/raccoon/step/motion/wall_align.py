@@ -6,11 +6,14 @@ Uses the IMU's gravity-compensated linear acceleration to detect the
 moment of impact, then optionally continues pushing for a short settle
 period so the robot can rotate flush against the wall surface.
 """
+
+from __future__ import annotations
+
 import asyncio
 import math
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from raccoon.foundation import ChassisVelocity
 from raccoon.hal import IMU
@@ -25,6 +28,7 @@ if TYPE_CHECKING:
 
 class WallDirection(Enum):
     """Direction to drive into a wall."""
+
     FORWARD = "forward"
     BACKWARD = "backward"
     STRAFE_LEFT = "strafe_left"
@@ -34,10 +38,10 @@ class WallDirection(Enum):
 # Expected deceleration angle (radians) for each drive direction.
 # When driving forward, the wall pushes back at ~180 deg, etc.
 _EXPECTED_DECEL_ANGLE = {
-    WallDirection.FORWARD: math.pi,        # decel in -X
-    WallDirection.BACKWARD: 0.0,           # decel in +X
-    WallDirection.STRAFE_LEFT: math.pi / 2,   # decel in +Y
-    WallDirection.STRAFE_RIGHT: -math.pi / 2, # decel in -Y
+    WallDirection.FORWARD: math.pi,  # decel in -X
+    WallDirection.BACKWARD: 0.0,  # decel in +X
+    WallDirection.STRAFE_LEFT: math.pi / 2,  # decel in +Y
+    WallDirection.STRAFE_RIGHT: -math.pi / 2,  # decel in -Y
 }
 
 
@@ -53,6 +57,7 @@ def _normalize_angle(a: float) -> float:
 @dataclass
 class BumpResult:
     """Information about a detected wall impact."""
+
     accel_magnitude: float
     """XY acceleration magnitude at impact in m/s²."""
     impact_angle_deg: float
@@ -87,17 +92,23 @@ class WallAlign(MotionStep):
     ):
         super().__init__()
         if not isinstance(direction, WallDirection):
-            raise TypeError(f"direction must be a WallDirection, got {type(direction).__name__}")
-        if not isinstance(speed, (int, float)) or speed <= 0:
-            raise ValueError(f"speed must be > 0, got {speed}")
-        if not isinstance(accel_threshold, (int, float)) or accel_threshold <= 0:
-            raise ValueError(f"accel_threshold must be > 0, got {accel_threshold}")
-        if not isinstance(settle_duration, (int, float)) or settle_duration < 0:
-            raise ValueError(f"settle_duration must be >= 0, got {settle_duration}")
-        if not isinstance(max_duration, (int, float)) or max_duration <= 0:
-            raise ValueError(f"max_duration must be > 0, got {max_duration}")
-        if not isinstance(grace_period, (int, float)) or grace_period < 0:
-            raise ValueError(f"grace_period must be >= 0, got {grace_period}")
+            msg = f"direction must be a WallDirection, got {type(direction).__name__}"
+            raise TypeError(msg)
+        if not isinstance(speed, int | float) or speed <= 0:
+            msg = f"speed must be > 0, got {speed}"
+            raise ValueError(msg)
+        if not isinstance(accel_threshold, int | float) or accel_threshold <= 0:
+            msg = f"accel_threshold must be > 0, got {accel_threshold}"
+            raise ValueError(msg)
+        if not isinstance(settle_duration, int | float) or settle_duration < 0:
+            msg = f"settle_duration must be >= 0, got {settle_duration}"
+            raise ValueError(msg)
+        if not isinstance(max_duration, int | float) or max_duration <= 0:
+            msg = f"max_duration must be > 0, got {max_duration}"
+            raise ValueError(msg)
+        if not isinstance(grace_period, int | float) or grace_period < 0:
+            msg = f"grace_period must be >= 0, got {grace_period}"
+            raise ValueError(msg)
         self.direction = direction
         self.speed = speed
         self.accel_threshold = accel_threshold
@@ -105,14 +116,14 @@ class WallAlign(MotionStep):
         self.max_duration = max_duration
         self.grace_period = grace_period
 
-        self._imu: Optional[IMU] = None
+        self._imu: IMU | None = None
         self._elapsed: float = 0.0
-        self._bump_time: Optional[float] = None
+        self._bump_time: float | None = None
         self._heading_at_bump: float = 0.0
         self._peak_accel: float = 0.0
         self._peak_ax: float = 0.0
         self._peak_ay: float = 0.0
-        self.bump_result: Optional[BumpResult] = None
+        self.bump_result: BumpResult | None = None
 
     def _generate_signature(self) -> str:
         return (
@@ -124,12 +135,12 @@ class WallAlign(MotionStep):
     def _get_velocity(self) -> ChassisVelocity:
         if self.direction == WallDirection.FORWARD:
             return ChassisVelocity(self.speed, 0.0, 0.0)
-        elif self.direction == WallDirection.BACKWARD:
+        if self.direction == WallDirection.BACKWARD:
             return ChassisVelocity(-self.speed, 0.0, 0.0)
-        elif self.direction == WallDirection.STRAFE_LEFT:
+        if self.direction == WallDirection.STRAFE_LEFT:
             return ChassisVelocity(0.0, -self.speed, 0.0)
-        else:  # STRAFE_RIGHT
-            return ChassisVelocity(0.0, self.speed, 0.0)
+        # STRAFE_RIGHT
+        return ChassisVelocity(0.0, self.speed, 0.0)
 
     def on_start(self, robot: "GenericRobot") -> None:
         self._imu = IMU()
@@ -200,6 +211,7 @@ class WallAlign(MotionStep):
 # ---------------------------------------------------------------------------
 # Public dsl_step subclasses
 # ---------------------------------------------------------------------------
+
 
 @dsl_step(tags=["motion", "wall"])
 class WallAlignForward(WallAlign):

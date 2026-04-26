@@ -1,7 +1,9 @@
-import asyncio
-from typing import TYPE_CHECKING, Union
+from __future__ import annotations
 
-from ..annotation import dsl_step
+import asyncio
+import contextlib
+from typing import TYPE_CHECKING
+
 from raccoon.ui import UIStep
 from raccoon.ui.screen import UIScreen
 from raccoon.ui.widgets import (
@@ -13,6 +15,8 @@ from raccoon.ui.widgets import (
     Text,
     Widget,
 )
+
+from ..annotation import dsl_step
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -34,27 +38,32 @@ class _CheckpointCountdownScreen(UIScreen[None]):
         seconds = remaining - minutes * 60
         timer_text = f"{minutes}:{seconds:04.1f}" if minutes > 0 else f"{seconds:.1f} s"
 
-        return Center(children=[
-            Column(children=[
-                Icon("hourglass_top", size=64, color="blue"),
-                Spacer(16),
-                Text("Waiting for checkpoint", size="large", align="center"),
-                Spacer(8),
-                Text(
-                    f"Target: T = {self.checkpoint_seconds:.1f} s",
-                    size="small",
-                    muted=True,
+        return Center(
+            children=[
+                Column(
+                    children=[
+                        Icon("hourglass_top", size=64, color="blue"),
+                        Spacer(16),
+                        Text("Waiting for checkpoint", size="large", align="center"),
+                        Spacer(8),
+                        Text(
+                            f"Target: T = {self.checkpoint_seconds:.1f} s",
+                            size="small",
+                            muted=True,
+                            align="center",
+                        ),
+                        Spacer(24),
+                        Text(timer_text, size="title", bold=True, color="blue", align="center"),
+                        Spacer(16),
+                        HintBox(
+                            "The next step will begin when the timer reaches zero.",
+                            icon="schedule",
+                        ),
+                    ],
                     align="center",
                 ),
-                Spacer(24),
-                Text(timer_text, size="title", bold=True, color="blue", align="center"),
-                Spacer(16),
-                HintBox(
-                    "The next step will begin when the timer reaches zero.",
-                    icon="schedule",
-                ),
-            ], align="center"),
-        ])
+            ]
+        )
 
 
 @dsl_step(tags=["timing", "sync"])
@@ -81,24 +90,27 @@ class WaitForCheckpoint(UIStep):
 
         from raccoon.step.timing import wait_for_checkpoint
 
-        seq([
-            drive_forward(50),
-            # Ensure we don't start the next action before T=10s
-            wait_for_checkpoint(10.0),
-            pick_up_tribble(),
-            # Gate the final action to T=25s
-            wait_for_checkpoint(25.0),
-            drive_to_bin(),
-        ])
+        seq(
+            [
+                drive_forward(50),
+                # Ensure we don't start the next action before T=10s
+                wait_for_checkpoint(10.0),
+                pick_up_tribble(),
+                # Gate the final action to T=25s
+                wait_for_checkpoint(25.0),
+                drive_to_bin(),
+            ]
+        )
     """
 
     _UI_REFRESH_INTERVAL = 0.1
 
-    def __init__(self, checkpoint_seconds: Union[float, int]) -> None:
+    def __init__(self, checkpoint_seconds: float | int) -> None:
         super().__init__()
 
         if checkpoint_seconds < 0:
-            raise ValueError(f"Checkpoint duration cannot be negative: {checkpoint_seconds}")
+            msg = f"Checkpoint duration cannot be negative: {checkpoint_seconds}"
+            raise ValueError(msg)
 
         self.checkpoint_seconds = float(checkpoint_seconds)
 
@@ -135,8 +147,6 @@ class WaitForCheckpoint(UIStep):
         finally:
             if not wait_task.done():
                 wait_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await wait_task
-                except asyncio.CancelledError:
-                    pass
             await self.close_ui()

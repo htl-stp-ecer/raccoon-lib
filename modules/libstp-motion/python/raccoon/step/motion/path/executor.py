@@ -14,16 +14,17 @@ from __future__ import annotations
 
 import asyncio
 import math
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
-from .ir import Segment, SideAction, PathNode, Correction
+from .ir import Correction, PathNode, Segment, SideAction
 from .motion_factory import create_motion
 from .passes import flatten_steps, is_same_type
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
+
     from ...logic.defer import Defer
     from .. import Step
     from .middleware import PathMiddleware
@@ -33,13 +34,14 @@ if TYPE_CHECKING:
 # Per-segment manual completion check tolerances
 # ---------------------------------------------------------------------------
 
-DISTANCE_TOL_M = 0.005   # 5mm tolerance for manual distance check
-ANGLE_TOL_RAD = 0.035    # ~2° tolerance for manual angle check
+DISTANCE_TOL_M = 0.005  # 5mm tolerance for manual distance check
+ANGLE_TOL_RAD = 0.035  # ~2° tolerance for manual angle check
 
 
 # ---------------------------------------------------------------------------
 # Helpers — odometry reads, completion checks
 # ---------------------------------------------------------------------------
+
 
 def _has_reached_target(motion, seg: Segment) -> bool:
     """Did the motion reach its distance/angle target?
@@ -50,7 +52,7 @@ def _has_reached_target(motion, seg: Segment) -> bool:
     """
     if seg.kind == "linear":
         return motion.has_reached_distance()
-    elif seg.kind in ("turn", "arc"):
+    if seg.kind in ("turn", "arc"):
         return motion.has_reached_angle()
     return motion.is_finished()
 
@@ -60,9 +62,9 @@ def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
     if seg.kind == "linear":
         info = robot.odometry.get_distance_from_origin()
         return info.forward if seg.axis == LinearAxis.Forward else info.lateral
-    elif seg.kind in ("turn", "arc"):
+    if seg.kind in ("turn", "arc"):
         return robot.odometry.get_heading()
-    elif seg.kind == "follow_line":
+    if seg.kind == "follow_line":
         # Always forward-axis, same as LinearAxis.Forward.
         return robot.odometry.get_distance_from_origin().forward
     # "spline": not used for warm-start (splines always cold-start).
@@ -70,8 +72,10 @@ def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
 
 
 def _check_segment_reached(
-    robot: "GenericRobot", seg: Segment, seg_origin: float,
-    correction: Optional[Correction] = None,
+    robot: "GenericRobot",
+    seg: Segment,
+    seg_origin: float,
+    correction: Correction | None = None,
 ) -> bool:
     """Manual position check for non-terminal segments.
 
@@ -104,17 +108,17 @@ def _check_segment_reached(
         return False
     if target >= 0:
         return traveled >= target - tol
-    else:
-        return traveled <= target + tol
+    return traveled <= target + tol
 
 
 # ---------------------------------------------------------------------------
 # Lazy deferred resolution & side-action execution
 # ---------------------------------------------------------------------------
 
+
 def _resolve_node_at(
     robot: "GenericRobot",
-    nodes: list[Optional[PathNode]],
+    nodes: list[PathNode | None],
     idx: int,
     deferred_map: dict[int, "Defer"],
 ) -> None:
@@ -132,12 +136,13 @@ def _resolve_node_at(
     resolved_step = defer.factory(robot)
     sub_nodes, sub_deferred = flatten_steps([resolved_step])
     if sub_deferred:
-        raise TypeError(
+        msg = (
             "smooth_path(): a Defer step resolved to another Defer — "
             "nested deferral is not supported"
         )
+        raise TypeError(msg)
     resolved = [n for n in sub_nodes if n is not None]
-    nodes[idx:idx + 1] = resolved
+    nodes[idx : idx + 1] = resolved
     if resolved:
         shift = len(resolved) - 1  # we replaced 1 entry with N
         if shift != 0:
@@ -150,7 +155,7 @@ def _resolve_node_at(
 
 async def _advance_past_side_actions(
     robot: "GenericRobot",
-    nodes: list[Optional[PathNode]],
+    nodes: list[PathNode | None],
     start_idx: int,
     bg_tasks: list[asyncio.Task],
     deferred_map: dict[int, "Defer"],
@@ -177,7 +182,8 @@ async def _advance_past_side_actions(
 
 
 def _is_last_segment(
-    nodes: list[Optional[PathNode]], current_idx: int,
+    nodes: list[PathNode | None],
+    current_idx: int,
 ) -> bool:
     """Are there no more Segment nodes after ``current_idx``?
 
@@ -194,6 +200,7 @@ def _is_last_segment(
 # Executor
 # ---------------------------------------------------------------------------
 
+
 class PathExecutor:
     """Runs a compiled plan against a robot.
 
@@ -206,10 +213,10 @@ class PathExecutor:
 
     def __init__(
         self,
-        nodes: list[Optional[PathNode]],
+        nodes: list[PathNode | None],
         deferred: list[tuple[int, "Defer"]],
-        spline_step: Optional["Step"] = None,
-        middlewares: Optional[list["PathMiddleware"]] = None,
+        spline_step: "Step" | None = None,
+        middlewares: list["PathMiddleware"] | None = None,
         hz: int = DEFAULT_HZ,
     ) -> None:
         self._nodes = nodes
@@ -225,12 +232,15 @@ class PathExecutor:
             mw.on_path_start(robot)
 
     def _mw_segment_start(
-        self, seg: Segment, is_first: bool, robot: "GenericRobot",
-    ) -> Optional[Correction]:
+        self,
+        seg: Segment,
+        is_first: bool,
+        robot: "GenericRobot",
+    ) -> Correction | None:
         # If multiple middlewares produce a correction, the last one wins.
         # (For Phase 1 there's only WorldCorrection; merging strategies for
         # multi-middleware setups belong to the public-API layer.)
-        result: Optional[Correction] = None
+        result: Correction | None = None
         for mw in self._middlewares:
             c = mw.on_segment_start(seg, is_first, robot)
             if c is not None:
@@ -259,16 +269,16 @@ class PathExecutor:
             return
 
         # 1. Mutable working copies (deferreds get popped, nodes get spliced).
-        nodes: list[Optional[PathNode]] = list(self._nodes)
+        nodes: list[PathNode | None] = list(self._nodes)
         deferred_map: dict[int, "Defer"] = dict(self._deferred)
 
         # 2. Calibration check: any known-distance linear requires calibration.
         has_calibrated_drive = any(
-            isinstance(n, Segment) and n.kind == "linear" and n.has_known_endpoint
-            for n in nodes
+            isinstance(n, Segment) and n.kind == "linear" and n.has_known_endpoint for n in nodes
         )
         if has_calibrated_drive:
             from raccoon.step.calibration import check_distance_calibration
+
             check_distance_calibration()
 
         # 3. Execute the path.
@@ -279,7 +289,11 @@ class PathExecutor:
 
             # Leading side actions (resolves Defers lazily).
             node_idx = await _advance_past_side_actions(
-                robot, nodes, node_idx, bg_tasks, deferred_map,
+                robot,
+                nodes,
+                node_idx,
+                bg_tasks,
+                deferred_map,
             )
             if node_idx >= len(nodes):
                 return  # path was only side actions
@@ -289,10 +303,11 @@ class PathExecutor:
                 _resolve_node_at(robot, nodes, node_idx, deferred_map)
 
             if not isinstance(nodes[node_idx], Segment):
-                raise ValueError(
+                msg = (
                     "smooth_path() resolved to no motion segments — "
                     "at least one motion step is required"
                 )
+                raise ValueError(msg)
 
             # Start first segment (cold start).
             seg: Segment = nodes[node_idx]  # type: ignore[assignment]
@@ -349,7 +364,10 @@ class PathExecutor:
                         # Manual check while the inflated profile keeps
                         # the robot at cruise speed.
                         transition = _check_segment_reached(
-                            robot, seg, seg_origin, seg_correction,
+                            robot,
+                            seg,
+                            seg_origin,
+                            seg_correction,
                         )
 
                 # Opaque steps: adapter signals completion via is_finished().
@@ -367,24 +385,33 @@ class PathExecutor:
 
                     # Side actions at this transition point.
                     node_idx = await _advance_past_side_actions(
-                        robot, nodes, node_idx, bg_tasks, deferred_map,
+                        robot,
+                        nodes,
+                        node_idx,
+                        bg_tasks,
+                        deferred_map,
                     )
                     if node_idx >= len(nodes):
                         break
 
                     # Was the next node a Defer?  If so, resolve it now —
                     # heading-dependent steps need the current heading.
-                    was_deferred = (
-                        nodes[node_idx] is None and node_idx in deferred_map
-                    )
+                    was_deferred = nodes[node_idx] is None and node_idx in deferred_map
                     if was_deferred:
                         _resolve_node_at(
-                            robot, nodes, node_idx, deferred_map,
+                            robot,
+                            nodes,
+                            node_idx,
+                            deferred_map,
                         )
 
                     # Skip side actions that may have appeared post-resolution.
                     node_idx = await _advance_past_side_actions(
-                        robot, nodes, node_idx, bg_tasks, deferred_map,
+                        robot,
+                        nodes,
+                        node_idx,
+                        bg_tasks,
+                        deferred_map,
                     )
                     if node_idx >= len(nodes):
                         break
@@ -394,20 +421,24 @@ class PathExecutor:
 
                     # Ask middlewares for the next segment's correction.
                     seg_correction = self._mw_segment_start(
-                        seg, is_first=False, robot=robot,
+                        seg,
+                        is_first=False,
+                        robot=robot,
                     )
                     # Deferred heading turns already used the current heading
                     # to compute their angle — zero out angle correction so
                     # we don't double-correct.
-                    if (was_deferred and seg_correction is not None
-                            and seg.kind in ("turn", "arc")):
+                    if was_deferred and seg_correction is not None and seg.kind in ("turn", "arc"):
                         seg_correction.angle_adjust_rad = 0.0
 
                     if is_same_type(prev_seg, seg):
                         # Same type: warm start — carry velocity seamlessly.
                         offset = _get_position_offset(robot, prev_seg)
                         motion = create_motion(
-                            robot, seg, is_last, seg_correction,
+                            robot,
+                            seg,
+                            is_last,
+                            seg_correction,
                         )
                         motion.start_warm(offset, current_vel)
                     else:
@@ -415,7 +446,10 @@ class PathExecutor:
                         # so they can snapshot pre-reset state.
                         self._mw_cold_start(seg, robot)
                         motion = create_motion(
-                            robot, seg, is_last, seg_correction,
+                            robot,
+                            seg,
+                            is_last,
+                            seg_correction,
                         )
                         motion.start()
 

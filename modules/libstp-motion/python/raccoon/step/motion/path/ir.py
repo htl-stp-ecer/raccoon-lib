@@ -14,7 +14,7 @@ in the executor / middleware layer.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
@@ -50,28 +50,28 @@ class Segment:
     kind: str  # "linear" | "turn" | "arc" | "follow_line" | "spline"
 
     # Linear params
-    axis: Optional[LinearAxis] = None
+    axis: LinearAxis | None = None
     sign: float = 1.0
-    distance_m: Optional[float] = None  # None = condition-only (sentinel)
+    distance_m: float | None = None  # None = condition-only (sentinel)
     speed_scale: float = 1.0
-    heading_deg: Optional[float] = None
+    heading_deg: float | None = None
 
     # Turn params
-    angle_rad: Optional[float] = None
+    angle_rad: float | None = None
 
     # Arc params
-    radius_m: Optional[float] = None
-    arc_angle_rad: Optional[float] = None
+    radius_m: float | None = None
+    arc_angle_rad: float | None = None
     lateral: bool = False
 
     # Common
-    condition: Optional["StopCondition"] = None
+    condition: "StopCondition" | None = None
     has_known_endpoint: bool = True
 
     # Opaque steps (follow_line, spline): store the step for adapter creation.
     # Excluded from equality so two segments with equivalent geometry compare
     # equal even if they originated from different opaque step instances.
-    opaque_step: Optional["Step"] = field(default=None, compare=False)
+    opaque_step: "Step" | None = field(default=None, compare=False)
 
 
 @dataclass
@@ -90,7 +90,7 @@ class SideAction:
 # ``Optional[PathNode]`` (i.e. ``None``) at the list level rather than baked
 # into ``PathNode`` itself, so type-narrowing on a non-None entry yields a
 # concrete Segment-or-SideAction.
-PathNode = Union[Segment, SideAction]
+PathNode = Segment | SideAction
 
 
 @dataclass
@@ -104,7 +104,7 @@ class Correction:
     distance_adjust_m: float = 0.0
     """Subtract from linear distance target (positive = overshot, drive less)."""
 
-    heading_target_rad: Optional[float] = None
+    heading_target_rad: float | None = None
     """Absolute heading to hold during the next linear segment (cross-track bias)."""
 
     angle_adjust_rad: float = 0.0

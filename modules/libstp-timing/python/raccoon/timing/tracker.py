@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import statistics
 import time
-from typing import Awaitable, Callable, List, Optional
+from collections.abc import Awaitable, Callable
 
 from raccoon.class_name_logger import ClassNameLogger
 
@@ -15,13 +17,13 @@ AnomalyCallback = Callable[[AnomalyDetection], Awaitable[None]]
 class StepTimingTracker(ClassNameLogger):
     """Singleton tracker that persists step runtimes and reports anomalies."""
 
-    _instance: Optional["StepTimingTracker"] = None
+    _instance: "StepTimingTracker" | None = None
 
-    def __init__(self, config: Optional[TimingConfig] = None) -> None:
+    def __init__(self, config: TimingConfig | None = None) -> None:
         """Initialize tracker state and open the configured timing database lazily."""
         self.config = config or TimingConfig()
         self.database = StepTimingDatabase(self.config.db_path)
-        self.anomaly_callbacks: List[AnomalyCallback] = []
+        self.anomaly_callbacks: list[AnomalyCallback] = []
         self._lock = asyncio.Lock()
 
     @classmethod
@@ -40,9 +42,7 @@ class StepTimingTracker(ClassNameLogger):
         """Register an async callback to run when an anomaly is detected."""
         self.anomaly_callbacks.append(callback)
 
-    async def record_execution(
-        self, signature: str, duration: float
-    ) -> Optional[AnomalyDetection]:
+    async def record_execution(self, signature: str, duration: float) -> AnomalyDetection | None:
         """Persist execution and evaluate for anomalies.
 
         Returns:
@@ -61,13 +61,11 @@ class StepTimingTracker(ClassNameLogger):
             if anomaly:
                 direction = "FASTER" if anomaly.faster_than_expected else "SLOWER"
                 self.debug(
-                    (
-                        f"Timing anomaly for {signature}: {duration:.3f}s "
-                        f"(expected {anomaly.expected_mean:.3f}s +/- "
-                        f"{anomaly.threshold_multiplier:.1f}*"
-                        f"{anomaly.expected_stddev:.3f}s, "
-                        f"{anomaly.deviation_sigma:.1f} sigma) {direction}"
-                    )
+                    f"Timing anomaly for {signature}: {duration:.3f}s "
+                    f"(expected {anomaly.expected_mean:.3f}s +/- "
+                    f"{anomaly.threshold_multiplier:.1f}*"
+                    f"{anomaly.expected_stddev:.3f}s, "
+                    f"{anomaly.deviation_sigma:.1f} sigma) {direction}"
                 )
                 await self._fire_callbacks(anomaly)
             else:
@@ -76,15 +74,13 @@ class StepTimingTracker(ClassNameLogger):
             await self.database.insert_execution(signature, duration, anomaly)
             return anomaly
 
-    async def get_upper_bound(self, signature: str) -> Optional[float]:
+    async def get_upper_bound(self, signature: str) -> float | None:
         """Return the anomaly upper bound for a signature, or ``None`` if no baseline.
 
         This is the duration above which an execution would be flagged as
         SLOWER than expected.  Used by the live watchdog in ``Step.run_step``.
         """
-        durations = await self.database.fetch_recent_durations(
-            signature, self.config.window_size
-        )
+        durations = await self.database.fetch_recent_durations(signature, self.config.window_size)
         stats = self._compute_statistics(durations)
         if stats is None:
             return None
@@ -100,8 +96,8 @@ class StepTimingTracker(ClassNameLogger):
         self,
         signature: str,
         duration: float,
-        stats: Optional[StepStatistics],
-    ) -> Optional[AnomalyDetection]:
+        stats: StepStatistics | None,
+    ) -> AnomalyDetection | None:
         """Return anomaly record if duration exceeds mean +/- threshold * stddev."""
         if stats is None:
             return None
@@ -131,7 +127,7 @@ class StepTimingTracker(ClassNameLogger):
             )
         return None
 
-    def _compute_statistics(self, durations: List[float]) -> Optional[StepStatistics]:
+    def _compute_statistics(self, durations: list[float]) -> StepStatistics | None:
         """Compute rolling statistics from prior samples."""
         if len(durations) < 2:
             return None

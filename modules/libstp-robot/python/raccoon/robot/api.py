@@ -1,14 +1,22 @@
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Protocol, Type, TypeVar, TYPE_CHECKING, runtime_checkable
+from __future__ import annotations
+
 import asyncio
+import contextlib
+from abc import ABC, abstractmethod
+from typing import (
+    TYPE_CHECKING,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
 
 from raccoon.class_name_logger import ClassNameLogger
+from raccoon.foundation import initialize_timer
 from raccoon.hal import AnalogSensor, DigitalSensor
 from raccoon.motion import UnifiedMotionPidConfig
 from raccoon.timing import Synchronizer
-from raccoon.foundation import initialize_timer
-from .geometry import RobotGeometry
 
+from .geometry import RobotGeometry
 from .service import RobotService
 
 _S = TypeVar("_S", bound=RobotService)
@@ -35,11 +43,12 @@ class RobotDefinitionsProtocol(Protocol):
     Drive motors are accessed via robot.drive.get_motors() instead of defs.
     """
 
-    analog_sensors: List[AnalogSensor]
+    analog_sensors: list[AnalogSensor]
     button: DigitalSensor
-    wait_for_light_sensor: Optional[AnalogSensor]
+    wait_for_light_sensor: AnalogSensor | None
     wait_for_light_mode: str  # "auto" (default) or "legacy"
     wait_for_light_drop_fraction: float  # sensitivity for auto mode (default 0.15)
+
 
 class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     """
@@ -81,7 +90,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         ...
 
     @property
-    def table_map(self) -> Optional["TableMap"]:
+    def table_map(self) -> "TableMap" | None:
         """Table map with field line/wall geometry. ``None`` if not configured."""
         return None
 
@@ -91,12 +100,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         return UnifiedMotionPidConfig()
 
     @property
-    def missions(self) -> List["MissionProtocol"]:
+    def missions(self) -> list["MissionProtocol"]:
         """List of missions to execute. Override to provide missions."""
         return []
 
     @property
-    def setup_mission(self) -> Optional["SetupMission"]:
+    def setup_mission(self) -> "SetupMission" | None:
         """Optional setup mission to run before main missions.
 
         Must be a ``SetupMission`` instance (not a plain ``Mission``).
@@ -104,7 +113,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         return None
 
     @property
-    def shutdown_mission(self) -> Optional["MissionProtocol"]:
+    def shutdown_mission(self) -> "MissionProtocol" | None:
         """Optional mission to run after all missions complete."""
         return None
 
@@ -117,18 +126,20 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
     def __init__(self) -> None:
         """Initialize the robot and log configuration status."""
-        self._services: Dict[Type[RobotService], RobotService] = {}
+        self._services: dict[type[RobotService], RobotService] = {}
 
         # Clear STM32 shutdown flag to enable motors and servos
         from raccoon.hal import Motor
+
         Motor.enable_all()
 
         # Initialize button from defs
         from raccoon import button
+
         button.set_digital(self.defs.button)
 
         # Auto-configure wheel speed desaturation from motion config
-        if hasattr(self.kinematics, 'set_max_wheel_speed') and hasattr(self, 'motion_pid_config'):
+        if hasattr(self.kinematics, "set_max_wheel_speed") and hasattr(self, "motion_pid_config"):
             cfg = self.motion_pid_config
             max_linear = max(cfg.linear.max_velocity, cfg.lateral.max_velocity)
             max_wheel = max_linear / self.kinematics.get_wheel_radius()
@@ -140,18 +151,20 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
         if self.setup_mission is not None:
             from raccoon.mission.api import SetupMission
+
             if not isinstance(self.setup_mission, SetupMission):
-                raise TypeError(
+                msg = (
                     f"setup_mission must be a SetupMission instance, "
                     f"got {type(self.setup_mission).__name__}. "
                     f"Subclass SetupMission instead of Mission for setup missions."
                 )
+                raise TypeError(msg)
             self.info("Setup mission found")
 
         if self.shutdown_mission is not None:
             self.info("Shutdown mission found")
 
-    def get_service(self, cls: Type[_S]) -> _S:
+    def get_service(self, cls: type[_S]) -> _S:
         """Get or create a cached service instance.
 
         Services are lazily instantiated on first access and reused for
@@ -191,30 +204,37 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         Override this method in a subclass to customize pre-start behavior.
         """
         import os
+
         dev_mode = os.environ.get("LIBSTP_DEV_MODE") == "1"
 
         if dev_mode:
             self.info("Dev mode: waiting for button press")
             from raccoon.step import wait_for_button
+
             await wait_for_button("Start by clicking the button").run_step(self)
         else:
             sensor = getattr(self.defs, "wait_for_light_sensor", None)
             if sensor is None:
-                self.warn("No wait_for_light_sensor configured in defs! Falling back to wait_for_button.")
+                self.warn(
+                    "No wait_for_light_sensor configured in defs! Falling back to wait_for_button."
+                )
                 from raccoon.step import wait_for_button
+
                 await wait_for_button().run_step(self)
             else:
                 self.info("Waiting for light...")
                 wfl_mode = getattr(self.defs, "wait_for_light_mode", "auto")
                 if wfl_mode == "legacy":
                     from raccoon.step import wait_for_light_legacy
+
                     await wait_for_light_legacy(sensor).run_step(self)
                 else:
                     from raccoon.step import wait_for_light
+
                     drop_fraction = getattr(self.defs, "wait_for_light_drop_fraction", 0.15)
                     await wait_for_light(sensor, drop_fraction=drop_fraction).run_step(self)
 
-    async def _run_main_missions(self, missions: List["MissionProtocol"]) -> None:
+    async def _run_main_missions(self, missions: list["MissionProtocol"]) -> None:
         """Execute main missions sequentially with per-mission watchdogs."""
         from raccoon.step.watchdog_manager import get_watchdog_manager
 
@@ -223,7 +243,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             self.info(f"Starting mission: {mission}")
 
             budget = getattr(mission, "time_budget", None)
-            wd_name: Optional[str] = None
+            wd_name: str | None = None
             if budget is not None and budget > 0:
                 wd_name = f"mission:{mission}"
                 wdt.arm(wd_name, float(budget), source="mission")
@@ -267,8 +287,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         if bg_mgr is None or bg_mgr.active_count == 0:
             return
         self.info(
-            f"Cancelling {bg_mgr.active_count} remaining background task(s) "
-            f"before shutdown"
+            f"Cancelling {bg_mgr.active_count} remaining background task(s) " f"before shutdown"
         )
         await bg_mgr.cancel_all()
 
@@ -284,19 +303,23 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         self.error(f"{reason} — forcing process exit")
         try:
             from raccoon.hal import Motor, Servo
+
             Motor.disable_all()
             Servo.fully_disable_all()
         except Exception as e:
             self.error(f"Failed to set STM32 shutdown flag: {e}")
         import time as _time
+
         _time.sleep(0.05)
         import os
+
         os._exit(2)
 
     @staticmethod
     def _get_skip_mission_indices() -> set:
         """Return mission order indices to skip, from LIBSTP_SKIP_MISSIONS env var."""
         import os
+
         val = os.environ.get("LIBSTP_SKIP_MISSIONS", "")
         if not val:
             return set()
@@ -313,6 +336,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         headless tests where the LCM bridge is intentionally absent).
         """
         import os
+
         if os.environ.get("LIBSTP_SKIP_PROBE") == "1":
             self.info("LIBSTP_SKIP_PROBE=1 — skipping platform probe")
             return
@@ -333,9 +357,8 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
         if not result.ok:
             failed = ", ".join(c.component.name.lower() for c in result.failed_components())
-            raise _platform.ProbeFailedError(
-                f"Platform probe failed: {failed}\n{result.summary()}"
-            )
+            msg = f"Platform probe failed: {failed}\n{result.summary()}"
+            raise _platform.ProbeFailedError(msg)
 
     async def _run_missions(self) -> None:
         """Internal mission execution loop."""
@@ -356,10 +379,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         # so headless test environments can opt out.
         self._run_platform_probe()
 
-        initialize_timer() # reset clock to 0
+        initialize_timer()  # reset clock to 0
         if setup_mission is not None:
-            from raccoon.mission.api import SetupMission
             from contextlib import nullcontext
+
+            from raccoon.mission.api import SetupMission
+
             timer_ctx = (
                 setup_mission.setup_timer_context()
                 if isinstance(setup_mission, SetupMission)
@@ -379,34 +404,25 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             await self._pre_start_gate()
 
         # Main missions with shutdown timer and watchdog manager
-        initialize_timer() # reset clock to 0 before main missions
+        initialize_timer()  # reset clock to 0 before main missions
         self.synchronizer.start_recording()
 
         from raccoon.step.watchdog_manager import get_watchdog_manager
+
         wdt = get_watchdog_manager(self)
         main_task = asyncio.create_task(self._run_main_missions(missions))
         wdt.attach_main_task(main_task)
 
         try:
-            done, pending = await asyncio.wait(
-                [main_task], timeout=self.shutdown_in
-            )
+            done, pending = await asyncio.wait([main_task], timeout=self.shutdown_in)
             if main_task in pending:
-                self.error(
-                    f"Shutdown timer expired after {self.shutdown_in}s! Forcing shutdown."
-                )
+                self.error(f"Shutdown timer expired after {self.shutdown_in}s! Forcing shutdown.")
                 main_task.cancel()
-                try:
-                    await asyncio.wait_for(
-                        asyncio.shield(main_task), timeout=2.0
-                    )
-                except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
-                    pass
+                with contextlib.suppress(TimeoutError, asyncio.CancelledError, Exception):
+                    await asyncio.wait_for(asyncio.shield(main_task), timeout=2.0)
 
                 if not main_task.done():
-                    self._force_quit(
-                        "Main task ignored cancellation after 2s grace period"
-                    )
+                    self._force_quit("Main task ignored cancellation after 2s grace period")
             elif main_task.cancelled():
                 expired = wdt.expired_name
                 if expired is not None:
@@ -428,7 +444,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         await self._drain_background_tasks()
 
         # Always run shutdown mission
-        initialize_timer() # reset clock to 0 before shutdown mission
+        initialize_timer()  # reset clock to 0 before shutdown mission
         if shutdown_mission is not None:
             self.info("Running shutdown mission")
             await shutdown_mission.run(self)
@@ -437,12 +453,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
     def _preload_missions(
         self,
-        missions: List["MissionProtocol"],
-        setup_mission: Optional["MissionProtocol"],
-        shutdown_mission: Optional["MissionProtocol"],
+        missions: list["MissionProtocol"],
+        setup_mission: "MissionProtocol" | None,
+        shutdown_mission: "MissionProtocol" | None,
     ) -> None:
         """Build mission sequences early to validate step construction."""
-        preload_targets: List[tuple[str, "MissionProtocol"]] = []
+        preload_targets: list[tuple[str, "MissionProtocol"]] = []
         if setup_mission is not None:
             preload_targets.append(("setup", setup_mission))
         preload_targets.extend(("main", mission) for mission in missions)

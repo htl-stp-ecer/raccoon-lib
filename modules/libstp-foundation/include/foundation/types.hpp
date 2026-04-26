@@ -1,8 +1,6 @@
-//
-// Created by tobias on 4/21/25.
-//
-
 #pragma once
+
+#include <numbers>
 
 #include "pch.hpp"
 
@@ -89,11 +87,11 @@ namespace libstp::foundation {
         constexpr explicit Radians(double rad) : value(rad) {}
 
         static constexpr Radians from_deg(double deg) {
-            return Radians{deg * 3.14159265358979323846 / 180.0};
+            return Radians{deg * std::numbers::pi / 180.0};
         }
 
         constexpr double to_deg() const {
-            return value * 180.0 / 3.14159265358979323846;
+            return value * 180.0 / std::numbers::pi;
         }
 
         constexpr operator double() const { return value; }
@@ -113,7 +111,7 @@ namespace libstp::foundation {
         constexpr explicit RadiansPerSecond(double rps) : value(rps) {}
 
         static constexpr RadiansPerSecond from_deg_per_sec(double dps) {
-            return RadiansPerSecond{dps * 3.14159265358979323846 / 180.0};
+            return RadiansPerSecond{dps * std::numbers::pi / 180.0};
         }
 
         constexpr operator double() const { return value; }

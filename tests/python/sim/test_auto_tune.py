@@ -18,6 +18,7 @@ Known limitations in sim:
 
 The runner subprocess pattern isolates C++ singleton teardown from pytest.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,8 +34,8 @@ RUNNER = Path(__file__).parent / "_auto_tune_runner.py"
 
 def _raccoon_available() -> bool:
     try:
-        import raccoon  # noqa: F401
-        from raccoon import sim  # noqa: F401
+        from raccoon import sim
+
         return hasattr(sim, "mock")
     except ImportError:
         return False
@@ -43,7 +44,7 @@ def _raccoon_available() -> bool:
 pytestmark = pytest.mark.skipif(
     not _raccoon_available(),
     reason="raccoon mock-bundle wheel not installed (rebuild with "
-           "`pip install -e . --config-settings=cmake.define.DRIVER_BUNDLE=mock`)",
+    "`pip install -e . --config-settings=cmake.define.DRIVER_BUNDLE=mock`)",
 )
 
 
@@ -64,23 +65,26 @@ def _run_runner(config_name: str, timeout: int = 360) -> dict:
         check=False,
     )
     if proc.returncode != 0:
-        raise AssertionError(
+        msg = (
             f"runner failed (exit={proc.returncode}, config={config_name})\n"
             f"stdout: {proc.stdout[-2000:]}\nstderr: {proc.stderr[-2000:]}"
         )
+        raise AssertionError(msg)
 
     for line in proc.stdout.splitlines():
         if line.startswith("RESULTS:"):
-            return json.loads(line[len("RESULTS:"):])
-    raise AssertionError(
+            return json.loads(line[len("RESULTS:") :])
+    msg = (
         f"runner did not emit RESULTS line (config={config_name})\n"
         f"stdout: {proc.stdout[-2000:]}\nstderr: {proc.stderr[-2000:]}"
     )
+    raise AssertionError(msg)
 
 
 # ---------------------------------------------------------------------------
 # Fixtures — run the expensive subprocess once per config, cache the results
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def default_results() -> dict:
@@ -101,14 +105,16 @@ def packingbot_results() -> dict:
 # Phase 1: CharacterizeDrive — should measure realistic velocity profiles
 # ---------------------------------------------------------------------------
 
+
 class TestCharacterizeDefault:
     """Phase 1 with the default (moderate drag) config."""
 
     def test_forward_max_velocity_positive(self, default_results):
         char = default_results["characterize"]
         assert "error" not in char, f"characterize failed: {char.get('error')}"
-        assert char["forward"]["max_velocity"] > 0.5, (
-            f"max_velocity too low: {char['forward']['max_velocity']}")
+        assert (
+            char["forward"]["max_velocity"] > 0.5
+        ), f"max_velocity too low: {char['forward']['max_velocity']}"
 
     def test_forward_acceleration_positive(self, default_results):
         char = default_results["characterize"]
@@ -116,8 +122,9 @@ class TestCharacterizeDefault:
 
     def test_angular_max_velocity_positive(self, default_results):
         char = default_results["characterize"]
-        assert char["angular"]["max_velocity"] > 10.0, (
-            f"angular max_velocity too low: {char['angular']['max_velocity']}")
+        assert (
+            char["angular"]["max_velocity"] > 10.0
+        ), f"angular max_velocity too low: {char['angular']['max_velocity']}"
 
     def test_angular_acceleration_positive(self, default_results):
         char = default_results["characterize"]
@@ -171,6 +178,7 @@ class TestCharacterizePackingbot:
 # Phase 2: AutoTuneVelocity — runs but reverts (sim limitation)
 # ---------------------------------------------------------------------------
 
+
 class TestVelocityTuneDefault:
     """Phase 2 with default config.
 
@@ -195,7 +203,8 @@ class TestVelocityTuneDefault:
         # Plant Ks should be positive for the system identification to work
         assert vx["plant_Ks"] > 0, (
             f"Plant Ks is non-positive ({vx['plant_Ks']}), system identification "
-            f"may not be handling the sim motor model correctly")
+            f"may not be handling the sim motor model correctly"
+        )
         assert vx["pid_kp"] > 0.0
 
     def test_accepted_or_reverted_gracefully(self, default_results):
@@ -206,12 +215,14 @@ class TestVelocityTuneDefault:
             # If accepted, tuned ISE should be better (lower) than baseline
             assert vx["tuned_ise"] < vx["baseline_ise"], (
                 f"Accepted but tuned ISE ({vx['tuned_ise']:.4f}) >= "
-                f"baseline ({vx['baseline_ise']:.4f})")
+                f"baseline ({vx['baseline_ise']:.4f})"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Phase 3: AutoTuneMotion — coordinate descent on motion PID
 # ---------------------------------------------------------------------------
+
 
 class TestMotionTuneDefault:
     """Phase 3 with default config.
@@ -228,8 +239,7 @@ class TestMotionTuneDefault:
         """Phase 3 should either complete successfully or report TimeoutError."""
         motion = default_results["motion"]
         if "error" in motion:
-            assert "Timeout" in motion["error"], (
-                f"unexpected motion tune error: {motion['error']}")
+            assert "Timeout" in motion["error"], f"unexpected motion tune error: {motion['error']}"
 
     def test_score_does_not_degrade(self, default_results):
         """Final score should be <= initial score (lower is better)."""
@@ -238,8 +248,8 @@ class TestMotionTuneDefault:
             pytest.skip("motion tune timed out")
         dist = motion["distance"]
         assert dist["final_score"] <= dist["initial_score"] * 1.05, (
-            f"Motion tune degraded: {dist['initial_score']:.4f} → "
-            f"{dist['final_score']:.4f}")
+            f"Motion tune degraded: {dist['initial_score']:.4f} → " f"{dist['final_score']:.4f}"
+        )
 
     def test_multiple_iterations(self, default_results):
         """Coordinate descent should run multiple iterations."""
@@ -255,8 +265,7 @@ class TestMotionTuneDefault:
             pytest.skip("motion tune timed out")
         dist = motion["distance"]
         gains_changed = (
-            dist["final_kp"] != dist["initial_kp"] or
-            dist["final_kd"] != dist["initial_kd"]
+            dist["final_kp"] != dist["initial_kp"] or dist["final_kd"] != dist["initial_kd"]
         )
         assert gains_changed, "Coordinate descent didn't explore any gain changes"
 
@@ -281,8 +290,7 @@ class TestMotionTuneHighDrag:
     def test_drumbot_completes(self, drumbot_results):
         motion = drumbot_results["motion"]
         if "error" in motion:
-            assert "Timeout" in motion["error"], (
-                f"unexpected error: {motion['error']}")
+            assert "Timeout" in motion["error"], f"unexpected error: {motion['error']}"
         else:
             dist = motion["distance"]
             assert dist["final_kp"] > 0.0
@@ -291,8 +299,7 @@ class TestMotionTuneHighDrag:
     def test_packingbot_completes(self, packingbot_results):
         motion = packingbot_results["motion"]
         if "error" in motion:
-            assert "Timeout" in motion["error"], (
-                f"unexpected error: {motion['error']}")
+            assert "Timeout" in motion["error"], f"unexpected error: {motion['error']}"
         else:
             dist = motion["distance"]
             assert dist["final_kp"] > 0.0

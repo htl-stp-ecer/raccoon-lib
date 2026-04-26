@@ -1,3 +1,4 @@
+from __future__ import annotations
 from .tracker import StepTimingTracker, AnomalyCallback
 from .models import AnomalyDetection, StepStatistics
 from .config import TimingConfig
@@ -9,5 +10,5 @@ __all__ = [
     "AnomalyDetection",
     "StepStatistics",
     "TimingConfig",
-    "Synchronizer"
+    "Synchronizer",
 ]

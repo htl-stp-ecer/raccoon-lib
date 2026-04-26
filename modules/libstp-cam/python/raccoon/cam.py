@@ -18,21 +18,19 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-import os
-import sys
-from typing import List
+from pathlib import Path
 
 # Locate the native extension (.so / .pyd) that sits next to this file.
-_pkg_dir = os.path.dirname(os.path.abspath(__file__))
+_pkg_dir = Path(__file__).resolve().parent
 _ext_spec = None
-for _fname in os.listdir(_pkg_dir):
-    if _fname.startswith("cam.") and (_fname.endswith(".so") or _fname.endswith(".pyd")):
-        _ext_path = os.path.join(_pkg_dir, _fname)
-        _ext_spec = importlib.util.spec_from_file_location("raccoon._cam_native", _ext_path)
+for _candidate in _pkg_dir.iterdir():
+    if _candidate.name.startswith("cam.") and _candidate.suffix in (".so", ".pyd"):
+        _ext_spec = importlib.util.spec_from_file_location("raccoon._cam_native", _candidate)
         break
 
 if _ext_spec is None:
-    raise ImportError("Could not find the native cam extension (.so/.pyd) in " + _pkg_dir)
+    msg = f"Could not find the native cam extension (.so/.pyd) in {_pkg_dir}"
+    raise ImportError(msg)
 
 _native = importlib.util.module_from_spec(_ext_spec)
 _ext_spec.loader.exec_module(_native)

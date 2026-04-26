@@ -1,7 +1,10 @@
 """
 Unified calibration step (distance + IR sensors).
 """
-from typing import Optional, List, TYPE_CHECKING
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from raccoon.step.annotation import dsl_step
 
@@ -67,8 +70,8 @@ class Calibrate(CalibrateDistance):
         speed: float = 1.0,
         persist_to_yaml: bool = True,
         ema_alpha: float = 0.7,
-        calibration_sets: Optional[List[str]] = None,
-        exclude_ir_sensors: Optional[List["IRSensor"]] = None,
+        calibration_sets: list[str] | None = None,
+        exclude_ir_sensors: list["IRSensor"] | None = None,
     ) -> None:
         super().__init__(
             distance_cm=distance_cm,

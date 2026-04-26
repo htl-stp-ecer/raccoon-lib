@@ -1,7 +1,3 @@
-//
-// Created by tobias on 10/9/25.
-//
-
 #include "foundation/types.hpp"
 
 #include <pybind11/pybind11.h>

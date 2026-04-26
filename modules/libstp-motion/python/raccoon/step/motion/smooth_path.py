@@ -15,35 +15,26 @@ from typing import TYPE_CHECKING
 
 from .. import Step, dsl
 from .path import (
-    PathCompiler, PathExecutor, CompiledPlan,
-    Segment as _Segment,
-    SideAction as _SideAction,
-    PathNode as _PathNode,
-    Correction as _Correction,
     SENTINEL_DISTANCE_M as _SENTINEL_DISTANCE_M,
-    WorldCorrectionMiddleware,
-    WorldPoseTracker as _WorldPoseTracker,
-    LineFollowAdapter as _LineFollowAdapter,
-    SplineAdapter as _SplineAdapter,
 )
-from .path.middleware.world_correction import wrap_angle as _wrap_angle
+from .path import (
+    CompiledPlan,
+    PathCompiler,
+    PathExecutor,
+    WorldCorrectionMiddleware,
+)
+from .path import (
+    Segment as _Segment,
+)
+from .path import (
+    SideAction as _SideAction,
+)
 from .path.passes import (
-    extract_segment as _extract_segment,
-    resolve_step as _resolve_step,
-    is_same_type as _is_same_type,
-    flatten_one as _flatten_one,
-    flatten_parallel as _flatten_parallel,
-    flatten_steps as _flatten_steps,
-    can_merge as _can_merge,
-    merge_two as _merge_two,
-    run_merge as _pass_merge,
-    try_corner_arc as _try_corner_arc,
-    run_corner_cut as _pass_corner_cut,
-    segments_to_spline_waypoints as _segments_to_spline_waypoints,
-    build_spline_step as _build_spline_step,
-    optimize_nodes as _optimize_nodes,
-    MergePass,
     CornerCutPass,
+    MergePass,
+)
+from .path.passes import (
+    build_spline_step as _build_spline_step,
 )
 
 if TYPE_CHECKING:
@@ -68,6 +59,7 @@ def _build_default_passes(*, optimize: bool, corner_cut_m: float) -> list:
 # ---------------------------------------------------------------------------
 # SmoothPath Step
 # ---------------------------------------------------------------------------
+
 
 @dsl(hidden=True)
 class SmoothPath(Step):
@@ -94,12 +86,14 @@ class SmoothPath(Step):
     ) -> None:
         super().__init__()
         if not steps:
-            raise ValueError("smooth_path() requires at least one step")
+            msg = "smooth_path() requires at least one step"
+            raise ValueError(msg)
         if corner_cut_m > 0.0 and spline:
-            raise ValueError(
+            msg = (
                 "smooth_path(): corner_cut_cm and spline=True are mutually "
                 "exclusive — use one strategy for handling turns"
             )
+            raise ValueError(msg)
 
         self._raw_steps = steps
         self._correct = correct
@@ -110,7 +104,8 @@ class SmoothPath(Step):
         # Compile the plan via the standard pipeline.
         compiler = PathCompiler(
             passes=_build_default_passes(
-                optimize=optimize, corner_cut_m=corner_cut_m,
+                optimize=optimize,
+                corner_cut_m=corner_cut_m,
             ),
         )
         self._plan: CompiledPlan = compiler.compile(steps)
@@ -129,10 +124,11 @@ class SmoothPath(Step):
         has_segment = any(isinstance(n, _Segment) for n in self._nodes)
         has_deferred = len(self._deferred) > 0
         if not has_segment and not has_deferred:
-            raise ValueError(
+            msg = (
                 "smooth_path() requires at least one motion step "
                 "(drive, turn, or arc), but none were found"
             )
+            raise ValueError(msg)
 
     _composite = True
 
@@ -148,6 +144,7 @@ class SmoothPath(Step):
 
     def _generate_signature(self) -> str:
         import math
+
         parts: list[str] = []
         for node in self._nodes:
             if node is None:
@@ -158,7 +155,11 @@ class SmoothPath(Step):
                     d = f"{abs(seg.distance_m or 0) * 100:.0f}cm" if seg.distance_m else "until"
                     parts.append(f"drive({d})")
                 elif seg.kind == "turn":
-                    a = f"{abs(math.degrees(seg.angle_rad or 0)):.0f}°" if seg.angle_rad else "until"
+                    a = (
+                        f"{abs(math.degrees(seg.angle_rad or 0)):.0f}°"
+                        if seg.angle_rad
+                        else "until"
+                    )
                     parts.append(f"turn({a})")
                 elif seg.kind == "arc":
                     parts.append(f"arc({abs(math.degrees(seg.arc_angle_rad or 0)):.0f}°)")
@@ -200,6 +201,7 @@ class SmoothPath(Step):
 # ---------------------------------------------------------------------------
 # DSL factory function
 # ---------------------------------------------------------------------------
+
 
 @dsl(tags=["motion", "path"])
 def smooth_path(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <numbers>
 
 namespace libstp::sim
 {
@@ -22,7 +23,7 @@ namespace libstp::sim
 
     inline float normalizeAngle(float angle) noexcept
     {
-        constexpr float kPi = 3.14159265358979323846f;
+        constexpr float kPi = std::numbers::pi_v<float>;
         constexpr float kTwoPi = 2.0f * kPi;
         while (angle > kPi) angle -= kTwoPi;
         while (angle < -kPi) angle += kTwoPi;
@@ -52,7 +53,7 @@ namespace libstp::sim
 
     inline Pose2D strafeMove(const Pose2D& pose, float distanceCm) noexcept
     {
-        constexpr float kHalfPi = 1.57079632679489661923f;
+        constexpr float kHalfPi = std::numbers::pi_v<float> / 2.0f;
         const float perp = pose.theta + kHalfPi;
         return {
             pose.x + distanceCm * std::cos(perp),

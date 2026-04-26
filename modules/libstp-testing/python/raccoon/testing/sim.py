@@ -5,9 +5,7 @@ helpers so a team's pytest can do::
 
     from raccoon.testing.sim import use_scene
 
-    with use_scene("empty_table.ftmap",
-                   robot=my_robot_config,
-                   start=(50, 50, 0)):
+    with use_scene("empty_table.ftmap", robot=my_robot_config, start=(50, 50, 0)):
         await drive_forward(cm=30).run_step(robot)
         assert pose().x == pytest.approx(80.0, abs=2.0)
 
@@ -24,12 +22,14 @@ a test-harness concern; the actual C++ sim bindings still live at
 ``raccoon.sim``. Historically this API was at ``raccoon.step.sim`` — that
 path remains as a deprecation shim and will be removed in a future release.
 """
+
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterator, List, Literal, Optional, Tuple, Union
+from typing import Literal, Union
 
 try:
     from raccoon import sim as _sim
@@ -49,7 +49,7 @@ if not hasattr(_sim, "mock"):
 
 _mock = _sim.mock
 
-PoseTuple = Tuple[float, float, float]
+PoseTuple = tuple[float, float, float]
 PoseLike = Union[PoseTuple, "_sim.Pose2D"]
 
 
@@ -116,8 +116,8 @@ class SimRobotConfig:
     coulomb_friction_rad_s2: float = 0.0
     bemf_noise_stddev: float = 0.0
 
-    line_sensors: List[LineSensorMount] = field(default_factory=list)
-    distance_sensors: List[DistanceSensorMount] = field(default_factory=list)
+    line_sensors: list[LineSensorMount] = field(default_factory=list)
+    distance_sensors: list[DistanceSensorMount] = field(default_factory=list)
 
 
 def _to_pose(pose: PoseLike) -> "_sim.Pose2D":
@@ -169,9 +169,9 @@ def _build_native_motors(cfg: SimRobotConfig) -> "_sim.SimMotorMap":
 
 
 def configure(
-    scene: Union[str, Path],
+    scene: str | Path,
     *,
-    robot: Optional[SimRobotConfig] = None,
+    robot: SimRobotConfig | None = None,
     start: PoseLike = (0.0, 0.0, 0.0),
     auto_tick: bool = True,
     auto_tick_max_step_sec: float = 0.05,
@@ -195,12 +195,16 @@ def configure(
     )
 
     for ls in cfg.line_sensors:
-        _mock.attach_line_sensor(
-            ls.analog_port, ls.forward_cm, ls.strafe_cm, ls.name)
+        _mock.attach_line_sensor(ls.analog_port, ls.forward_cm, ls.strafe_cm, ls.name)
     for ds in cfg.distance_sensors:
         _mock.attach_distance_sensor(
-            ds.analog_port, ds.forward_cm, ds.strafe_cm,
-            ds.mount_angle_rad, ds.max_range_cm, ds.name)
+            ds.analog_port,
+            ds.forward_cm,
+            ds.strafe_cm,
+            ds.mount_angle_rad,
+            ds.max_range_cm,
+            ds.name,
+        )
 
     _mock.set_auto_tick_max_step(auto_tick_max_step_sec)
     _mock.enable_auto_tick(auto_tick)
@@ -229,9 +233,9 @@ def tick(dt_seconds: float) -> None:
 
 @contextmanager
 def use_scene(
-    scene: Union[str, Path],
+    scene: str | Path,
     *,
-    robot: Optional[SimRobotConfig] = None,
+    robot: SimRobotConfig | None = None,
     start: PoseLike = (0.0, 0.0, 0.0),
     auto_tick: bool = True,
     auto_tick_max_step_sec: float = 0.05,

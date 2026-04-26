@@ -1,7 +1,3 @@
-//
-// Created by tobias on 6/9/25.
-//
-
 #include "hal/Servo.hpp"
 #include "foundation/config.hpp"
 

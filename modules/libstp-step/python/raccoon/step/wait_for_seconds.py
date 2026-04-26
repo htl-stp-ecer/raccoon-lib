@@ -1,7 +1,8 @@
-import asyncio
-from typing import Union
+from __future__ import annotations
 
-from . import Step, SimulationStep, SimulationStepDelta
+import asyncio
+
+from . import SimulationStep, SimulationStepDelta, Step
 from .annotation import dsl_step
 
 
@@ -35,11 +36,12 @@ class WaitForSeconds(Step):
         wait(0.1)
     """
 
-    def __init__(self, seconds: Union[float, int]) -> None:
+    def __init__(self, seconds: float | int) -> None:
         super().__init__()
 
         if seconds < 0:
-            raise ValueError(f"Wait duration cannot be negative: {seconds}")
+            msg = f"Wait duration cannot be negative: {seconds}"
+            raise ValueError(msg)
 
         self.seconds = float(seconds)
 

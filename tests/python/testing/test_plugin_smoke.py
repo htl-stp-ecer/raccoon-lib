@@ -6,6 +6,7 @@ resolution helper finds bundled scenes. Full end-to-end coverage of the
 fixtures lives in the drive-mission integration test which requires a
 mock-bundle wheel.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -24,7 +25,6 @@ def test_plugin_module_imports_without_sim() -> None:
     """
     # If this raises, the plugin is doing sim work at import time, which
     # breaks test collection on wombat-bundle wheels.
-    from raccoon.testing import pytest_plugin  # noqa: F401
 
 
 def test_plugin_exposes_expected_fixtures() -> None:

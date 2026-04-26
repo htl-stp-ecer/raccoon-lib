@@ -13,6 +13,8 @@ Public API:
     create_motion                                — motion factory
 """
 
+from __future__ import annotations
+
 from .ir import (
     Segment,
     SideAction,
@@ -37,14 +39,25 @@ from .middleware import (
 
 __all__ = [
     # IR
-    "Segment", "SideAction", "PathNode", "Correction", "SENTINEL_DISTANCE_M",
+    "Segment",
+    "SideAction",
+    "PathNode",
+    "Correction",
+    "SENTINEL_DISTANCE_M",
     # Compilation
-    "CompilerPass", "CompiledPlan", "PathCompiler",
+    "CompilerPass",
+    "CompiledPlan",
+    "PathCompiler",
     # Executor
     "PathExecutor",
     # Motion factory
-    "create_motion", "LineFollowAdapter", "SplineAdapter",
-    "OVERSHOOT_M", "OVERSHOOT_RAD",
+    "create_motion",
+    "LineFollowAdapter",
+    "SplineAdapter",
+    "OVERSHOOT_M",
+    "OVERSHOOT_RAD",
     # Middleware
-    "PathMiddleware", "WorldCorrectionMiddleware", "WorldPoseTracker",
+    "PathMiddleware",
+    "WorldCorrectionMiddleware",
+    "WorldPoseTracker",
 ]

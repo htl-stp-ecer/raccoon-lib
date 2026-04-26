@@ -8,12 +8,12 @@ mecanum mixing matrix (matches MecanumKinematics::estimateState):
     vy =  (fl - fr - bl + br) * R / 4
     wz = (-fl + fr - bl + br) * R / (4 * L),   L = (wheelbase + track) / 2
 """
+
 from __future__ import annotations
 
 import math
 
 import pytest
-
 from conftest import SCENES_DIR  # type: ignore[import-not-found]
 
 
@@ -61,10 +61,10 @@ def _run(world, seconds: float, dt: float = 0.005) -> None:
 def test_pure_strafe_moves_lateral_only(mecanum_world):
     """FL=+50%, FR=-50%, BL=-50%, BR=+50% → pure strafe, no rotation, no forward."""
     w = mecanum_world
-    w.set_motor_command(0, 50)   # FL
+    w.set_motor_command(0, 50)  # FL
     w.set_motor_command(1, -50)  # FR
     w.set_motor_command(2, -50)  # BL
-    w.set_motor_command(3, 50)   # BR
+    w.set_motor_command(3, 50)  # BR
     _run(w, 1.0)
 
     p = w.pose
@@ -93,9 +93,9 @@ def test_pure_rotation(mecanum_world):
     """FL=-50%, FR=+50%, BL=-50%, BR=+50% → spin in place, no translation."""
     w = mecanum_world
     w.set_motor_command(0, -50)  # FL
-    w.set_motor_command(1, 50)   # FR
+    w.set_motor_command(1, 50)  # FR
     w.set_motor_command(2, -50)  # BL
-    w.set_motor_command(3, 50)   # BR
+    w.set_motor_command(3, 50)  # BR
     _run(w, 1.0)
 
     p = w.pose

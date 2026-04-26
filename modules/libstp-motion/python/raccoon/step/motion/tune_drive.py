@@ -5,17 +5,20 @@ Runs test drives at specified distances and speeds, collecting per-cycle
 telemetry (commanded vs measured vs predicted position/velocity, PID outputs,
 saturation state) into CSV files for offline analysis.
 """
+
+from __future__ import annotations
+
 import asyncio
 import csv
 import math
-import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from raccoon.motion import (
+    LinearAxis,
     LinearMotion,
     LinearMotionConfig,
     LinearMotionTelemetry,
-    LinearAxis,
 )
 
 from .. import Step
@@ -75,8 +78,8 @@ def _telemetry_row(t: LinearMotionTelemetry) -> list:
     ]
 
 
-def _write_csv(path: str, telemetry: list[LinearMotionTelemetry]) -> None:
-    with open(path, "w", newline="") as f:
+def _write_csv(path: str | Path, telemetry: list[LinearMotionTelemetry]) -> None:
+    with Path(path).open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(CSV_HEADER)
         for t in telemetry:
@@ -145,8 +148,8 @@ class TuneDrive(Step):
 
     def __init__(
         self,
-        distances_cm: list[float] = None,
-        speeds: list[float] = None,
+        distances_cm: list[float] | None = None,
+        speeds: list[float] | None = None,
         csv_dir: str = "/tmp/drive_telemetry",
         axis: str = "forward",
         settle_time: float = 1.5,
@@ -171,13 +174,10 @@ class TuneDrive(Step):
         self.timeout = timeout
 
     def _generate_signature(self) -> str:
-        return (
-            f"TuneDrive(distances={self.distances_cm}, "
-            f"speeds={self.speeds})"
-        )
+        return f"TuneDrive(distances={self.distances_cm}, " f"speeds={self.speeds})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        os.makedirs(self.csv_dir, exist_ok=True)
+        Path(self.csv_dir).mkdir(parents=True, exist_ok=True)
 
         axis_name = "fwd" if self.axis == LinearAxis.Forward else "lat"
         total = len(self.distances_cm) * len(self.speeds)
@@ -204,14 +204,17 @@ class TuneDrive(Step):
                 # Save CSV
                 sign = "pos" if dist_cm >= 0 else "neg"
                 fname = f"{axis_name}_{sign}_{abs(dist_cm):.0f}cm_{speed:.2f}scale.csv"
-                csv_path = os.path.join(self.csv_dir, fname)
+                csv_path = Path(self.csv_dir) / fname
                 _write_csv(csv_path, telemetry)
 
                 # Summary
                 if telemetry:
                     final = telemetry[-1]
                     peak_vel = max(abs(t.filtered_velocity_mps) for t in telemetry)
-                    peak_cmd = max(abs(t.cmd_vx_mps if self.axis == LinearAxis.Forward else t.cmd_vy_mps) for t in telemetry)
+                    peak_cmd = max(
+                        abs(t.cmd_vx_mps if self.axis == LinearAxis.Forward else t.cmd_vy_mps)
+                        for t in telemetry
+                    )
                     self.info(f"  Duration:    {final.time_s:.2f} s  ({len(telemetry)} samples)")
                     self.info(f"  Final pos:   {final.position_m:.4f} m  (target: {dist_m:.4f} m)")
                     self.info(f"  Final error: {final.actual_error_m:.4f} m")
@@ -238,9 +241,7 @@ class TuneDrive(Step):
         config.distance_m = distance_m
         config.speed_scale = max_speed
 
-        motion = LinearMotion(
-            robot.drive, robot.odometry, robot.motion_pid_config, config
-        )
+        motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
         motion.start()
 
         rate = 1 / 50  # 50 Hz for higher resolution telemetry
@@ -262,5 +263,3 @@ class TuneDrive(Step):
 
         robot.drive.hard_stop()
         return list(motion.get_telemetry())
-
-

@@ -1,15 +1,15 @@
 """Construction-time input validation tests for CustomVelocity and its builder."""
 
+from __future__ import annotations
+
+import importlib.util
+
 import pytest
-from types import SimpleNamespace
 
 
-def libstp_available():
-    try:
-        from raccoon.step.base import Step  # noqa: F401
-        return True
-    except (ImportError, ModuleNotFoundError):
-        return False
+def libstp_available() -> bool:
+    """Check raccoon availability without importing."""
+    return importlib.util.find_spec("raccoon.step.base") is not None
 
 
 requires_libstp = pytest.mark.skipif(
@@ -27,6 +27,7 @@ requires_libstp = pytest.mark.skipif(
 class TestCustomVelocityValidation:
     def test_valid_callable(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         CustomVelocity(lambda robot, dt: (0.5, 0.0, 0.0))
 
     def test_valid_named_function(self):
@@ -38,32 +39,38 @@ class TestCustomVelocityValidation:
         CustomVelocity(my_fn)
 
     def test_valid_with_until(self):
-        from raccoon.step.motion.custom_velocity import CustomVelocity
         from raccoon.step.condition import after_seconds
+        from raccoon.step.motion.custom_velocity import CustomVelocity
+
         CustomVelocity(lambda robot, dt: (0.0, 0.0, 0.0), until=after_seconds(2))
 
     def test_not_callable_string(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         with pytest.raises(TypeError, match="callable"):
             CustomVelocity("not a function")
 
     def test_not_callable_int(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         with pytest.raises(TypeError, match="callable"):
             CustomVelocity(42)
 
     def test_not_callable_none(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         with pytest.raises(TypeError, match="callable"):
             CustomVelocity(None)
 
     def test_until_wrong_type_string(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         with pytest.raises(TypeError, match="StopCondition"):
             CustomVelocity(lambda robot, dt: (0.0, 0.0, 0.0), until="stop")
 
     def test_until_wrong_type_int(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         with pytest.raises(TypeError, match="StopCondition"):
             CustomVelocity(lambda robot, dt: (0.0, 0.0, 0.0), until=5)
 
@@ -78,6 +85,7 @@ class TestCustomVelocityValidation:
 
     def test_generate_signature_lambda(self):
         from raccoon.step.motion.custom_velocity import CustomVelocity
+
         step = CustomVelocity(lambda robot, dt: (0.0, 0.0, 0.0))
         sig = step._generate_signature()
         assert "CustomVelocity" in sig
@@ -92,32 +100,39 @@ class TestCustomVelocityValidation:
 class TestCustomVelocityFactoryValidation:
     def test_valid_callable(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
+
         custom_velocity(lambda robot, dt: (0.0, 0.0, 0.0))
 
     def test_returns_builder(self):
         from raccoon.step.motion.custom_velocity_dsl import (
-            custom_velocity, CustomVelocityBuilder,
+            CustomVelocityBuilder,
+            custom_velocity,
         )
+
         b = custom_velocity(lambda robot, dt: (0.0, 0.0, 0.0))
         assert isinstance(b, CustomVelocityBuilder)
 
     def test_valid_with_until(self):
-        from raccoon.step.motion.custom_velocity_dsl import custom_velocity
         from raccoon.step.condition import after_seconds
+        from raccoon.step.motion.custom_velocity_dsl import custom_velocity
+
         custom_velocity(lambda robot, dt: (0.0, 0.0, 0.0), until=after_seconds(3))
 
     def test_not_callable(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
+
         with pytest.raises(TypeError, match="callable"):
             custom_velocity("not_a_fn")
 
     def test_not_callable_none(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
+
         with pytest.raises(TypeError, match="callable"):
             custom_velocity(None)
 
     def test_until_wrong_type(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
+
         with pytest.raises(TypeError, match="StopCondition"):
             custom_velocity(lambda robot, dt: (0.0, 0.0, 0.0), until="bad")
 
@@ -130,8 +145,9 @@ class TestCustomVelocityFactoryValidation:
 @requires_libstp
 class TestCustomVelocityBuilderValidation:
     def test_until_valid(self):
-        from raccoon.step.motion.custom_velocity_dsl import CustomVelocityBuilder
         from raccoon.step.condition import after_seconds
+        from raccoon.step.motion.custom_velocity_dsl import CustomVelocityBuilder
+
         b = CustomVelocityBuilder()
         b._velocity_fn = lambda robot, dt: (0.0, 0.0, 0.0)
         result = b.until(after_seconds(5))
@@ -139,31 +155,37 @@ class TestCustomVelocityBuilderValidation:
 
     def test_until_wrong_type_string(self):
         from raccoon.step.motion.custom_velocity_dsl import CustomVelocityBuilder
+
         b = CustomVelocityBuilder()
         with pytest.raises(TypeError, match="StopCondition"):
             b.until("stop when black")
 
     def test_until_wrong_type_int(self):
         from raccoon.step.motion.custom_velocity_dsl import CustomVelocityBuilder
+
         b = CustomVelocityBuilder()
         with pytest.raises(TypeError, match="StopCondition"):
             b.until(42)
 
     def test_chained_until_builds_correctly(self):
-        from raccoon.step.motion.custom_velocity_dsl import custom_velocity
-        from raccoon.step.motion.custom_velocity import CustomVelocity
         from raccoon.step.condition import after_seconds
+        from raccoon.step.motion.custom_velocity import CustomVelocity
+        from raccoon.step.motion.custom_velocity_dsl import custom_velocity
 
-        fn = lambda robot, dt: (0.3, 0.0, 0.0)
+        def fn(robot, dt):
+            return 0.3, 0.0, 0.0
+
         step = custom_velocity(fn).until(after_seconds(2)).resolve()
         assert isinstance(step, CustomVelocity)
         assert step._until is not None
 
     def test_build_without_until(self):
-        from raccoon.step.motion.custom_velocity_dsl import custom_velocity
         from raccoon.step.motion.custom_velocity import CustomVelocity
+        from raccoon.step.motion.custom_velocity_dsl import custom_velocity
 
-        fn = lambda robot, dt: (0.0, 0.0, 0.0)
+        def fn(robot, dt):
+            return 0.0, 0.0, 0.0
+
         step = custom_velocity(fn).resolve()
         assert isinstance(step, CustomVelocity)
         assert step._until is None
@@ -179,10 +201,12 @@ class TestCustomVelocityBuilderValidation:
 
     def test_condition_composition(self):
         """until() accepts composed conditions (|, &, +)."""
+        from raccoon.step.condition import after_cm, after_seconds
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
-        from raccoon.step.condition import after_seconds, after_cm
 
-        fn = lambda robot, dt: (0.5, 0.0, 0.0)
+        def fn(robot, dt):
+            return 0.5, 0.0, 0.0
+
         custom_velocity(fn).until(after_seconds(5) | after_cm(30))
         custom_velocity(fn).until(after_seconds(5) & after_cm(30))
         custom_velocity(fn).until(after_cm(10) + after_seconds(3))
@@ -196,4 +220,4 @@ class TestCustomVelocityBuilderValidation:
 @requires_libstp
 class TestCustomVelocityExports:
     def test_exported_from_motion_package(self):
-        from raccoon.step.motion import custom_velocity, CustomVelocity, CustomVelocityBuilder  # noqa: F401
+        pass

@@ -14,11 +14,9 @@ from __future__ import annotations
 import ast
 import logging
 import re
-import sys
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("raccoon.codegen")
 
@@ -35,7 +33,7 @@ class ParamInfo:
     annotation: str  # source-level type annotation, or ""
     default: str  # source-level default expression, or ""
     has_default: bool = False
-    default_refs: List[str] = field(default_factory=list)  # top-level names in default
+    default_refs: list[str] = field(default_factory=list)  # top-level names in default
 
 
 @dataclass
@@ -43,10 +41,10 @@ class StepClassInfo:
     """Information about a ``@dsl_step`` class extracted from AST."""
 
     name: str
-    params: List[ParamInfo]
+    params: list[ParamInfo]
     source_file: Path
-    bases: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    bases: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     docstring: str = ""
 
 
@@ -57,7 +55,7 @@ class StepClassInfo:
 # Fallback descriptions for very common parameter names.
 # Class docstring ``Args:`` sections are the PRIMARY source —
 # these only kick in when the class doesn't document a param.
-_COMMON_PARAM_DEFAULTS: Dict[str, str] = {
+_COMMON_PARAM_DEFAULTS: dict[str, str] = {
     "cm": "Distance in centimeters. Omit to use condition-only mode.",
     "degrees": "Angle in degrees. Omit to use condition-only mode.",
     "speed": "Fraction of max speed, 0.0 to 1.0.",
@@ -75,7 +73,7 @@ class _ParsedDocstring:
 
     summary: str = ""
     body: str = ""
-    args: Dict[str, str] = field(default_factory=dict)
+    args: dict[str, str] = field(default_factory=dict)
     example: str = ""
 
 
@@ -89,7 +87,7 @@ def _parse_class_docstring(raw: str) -> _ParsedDocstring:
 
     # Split into lines and extract summary (first paragraph)
     lines = text.split("\n")
-    summary_lines: List[str] = []
+    summary_lines: list[str] = []
     rest_start = 0
     for i, line in enumerate(lines):
         if line.strip() == "" and summary_lines:
@@ -107,13 +105,13 @@ def _parse_class_docstring(raw: str) -> _ParsedDocstring:
     # Extract Example:: section (everything after "Example::")
     example_match = re.search(r"^Example::[ \t]*\n", rest, re.MULTILINE)
     if example_match:
-        result.example = textwrap.dedent(rest[example_match.end():]).strip()
+        result.example = textwrap.dedent(rest[example_match.end() :]).strip()
         rest = rest[: example_match.start()].strip()
 
     # Extract Args: section
     args_match = re.search(r"^Args:\s*\n", rest, re.MULTILINE)
     if args_match:
-        args_text = rest[args_match.end():]
+        args_text = rest[args_match.end() :]
         rest = rest[: args_match.start()].strip()
         result.args = _parse_args_section(args_text)
 
@@ -121,11 +119,11 @@ def _parse_class_docstring(raw: str) -> _ParsedDocstring:
     return result
 
 
-def _parse_args_section(text: str) -> Dict[str, str]:
+def _parse_args_section(text: str) -> dict[str, str]:
     """Parse an Args: section into a name→description mapping."""
-    args: Dict[str, str] = {}
-    current_name: Optional[str] = None
-    current_lines: List[str] = []
+    args: dict[str, str] = {}
+    current_name: str | None = None
+    current_lines: list[str] = []
 
     for line in text.split("\n"):
         # Check for a new arg: "    name: description" or "    name (type): desc"
@@ -157,7 +155,7 @@ def _build_factory_docstring(info: StepClassInfo) -> str:
     fn = camel_to_snake(info.name)
     builder = f"{info.name}Builder"
 
-    sections: List[str] = []
+    sections: list[str] = []
 
     # Summary
     summary = parsed.summary or f"Create a {info.name} step."
@@ -175,11 +173,12 @@ def _build_factory_docstring(info: StepClassInfo) -> str:
         for p in info.params:
             desc = parsed.args.get(p.name) or _COMMON_PARAM_DEFAULTS.get(p.name, "")
             if not desc:
-                raise ValueError(
+                msg = (
                     f"{info.name}.__init__ param '{p.name}' has no documentation. "
                     f"Add an Args: section to the class docstring or add "
                     f"'{p.name}' to _COMMON_PARAM_DEFAULTS in step_builder_gen.py"
                 )
+                raise ValueError(msg)
             sections.append(f"    {p.name}: {desc}")
 
     # Returns
@@ -238,12 +237,12 @@ def _is_dsl_step_decorator(node: ast.expr) -> bool:
     return False
 
 
-def _extract_dsl_step_tags(decorator_list: List[ast.expr]) -> List[str]:
+def _extract_dsl_step_tags(decorator_list: list[ast.expr]) -> list[str]:
     """Extract tags from a ``@dsl_step(tags=[...])`` decorator."""
     for node in decorator_list:
         if isinstance(node, ast.Call) and _is_dsl_step_decorator(node.func):
             for kw in node.keywords:
-                if kw.arg == "tags" and isinstance(kw.value, (ast.List, ast.Tuple)):
+                if kw.arg == "tags" and isinstance(kw.value, ast.List | ast.Tuple):
                     return [
                         elt.value
                         for elt in kw.value.elts
@@ -256,46 +255,95 @@ def _ast_to_source(node: ast.expr) -> str:
     return ast.unparse(node)
 
 
-def _extract_init_params(cls_node: ast.ClassDef) -> List[ParamInfo]:
+def _extract_init_params(cls_node: ast.ClassDef) -> list[ParamInfo]:
     for item in cls_node.body:
         if isinstance(item, ast.FunctionDef) and item.name == "__init__":
             return _parse_function_params(item)
     return []
 
 
-def _extract_default_refs(node: ast.expr) -> List[str]:
+def _extract_default_refs(node: ast.expr) -> list[str]:
     """Extract top-level names referenced in a default-value AST node.
 
     For example, ``LineSide.LEFT`` yields ``["LineSide"]``, while
     literal values like ``0.5`` or ``None`` yield nothing.
     """
-    refs: List[str] = []
+    _SKIP = frozenset(
+        {
+            "None",
+            "True",
+            "False",
+            "int",
+            "float",
+            "str",
+            "bool",
+            "list",
+            "dict",
+            "tuple",
+            "set",
+            "Optional",
+            "Union",
+            "List",
+        }
+    )
+    refs: list[str] = []
     for child in ast.walk(node):
-        if isinstance(child, ast.Name):
-            # Skip builtins and common literals
-            if child.id not in (
-                "None", "True", "False", "int", "float", "str", "bool",
-                "list", "dict", "tuple", "set", "Optional", "Union", "List",
-            ):
-                refs.append(child.id)
+        if isinstance(child, ast.Name) and child.id not in _SKIP:
+            refs.append(child.id)
     return refs
 
 
-_ANNOTATION_BUILTINS = frozenset({
-    # Python builtins usable as generics in annotations (PEP 585)
-    "None", "True", "False",
-    "int", "float", "str", "bool", "bytes", "bytearray", "object",
-    "list", "dict", "tuple", "set", "frozenset", "type",
-    # typing module constructs
-    "Optional", "Union", "List", "Dict", "Tuple", "Set", "FrozenSet",
-    "Any", "Callable", "Type", "ClassVar", "Final", "Literal",
-    "Awaitable", "Coroutine", "AsyncIterator", "AsyncIterable",
-    "Iterator", "Iterable", "Generator", "Sequence", "Mapping",
-    "MutableMapping", "MutableSequence", "TypeVar", "overload",
-})
+_ANNOTATION_BUILTINS = frozenset(
+    {
+        # Python builtins usable as generics in annotations (PEP 585)
+        "None",
+        "True",
+        "False",
+        "int",
+        "float",
+        "str",
+        "bool",
+        "bytes",
+        "bytearray",
+        "object",
+        "list",
+        "dict",
+        "tuple",
+        "set",
+        "frozenset",
+        "type",
+        # typing module constructs
+        "Optional",
+        "Union",
+        "List",
+        "Dict",
+        "Tuple",
+        "Set",
+        "FrozenSet",
+        "Any",
+        "Callable",
+        "Type",
+        "ClassVar",
+        "Final",
+        "Literal",
+        "Awaitable",
+        "Coroutine",
+        "AsyncIterator",
+        "AsyncIterable",
+        "Iterator",
+        "Iterable",
+        "Generator",
+        "Sequence",
+        "Mapping",
+        "MutableMapping",
+        "MutableSequence",
+        "TypeVar",
+        "overload",
+    }
+)
 
 
-def _extract_annotation_refs(annotation: str) -> List[str]:
+def _extract_annotation_refs(annotation: str) -> list[str]:
     """Extract top-level names referenced in a type annotation string.
 
     Parses the annotation as an expression and returns every bare ``Name``
@@ -315,7 +363,7 @@ def _extract_annotation_refs(annotation: str) -> List[str]:
     ]
 
 
-def _find_imports_for_names(source_file: Path, needed_names: set) -> List[str]:
+def _find_imports_for_names(source_file: Path, needed_names: set) -> list[str]:
     """Return import statements from *source_file* that provide *needed_names*.
 
     Scans the entire AST of the source file (including function bodies) for
@@ -330,7 +378,7 @@ def _find_imports_for_names(source_file: Path, needed_names: set) -> List[str]:
         return []
 
     # Map: provided name → import line (first occurrence wins)
-    found: Dict[str, str] = {}
+    found: dict[str, str] = {}
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom):
             continue
@@ -346,8 +394,8 @@ def _find_imports_for_names(source_file: Path, needed_names: set) -> List[str]:
     return [found[n] for n in sorted(needed_names) if n in found]
 
 
-def _parse_function_params(func: ast.FunctionDef) -> List[ParamInfo]:
-    params: List[ParamInfo] = []
+def _parse_function_params(func: ast.FunctionDef) -> list[ParamInfo]:
+    params: list[ParamInfo] = []
     args = func.args
     all_args = args.args[1:]  # skip self
     num_defaults = len(args.defaults)
@@ -373,7 +421,7 @@ def _parse_function_params(func: ast.FunctionDef) -> List[ParamInfo]:
     return params
 
 
-def scan_file(source_file: Path) -> List[StepClassInfo]:
+def scan_file(source_file: Path) -> list[StepClassInfo]:
     """Scan a Python source file for ``@dsl_step`` classes."""
     try:
         tree = ast.parse(
@@ -394,9 +442,16 @@ def scan_file(source_file: Path) -> List[StepClassInfo]:
         bases = [_ast_to_source(b) for b in node.bases]
         tags = _extract_dsl_step_tags(node.decorator_list)
         docstring = ast.get_docstring(node) or ""
-        results.append(StepClassInfo(
-            node.name, params, source_file, bases, tags, docstring,
-        ))
+        results.append(
+            StepClassInfo(
+                node.name,
+                params,
+                source_file,
+                bases,
+                tags,
+                docstring,
+            )
+        )
 
     return results
 
@@ -443,10 +498,10 @@ def _generate_builder_class(info: StepClassInfo) -> str:
     lines.append("        kwargs = {}")
     for p in info.params:
         if p.has_default:
-            lines.append(f"        kwargs['{p.name}'] = self._{p.name}")
+            lines.append(f'        kwargs["{p.name}"] = self._{p.name}')
         else:
             lines.append(f"        if self._{p.name} is not {_SENTINEL}:")
-            lines.append(f"            kwargs['{p.name}'] = self._{p.name}")
+            lines.append(f'            kwargs["{p.name}"] = self._{p.name}')
     lines.append(f"        return {cls}(**kwargs)")
     lines.append("")
     return "\n".join(lines)
@@ -468,7 +523,11 @@ def _generate_dsl_function(info: StepClassInfo) -> str:
 
     lines = []
     if info.tags:
-        lines.append(f"@dsl(tags={info.tags!r})")
+        # Emit tags as double-quoted strings to match ruff-format's preferred
+        # quote style; using ``repr()`` here would produce single quotes and
+        # the format pass would silently rewrite them on every commit.
+        tag_literals = ", ".join(f'"{t}"' for t in info.tags)
+        lines.append(f"@dsl(tags=[{tag_literals}])")
     lines.append(f"def {fn}({', '.join(sig_parts)}):")
 
     # Emit docstring — indent each line by 4 spaces (function body)
@@ -489,7 +548,7 @@ def _generate_dsl_function(info: StepClassInfo) -> str:
     return "\n".join(lines)
 
 
-def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
+def generate_file(classes: list[StepClassInfo], source_file: Path) -> str:
     """Generate a complete ``_dsl.py`` file for the given step classes."""
     has_tags = any(c.tags for c in classes)
     lines = [
@@ -509,7 +568,7 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
         lines.append("from raccoon.step.annotation import dsl")
     # Collect names from the source module needed for default values
     class_names = [c.name for c in classes]
-    default_ref_names: List[str] = []
+    default_ref_names: list[str] = []
     for c in classes:
         for p in c.params:
             for ref in p.default_refs:
@@ -524,11 +583,20 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
     # These are needed so that get_type_hints() (used by stubgen/mypy) can resolve
     # them at runtime; without this the stub generator silently skips the module.
     _already_covered = set(all_imports) | {
-        "StepBuilder", "StopCondition", "dsl",
+        "StepBuilder",
+        "StopCondition",
+        "dsl",
         # builtins / typing — already in _ANNOTATION_BUILTINS, but be explicit
-        "Optional", "Union", "List", "Dict", "Tuple", "Set", "Any", "Callable",
+        "Optional",
+        "Union",
+        "List",
+        "Dict",
+        "Tuple",
+        "Set",
+        "Any",
+        "Callable",
     }
-    annotation_only_refs: List[str] = []
+    annotation_only_refs: list[str] = []
     for c in classes:
         for p in c.params:
             for ref in _extract_annotation_refs(p.annotation):
@@ -538,8 +606,7 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
         # Names that come from an external module — re-emit that import line.
         found_via_import = _find_imports_for_names(source_file, set(annotation_only_refs))
         found_names = {
-            line.rsplit("import ", 1)[-1].split(" as ")[0].strip()
-            for line in found_via_import
+            line.rsplit("import ", 1)[-1].split(" as ")[0].strip() for line in found_via_import
         }
         for import_line in found_via_import:
             lines.append(import_line)
@@ -549,13 +616,15 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
         if locally_defined:
             # Rewrite the already-emitted source-module import to include them.
             src_import_idx = next(
-                i for i, l in enumerate(lines) if l.startswith(f"from .{source_file.stem} import ")
+                i
+                for i, line in enumerate(lines)
+                if line.startswith(f"from .{source_file.stem} import ")
             )
             existing = lines[src_import_idx]
             lines[src_import_idx] = existing.rstrip() + ", " + ", ".join(locally_defined)
     lines.append("")
 
-    exports: List[str] = []
+    exports: list[str] = []
     for info in classes:
         builder = f"{info.name}Builder"
         fn = camel_to_snake(info.name)
@@ -575,12 +644,48 @@ def generate_file(classes: List[StepClassInfo], source_file: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _format_with_ruff(source: str) -> str:
+    """Pipe ``source`` through ``ruff format -`` and return the result.
+
+    Falls back to the unformatted text if ruff isn't on PATH or the
+    subprocess errors. The repo's scripts/run-ruff.sh resolves a usable
+    binary for contributors who don't install ruff locally; we use that
+    when present so the generator and the rest of the toolchain agree on
+    a single ruff version.
+    """
+    import shutil
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parents[3]
+    wrapper = repo_root / "scripts" / "run-ruff.sh"
+
+    if wrapper.is_file():
+        cmd: list[str] = ["bash", str(wrapper), "format", "-"]
+    elif shutil.which("ruff"):
+        cmd = ["ruff", "format", "-"]
+    else:
+        return source
+
+    try:
+        result = subprocess.run(
+            cmd,
+            input=source,
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=repo_root,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return source
+    return result.stdout
+
+
 def generate_for_source_dirs(
-    source_dirs: List[Path],
+    source_dirs: list[Path],
     *,
     dry_run: bool = False,
     format_code: bool = True,
-) -> Dict[Path, str]:
+) -> dict[Path, str]:
     """Scan source directories for ``@dsl_step`` classes and generate builders.
 
     Args:
@@ -591,14 +696,14 @@ def generate_for_source_dirs(
     Returns:
         Mapping of output file paths to generated source code.
     """
-    results: Dict[Path, str] = {}
+    results: dict[Path, str] = {}
 
     for source_dir in source_dirs:
         if not source_dir.is_dir():
             logger.warning("Skipping %s (not a directory)", source_dir)
             continue
 
-        by_file: Dict[Path, List[StepClassInfo]] = {}
+        by_file: dict[Path, list[StepClassInfo]] = {}
         for py_file in sorted(source_dir.rglob("*.py")):
             if py_file.name.startswith("_") or "_dsl.py" in py_file.name:
                 continue
@@ -609,15 +714,14 @@ def generate_for_source_dirs(
             output_file = source_file.with_name(f"{source_file.stem}_dsl.py")
             source = generate_file(classes, source_file)
 
-            if format_code and not dry_run:
-                try:
-                    import black
+            # Format unconditionally so --check and an actual generate both
+            # produce the same byte sequence; otherwise the pre-commit hook
+            # finds drift between the unformatted dry-run output and the
+            # ruff-formatted file already on disk.
+            if format_code:
+                source = _format_with_ruff(source)
 
-                    source = black.format_str(
-                        source, mode=black.Mode(line_length=88)
-                    )
-                except ImportError:
-                    pass
+            results[output_file] = source
 
             if not dry_run:
                 output_file.write_text(source, encoding="utf-8")
@@ -626,7 +730,5 @@ def generate_for_source_dirs(
                     output_file.name,
                     len(classes),
                 )
-
-            results[output_file] = source
 
     return results

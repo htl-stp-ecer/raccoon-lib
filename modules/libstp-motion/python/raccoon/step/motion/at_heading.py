@@ -20,6 +20,9 @@ Multiple heading-triggered actions:
 Polls odometry heading at 100 Hz.  Three origin modes are available —
 see ``HeadingOrigin`` for details.
 """
+
+from __future__ import annotations
+
 import asyncio
 import enum
 import math
@@ -51,10 +54,12 @@ class HeadingOrigin(enum.Enum):
 
         Example — fires 45° after the step starts::
 
-            parallel([
-                turn_left(90),
-                seq([wait_until_degrees(45), servo(claw, 90)]),
-            ])
+            parallel(
+                [
+                    turn_left(90),
+                    seq([wait_until_degrees(45), servo(claw, 90)]),
+                ]
+            )
 
     TURN_START
         Degrees are counted from the heading at the start of the concurrent
@@ -70,10 +75,18 @@ class HeadingOrigin(enum.Enum):
         Example — fires when the turn has reached 45° from its own start,
         even though ``prepare_arm()`` ran first::
 
-            parallel([
-                turn_left(90),
-                seq([prepare_arm(), wait_until_degrees(45, origin=HeadingOrigin.TURN_START), servo(claw, 90)]),
-            ])
+            parallel(
+                [
+                    turn_left(90),
+                    seq(
+                        [
+                            prepare_arm(),
+                            wait_until_degrees(45, origin=HeadingOrigin.TURN_START),
+                            servo(claw, 90),
+                        ]
+                    ),
+                ]
+            )
 
     HEADING_REFERENCE
         Degrees are counted from the global heading reference set by
@@ -90,10 +103,12 @@ class HeadingOrigin(enum.Enum):
 
             mark_heading_reference()
             # ... other motion ...
-            parallel([
-                turn_left(90),
-                seq([wait_until_degrees(45, origin=HeadingOrigin.HEADING_REFERENCE), servo(claw, 90)]),
-            ])
+            parallel(
+                [
+                    turn_left(90),
+                    seq([wait_until_degrees(45, origin=HeadingOrigin.HEADING_REFERENCE), servo(claw, 90)]),
+                ]
+            )
     """
 
     STEP_START = "step_start"
@@ -134,22 +149,34 @@ class WaitUntilDegrees(Step):
         from raccoon.step.servo import servo
 
         # Default: fires 45° after this step starts executing
-        parallel([
-            turn_left(90),
-            seq([wait_until_degrees(45), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                turn_left(90),
+                seq([wait_until_degrees(45), servo(claw, 90)]),
+            ]
+        )
 
         # TURN_START: fires at 45° from the turn's own start
-        parallel([
-            turn_left(90),
-            seq([prepare_arm(), wait_until_degrees(45, origin=HeadingOrigin.TURN_START), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                turn_left(90),
+                seq(
+                    [
+                        prepare_arm(),
+                        wait_until_degrees(45, origin=HeadingOrigin.TURN_START),
+                        servo(claw, 90),
+                    ]
+                ),
+            ]
+        )
 
         # HEADING_REFERENCE: fires at 45° from the global reference
-        parallel([
-            turn_left(90),
-            seq([wait_until_degrees(45, origin=HeadingOrigin.HEADING_REFERENCE), servo(claw, 90)]),
-        ])
+        parallel(
+            [
+                turn_left(90),
+                seq([wait_until_degrees(45, origin=HeadingOrigin.HEADING_REFERENCE), servo(claw, 90)]),
+            ]
+        )
     """
 
     def __init__(
@@ -163,7 +190,9 @@ class WaitUntilDegrees(Step):
         self._hz = 100
 
     def _generate_signature(self) -> str:
-        suffix = f", origin={self._origin.value}" if self._origin != HeadingOrigin.STEP_START else ""
+        suffix = (
+            f", origin={self._origin.value}" if self._origin != HeadingOrigin.STEP_START else ""
+        )
         return f"WaitUntilDegrees(degrees={math.degrees(self._threshold_rad):.1f}{suffix})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
@@ -186,12 +215,14 @@ class WaitUntilDegrees(Step):
 
         else:  # HEADING_REFERENCE
             from raccoon.robot.heading_reference import HeadingReferenceService
+
             service = robot.get_service(HeadingReferenceService)
             if service.reference_deg is None:
-                raise RuntimeError(
+                msg = (
                     "HeadingOrigin.HEADING_REFERENCE requires mark_heading_reference() "
                     "to have been called before this step."
                 )
+                raise RuntimeError(msg)
             ref_rad = math.radians(service.reference_deg)
 
             def _turned() -> float:

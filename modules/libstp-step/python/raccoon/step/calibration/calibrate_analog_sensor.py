@@ -4,11 +4,12 @@ Captures a reference raw reading from any AnalogSensor at a user-defined
 robot position so that ``drive_to_analog_target()`` can reproduce the same
 sensor-distance during a mission.
 """
+
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from raccoon.step.annotation import dsl_step
 
@@ -31,6 +32,7 @@ def analog_sensor_store_key(sensor: "AnalogSensor", set_name: str) -> str:
 @dataclass
 class AnalogSensorCalibration:
     """Reference reading captured during calibration."""
+
     target_value: float
     std: float
     sample_count: int
@@ -105,19 +107,19 @@ class CalibrateAnalogSensor(CalibrateStep[AnalogSensorCalibration]):
 
     # ── CalibrateStep hooks ───────────────────────────────────────────────────
 
-    async def _collect(
-        self, robot: "GenericRobot"
-    ) -> Optional[AnalogSensorCalibration]:
+    async def _collect(self, robot: "GenericRobot") -> AnalogSensorCalibration | None:
         from raccoon.ui.screens.analog_sensor import (
             AnalogSensorPositionScreen,
             AnalogSensorSamplingScreen,
         )
 
         # Phase 1: operator positions the robot
-        await self.show(AnalogSensorPositionScreen(
-            port=self._sensor.port,
-            set_name=self._set_name,
-        ))
+        await self.show(
+            AnalogSensorPositionScreen(
+                port=self._sensor.port,
+                set_name=self._set_name,
+            )
+        )
 
         # Phase 2: sample the sensor while displaying a progress screen
         values: list[float] = []
@@ -142,11 +144,10 @@ class CalibrateAnalogSensor(CalibrateStep[AnalogSensorCalibration]):
 
         mean = sum(values) / len(values)
         variance = sum((v - mean) ** 2 for v in values) / len(values)
-        std = variance ** 0.5
+        std = variance**0.5
 
         self.debug(
-            f"Sensor port {self._sensor.port}: "
-            f"mean={mean:.1f}, std={std:.1f}, n={len(values)}"
+            f"Sensor port {self._sensor.port}: " f"mean={mean:.1f}, std={std:.1f}, n={len(values)}"
         )
         return AnalogSensorCalibration(
             target_value=mean,
@@ -158,24 +159,24 @@ class CalibrateAnalogSensor(CalibrateStep[AnalogSensorCalibration]):
         self,
         robot: "GenericRobot",
         calibration: AnalogSensorCalibration,
-    ) -> Tuple[bool, AnalogSensorCalibration]:
+    ) -> tuple[bool, AnalogSensorCalibration]:
         from raccoon.ui.screens.analog_sensor import AnalogSensorConfirmScreen
 
-        result = await self.show(AnalogSensorConfirmScreen(
-            port=self._sensor.port,
-            set_name=self._set_name,
-            target_value=calibration.target_value,
-            std=calibration.std,
-            sample_count=calibration.sample_count,
-        ))
+        result = await self.show(
+            AnalogSensorConfirmScreen(
+                port=self._sensor.port,
+                set_name=self._set_name,
+                target_value=calibration.target_value,
+                std=calibration.std,
+                sample_count=calibration.sample_count,
+            )
+        )
 
         if result is None or not result.confirmed:
             return False, calibration
         return True, calibration
 
-    def _apply(
-        self, robot: "GenericRobot", calibration: AnalogSensorCalibration
-    ) -> None:
+    def _apply(self, robot: "GenericRobot", calibration: AnalogSensorCalibration) -> None:
         # Nothing to push to hardware; the value lives in the store and is
         # loaded by drive_to_analog_target at motion time.
         self.debug(

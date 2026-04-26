@@ -9,13 +9,16 @@ Use ``wait_for_background()`` to explicitly synchronise with one or all
 background steps before continuing.
 """
 
+from __future__ import annotations
+
 import asyncio
-from typing import Optional, TYPE_CHECKING
+import contextlib
+from typing import TYPE_CHECKING
 
 from .. import Step
 from ..annotation import dsl
-from ..base import _in_background
 from ..background_manager import get_background_manager
+from ..base import _in_background
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -27,12 +30,13 @@ class Background(Step):
 
     _composite = True
 
-    def __init__(self, step: Step, name: Optional[str] = None) -> None:
+    def __init__(self, step: Step, name: str | None = None) -> None:
         super().__init__()
         from ..model import StepProtocol
 
         if not isinstance(step, StepProtocol):
-            raise TypeError(f"step must be a Step, got {type(step).__name__}")
+            msg = f"step must be a Step, got {type(step).__name__}"
+            raise TypeError(msg)
         self._step = step.resolve()
         self._name = name
 
@@ -57,10 +61,8 @@ class Background(Step):
         token = _in_background.set(True)
 
         async def _run_bg() -> None:
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._step.run_step(robot)
-            except asyncio.CancelledError:
-                pass
 
         task = asyncio.create_task(_run_bg())
 
@@ -75,7 +77,7 @@ class Background(Step):
 class WaitForBackground(Step):
     """Wait for one or all background steps to complete."""
 
-    def __init__(self, name: Optional[str] = None) -> None:
+    def __init__(self, name: str | None = None) -> None:
         super().__init__()
         self._name = name
 
@@ -93,7 +95,7 @@ class WaitForBackground(Step):
 
 
 @dsl(tags=["control", "background"])
-def background(step: Step, name: Optional[str] = None) -> Background:
+def background(step: Step, name: str | None = None) -> Background:
     """Launch a step in the background without blocking.
 
     Start executing *step* immediately but continue the sequence without
@@ -124,17 +126,19 @@ def background(step: Step, name: Optional[str] = None) -> Background:
         from raccoon.step.motion import drive_forward
 
         # Move a servo while driving — no resource conflict
-        seq([
-            background(servo_move(0, 1500), name="arm"),
-            drive_forward(25),
-            wait_for_background("arm"),
-        ])
+        seq(
+            [
+                background(servo_move(0, 1500), name="arm"),
+                drive_forward(25),
+                wait_for_background("arm"),
+            ]
+        )
     """
     return Background(step, name)
 
 
 @dsl(tags=["control", "background"])
-def wait_for_background(name: Optional[str] = None) -> WaitForBackground:
+def wait_for_background(name: str | None = None) -> WaitForBackground:
     """Wait for background steps to complete.
 
     Without arguments, wait for **all** running background steps.
@@ -153,10 +157,12 @@ def wait_for_background(name: Optional[str] = None) -> WaitForBackground:
 
         from raccoon.step import background, wait_for_background, seq
 
-        seq([
-            background(long_running_step(), name="scan"),
-            do_something_quick(),
-            wait_for_background("scan"),
-        ])
+        seq(
+            [
+                background(long_running_step(), name="scan"),
+                do_something_quick(),
+                wait_for_background("scan"),
+            ]
+        )
     """
     return WaitForBackground(name)

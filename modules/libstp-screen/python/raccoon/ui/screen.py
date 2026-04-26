@@ -6,17 +6,19 @@ The UIStep orchestrates which screens to show.
 """
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Optional, TypeVar, Generic, TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
+
+from raccoon.class_name_logger import ClassNameLogger
 
 from .widgets import Widget
-from raccoon.class_name_logger import ClassNameLogger
 
 if TYPE_CHECKING:
     from .step import UIStep
 
 
-T = TypeVar('T')  # Result type
+T = TypeVar("T")  # Result type
 
 
 class UIScreen(ABC, Generic[T], ClassNameLogger):
@@ -54,15 +56,15 @@ class UIScreen(ABC, Generic[T], ClassNameLogger):
 
     # Override in subclass
     title: str = "Screen"
-    _primary_button_id: Optional[str] = None  # Physical button triggers this button's click
+    _primary_button_id: str | None = None  # Physical button triggers this button's click
 
     def __init__(self):
         super().__init__()
         self._closed = False
-        self._result: Optional[T] = None
-        self._step: Optional[UIStep] = None
-        self._values: Dict[str, Any] = {}  # Current input values from UI
-        self._event_handlers: Dict[tuple, Any] = {}
+        self._result: T | None = None
+        self._step: UIStep | None = None
+        self._values: dict[str, Any] = {}  # Current input values from UI
+        self._event_handlers: dict[tuple, Any] = {}
 
         # Collect decorated event handlers
         for name in dir(self.__class__):
@@ -159,12 +161,11 @@ class UIScreen(ABC, Generic[T], ClassNameLogger):
 
         if sensor_type == "analog":
             return self.robot.sensors.analog(port).read()
-        else:
-            return self.robot.sensors.digital(port).read()
+        return self.robot.sensors.digital(port).read()
 
     # --- Internal Methods ---
 
-    def _to_dict(self, setup_timer: Optional[dict] = None) -> dict:
+    def _to_dict(self, setup_timer: dict | None = None) -> dict:
         """Serialize screen to JSON for LCM.
 
         Args:

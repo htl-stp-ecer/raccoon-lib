@@ -2,6 +2,8 @@
 Pre-built reusable UI screens.
 """
 
+from __future__ import annotations
+
 from .basic import (
     WaitForButtonScreen,
     ConfirmScreen,

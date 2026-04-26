@@ -1,6 +1,3 @@
-//
-// Created by tobias on 9/8/25.
-//
 #include "drive/velocity_controller.hpp"
 #include "foundation/config.hpp"
 #include <cmath>

@@ -15,6 +15,7 @@ Each section/set pair maps to a flat dict of values::
           blocked: 3200.0
           pocket: 900.0
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -33,14 +34,14 @@ class CalibrationStore:
     def _read_root(self) -> dict:
         if not self._path.exists():
             return {}
-        with open(self._path) as f:
+        with self._path.open() as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
             return {}
         return data.get("root", {})
 
     def _write_root(self, root: dict) -> None:
-        with open(self._path, "w") as f:
+        with self._path.open("w") as f:
             yaml.safe_dump({"root": root}, f, default_flow_style=False)
 
     def load(self, section: str, set_name: str = "default") -> dict | None:

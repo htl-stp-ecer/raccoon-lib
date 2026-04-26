@@ -17,7 +17,7 @@ Resource identifiers are plain strings with the format ``"<type>"`` or
 
 from __future__ import annotations
 
-from typing import List, Sequence
+from collections.abc import Sequence
 
 
 class ResourceConflictError(Exception):
@@ -78,9 +78,7 @@ def validate_no_overlap(
     Raises:
         ResourceConflictError: If any two branches share a resource.
     """
-    resource_sets: List[frozenset[str]] = [
-        b.collected_resources() for b in branches
-    ]
+    resource_sets: list[frozenset[str]] = [b.collected_resources() for b in branches]
 
     for i in range(len(resource_sets)):
         for j in range(i + 1, len(resource_sets)):
@@ -95,7 +93,7 @@ def validate_no_overlap(
                 )
 
 
-def _branch_label(step: "_HasResources", index: int) -> str:
+def _branch_label(step: "_HasResources", _index: int) -> str:
     """Best-effort human-readable label for an error message."""
     cls_name = type(step).__name__
     sig = getattr(step, "_generate_signature", None)
@@ -133,18 +131,14 @@ class ResourceManager:
                 prefix = res.rsplit(":", 1)[0] + ":"
                 for held_res, held_holder in self._held.items():
                     if held_res.startswith(prefix):
-                        raise ResourceConflictError(
-                            held_res, held_holder, holder
-                        )
+                        raise ResourceConflictError(held_res, held_holder, holder)
             else:
                 # Check if a wildcard is already held that covers this resource
                 parts = res.rsplit(":", 1)
                 if len(parts) == 2:
                     wildcard = parts[0] + ":*"
                     if wildcard in self._held:
-                        raise ResourceConflictError(
-                            res, self._held[wildcard], holder
-                        )
+                        raise ResourceConflictError(res, self._held[wildcard], holder)
 
         # All clear — register
         for res in resources:

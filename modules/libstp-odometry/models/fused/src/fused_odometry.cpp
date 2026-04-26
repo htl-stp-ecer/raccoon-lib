@@ -1,7 +1,3 @@
-//
-// Created by tobias on 11/9/25.
-//
-
 #include "odometry/fused/fused_odometry.hpp"
 #include "odometry/angle_utils.hpp" // wrapAngle, angularError
 #include "foundation/config.hpp"

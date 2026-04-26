@@ -8,6 +8,8 @@ any C++ dependencies.
 The raccoon toolchain imports from here rather than duplicating the logic.
 """
 
+from __future__ import annotations
+
 from .step_builder_gen import (
     ParamInfo,
     StepClassInfo,

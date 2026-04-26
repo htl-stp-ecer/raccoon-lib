@@ -1,23 +1,20 @@
 """Tests for per-wheel distance calibration."""
+
+from __future__ import annotations
+
+import importlib.util
+
 import pytest
-from unittest.mock import Mock, MagicMock, AsyncMock, patch
-import asyncio
-import sys
 
 
-def libstp_available():
-    """Check if raccoon module is available."""
-    try:
-        import raccoon
-        return True
-    except ImportError:
-        return False
+def libstp_available() -> bool:
+    """Check raccoon availability without importing the module."""
+    return importlib.util.find_spec("raccoon") is not None
 
 
 # Mark for tests requiring raccoon native module
 requires_libstp = pytest.mark.skipif(
-    not libstp_available(),
-    reason="raccoon native module not installed"
+    not libstp_available(), reason="raccoon native module not installed"
 )
 
 
@@ -27,7 +24,11 @@ class TestCalibrationFunctions:
     @requires_libstp
     def test_is_distance_calibrated_initial_false(self):
         """Test that calibration flag is initially False."""
-        from raccoon.step.calibrate_distance import reset_distance_calibration, is_distance_calibrated
+        from raccoon.step.calibrate_distance import (
+            is_distance_calibrated,
+            reset_distance_calibration,
+        )
+
         reset_distance_calibration()
         assert is_distance_calibrated() is False
 
@@ -35,10 +36,11 @@ class TestCalibrationFunctions:
     def test_check_distance_calibration_raises_when_not_calibrated(self):
         """Test that check_distance_calibration raises when not calibrated."""
         from raccoon.step.calibrate_distance import (
-            reset_distance_calibration,
+            CalibrationRequiredError,
             check_distance_calibration,
-            CalibrationRequiredError
+            reset_distance_calibration,
         )
+
         reset_distance_calibration()
         with pytest.raises(CalibrationRequiredError):
             check_distance_calibration()
@@ -46,7 +48,11 @@ class TestCalibrationFunctions:
     @requires_libstp
     def test_reset_distance_calibration(self):
         """Test that reset clears the calibration flag."""
-        from raccoon.step.calibrate_distance import reset_distance_calibration, is_distance_calibrated
+        from raccoon.step.calibrate_distance import (
+            is_distance_calibrated,
+            reset_distance_calibration,
+        )
+
         reset_distance_calibration()
         assert is_distance_calibrated() is False
 
@@ -60,10 +66,7 @@ class TestPerWheelCalibration:
         from raccoon.step.calibrate_distance import PerWheelCalibration
 
         result = PerWheelCalibration(
-            motor_port=0,
-            old_ticks_to_rad=0.001,
-            new_ticks_to_rad=0.0012,
-            delta_ticks=1000
+            motor_port=0, old_ticks_to_rad=0.001, new_ticks_to_rad=0.0012, delta_ticks=1000
         )
 
         assert result.motor_port == 0
@@ -78,7 +81,7 @@ class TestCalibrateDistanceStep:
     @requires_libstp
     def test_calibrate_distance_factory(self):
         """Test the calibrate_distance factory function."""
-        from raccoon.step.calibrate_distance import calibrate_distance, CalibrateDistance
+        from raccoon.step.calibrate_distance import CalibrateDistance, calibrate_distance
 
         step = calibrate_distance(distance_cm=50.0, calibrate_light_sensors=True)
 
@@ -155,7 +158,7 @@ class TestTicksToRadCalculation:
         new_ticks_to_rad = 6.0 / 1000 = 0.006 rad/tick
         """
         wheel_radius = 0.05  # 50mm
-        measured_m = 0.30    # 30cm
+        measured_m = 0.30  # 30cm
         delta_ticks = 1000
 
         theta_rad = measured_m / wheel_radius
@@ -210,7 +213,7 @@ class TestTicksToRadCalculation:
 
         # Scale should be less than 1 since robot over-reported distance
         assert scale_factor < 1.0
-        assert abs(scale_factor - (25/30)) < 0.001
+        assert abs(scale_factor - (25 / 30)) < 0.001
 
     def test_calibration_corrects_distance_over_reporting(self):
         """Test that calibration correctly adjusts for over-reporting.
@@ -230,7 +233,7 @@ class TestTicksToRadCalculation:
 
         # Scale should be greater than 1 since robot under-reported distance
         assert scale_factor > 1.0
-        assert abs(scale_factor - (35/30)) < 0.001
+        assert abs(scale_factor - (35 / 30)) < 0.001
 
     def test_per_wheel_independent_calibration(self):
         """Test that different wheels can have different calibrations.
@@ -273,14 +276,14 @@ class TestMotorCalibrationBinding:
         from raccoon.hal import Motor
 
         # Check that the method exists
-        assert hasattr(Motor, 'set_calibration')
+        assert hasattr(Motor, "set_calibration")
 
     @requires_libstp
     def test_motor_get_calibration_exists(self):
         """Test that get_calibration method exists on Motor."""
         from raccoon.hal import Motor
 
-        assert hasattr(Motor, 'get_calibration')
+        assert hasattr(Motor, "get_calibration")
 
 
 class TestKinematicsWheelRadius:
@@ -291,14 +294,14 @@ class TestKinematicsWheelRadius:
         """Test that DifferentialKinematics has get_wheel_radius binding."""
         from raccoon.kinematics_differential import DifferentialKinematics
 
-        assert hasattr(DifferentialKinematics, 'get_wheel_radius')
+        assert hasattr(DifferentialKinematics, "get_wheel_radius")
 
     @requires_libstp
     def test_mecanum_kinematics_get_wheel_radius_binding(self):
         """Test that MecanumKinematics has get_wheel_radius binding."""
         from raccoon.kinematics_mecanum import MecanumKinematics
 
-        assert hasattr(MecanumKinematics, 'get_wheel_radius')
+        assert hasattr(MecanumKinematics, "get_wheel_radius")
 
 
 class TestDriveWheelRadius:
@@ -309,7 +312,7 @@ class TestDriveWheelRadius:
         """Test that Drive has get_wheel_radius binding."""
         from raccoon.drive import Drive
 
-        assert hasattr(Drive, 'get_wheel_radius')
+        assert hasattr(Drive, "get_wheel_radius")
 
 
 class TestDriveForwardCalibrationCheck:
@@ -318,7 +321,10 @@ class TestDriveForwardCalibrationCheck:
     @requires_libstp
     def test_drive_forward_requires_calibration(self):
         """Test that drive_forward raises CalibrationRequiredError when not calibrated."""
-        from raccoon.step.calibrate_distance import reset_distance_calibration, CalibrationRequiredError
+        from raccoon.step.calibrate_distance import (
+            CalibrationRequiredError,
+            reset_distance_calibration,
+        )
         from raccoon.step.drive import drive_forward
 
         reset_distance_calibration()
@@ -329,7 +335,10 @@ class TestDriveForwardCalibrationCheck:
     @requires_libstp
     def test_drive_backward_requires_calibration(self):
         """Test that drive_backward raises CalibrationRequiredError when not calibrated."""
-        from raccoon.step.calibrate_distance import reset_distance_calibration, CalibrationRequiredError
+        from raccoon.step.calibrate_distance import (
+            CalibrationRequiredError,
+            reset_distance_calibration,
+        )
         from raccoon.step.drive import drive_backward
 
         reset_distance_calibration()
@@ -346,7 +355,7 @@ class TestDriveGetMotors:
         """Test that Drive has get_motors binding."""
         from raccoon.drive import Drive
 
-        assert hasattr(Drive, 'get_motors')
+        assert hasattr(Drive, "get_motors")
 
 
 class TestExportedSymbols:
@@ -356,12 +365,12 @@ class TestExportedSymbols:
     def test_step_module_exports(self):
         """Test that step module exports the new calibration functions."""
         from raccoon.step import (
-            calibrate_distance,
             CalibrateDistance,
             CalibrationRequiredError,
             PerWheelCalibration,
-            is_distance_calibrated,
+            calibrate_distance,
             check_distance_calibration,
+            is_distance_calibrated,
             reset_distance_calibration,
         )
 

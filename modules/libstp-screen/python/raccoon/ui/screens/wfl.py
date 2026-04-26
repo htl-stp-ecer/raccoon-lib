@@ -2,21 +2,39 @@
 Wait-for-light screens: calibration (legacy) and auto-detection.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
+from ..events import on_button_press, on_change, on_click
 from ..screen import UIScreen
 from ..widgets import (
-    Widget, Text, Icon, Button, Spacer,
-    StatusBadge, StatusIcon, HintBox, ResultsTable,
-    LightBulb, SensorValue, SensorGraph,
-    NumericInput, Row, Column, Split, Card, Center, Container,
+    Button,
+    Card,
+    Center,
+    Column,
+    Container,
+    HintBox,
+    Icon,
+    LightBulb,
+    NumericInput,
+    ResultsTable,
+    Row,
+    SensorGraph,
+    SensorValue,
+    Spacer,
+    Split,
+    StatusBadge,
+    StatusIcon,
+    Text,
+    Widget,
 )
-from ..events import on_click, on_button_press, on_change
 
 
 @dataclass
 class WFLMeasureResult:
     """Result from WFLMeasureScreen."""
+
     value: float
 
 
@@ -51,11 +69,14 @@ class WFLMeasureScreen(UIScreen[WFLMeasureResult]):
                 HintBox("Press button when ready"),
             ],
             right=[
-                Card(title="Sensor Value", children=[
-                    SensorValue(port=self.port),
-                    Spacer(8),
-                    SensorGraph(port=self.port),
-                ]),
+                Card(
+                    title="Sensor Value",
+                    children=[
+                        SensorValue(port=self.port),
+                        Spacer(8),
+                        SensorGraph(port=self.port),
+                    ],
+                ),
             ],
             ratio=(4, 3),
         )
@@ -69,6 +90,7 @@ class WFLMeasureScreen(UIScreen[WFLMeasureResult]):
 @dataclass
 class WFLConfirmResult:
     """Result from WFLConfirmScreen."""
+
     confirmed: bool
     light_off: float
     light_on: float
@@ -120,33 +142,55 @@ class WFLConfirmScreen(UIScreen[WFLConfirmResult]):
                     size="large",
                 ),
                 Spacer(16),
-                Row(children=[
-                    Column(children=[
-                        Icon("lightbulb_outline", color="grey"),
-                        Text("Light OFF", size="small", muted=True),
-                        NumericInput(id="light_off", value=self.light_off),
-                    ], spacing=4),
-                    Column(children=[
-                        Icon("lightbulb", color="amber"),
-                        Text("Light ON", size="small", muted=True),
-                        NumericInput(id="light_on", value=self.light_on),
-                    ], spacing=4),
-                ], spacing=24),
+                Row(
+                    children=[
+                        Column(
+                            children=[
+                                Icon("lightbulb_outline", color="grey"),
+                                Text("Light OFF", size="small", muted=True),
+                                NumericInput(id="light_off", value=self.light_off),
+                            ],
+                            spacing=4,
+                        ),
+                        Column(
+                            children=[
+                                Icon("lightbulb", color="amber"),
+                                Text("Light ON", size="small", muted=True),
+                                NumericInput(id="light_on", value=self.light_on),
+                            ],
+                            spacing=4,
+                        ),
+                    ],
+                    spacing=24,
+                ),
             ],
             right=[
-                Card(children=[
-                    ResultsTable(rows=[
-                        ("Threshold", f"{self.threshold:.0f}", "blue"),
-                        ("Difference", f"{self.difference:.0f}",
-                         "green" if self.is_good else "orange"),
-                    ]),
-                    Spacer(24),
-                    Column(children=[
-                        Button("retry", "Retry", style="secondary"),
-                        Button("confirm", "Confirm",
-                               style="success" if self.is_good else "warning"),
-                    ], spacing=8),
-                ]),
+                Card(
+                    children=[
+                        ResultsTable(
+                            rows=[
+                                ("Threshold", f"{self.threshold:.0f}", "blue"),
+                                (
+                                    "Difference",
+                                    f"{self.difference:.0f}",
+                                    "green" if self.is_good else "orange",
+                                ),
+                            ]
+                        ),
+                        Spacer(24),
+                        Column(
+                            children=[
+                                Button("retry", "Retry", style="secondary"),
+                                Button(
+                                    "confirm",
+                                    "Confirm",
+                                    style="success" if self.is_good else "warning",
+                                ),
+                            ],
+                            spacing=8,
+                        ),
+                    ]
+                ),
             ],
             ratio=(5, 3),
         )
@@ -163,19 +207,23 @@ class WFLConfirmScreen(UIScreen[WFLConfirmResult]):
 
     @on_click("retry")
     async def on_retry(self):
-        self.close(WFLConfirmResult(
-            confirmed=False,
-            light_off=self.light_off,
-            light_on=self.light_on,
-        ))
+        self.close(
+            WFLConfirmResult(
+                confirmed=False,
+                light_off=self.light_off,
+                light_on=self.light_on,
+            )
+        )
 
     @on_click("confirm")
     async def on_confirm(self):
-        self.close(WFLConfirmResult(
-            confirmed=True,
-            light_off=self.light_off,
-            light_on=self.light_on,
-        ))
+        self.close(
+            WFLConfirmResult(
+                confirmed=True,
+                light_off=self.light_off,
+                light_on=self.light_on,
+            )
+        )
 
 
 # =============================================================================
@@ -217,49 +265,67 @@ class WFLDetectScreen(UIScreen[None]):
     def build(self) -> Widget:
         # Big full-screen TRIGGERED indicator
         if self.status == "TRIGGERED":
-            return Center(children=[
-                Column(children=[
-                    StatusBadge(
-                        text="TRIGGERED",
-                        color="green",
-                        glow=True,
+            return Center(
+                children=[
+                    Column(
+                        children=[
+                            StatusBadge(
+                                text="TRIGGERED",
+                                color="green",
+                                glow=True,
+                            ),
+                            Spacer(8),
+                            Text("Lamp detected!", size="xlarge"),
+                            Spacer(12),
+                            Text(f"Sensor: {self.raw_value}", size="large"),
+                            Spacer(4),
+                            Text(f"Baseline: {self.baseline:.0f}", size="large", muted=True),
+                            Spacer(4),
+                            Text(f"Threshold: {self.threshold:.0f}", size="large"),
+                            Spacer(8),
+                            Text("Turn off lamp to continue", size="small", muted=True),
+                        ],
+                        align="center",
+                        spacing=0,
                     ),
-                    Spacer(8),
-                    Text("Lamp detected!", size="xlarge"),
-                    Spacer(12),
-                    Text(f"Sensor: {self.raw_value}", size="large"),
-                    Spacer(4),
-                    Text(f"Baseline: {self.baseline:.0f}", size="large", muted=True),
-                    Spacer(4),
-                    Text(f"Threshold: {self.threshold:.0f}", size="large"),
-                    Spacer(8),
-                    Text("Turn off lamp to continue", size="small", muted=True),
-                ], align="center", spacing=0),
-            ])
+                ]
+            )
 
         # Big full-screen GO! indicator
         if self.status == "GO!":
-            return Container(bg_color="#1565C0", children=[
-                Text("GO!", size="title", bold=True, align="center", color="white"),
-            ])
+            return Container(
+                bg_color="#1565C0",
+                children=[
+                    Text("GO!", size="title", bold=True, align="center", color="white"),
+                ],
+            )
 
         # Full-screen ARMED indicator — visible from across the room
         if self.status == "ARMED":
-            return Container(bg_color="#2E7D32", padding=16, children=[
-                Text("ARMED", size="title", bold=True, align="center", color="white"),
-                Spacer(12),
-                Text(f"Sensor: {self.raw_value}", size="large", align="center", color="white"),
-                Spacer(8),
-                ResultsTable(rows=[
-                    ("Baseline", f"{self.baseline:.0f}", "white"),
-                    ("Threshold", f"{self.threshold:.0f}", "white"),
-                ]),
-                Spacer(12),
-                Row(children=[
-                    Button("test", "Back to Test Mode", style="secondary"),
-                    Button("reinit", "Reinit Kalman", style="warning"),
-                ], spacing=8),
-            ])
+            return Container(
+                bg_color="#2E7D32",
+                padding=16,
+                children=[
+                    Text("ARMED", size="title", bold=True, align="center", color="white"),
+                    Spacer(12),
+                    Text(f"Sensor: {self.raw_value}", size="large", align="center", color="white"),
+                    Spacer(8),
+                    ResultsTable(
+                        rows=[
+                            ("Baseline", f"{self.baseline:.0f}", "white"),
+                            ("Threshold", f"{self.threshold:.0f}", "white"),
+                        ]
+                    ),
+                    Spacer(12),
+                    Row(
+                        children=[
+                            Button("test", "Back to Test Mode", style="secondary"),
+                            Button("reinit", "Reinit Kalman", style="warning"),
+                        ],
+                        spacing=8,
+                    ),
+                ],
+            )
 
         children: list[Widget] = [
             StatusBadge(
@@ -290,9 +356,11 @@ class WFLDetectScreen(UIScreen[None]):
                 Button("reinit", "Reinit Kalman", style="warning"),
             ]
 
-        return Center(children=[
-            Column(children=children, align="center", spacing=0),
-        ])
+        return Center(
+            children=[
+                Column(children=children, align="center", spacing=0),
+            ]
+        )
 
     @on_click("test")
     async def on_test(self):

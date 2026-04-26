@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Type, TypeVar, Any, Union, overload, get_type_hints
 from functools import wraps
+from typing import Any, TypeVar, get_type_hints, overload
+
 from .base import Step
 from .model import StepProtocol
 
@@ -12,11 +15,11 @@ class DslMeta:
     """Discovery metadata attached by ``@dsl`` to steps and factories."""
 
     hidden: bool = False
-    name: Optional[str] = None
+    name: str | None = None
     tags: tuple[str, ...] = field(default_factory=tuple)
 
 
-T = TypeVar("T", bound=Type[Step])
+T = TypeVar("T", bound=type[Step])
 F = TypeVar("F", bound=Callable[..., StepProtocol])
 
 
@@ -26,15 +29,15 @@ def dsl_step(cls: T) -> T: ...
 def dsl_step(
     cls: None = None,
     *,
-    tags: Optional[list[str] | tuple[str, ...]] = None,
+    tags: list[str] | tuple[str, ...] | None = None,
 ) -> Callable[[T], T]: ...
 
 
 def dsl_step(
-    cls: Optional[T] = None,
+    cls: T | None = None,
     *,
-    tags: Optional[list[str] | tuple[str, ...]] = None,
-) -> Union[T, Callable[[T], T]]:
+    tags: list[str] | tuple[str, ...] | None = None,
+) -> T | Callable[[T], T]:
     """Mark a Step class for builder + DSL function generation.
 
     Codegen scans for classes decorated with ``@dsl_step``,
@@ -50,9 +53,7 @@ def dsl_step(
 
         @dsl_step(tags=["motion", "drive"])
         class DriveForward(MotionStep):
-            def __init__(self, cm: float = None, speed: float = 1.0,
-                         until: StopCondition = None):
-                ...
+            def __init__(self, cm: float = None, speed: float = 1.0, until: StopCondition = None): ...
 
     Codegen produces ``DriveForwardBuilder`` and ``drive_forward()``.
     Tags are propagated to the generated ``@dsl(tags=...)`` factory.
@@ -61,18 +62,19 @@ def dsl_step(
 
     def _apply(cls: T) -> T:
         if not isinstance(cls, type) or not issubclass(cls, Step):
-            raise TypeError(f"@dsl_step requires a Step subclass; got {cls}")
+            msg = f"@dsl_step requires a Step subclass; got {cls}"
+            raise TypeError(msg)
 
         # Mark for codegen discovery
-        setattr(cls, "__dsl_step__", True)
-        setattr(cls, "__dsl_step_tags__", tags_tuple)
+        cls.__dsl_step__ = True
+        cls.__dsl_step_tags__ = tags_tuple
 
         # Also apply @dsl(hidden=True) — the generated function is the public API
         meta = DslMeta(hidden=True, name=cls.__name__, tags=tags_tuple)
-        setattr(cls, "__dsl__", meta)
-        setattr(cls, "__dsl_hidden__", True)
-        setattr(cls, "__dsl_name__", cls.__name__)
-        setattr(cls, "__dsl_tags__", tags_tuple)
+        cls.__dsl__ = meta
+        cls.__dsl_hidden__ = True
+        cls.__dsl_name__ = cls.__name__
+        cls.__dsl_tags__ = tags_tuple
 
         return cls
 
@@ -91,18 +93,18 @@ def dsl(
     _target: None = None,
     *,
     hidden: bool = False,
-    name: Optional[str] = None,
-    tags: Optional[list[str] | tuple[str, ...]] = None,
-) -> Callable[[Union[T, F]], Union[T, F]]: ...
+    name: str | None = None,
+    tags: list[str] | tuple[str, ...] | None = None,
+) -> Callable[[T | F], T | F]: ...
 
 
 def dsl(
-    _target: Optional[Union[T, F]] = None,
+    _target: T | F | None = None,
     *,
     hidden: bool = False,
-    name: Optional[str] = None,
-    tags: Optional[list[str] | tuple[str, ...]] = None,
-) -> Union[Callable[[Union[T, F]], Union[T, F]], T, F]:
+    name: str | None = None,
+    tags: list[str] | tuple[str, ...] | None = None,
+) -> Callable[[T | F], T | F] | T | F:
     """
     Mark a class or function as part of the DSL.
 
@@ -127,12 +129,13 @@ def dsl(
 
     def wrap_class(cls: T) -> T:
         if not issubclass(cls, Step):
-            raise TypeError(f"@dsl requires the class to extend Step; got {cls.__name__}")
+            msg = f"@dsl requires the class to extend Step; got {cls.__name__}"
+            raise TypeError(msg)
 
-        setattr(cls, "__dsl__", meta)
-        setattr(cls, "__dsl_hidden__", hidden)
-        setattr(cls, "__dsl_name__", name or cls.__name__)
-        setattr(cls, "__dsl_tags__", tags_tuple)
+        cls.__dsl__ = meta
+        cls.__dsl_hidden__ = hidden
+        cls.__dsl_name__ = name or cls.__name__
+        cls.__dsl_tags__ = tags_tuple
         return cls
 
     def wrap_function(fn: F) -> F:
@@ -141,17 +144,18 @@ def dsl(
             hints = get_type_hints(fn) if hasattr(fn, "__annotations__") else {}
         except NameError:
             hints = {}
-        return_hint = hints.get("return")
+        hints.get("return")
 
         # We can't always verify at decoration time, but we attach metadata
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> StepProtocol:
             result = fn(*args, **kwargs)
             if not isinstance(result, StepProtocol):
-                raise TypeError(
+                msg = (
                     f"@dsl function '{fn.__name__}' must return a StepProtocol; "
                     f"got {type(result).__name__}"
                 )
+                raise TypeError(msg)
             return result
 
         # Preserve the original signature so stubgen emits full typed params
@@ -159,23 +163,24 @@ def dsl(
         wrapper.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
 
         # Attach DSL metadata to the wrapper
-        setattr(wrapper, "__dsl__", meta)
-        setattr(wrapper, "__dsl_hidden__", hidden)
-        setattr(wrapper, "__dsl_name__", name or fn.__name__)
-        setattr(wrapper, "__dsl_tags__", tags_tuple)
-        setattr(wrapper, "__dsl_is_factory__", True)
+        wrapper.__dsl__ = meta
+        wrapper.__dsl_hidden__ = hidden
+        wrapper.__dsl_name__ = name or fn.__name__
+        wrapper.__dsl_tags__ = tags_tuple
+        wrapper.__dsl_is_factory__ = True
 
         return wrapper  # type: ignore[return-value]
 
-    def wrap(target: Union[T, F]) -> Union[T, F]:
+    def wrap(target: T | F) -> T | F:
         if isinstance(target, type):
             if issubclass(target, Step):
                 return wrap_class(target)  # type: ignore[return-value]
-            raise TypeError(f"@dsl requires the class to extend Step; got {target.__name__}")
-        elif callable(target):
+            msg = f"@dsl requires the class to extend Step; got {target.__name__}"
+            raise TypeError(msg)
+        if callable(target):
             return wrap_function(target)  # type: ignore[return-value]
-        else:
-            raise TypeError(f"@dsl can only decorate classes or functions; got {type(target)}")
+        msg = f"@dsl can only decorate classes or functions; got {type(target)}"
+        raise TypeError(msg)
 
     # Support both @dsl and @dsl(...)
     return wrap(_target) if _target is not None else wrap

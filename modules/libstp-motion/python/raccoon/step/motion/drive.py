@@ -1,5 +1,8 @@
-from raccoon.motion import LinearMotion, LinearMotionConfig, LinearAxis
-from typing import TYPE_CHECKING, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from raccoon.motion import LinearAxis, LinearMotion, LinearMotionConfig
 
 from ..annotation import dsl_step
 from ..condition import StopCondition
@@ -7,6 +10,7 @@ from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
+
 
 class _ConditionalDrive(MotionStep):
     """Base for directional drive steps with optional stop conditions.
@@ -22,47 +26,52 @@ class _ConditionalDrive(MotionStep):
 
     _SENTINEL_DISTANCE_M = 100.0  # Large distance; condition stops early
 
-    def __init__(self, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None,
-                 heading: float = None):
+    def __init__(
+        self,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+        heading: float | None = None,
+    ):
         super().__init__()
         if cm is None and until is None:
-            raise ValueError(
-                f"{self.__class__.__name__} requires either 'cm' or 'until'"
-            )
+            msg = f"{self.__class__.__name__} requires either 'cm' or 'until'"
+            raise ValueError(msg)
         if cm is not None:
-            if not isinstance(cm, (int, float)):
-                raise TypeError(f"cm must be a number, got {type(cm).__name__}")
+            if not isinstance(cm, int | float):
+                msg = f"cm must be a number, got {type(cm).__name__}"
+                raise TypeError(msg)
             if cm <= 0:
-                raise ValueError(f"cm must be > 0, got {cm}")
-        if not isinstance(speed, (int, float)):
-            raise TypeError(f"speed must be a number, got {type(speed).__name__}")
+                msg = f"cm must be > 0, got {cm}"
+                raise ValueError(msg)
+        if not isinstance(speed, int | float):
+            msg = f"speed must be a number, got {type(speed).__name__}"
+            raise TypeError(msg)
         if not (0.0 < speed <= 1.0):
-            raise ValueError(f"speed must be in (0.0, 1.0], got {speed}")
+            msg = f"speed must be in (0.0, 1.0], got {speed}"
+            raise ValueError(msg)
         if until is not None and not isinstance(until, StopCondition):
-            raise TypeError(
-                f"until must be a StopCondition, got {type(until).__name__}"
-            )
-        if heading is not None and not isinstance(heading, (int, float)):
-            raise TypeError(f"heading must be a number, got {type(heading).__name__}")
+            msg = f"until must be a StopCondition, got {type(until).__name__}"
+            raise TypeError(msg)
+        if heading is not None and not isinstance(heading, int | float):
+            msg = f"heading must be a number, got {type(heading).__name__}"
+            raise TypeError(msg)
         self._cm = cm
         self._speed = speed
         self._until = until
         self._heading_deg = heading
         self._skip_calibration = False
-        self._motion: Optional[LinearMotion] = None
+        self._motion: LinearMotion | None = None
 
     def _generate_signature(self) -> str:
         mode = f"{self._cm:.1f}cm" if self._cm else "until"
         heading = f", heading={self._heading_deg:.1f}°" if self._heading_deg is not None else ""
-        return (
-            f"{self.__class__.__name__}(mode={mode}, "
-            f"speed={self._speed:.2f}{heading})"
-        )
+        return f"{self.__class__.__name__}(mode={mode}, " f"speed={self._speed:.2f}{heading})"
 
     def on_start(self, robot: "GenericRobot") -> None:
         if self._cm is not None and not self._skip_calibration:
             from raccoon.step.calibration import check_distance_calibration
+
             check_distance_calibration()
 
         config = LinearMotionConfig()
@@ -76,12 +85,15 @@ class _ConditionalDrive(MotionStep):
 
         if self._heading_deg is not None:
             from raccoon.robot.heading_reference import HeadingReferenceService
+
             ref_svc = robot.get_service(HeadingReferenceService)
             config.target_heading_rad = ref_svc.target_absolute_rad(self._heading_deg)
 
         self._motion = LinearMotion(
-            robot.drive, robot.odometry,
-            robot.motion_pid_config, config,
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            config,
         )
         self._motion.start()
 
@@ -116,16 +128,21 @@ class DriveForward(_ConditionalDrive):
 
     Example::
 
-        drive_forward(25)                            # 25 cm, relative heading
-        drive_forward(25, heading=90)                # hold 90° absolute
+        drive_forward(25)  # 25 cm, relative heading
+        drive_forward(25, heading=90)  # hold 90° absolute
         drive_forward(speed=0.8).until(on_black(s))  # until sensor
     """
+
     _axis = LinearAxis.Forward
     _sign = 1.0
 
-    def __init__(self, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None,
-                 heading: float = None):
+    def __init__(
+        self,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+        heading: float | None = None,
+    ):
         super().__init__(cm=cm, speed=speed, until=until, heading=heading)
 
 
@@ -148,15 +165,20 @@ class DriveBackward(_ConditionalDrive):
     Example::
 
         drive_backward(20)
-        drive_backward(20, heading=0)                # hold 0° absolute
+        drive_backward(20, heading=0)  # hold 0° absolute
         drive_backward(speed=0.5).until(on_white(s))
     """
+
     _axis = LinearAxis.Forward
     _sign = -1.0
 
-    def __init__(self, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None,
-                 heading: float = None):
+    def __init__(
+        self,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+        heading: float | None = None,
+    ):
         super().__init__(cm=cm, speed=speed, until=until, heading=heading)
 
 
@@ -178,15 +200,20 @@ class StrafeLeft(_ConditionalDrive):
     Example::
 
         strafe_left(15)
-        strafe_left(15, heading=90)                  # hold 90° absolute
+        strafe_left(15, heading=90)  # hold 90° absolute
         strafe_left(speed=0.6).until(on_black(s))
     """
+
     _axis = LinearAxis.Lateral
     _sign = -1.0
 
-    def __init__(self, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None,
-                 heading: float = None):
+    def __init__(
+        self,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+        heading: float | None = None,
+    ):
         super().__init__(cm=cm, speed=speed, until=until, heading=heading)
 
 
@@ -208,15 +235,20 @@ class StrafeRight(_ConditionalDrive):
     Example::
 
         strafe_right(15)
-        strafe_right(15, heading=0)                  # hold 0° absolute
+        strafe_right(15, heading=0)  # hold 0° absolute
         strafe_right(speed=0.6).until(on_black(s))
     """
+
     _axis = LinearAxis.Lateral
     _sign = 1.0
 
-    def __init__(self, cm: float = None, speed: float = 1.0,
-                 until: StopCondition = None,
-                 heading: float = None):
+    def __init__(
+        self,
+        cm: float | None = None,
+        speed: float = 1.0,
+        until: StopCondition = None,
+        heading: float | None = None,
+    ):
         super().__init__(cm=cm, speed=speed, until=until, heading=heading)
 
 

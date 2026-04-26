@@ -89,6 +89,7 @@ CUSTOM SCREENS - Full control
 """
 
 # Widgets
+from __future__ import annotations
 from .widgets import (
     # Base
     Widget,

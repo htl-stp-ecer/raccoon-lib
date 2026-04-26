@@ -4,19 +4,23 @@ Strafe lineup on lines using two IR sensors (for omni bots).
 Strafes until both sensors hit a line, measures the distance between hits,
 then computes and executes a corrective turn angle.
 """
+
+from __future__ import annotations
+
 import math
 import time
-from raccoon.foundation import ChassisVelocity, info
-from raccoon.sensor_ir import IRSensor
-from raccoon.step import Sequential, seq, defer, Run
-from raccoon.step.condition import on_black, on_white
 from typing import TYPE_CHECKING
 
-from ..turn_dsl import turn_left, turn_right
-from ..drive_dsl import strafe_left, strafe_right
-from .forward import SurfaceColor
+from raccoon.foundation import ChassisVelocity, info
+from raccoon.sensor_ir import IRSensor
+from raccoon.step import Run, Sequential, defer, seq
+from raccoon.step.condition import on_black, on_white
+
 from ... import dsl
+from ..drive_dsl import strafe_left, strafe_right
 from ..motion_step import MotionStep
+from ..turn_dsl import turn_left, turn_right
+from .forward import SurfaceColor
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -50,10 +54,14 @@ class TimingBasedStrafeLineUp(MotionStep):
             count as having detected the target color.
     """
 
-    def __init__(self, front_sensor: IRSensor, back_sensor: IRSensor,
-                 target: SurfaceColor = SurfaceColor.BLACK,
-                 strafe_speed: float = 1.0,
-                 detection_threshold: float = 0.9):
+    def __init__(
+        self,
+        front_sensor: IRSensor,
+        back_sensor: IRSensor,
+        target: SurfaceColor = SurfaceColor.BLACK,
+        strafe_speed: float = 1.0,
+        detection_threshold: float = 0.9,
+    ):
         super().__init__()
         self.front_sensor = front_sensor
         self.back_sensor = back_sensor
@@ -71,8 +79,7 @@ class TimingBasedStrafeLineUp(MotionStep):
     def _get_confidences(self):
         if self.target == SurfaceColor.BLACK:
             return self.front_sensor.probabilityOfBlack(), self.back_sensor.probabilityOfBlack()
-        else:
-            return self.front_sensor.probabilityOfWhite(), self.back_sensor.probabilityOfWhite()
+        return self.front_sensor.probabilityOfWhite(), self.back_sensor.probabilityOfWhite()
 
     def on_start(self, robot: "GenericRobot") -> None:
         self._front_triggered = False
@@ -92,7 +99,9 @@ class TimingBasedStrafeLineUp(MotionStep):
 
         distance_info = robot.odometry.get_distance_from_origin()
         current_distance = distance_info.lateral
-        self.debug(f"Front conf: {front_conf:.3f}, Back conf: {back_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}")
+        self.debug(
+            f"Front conf: {front_conf:.3f}, Back conf: {back_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}"
+        )
 
         if not self._front_triggered and front_conf >= self.threshold:
             self._front_triggered = True
@@ -104,7 +113,9 @@ class TimingBasedStrafeLineUp(MotionStep):
             else:
                 elapsed = now - self._t_first
                 self.distance_between_hits_m = abs(current_distance - self._first_hit_distance)
-                self.debug(f"Front sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
+                self.debug(
+                    f"Front sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm"
+                )
                 return True
 
         if not self._back_triggered and back_conf >= self.threshold:
@@ -117,7 +128,9 @@ class TimingBasedStrafeLineUp(MotionStep):
             else:
                 elapsed = now - self._t_first
                 self.distance_between_hits_m = abs(current_distance - self._first_hit_distance)
-                self.debug(f"Back sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm")
+                self.debug(
+                    f"Back sensor hit line at t = {elapsed:.3f}s, distance = {self.distance_between_hits_m * 100:.2f}cm"
+                )
                 return True
 
         return self._front_triggered and self._back_triggered
@@ -129,9 +142,7 @@ class TimingBasedStrafeLineUp(MotionStep):
 
 
 def _compute_strafe_lineup_turn(measure: TimingBasedStrafeLineUp, robot: "GenericRobot"):
-    sensor_gap_m = robot.distance_between_sensors(
-        measure.front_sensor, measure.back_sensor
-    ) / 100
+    sensor_gap_m = robot.distance_between_sensors(measure.front_sensor, measure.back_sensor) / 100
     first_sensor, distance_strafed = measure.results
     angle_rad = math.atan(distance_strafed / sensor_gap_m)
     # When strafing right (+), front first -> CCW (+); back first -> CW (-)
@@ -151,11 +162,11 @@ def _compute_strafe_lineup_turn(measure: TimingBasedStrafeLineUp, robot: "Generi
 
 @dsl(hidden=True)
 def strafe_lineup(
-        front_sensor: IRSensor,
-        back_sensor: IRSensor,
-        target: SurfaceColor = SurfaceColor.BLACK,
-        strafe_speed: float = 1.0,
-        detection_threshold: float = 0.7
+    front_sensor: IRSensor,
+    back_sensor: IRSensor,
+    target: SurfaceColor = SurfaceColor.BLACK,
+    strafe_speed: float = 1.0,
+    detection_threshold: float = 0.7,
 ) -> Sequential:
     """Measure angular skew from a line via lateral strafing, then correct with a turn.
 
@@ -182,21 +193,25 @@ def strafe_lineup(
     Returns:
         Sequential: A two-step sequence (measure + corrective turn).
     """
-    measure = TimingBasedStrafeLineUp(front_sensor, back_sensor, target,
-                                       strafe_speed=strafe_speed,
-                                       detection_threshold=detection_threshold)
+    measure = TimingBasedStrafeLineUp(
+        front_sensor,
+        back_sensor,
+        target,
+        strafe_speed=strafe_speed,
+        detection_threshold=detection_threshold,
+    )
 
-    return seq([
-        measure,
-        defer(lambda robot: _compute_strafe_lineup_turn(measure, robot)),
-    ])
+    return seq(
+        [
+            measure,
+            defer(lambda robot: _compute_strafe_lineup_turn(measure, robot)),
+        ]
+    )
 
 
 @dsl(tags=["motion", "lineup"])
 def strafe_right_lineup_on_black(
-        front_sensor: IRSensor,
-        back_sensor: IRSensor,
-        detection_threshold: float = 0.7
+    front_sensor: IRSensor, back_sensor: IRSensor, detection_threshold: float = 0.7
 ) -> Sequential:
     """Strafe right onto a black line, align perpendicular, then clear to white.
 
@@ -232,25 +247,23 @@ def strafe_right_lineup_on_black(
         )
         step.run(robot)
     """
-    return seq([
-        strafe_lineup(
-            front_sensor=front_sensor,
-            back_sensor=back_sensor,
-            target=SurfaceColor.BLACK,
-            strafe_speed=1.0,
-            detection_threshold=detection_threshold
-        ),
-        strafe_right(speed=0.3).until(
-            on_white(front_sensor) | on_white(back_sensor)
-        ),
-    ])
+    return seq(
+        [
+            strafe_lineup(
+                front_sensor=front_sensor,
+                back_sensor=back_sensor,
+                target=SurfaceColor.BLACK,
+                strafe_speed=1.0,
+                detection_threshold=detection_threshold,
+            ),
+            strafe_right(speed=0.3).until(on_white(front_sensor) | on_white(back_sensor)),
+        ]
+    )
 
 
 @dsl(tags=["motion", "lineup"])
 def strafe_right_lineup_on_white(
-        front_sensor: IRSensor,
-        back_sensor: IRSensor,
-        detection_threshold: float = 0.7
+    front_sensor: IRSensor, back_sensor: IRSensor, detection_threshold: float = 0.7
 ) -> Sequential:
     """Strafe right onto a white line, align perpendicular, then clear to black.
 
@@ -285,25 +298,23 @@ def strafe_right_lineup_on_white(
         )
         step.run(robot)
     """
-    return seq([
-        strafe_lineup(
-            front_sensor=front_sensor,
-            back_sensor=back_sensor,
-            target=SurfaceColor.WHITE,
-            strafe_speed=1.0,
-            detection_threshold=detection_threshold
-        ),
-        strafe_right(speed=0.3).until(
-            on_black(front_sensor) | on_black(back_sensor)
-        ),
-    ])
+    return seq(
+        [
+            strafe_lineup(
+                front_sensor=front_sensor,
+                back_sensor=back_sensor,
+                target=SurfaceColor.WHITE,
+                strafe_speed=1.0,
+                detection_threshold=detection_threshold,
+            ),
+            strafe_right(speed=0.3).until(on_black(front_sensor) | on_black(back_sensor)),
+        ]
+    )
 
 
 @dsl(tags=["motion", "lineup"])
 def strafe_left_lineup_on_black(
-        front_sensor: IRSensor,
-        back_sensor: IRSensor,
-        detection_threshold: float = 0.7
+    front_sensor: IRSensor, back_sensor: IRSensor, detection_threshold: float = 0.7
 ) -> Sequential:
     """Strafe left onto a black line, align perpendicular, then clear to white.
 
@@ -336,25 +347,23 @@ def strafe_left_lineup_on_black(
         )
         step.run(robot)
     """
-    return seq([
-        strafe_lineup(
-            front_sensor=front_sensor,
-            back_sensor=back_sensor,
-            target=SurfaceColor.BLACK,
-            strafe_speed=-1.0,
-            detection_threshold=detection_threshold
-        ),
-        strafe_left(speed=0.3).until(
-            on_white(front_sensor) | on_white(back_sensor)
-        ),
-    ])
+    return seq(
+        [
+            strafe_lineup(
+                front_sensor=front_sensor,
+                back_sensor=back_sensor,
+                target=SurfaceColor.BLACK,
+                strafe_speed=-1.0,
+                detection_threshold=detection_threshold,
+            ),
+            strafe_left(speed=0.3).until(on_white(front_sensor) | on_white(back_sensor)),
+        ]
+    )
 
 
 @dsl(tags=["motion", "lineup"])
 def strafe_left_lineup_on_white(
-        front_sensor: IRSensor,
-        back_sensor: IRSensor,
-        detection_threshold: float = 0.7
+    front_sensor: IRSensor, back_sensor: IRSensor, detection_threshold: float = 0.7
 ) -> Sequential:
     """Strafe left onto a white line, align perpendicular, then clear to black.
 
@@ -388,15 +397,15 @@ def strafe_left_lineup_on_white(
         )
         step.run(robot)
     """
-    return seq([
-        strafe_lineup(
-            front_sensor=front_sensor,
-            back_sensor=back_sensor,
-            target=SurfaceColor.WHITE,
-            strafe_speed=-1.0,
-            detection_threshold=detection_threshold
-        ),
-        strafe_left(speed=0.3).until(
-            on_black(front_sensor) | on_black(back_sensor)
-        ),
-    ])
+    return seq(
+        [
+            strafe_lineup(
+                front_sensor=front_sensor,
+                back_sensor=back_sensor,
+                target=SurfaceColor.WHITE,
+                strafe_speed=-1.0,
+                detection_threshold=detection_threshold,
+            ),
+            strafe_left(speed=0.3).until(on_black(front_sensor) | on_black(back_sensor)),
+        ]
+    )

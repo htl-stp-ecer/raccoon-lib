@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from raccoon.ui import *
 
 from .dataclasses import IRCalibrationChoice

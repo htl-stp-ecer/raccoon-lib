@@ -1,10 +1,12 @@
 """Tests for raccoon.foundation type bindings."""
-import pytest
+
+from __future__ import annotations
 
 
 def test_chassis_velocity_default():
     """Test default construction of ChassisVelocity."""
     from raccoon.foundation import ChassisVelocity
+
     cv = ChassisVelocity()
     assert cv.vx == 0.0
     assert cv.vy == 0.0
@@ -14,6 +16,7 @@ def test_chassis_velocity_default():
 def test_chassis_velocity_construction():
     """Test parameterized construction of ChassisVelocity."""
     from raccoon.foundation import ChassisVelocity
+
     cv = ChassisVelocity(1.0, 2.0, 3.0)
     assert cv.vx == 1.0
     assert cv.vy == 2.0

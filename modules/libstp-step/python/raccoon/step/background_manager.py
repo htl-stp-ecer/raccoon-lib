@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from .resource import _resources_overlap
 
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 class _BGEntry:
     task: asyncio.Task[None]
     label: str
-    name: Optional[str]
+    name: str | None
     resources: frozenset[str]
 
 
@@ -40,7 +39,7 @@ class BackgroundManager:
         self,
         task: asyncio.Task[None],
         label: str,
-        name: Optional[str],
+        name: str | None,
         resources: frozenset[str],
     ) -> None:
         """Register a background task for tracking and preemption."""
@@ -59,22 +58,18 @@ class BackgroundManager:
         entry = self._entries.pop(id(task), None)
         if entry is None:
             return
-        if entry.name is not None:
-            # Only remove named entry if it still points to this task
-            if self._named.get(entry.name) is entry:
-                del self._named[entry.name]
+        # Only remove named entry if it still points to this task — a later
+        # registration with the same name may have already replaced it.
+        if entry.name is not None and self._named.get(entry.name) is entry:
+            del self._named[entry.name]
         if task.cancelled():
             logger.debug("Background step '%s' cancelled", entry.label)
         elif task.exception():
-            logger.error(
-                "Background step '%s' failed: %s", entry.label, task.exception()
-            )
+            logger.error("Background step '%s' failed: %s", entry.label, task.exception())
         else:
             logger.info("Background step '%s' completed", entry.label)
 
-    async def preempt_conflicts(
-        self, resources: frozenset[str], holder_label: str
-    ) -> None:
+    async def preempt_conflicts(self, resources: frozenset[str], holder_label: str) -> None:
         """Cancel background tasks whose resources overlap with *resources*.
 
         After cancellation, awaits cleanup so released resources are
@@ -87,8 +82,7 @@ class BackgroundManager:
             overlaps = _resources_overlap(resources, entry.resources)
             if overlaps:
                 logger.warning(
-                    "Foreground '%s' preempting background '%s' "
-                    "— conflicting: %s",
+                    "Foreground '%s' preempting background '%s' " "— conflicting: %s",
                     holder_label,
                     entry.label,
                     ", ".join(overlaps),
@@ -111,7 +105,17 @@ class BackgroundManager:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def wait_for_name(self, name: str) -> None:
-        """Wait for a specific named background task to complete."""
+        """Wait for a specific named background task to complete.
+
+        Either outcome (clean exit, cancellation, or exception inside the
+        task) is acceptable here — the caller is asking "tell me when it's
+        done", not "tell me how it ended". We split the two ``except``
+        clauses on purpose: ``CancelledError`` is a ``BaseException`` in
+        Python 3.8+, so the previous ``except (CancelledError, Exception)``
+        tuple was misleading. Task-internal failures get a debug log so a
+        diagnostic trail exists; cancellation does not, because it is the
+        expected outcome of mission shutdown.
+        """
         entry = self._named.get(name)
         if entry is None:
             logger.debug(
@@ -121,8 +125,10 @@ class BackgroundManager:
             return
         try:
             await entry.task
-        except (asyncio.CancelledError, Exception):
+        except asyncio.CancelledError:
             pass
+        except Exception as exc:
+            logger.debug("Background step '%s' ended with %r", name, exc)
 
     async def cancel_all(self) -> None:
         """Cancel all running background tasks and await cleanup.

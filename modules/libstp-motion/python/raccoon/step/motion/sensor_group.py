@@ -24,6 +24,7 @@ Usage::
     # Single-sensor access for raw builder calls:
     strafe_left(speed=0.3).until(on_black(front.right))
 """
+
 from __future__ import annotations
 
 from raccoon.step.condition import on_black, on_white
@@ -87,16 +88,20 @@ class SensorGroup:
 
     def lineup_on_black(self, threshold=None):
         from .lineup import forward_lineup_on_black
+
         return forward_lineup_on_black(
             self.left, self.right, detection_threshold=self._t(threshold)
         )
 
     def lineup_on_white(self, threshold=None):
         from .lineup import forward_lineup_on_white
+
         return forward_lineup_on_white(self.left, self.right)
 
     def lineup(self, target=None, threshold=None):
-        from .lineup import lineup as _lineup, SurfaceColor
+        from .lineup import SurfaceColor
+        from .lineup import lineup as _lineup
+
         if target is None:
             target = SurfaceColor.BLACK
         return _lineup(
@@ -108,22 +113,26 @@ class SensorGroup:
 
     def backward_lineup_on_black(self):
         from .lineup import backward_lineup_on_black
+
         return backward_lineup_on_black(self.left, self.right)
 
     def backward_lineup_on_white(self):
         from .lineup import backward_lineup_on_white
+
         return backward_lineup_on_white(self.left, self.right)
 
     # ── drive until ─────────────────────────────────────────────
 
     def drive_until_black(self, speed=None, threshold=None):
         from .drive_dsl import drive_forward
+
         return drive_forward(speed=self._s(speed)).until(
             _any_condition(on_black, *self._both, threshold=self._t(threshold))
         )
 
     def drive_until_white(self, speed=None, threshold=None):
         from .drive_dsl import drive_forward
+
         return drive_forward(speed=self._s(speed)).until(
             _any_condition(on_white, *self._both, threshold=self._t(threshold))
         )
@@ -131,46 +140,46 @@ class SensorGroup:
     def drive_over_line(self, speed=None, threshold=None):
         """Drive forward through black then white (crosses one line)."""
         from raccoon.step import seq
-        return seq([
-            self.drive_until_black(speed, threshold),
-            self.drive_until_white(speed, threshold),
-        ])
+
+        return seq(
+            [
+                self.drive_until_black(speed, threshold),
+                self.drive_until_white(speed, threshold),
+            ]
+        )
 
     def drive_backward_until_black(self, sensor=None, speed=None, threshold=None):
         from .drive_dsl import drive_backward
+
         s = sensor or self.right or self.left
-        return drive_backward(speed=self._s(speed)).until(
-            on_black(s, self._t(threshold))
-        )
+        return drive_backward(speed=self._s(speed)).until(on_black(s, self._t(threshold)))
 
     # ── strafe until ────────────────────────────────────────────
 
     def strafe_left_until_black(self, sensor=None, speed=None, threshold=None):
         from .drive_dsl import strafe_left
+
         s = sensor or self.left or self.right
-        return strafe_left(speed=self._s(speed)).until(
-            on_black(s, self._t(threshold))
-        )
+        return strafe_left(speed=self._s(speed)).until(on_black(s, self._t(threshold)))
 
     def strafe_right_until_black(self, sensor=None, speed=None, threshold=None):
         from .drive_dsl import strafe_right
+
         s = sensor or self.right or self.left
-        return strafe_right(speed=self._s(speed)).until(
-            on_black(s, self._t(threshold))
-        )
+        return strafe_right(speed=self._s(speed)).until(on_black(s, self._t(threshold)))
 
     def strafe_right_until_white(self, sensor=None, speed=None, threshold=None):
         from .drive_dsl import strafe_right
+
         s = sensor or self.right or self.left
-        return strafe_right(speed=self._s(speed)).until(
-            on_white(s, self._t(threshold))
-        )
+        return strafe_right(speed=self._s(speed)).until(on_white(s, self._t(threshold)))
 
     # ── line following ──────────────────────────────────────────
 
     def follow_right_edge(self, cm, speed=None):
-        from .line_follow_dsl import follow_line_single
         from .line_follow import LineSide
+        from .line_follow_dsl import follow_line_single
+
         return follow_line_single(
             self.right,
             cm,
@@ -182,8 +191,9 @@ class SensorGroup:
         )
 
     def follow_right_until_black(self, speed=None):
-        from .line_follow_dsl import follow_line_single
         from .line_follow import LineSide
+        from .line_follow_dsl import follow_line_single
+
         return follow_line_single(
             self.right,
             speed=speed or self._follow_speed,

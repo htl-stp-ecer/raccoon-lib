@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <numbers>
 
 namespace libstp::sim::collision
 {
@@ -10,7 +11,7 @@ namespace libstp::sim::collision
     {
         constexpr float kEps = 1e-6f;
         constexpr float kStepCm = 1.0f;
-        constexpr float kStepAngleRad = 3.14159265358979323846f / 36.0f;
+        constexpr float kStepAngleRad = std::numbers::pi_v<float> / 36.0f;
         constexpr int kMaxIterations = 4000;
         constexpr float kMinWallThicknessCm = 0.01f;
 

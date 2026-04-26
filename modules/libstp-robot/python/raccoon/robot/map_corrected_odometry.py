@@ -47,20 +47,20 @@ Example::
 
     # In your update loop (or motion step):
     mc.update(dt)
-    pose = mc.get_pose()           # corrected pose in odometry frame
+    pose = mc.get_pose()  # corrected pose in odometry frame
     field_pos = mc.get_field_position()  # (x_cm, y_cm) on the table
 """
 
 from __future__ import annotations
 
-import math
 import logging
-from dataclasses import dataclass, field
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+import math
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from raccoon.robot.geometry import SensorPosition
-    from raccoon.robot.table_map import TableMap, MapSegment
+    from raccoon.robot.table_map import TableMap
 
 logger = logging.getLogger("raccoon.map_odom")
 
@@ -68,21 +68,24 @@ logger = logging.getLogger("raccoon.map_odom")
 @dataclass
 class _SensorEntry:
     """Internal bookkeeping for one registered IR sensor."""
-    sensor: Any                    # IRSensor instance
-    position: "SensorPosition"     # offset from robot center
-    was_on_line: bool = False      # previous frame state
+
+    sensor: Any  # IRSensor instance
+    position: "SensorPosition"  # offset from robot center
+    was_on_line: bool = False  # previous frame state
 
 
 def _nearest_segment(
-    x: float, y: float, segments: list,
-) -> Optional[Tuple[Any, float, float, float]]:
+    x: float,
+    y: float,
+    segments: list,
+) -> tuple[Any, float, float, float] | None:
     """Find the segment closest to (x, y).
 
     Returns ``(segment, distance, perp_x, perp_y)`` where ``(perp_x, perp_y)``
     is the unit vector perpendicular to the segment (pointing from the segment
     centerline toward the query point), or *None* if *segments* is empty.
     """
-    best: Optional[Tuple[Any, float, float, float]] = None
+    best: tuple[Any, float, float, float] | None = None
     best_dist = float("inf")
 
     for seg in segments:
@@ -161,12 +164,14 @@ class MapCorrectedOdometry:
         self._offset_x_cm: float = 0.0
         self._offset_y_cm: float = 0.0
 
-        self._sensors: List[_SensorEntry] = []
+        self._sensors: list[_SensorEntry] = []
 
     # ── Sensor registration ──────────────────────────────────────
 
     def register_sensor(
-        self, sensor: Any, position: "SensorPosition",
+        self,
+        sensor: Any,
+        position: "SensorPosition",
     ) -> None:
         """Register an IR sensor for map-based correction.
 
@@ -178,7 +183,7 @@ class MapCorrectedOdometry:
 
     # ── Coordinate conversion helpers ────────────────────────────
 
-    def _odom_to_field(self, pose: Any) -> Tuple[float, float, float]:
+    def _odom_to_field(self, pose: Any) -> tuple[float, float, float]:
         """Convert an odometry Pose to field coordinates (cm).
 
         Returns (field_x_cm, field_y_cm, field_heading_rad).
@@ -200,7 +205,7 @@ class MapCorrectedOdometry:
 
         return (field_x, field_y, field_heading)
 
-    def _field_offset_to_odom_m(self, dx_cm: float, dy_cm: float) -> Tuple[float, float]:
+    def _field_offset_to_odom_m(self, dx_cm: float, dy_cm: float) -> tuple[float, float]:
         """Convert a field-frame offset (cm) to odometry-frame offset (m)."""
         cos_s = math.cos(-self._start_heading_rad)
         sin_s = math.sin(-self._start_heading_rad)
@@ -233,7 +238,10 @@ class MapCorrectedOdometry:
             if on_line and not entry.was_on_line:
                 # Rising edge — sensor just moved onto a line.
                 self._correct_from_sensor(
-                    field_x, field_y, field_heading, entry.position,
+                    field_x,
+                    field_y,
+                    field_heading,
+                    entry.position,
                 )
 
             entry.was_on_line = on_line
@@ -247,9 +255,7 @@ class MapCorrectedOdometry:
     ) -> None:
         """Apply a single correction based on a sensor that just hit a line."""
         # Where do we think the sensor is on the field?
-        sx, sy = self._map.sensor_field_position(
-            robot_x, robot_y, robot_heading, sensor_pos
-        )
+        sx, sy = self._map.sensor_field_position(robot_x, robot_y, robot_heading, sensor_pos)
 
         # Find the nearest line segment.
         result = _nearest_segment(sx, sy, self._map._lines)
@@ -265,7 +271,8 @@ class MapCorrectedOdometry:
         if error > self._max_corr + half_width:
             logger.debug(
                 "Skipping correction: nearest line %.1f cm away (max %.1f)",
-                dist, self._max_corr,
+                dist,
+                self._max_corr,
             )
             return
 
@@ -277,9 +284,12 @@ class MapCorrectedOdometry:
         self._offset_y_cm -= perp_y * nudge
 
         logger.debug(
-            "Map correction: sensor at (%.1f, %.1f), line dist=%.2f cm, "
-            "nudge=(%.2f, %.2f) cm",
-            sx, sy, dist, -perp_x * nudge, -perp_y * nudge,
+            "Map correction: sensor at (%.1f, %.1f), line dist=%.2f cm, " "nudge=(%.2f, %.2f) cm",
+            sx,
+            sy,
+            dist,
+            -perp_x * nudge,
+            -perp_y * nudge,
         )
 
     # ── Public query methods (match IOdometry interface) ─────────
@@ -294,14 +304,12 @@ class MapCorrectedOdometry:
 
         # Convert our field-frame offset back to odometry-frame meters
         # and add to the raw pose.
-        odom_dx, odom_dy = self._field_offset_to_odom_m(
-            self._offset_x_cm, self._offset_y_cm
-        )
+        odom_dx, odom_dy = self._field_offset_to_odom_m(self._offset_x_cm, self._offset_y_cm)
         pose.position[0] += odom_dx
         pose.position[1] += odom_dy
         return pose
 
-    def get_field_position(self) -> Tuple[float, float]:
+    def get_field_position(self) -> tuple[float, float]:
         """Get the corrected robot position in field coordinates (cm).
 
         Returns:
@@ -346,7 +354,10 @@ class MapCorrectedOdometry:
             entry.was_on_line = False
 
     def reset_with_field_pose(
-        self, x_cm: float, y_cm: float, heading_rad: float = 0.0,
+        self,
+        x_cm: float,
+        y_cm: float,
+        heading_rad: float = 0.0,
     ) -> None:
         """Reset odometry and set a new field-frame starting pose.
 
@@ -368,7 +379,7 @@ class MapCorrectedOdometry:
             entry.was_on_line = False
 
     @property
-    def correction_offset_cm(self) -> Tuple[float, float]:
+    def correction_offset_cm(self) -> tuple[float, float]:
         """Current accumulated correction in field cm (for diagnostics)."""
         return (self._offset_x_cm, self._offset_y_cm)
 

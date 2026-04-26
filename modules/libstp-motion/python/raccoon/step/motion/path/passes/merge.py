@@ -8,7 +8,6 @@ deferred-placeholder (``None``) entries act as merge barriers.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Optional
 
 from ..ir import PathNode, Segment
 
@@ -20,11 +19,7 @@ def can_merge(a: Segment, b: Segment) -> bool:
     if not a.has_known_endpoint or not b.has_known_endpoint:
         return False
     if a.kind == "linear" and b.kind == "linear":
-        return (
-            a.axis == b.axis
-            and a.sign == b.sign
-            and a.heading_deg == b.heading_deg
-        )
+        return a.axis == b.axis and a.sign == b.sign and a.heading_deg == b.heading_deg
     if a.kind == "turn" and b.kind == "turn":
         # Only merge if the combined angle stays non-zero.
         combined = (a.angle_rad or 0.0) + (b.angle_rad or 0.0)
@@ -50,9 +45,9 @@ def merge_two(a: Segment, b: Segment) -> Segment:
     )
 
 
-def run_merge(nodes: list[Optional[PathNode]]) -> list[Optional[PathNode]]:
+def run_merge(nodes: list[PathNode | None]) -> list[PathNode | None]:
     """Collapse adjacent same-type/same-direction segments with no conditions."""
-    result: list[Optional[PathNode]] = []
+    result: list[PathNode | None] = []
     i = 0
     while i < len(nodes):
         node = nodes[i]
@@ -78,5 +73,5 @@ class MergePass:
 
     name = "merge"
 
-    def run(self, nodes: list[Optional[PathNode]]) -> list[Optional[PathNode]]:
+    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
         return run_merge(nodes)

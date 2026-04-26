@@ -1,7 +1,3 @@
-//
-// Created by tobias on 11/9/25.
-//
-
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <memory>

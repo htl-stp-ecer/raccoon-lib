@@ -5,19 +5,17 @@ background(), Run(), and non-drive steps, and rejects invalid combinations.
 These are pure-Python tests — no simulator or C++ runtime required beyond
 the raccoon package being installed.
 """
+
 from __future__ import annotations
 
-import asyncio
+import importlib.util
 
 import pytest
 
 
-def _libstp_available():
-    try:
-        import raccoon  # noqa: F401
-        return True
-    except ImportError:
-        return False
+def _libstp_available() -> bool:
+    """Check raccoon availability without importing the module."""
+    return importlib.util.find_spec("raccoon") is not None
 
 
 requires_libstp = pytest.mark.skipif(
@@ -29,6 +27,7 @@ requires_libstp = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Helpers: lightweight step stubs
 # ---------------------------------------------------------------------------
+
 
 def _make_stubs():
     """Import Step and build minimal stubs for testing flattening logic."""
@@ -73,8 +72,8 @@ def _make_stubs():
 @requires_libstp
 class TestNestedSeq:
     def test_seq_is_flattened(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment
         from raccoon.step.sequential import seq
 
         inner = seq([drive_forward(cm=10.0), drive_forward(cm=20.0)])
@@ -87,8 +86,8 @@ class TestNestedSeq:
         assert distances_cm == pytest.approx([10.0, 20.0, 30.0], abs=0.1)
 
     def test_deeply_nested_seq(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment
         from raccoon.step.sequential import seq
 
         inner = seq([seq([drive_forward(cm=5.0), drive_forward(cm=5.0)])])
@@ -106,18 +105,20 @@ class TestNestedSeq:
 @requires_libstp
 class TestParallelFlattening:
     def test_parallel_with_motion_spine_and_side_effect(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.parallel import parallel
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            parallel(
-                [drive_forward(cm=10.0), drive_forward(cm=20.0)],
-                [ServoStub()],
-            ),
-        ])
+        sp = SmoothPath(
+            [
+                parallel(
+                    [drive_forward(cm=10.0), drive_forward(cm=20.0)],
+                    [ServoStub()],
+                ),
+            ]
+        )
 
         segments = [n for n in sp._nodes if isinstance(n, _Segment)]
         side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]
@@ -126,20 +127,22 @@ class TestParallelFlattening:
         assert side_actions[0].is_background is True
 
     def test_parallel_no_drive_branch_becomes_side_action(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _SideAction
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _SideAction
         from raccoon.step.parallel import parallel
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            parallel(
-                [ServoStub(port=0)],
-                [ServoStub(port=1)],
-            ),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                parallel(
+                    [ServoStub(port=0)],
+                    [ServoStub(port=1)],
+                ),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]
         assert len(side_actions) == 1
@@ -147,18 +150,20 @@ class TestParallelFlattening:
 
     def test_side_actions_placed_before_spine_segments(self):
         """Side-effect branches should appear before the spine segments."""
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.parallel import parallel
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            parallel(
-                [drive_forward(cm=10.0)],
-                [ServoStub()],
-            ),
-        ])
+        sp = SmoothPath(
+            [
+                parallel(
+                    [drive_forward(cm=10.0)],
+                    [ServoStub()],
+                ),
+            ]
+        )
 
         # First node should be the side action, second the segment
         assert isinstance(sp._nodes[0], _SideAction)
@@ -173,17 +178,19 @@ class TestParallelFlattening:
 @requires_libstp
 class TestBackgroundFlattening:
     def test_background_becomes_side_action(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.logic.background import background
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            background(ServoStub()),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                background(ServoStub()),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         segments = [n for n in sp._nodes if isinstance(n, _Segment)]
         side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]
@@ -200,15 +207,17 @@ class TestBackgroundFlattening:
 @requires_libstp
 class TestRunFlattening:
     def test_run_becomes_inline_side_action(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.logic.defer import Run
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            Run(lambda robot: None),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                Run(lambda robot: None),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         segments = [n for n in sp._nodes if isinstance(n, _Segment)]
         side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]
@@ -225,16 +234,18 @@ class TestRunFlattening:
 @requires_libstp
 class TestNonDriveStepFlattening:
     def test_non_drive_step_becomes_inline(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            ServoStub(),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                ServoStub(),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         segments = [n for n in sp._nodes if isinstance(n, _Segment)]
         side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]
@@ -274,9 +285,9 @@ class TestConstructionTimeValidation:
 
     def test_deferred_only_does_not_raise(self):
         """A path with only Defer should be accepted at construction."""
-        from raccoon.step.motion.smooth_path import SmoothPath
         from raccoon.step.logic.defer import Defer
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath
 
         sp = SmoothPath([Defer(lambda robot: drive_forward(cm=10.0))])
         # Should not raise — validation deferred to runtime
@@ -291,33 +302,37 @@ class TestConstructionTimeValidation:
 @requires_libstp
 class TestSignature:
     def test_signature_includes_side_actions(self):
-        from raccoon.step.motion.smooth_path import SmoothPath
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.logic.background import background
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            background(ServoStub()),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                background(ServoStub()),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         sig = sp._generate_signature()
         assert "drive(" in sig
         assert "bg)" in sig  # background marker
 
     def test_signature_with_inline(self):
-        from raccoon.step.motion.smooth_path import SmoothPath
         from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            ServoStub(),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                ServoStub(),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         sig = sp._generate_signature()
         assert "inline)" in sig
@@ -331,16 +346,18 @@ class TestSignature:
 @requires_libstp
 class TestCollectedResources:
     def test_includes_drive_and_side_action_resources(self):
-        from raccoon.step.motion.smooth_path import SmoothPath
-        from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.logic.background import background
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=10.0),
-            background(ServoStub()),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=10.0),
+                background(ServoStub()),
+            ]
+        )
 
         resources = sp.collected_resources()
         assert "drive" in resources
@@ -355,21 +372,23 @@ class TestCollectedResources:
 @requires_libstp
 class TestMixedComposite:
     def test_seq_inside_parallel(self):
-        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.sequential import seq
+        from raccoon.step.motion.smooth_path import SmoothPath, _Segment, _SideAction
         from raccoon.step.parallel import parallel
+        from raccoon.step.sequential import seq
 
         ServoStub, _ = _make_stubs()
 
-        sp = SmoothPath([
-            drive_forward(cm=5.0),
-            parallel(
-                seq([drive_forward(cm=10.0), drive_forward(cm=15.0)]),
-                [ServoStub()],
-            ),
-            drive_forward(cm=20.0),
-        ])
+        sp = SmoothPath(
+            [
+                drive_forward(cm=5.0),
+                parallel(
+                    seq([drive_forward(cm=10.0), drive_forward(cm=15.0)]),
+                    [ServoStub()],
+                ),
+                drive_forward(cm=20.0),
+            ]
+        )
 
         segments = [n for n in sp._nodes if isinstance(n, _Segment)]
         side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]

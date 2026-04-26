@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
+import contextlib
 from asyncio import CancelledError
-from typing import Any
 
 from .. import Step
 from ..annotation import dsl_step
@@ -31,33 +33,34 @@ class DoWhileActive(Step):
         from raccoon.step.logic import do_while_active, loop_forever
 
         # Flash an LED while the robot drives forward
-        flash_led = loop_forever(seq([
-            set_digital(0, True),
-            wait(0.25),
-            set_digital(0, False),
-            wait(0.25),
-        ]))
+        flash_led = loop_forever(
+            seq(
+                [
+                    set_digital(0, True),
+                    wait(0.25),
+                    set_digital(0, False),
+                    wait(0.25),
+                ]
+            )
+        )
         do_while_active(drive_forward(50), flash_led)
     """
 
     def __init__(self, reference_step: Step, task: Step) -> None:
         super().__init__()
         from ..model import StepProtocol
+
         if not isinstance(reference_step, StepProtocol):
-            raise TypeError(
-                f"reference_step must be a Step, got {type(reference_step).__name__}"
-            )
+            msg = f"reference_step must be a Step, got {type(reference_step).__name__}"
+            raise TypeError(msg)
         if not isinstance(task, StepProtocol):
-            raise TypeError(
-                f"task must be a Step, got {type(task).__name__}"
-            )
+            msg = f"task must be a Step, got {type(task).__name__}"
+            raise TypeError(msg)
         self.reference_step = reference_step.resolve()
         self.task = task.resolve()
 
         # Pre-execution resource conflict check
-        validate_no_overlap(
-            [self.reference_step, self.task], context="DoWhileActive"
-        )
+        validate_no_overlap([self.reference_step, self.task], context="DoWhileActive")
 
     def collected_resources(self) -> frozenset[str]:
         return self.reference_step.collected_resources() | self.task.collected_resources()
@@ -73,7 +76,5 @@ class DoWhileActive(Step):
 
         await reference_step
         task.cancel()
-        try:
+        with contextlib.suppress(CancelledError):
             await task
-        except CancelledError:
-            pass

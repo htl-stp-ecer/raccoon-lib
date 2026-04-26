@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import replace
-from typing import Optional
 
 from raccoon.motion import LinearAxis
 
@@ -22,28 +21,37 @@ _log = logging.getLogger(__name__)
 
 
 def try_corner_arc(
-    lin1: Segment, turn: Segment, lin2: Segment, cut_m: float,
-) -> Optional[tuple[Segment, Segment, Segment]]:
+    lin1: Segment,
+    turn: Segment,
+    lin2: Segment,
+    cut_m: float,
+) -> tuple[Segment, Segment, Segment] | None:
     """Return ``(new_lin1, arc, new_lin2)`` for a corner cut, or ``None``.
 
     Geometry: cutting ``cut_m`` from each leg at the corner requires an arc of
     radius ``R = cut_m / tan(|θ| / 2)``.  Both linears must be the same axis
     and direction and have enough distance to accommodate the cut.
     """
-    if (turn.kind != "turn"
-            or not turn.has_known_endpoint
-            or turn.condition is not None
-            or turn.angle_rad is None):
+    if (
+        turn.kind != "turn"
+        or not turn.has_known_endpoint
+        or turn.condition is not None
+        or turn.angle_rad is None
+    ):
         return None
-    if (lin1.kind != "linear"
-            or not lin1.has_known_endpoint
-            or lin1.condition is not None
-            or lin1.distance_m is None):
+    if (
+        lin1.kind != "linear"
+        or not lin1.has_known_endpoint
+        or lin1.condition is not None
+        or lin1.distance_m is None
+    ):
         return None
-    if (lin2.kind != "linear"
-            or not lin2.has_known_endpoint
-            or lin2.condition is not None
-            or lin2.distance_m is None):
+    if (
+        lin2.kind != "linear"
+        or not lin2.has_known_endpoint
+        or lin2.condition is not None
+        or lin2.distance_m is None
+    ):
         return None
     if lin1.axis != lin2.axis or lin1.sign != lin2.sign:
         return None
@@ -76,17 +84,20 @@ def try_corner_arc(
 
 
 def run_corner_cut(
-    nodes: list[Optional[PathNode]], cut_m: float,
-) -> list[Optional[PathNode]]:
+    nodes: list[PathNode | None],
+    cut_m: float,
+) -> list[PathNode | None]:
     """Replace ``linear+turn+linear`` triples with ``linear+arc+linear``."""
-    result: list[Optional[PathNode]] = []
+    result: list[PathNode | None] = []
     i = 0
     while i < len(nodes):
         # Peek ahead for a three-segment pattern.
-        if (i + 2 < len(nodes)
-                and isinstance(nodes[i], Segment)
-                and isinstance(nodes[i + 1], Segment)
-                and isinstance(nodes[i + 2], Segment)):
+        if (
+            i + 2 < len(nodes)
+            and isinstance(nodes[i], Segment)
+            and isinstance(nodes[i + 1], Segment)
+            and isinstance(nodes[i + 2], Segment)
+        ):
             cut = try_corner_arc(nodes[i], nodes[i + 1], nodes[i + 2], cut_m)  # type: ignore[arg-type]
             if cut is not None:
                 new_lin1, arc_seg, new_lin2 = cut
@@ -99,7 +110,8 @@ def run_corner_cut(
                 _log.debug(
                     "path optimizer: corner cut at index %d "
                     "(cut=%.3fm, radius=%.3fm, angle=%.1f°)",
-                    i - 3, cut_m,
+                    i - 3,
+                    cut_m,
                     arc_seg.radius_m or 0,
                     math.degrees(arc_seg.arc_angle_rad or 0),
                 )
@@ -116,8 +128,9 @@ class CornerCutPass:
 
     def __init__(self, cut_m: float):
         if cut_m <= 0.0:
-            raise ValueError(f"CornerCutPass: cut_m must be positive, got {cut_m}")
+            msg = f"CornerCutPass: cut_m must be positive, got {cut_m}"
+            raise ValueError(msg)
         self.cut_m = cut_m
 
-    def run(self, nodes: list[Optional[PathNode]]) -> list[Optional[PathNode]]:
+    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
         return run_corner_cut(nodes, self.cut_m)

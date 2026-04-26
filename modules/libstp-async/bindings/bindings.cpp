@@ -1,6 +1,3 @@
-//
-// Created by tobias on 6/1/25.
-//
 #include <pybind11/pybind11.h>
 
 #include "async/algorithm.hpp"

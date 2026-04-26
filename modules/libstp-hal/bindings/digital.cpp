@@ -5,9 +5,12 @@ namespace py = pybind11;
 
 void init_digital(const py::module& m)
 {
-    // Keep the Python shape aligned with the C++ wrapper for simple sensor access.
+    // Port is read-only at the binding level: mutating it from Python would
+    // desync the platform-side PortRegistry without rebinding the underlying
+    // hardware channel. Construct a new DigitalSensor instead.
     py::class_<libstp::hal::digital::DigitalSensor>(m, "DigitalSensor")
         .def(py::init<int>(), py::arg("port"))
         .def("read", &libstp::hal::digital::DigitalSensor::read)
-        .def_readwrite("port", &libstp::hal::digital::DigitalSensor::port);
+        .def_property_readonly("port",
+            [](const libstp::hal::digital::DigitalSensor& s) { return s.port; });
 }
