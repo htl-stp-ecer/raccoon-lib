@@ -14,16 +14,54 @@ Env vars (Pi deploy only):
 """
 
 import glob
+import ipaddress
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Hostname grammar from RFC 1123: each label 1-63 chars, alnum or hyphen,
+# no leading/trailing hyphen. Total length capped at 253.
+_HOSTNAME_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+_HOSTNAME_RE = re.compile(rf"^{_HOSTNAME_LABEL}(?:\.{_HOSTNAME_LABEL})*$")
+
+
+def _validate_host(host: str) -> str:
+    """Reject anything that's not a plain hostname or IP literal.
+
+    Returning the host unchanged on success keeps call sites simple.
+    Raises SystemExit on bad input rather than letting shell-y characters
+    leak into ssh/scp argv (where they'd be quoted, but we'd rather fail
+    loud than silently connect to a typo).
+    """
+    if not host or len(host) > 253:
+        print(f"ERROR: invalid RPI_HOST {host!r}")
+        sys.exit(1)
+    try:
+        ipaddress.ip_address(host)
+        return host
+    except ValueError:
+        pass
+    if not _HOSTNAME_RE.match(host):
+        print(f"ERROR: RPI_HOST {host!r} is neither a valid IP nor hostname")
+        sys.exit(1)
+    return host
+
+
+# accept-new pins the host key on first connect and rejects later changes,
+# which is the right tradeoff for a deploy script that talks to one Pi.
+_SSH_OPTS = [
+    "-o", "ConnectTimeout=5",
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "BatchMode=yes",  # password prompts are scripting smells
+]
 
 
 def ssh(host: str, user: str, command: str, check: bool = True) -> int:
     """Run a command on the Pi via SSH."""
     result = subprocess.run(
-        ["ssh", "-o", "ConnectTimeout=5", f"{user}@{host}", command],
+        ["ssh", *_SSH_OPTS, f"{user}@{host}", command],
         capture_output=not check,
     )
     if check and result.returncode != 0:
@@ -34,7 +72,7 @@ def ssh(host: str, user: str, command: str, check: bool = True) -> int:
 
 def scp(source: str, dest: str) -> None:
     """Copy a file to the Pi via SCP."""
-    result = subprocess.run(["scp", source, dest])
+    result = subprocess.run(["scp", *_SSH_OPTS, source, dest])
     if result.returncode != 0:
         print(f"ERROR: SCP failed: {source} -> {dest}")
         sys.exit(1)
@@ -73,7 +111,7 @@ def deploy_to_pi() -> None:
     project_name = os.environ.get("PROJECT_NAME", "raccoon")
     python_cmd = os.environ.get("PYTHON_CMD", "python3")
     rpi_user = os.environ.get("RPI_USER", "pi")
-    rpi_host = os.environ["RPI_HOST"]
+    rpi_host = _validate_host(os.environ["RPI_HOST"])
 
     # Find the platform wheel (not stubs)
     wheels = [
@@ -111,7 +149,7 @@ def deploy_to_pi() -> None:
     # due to hardware cleanup segfault in atexit handler)
     print("• Verifying import...")
     result = subprocess.run(
-        ["ssh", "-o", "ConnectTimeout=5", f"{rpi_user}@{rpi_host}",
+        ["ssh", *_SSH_OPTS, f"{rpi_user}@{rpi_host}",
          f"{python_cmd} -c 'import {project_name}; print(\"{project_name} OK\")'"],
         capture_output=True, text=True,
     )
