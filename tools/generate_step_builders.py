@@ -54,7 +54,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate StepBuilder classes from @dsl_step annotations"
     )
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Print what would be generated without writing files.")
+    parser.add_argument("--check", action="store_true",
+                        help="Verify on-disk *_dsl.py files match what the generator would emit. "
+                             "Exits non-zero if any file is out of date or missing. Used by the "
+                             "pre-commit hook to keep generated code in sync with sources.")
     parser.add_argument("--module", type=str, default=None)
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
@@ -67,7 +72,30 @@ def main():
     source_dirs = _collect_source_dirs(_LIB_ROOT, args.module)
     print(f"Scanning {len(source_dirs)} module(s) for @dsl_step classes...")
 
-    results = generate_for_source_dirs(source_dirs, dry_run=args.dry_run)
+    # In --check mode the generator runs in dry-run and we compare the
+    # would-be content against what's on disk.
+    dry_run = args.dry_run or args.check
+    results = generate_for_source_dirs(source_dirs, dry_run=dry_run)
+
+    if args.check:
+        stale: list[Path] = []
+        for path_str, expected in results.items():
+            path = Path(path_str)
+            actual = path.read_text() if path.exists() else None
+            if actual != expected:
+                stale.append(path)
+        if stale:
+            print("ERROR: generated step-builder files are out of date:", file=sys.stderr)
+            for p in stale:
+                rel = p.relative_to(_LIB_ROOT) if p.is_absolute() else p
+                print(f"  - {rel}", file=sys.stderr)
+            print(
+                "\nRun `python tools/generate_step_builders.py` and commit the changes.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"OK: {len(results)} generated file(s) up to date")
+        return
 
     total_builders = sum(
         len([l for l in code.splitlines() if l.startswith("class ") and "Builder" in l])

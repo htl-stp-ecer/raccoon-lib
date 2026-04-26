@@ -58,6 +58,18 @@ repos:
     types: [file]
     files: (\.cmake|CMakeLists.txt)(.in)?$
 
+# Verify auto-generated step-builder DSL files are up to date with their
+# @dsl_step source classes. Catches drift before it lands in main and
+# avoids "works on my machine" failures from stale generated wrappers.
+- repo: local
+  hooks:
+    - id: check-step-builders
+      name: Check step-builder DSL files are in sync
+      language: system
+      entry: python3 tools/generate_step_builders.py --check
+      pass_filenames: false
+      files: '(^modules/.*/python/raccoon/.*\.py$|^tools/generate_step_builders\.py$|^python/raccoon/codegen/.*\.py$)'
+
 # Suggested hook if you add a .clang-format file
 # - repo: https://github.com/pre-commit/mirrors-clang-format
 #  rev: v13.0.0
