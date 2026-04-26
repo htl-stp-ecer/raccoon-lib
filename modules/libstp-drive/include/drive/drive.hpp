@@ -81,7 +81,7 @@ namespace libstp::drive
         [[nodiscard]] double getWheelRadius() const { return kinematics_->getWheelRadius(); }
 
         /** Convenience wrapper around `IKinematics::getMotors()`. */
-        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const { return kinematics_->getMotors(); }
+        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() { return kinematics_->getMotors(); }
 
         /** Convenience wrapper around `IKinematics::applyPowerCommand()`. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction, int power_percent)

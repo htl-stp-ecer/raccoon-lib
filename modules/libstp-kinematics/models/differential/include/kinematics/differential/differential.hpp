@@ -60,9 +60,9 @@ namespace libstp::kinematics::differential
         [[nodiscard]] double getWheelRadius() const override { return m_wheelRadius; }
 
         /** Return the underlying motors in left, right order. */
-        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
+        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() override;
 
-        [[nodiscard]] StmOdometryConfig getStmOdometryConfig() const override;
+        [[nodiscard]] StmOdometryConfig getStmOdometryConfig() override;
 
         /** Command motors at raw open-loop power using differential inverse kinematics for direction. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction,

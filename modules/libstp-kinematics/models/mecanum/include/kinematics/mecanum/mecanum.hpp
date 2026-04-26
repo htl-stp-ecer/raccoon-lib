@@ -74,9 +74,9 @@ namespace libstp::kinematics::mecanum
         [[nodiscard]] double getMaxWheelSpeed() const { return m_maxWheelSpeed; }
 
         /** Return the underlying motors in front-left, front-right, back-left, back-right order. */
-        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() const override;
+        [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() override;
 
-        [[nodiscard]] StmOdometryConfig getStmOdometryConfig() const override;
+        [[nodiscard]] StmOdometryConfig getStmOdometryConfig() override;
 
         /** Command motors at raw open-loop power using mecanum inverse kinematics for direction. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction,

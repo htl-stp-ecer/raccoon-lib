@@ -86,8 +86,12 @@ namespace libstp::kinematics
         /**
          * @brief Get pointers to all drive motors managed by this kinematics model
          * @return Vector of motor pointers (non-owning)
+         *
+         * Non-const because the returned pointers are used to command motors,
+         * which is a write through the kinematics. A `const Kinematics&`
+         * cannot hand out mutating handles.
          */
-        [[nodiscard]] virtual std::vector<hal::motor::IMotor*> getMotors() const = 0;
+        [[nodiscard]] virtual std::vector<hal::motor::IMotor*> getMotors() = 0;
 
         /**
          * Pre-baked inverse kinematics matrix for STM32-side odometry.
@@ -107,7 +111,9 @@ namespace libstp::kinematics
             std::array<std::array<float, 3>, 4> fwd_matrix{};
         };
 
-        [[nodiscard]] virtual StmOdometryConfig getStmOdometryConfig() const = 0;
+        // Non-const: needs to look up motor handles via getMotors() to
+        // reorder kinematics-slot data into hardware-port order.
+        [[nodiscard]] virtual StmOdometryConfig getStmOdometryConfig() = 0;
 
         /**
          * Command motors at raw open-loop power using the inverse kinematics
