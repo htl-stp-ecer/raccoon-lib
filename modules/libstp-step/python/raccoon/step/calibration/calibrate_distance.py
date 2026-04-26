@@ -123,7 +123,7 @@ def _update_yaml_calibration(
     Update ticks_to_rad values, following !include refs.
 
     Args:
-        results: List of calibration results with ema_baseline and motor_name set
+        results: List of calibration results with new_ticks_to_rad and motor_name set
         project_root: Path to project root (auto-detected if None)
 
     Returns:
@@ -141,7 +141,7 @@ def _update_yaml_calibration(
             if update_project_value(
                 project_root,
                 ["definitions", result.motor_name, "calibration", "ticks_to_rad"],
-                result.ema_baseline,
+                result.new_ticks_to_rad,
             ):
                 updated = True
 
@@ -583,12 +583,6 @@ class CalibrateDistance(UIStep):
 
                 # Apply calibration to each motor
                 for result in self.per_wheel_results:
-                    # Compute EMA baseline for persistence
-                    result.ema_baseline = (
-                        result.old_ticks_to_rad * self.ema_alpha +
-                        result.new_ticks_to_rad * (1 - self.ema_alpha)
-                    )
-
                     # Find motor name for YAML persistence (follows !include refs)
                     if project_root:
                         result.motor_name = _find_motor_name_by_port({}, result.motor_port)
@@ -597,14 +591,13 @@ class CalibrateDistance(UIStep):
                         if motor.port == result.motor_port:
                             old_cal = motor.get_calibration()
                             new_cal = MotorCalibration()
-                            new_cal.ticks_to_rad = result.ema_baseline
+                            new_cal.ticks_to_rad = result.new_ticks_to_rad
                             new_cal.vel_lpf_alpha = old_cal.vel_lpf_alpha
                             motor.set_calibration(new_cal)
 
                             self.debug(
-                                f"Motor {motor.port}: applied {result.new_ticks_to_rad:.6f} "
-                                f"(was {result.old_ticks_to_rad:.6f}, "
-                                f"EMA baseline: {result.ema_baseline:.6f})"
+                                f"Motor {motor.port}: {result.old_ticks_to_rad:.4e} → "
+                                f"{result.new_ticks_to_rad:.4e} rad/tick"
                             )
                             break
 
