@@ -14,15 +14,37 @@
 
 namespace libstp::sim
 {
+    /// Drivetrain topology the sim should use to mix wheel ω into chassis
+    /// velocity. The mock HAL still drives one motor port at a time — this
+    /// only changes how the sim *interprets* the resulting wheel speeds.
+    enum class DrivetrainKind : uint8_t
+    {
+        Differential,   ///< Two wheels (left/right). Default for legacy configs.
+        Mecanum,        ///< Four wheels (FL/FR/BL/BR) with 45° rollers.
+    };
+
     /// Motor mapping + kinematic parameters the sim needs beyond the pure
     /// geometry in RobotConfig. Kept here (not in RobotConfig) because this is
     /// sim-specific tuning, not robot ground truth.
     struct SimMotorMap
     {
+        DrivetrainKind kind{DrivetrainKind::Differential};
+
+        // Differential drive: left + right wheel ports.
         uint8_t leftPort{0};
         uint8_t rightPort{1};
         bool leftInverted{false};
         bool rightInverted{false};
+
+        // Mecanum drive: front-left, front-right, back-left, back-right ports.
+        uint8_t flPort{0};
+        uint8_t frPort{1};
+        uint8_t blPort{2};
+        uint8_t brPort{3};
+        bool flInverted{false};
+        bool frInverted{false};
+        bool blInverted{false};
+        bool brInverted{false};
 
         /// Wheel angular velocity (rad/s) produced by a 100% command.
         /// Used as the linear scale from commanded signed percent to wheel ω.
@@ -130,17 +152,31 @@ namespace libstp::sim
         bool isSensorOnBlackLine(const SensorMount& mount) const;
 
         /// Current left/right wheel angular velocity (rad/s) — exposed for
-        /// tests and for simulated BEMF output.
+        /// tests and for simulated BEMF output. For mecanum drivetrains these
+        /// alias to the front-left and front-right wheels.
         float wheelOmegaLeft() const noexcept { return m_wheelOmega[kLeft]; }
         float wheelOmegaRight() const noexcept { return m_wheelOmega[kRight]; }
+
+        /// Generic wheel ω accessor. Indices: diff = {0:L, 1:R};
+        /// mecanum = {0:FL, 1:FR, 2:BL, 3:BR}.
+        float wheelOmega(std::size_t idx) const noexcept
+        {
+            return idx < m_wheelOmega.size() ? m_wheelOmega[idx] : 0.0f;
+        }
 
         const std::vector<Pose2D>& trace() const noexcept { return m_trace; }
         void clearTrace() { m_trace.clear(); }
 
     private:
         static constexpr std::size_t kNumMotorPorts = 4;
+        static constexpr std::size_t kMaxWheels = 4;
         static constexpr std::size_t kLeft = 0;
         static constexpr std::size_t kRight = 1;
+        // Mecanum-specific aliases for clarity.
+        static constexpr std::size_t kFL = 0;
+        static constexpr std::size_t kFR = 1;
+        static constexpr std::size_t kBL = 2;
+        static constexpr std::size_t kBR = 3;
 
         enum class SensorKind : uint8_t { Line, Distance };
 
@@ -158,7 +194,7 @@ namespace libstp::sim
         Pose2D m_pose{};
 
         std::array<float, kNumMotorPorts> m_motorTargetOmega{};   // rad/s, signed
-        std::array<float, 2> m_wheelOmega{};                      // rad/s; [left,right]
+        std::array<float, kMaxWheels> m_wheelOmega{};             // rad/s
         float m_yawRateRadS{0.0f};
         std::vector<Pose2D> m_trace;
         std::unordered_map<uint8_t, SensorEntry> m_sensors;
@@ -168,6 +204,8 @@ namespace libstp::sim
         uint16_t sampleDistanceSensor(const SensorEntry&) const;
         std::size_t portToWheelIndex(uint8_t port) const;
         bool wheelInverted(std::size_t wheelIndex) const;
+        uint8_t wheelPort(std::size_t wheelIndex) const;
+        std::size_t activeWheelCount() const noexcept;
 
         /// Mutable RNG for BEMF noise (const-correct: reading is logically const
         /// even though the RNG state advances).

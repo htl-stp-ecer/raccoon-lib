@@ -94,12 +94,25 @@ PYBIND11_MODULE(sim, m)
         .def_readwrite("distance_sensors", &RobotConfig::distanceSensors);
 
     // ──────────────────── SimMotorMap ────────────────────
+    py::enum_<DrivetrainKind>(m, "DrivetrainKind")
+        .value("DIFFERENTIAL", DrivetrainKind::Differential)
+        .value("MECANUM", DrivetrainKind::Mecanum);
+
     py::class_<SimMotorMap>(m, "SimMotorMap")
         .def(py::init<>())
+        .def_readwrite("kind", &SimMotorMap::kind)
         .def_readwrite("left_port", &SimMotorMap::leftPort)
         .def_readwrite("right_port", &SimMotorMap::rightPort)
         .def_readwrite("left_inverted", &SimMotorMap::leftInverted)
         .def_readwrite("right_inverted", &SimMotorMap::rightInverted)
+        .def_readwrite("fl_port", &SimMotorMap::flPort)
+        .def_readwrite("fr_port", &SimMotorMap::frPort)
+        .def_readwrite("bl_port", &SimMotorMap::blPort)
+        .def_readwrite("br_port", &SimMotorMap::brPort)
+        .def_readwrite("fl_inverted", &SimMotorMap::flInverted)
+        .def_readwrite("fr_inverted", &SimMotorMap::frInverted)
+        .def_readwrite("bl_inverted", &SimMotorMap::blInverted)
+        .def_readwrite("br_inverted", &SimMotorMap::brInverted)
         .def_readwrite("max_wheel_velocity_rad_s", &SimMotorMap::maxWheelVelocityRadS)
         .def_readwrite("motor_time_constant_sec", &SimMotorMap::motorTimeConstantSec)
         .def_readwrite("ticks_to_rad", &SimMotorMap::ticksToRad)

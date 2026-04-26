@@ -66,10 +66,6 @@ DRUMBOT = SimRobotConfig(
 # Motion limits: v_max=0.214 m/s, accel=0.940 m/s², decel=1.664 m/s²
 #   → decel/accel = 1.77× — more symmetric than drumbot
 #
-# Note: sim is diff-drive only; using left/right front motors for the sim.
-# Mecanum-specific lateral motion is not modeled — tests validate forward
-# and turn algorithms which use the same diff-drive kinematics.
-#
 # Drag estimates:
 #   - viscous_drag: 1.2 /s — mecanum rollers add extra bearing drag
 #   - coulomb_friction: 2.0 rad/s² — roller bearings + heavier robot
@@ -82,10 +78,15 @@ PACKINGBOT = SimRobotConfig(
     wheel_radius_m=0.0375,
     track_width_m=0.20,
     wheelbase_m=0.125,
-    left_motor_port=1,
-    right_motor_port=0,
-    left_motor_inverted=False,
-    right_motor_inverted=True,
+    drivetrain="mecanum",
+    fl_motor_port=1,
+    fr_motor_port=0,
+    bl_motor_port=2,
+    br_motor_port=3,
+    fl_motor_inverted=False,
+    fr_motor_inverted=True,
+    bl_motor_inverted=False,
+    br_motor_inverted=True,
     max_wheel_velocity_rad_s=30.0,
     motor_time_constant_sec=0.06,
     # ticks_to_rad intentionally left at the default (2π/1440) — see DRUMBOT
