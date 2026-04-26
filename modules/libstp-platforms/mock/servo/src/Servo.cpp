@@ -45,6 +45,14 @@ void libstp::hal::servo::Servo::disable() const
     platform::mock::core::setServo(port, platform::mock::core::ServoMode::Disabled, storedPosition);
 }
 
+void libstp::hal::servo::Servo::setSmoothPosition(const float targetDeg, const float /*speedDegPerSec*/,
+                                                  const int /*easing*/)
+{
+    storedPosition = targetDeg;
+    platform::mock::core::setServo(port, platform::mock::core::ServoMode::Enabled,
+                                   static_cast<uint16_t>(targetDeg));
+}
+
 void libstp::hal::servo::Servo::fullyDisableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)

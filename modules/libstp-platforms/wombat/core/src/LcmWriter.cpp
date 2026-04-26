@@ -58,6 +58,17 @@ void LcmDataWriter::setServo(uint8_t port, float degrees)
     transport_.publish(Channels::servoPositionCommand(port), publishedValue, reliableOpts);
 }
 
+void LcmDataWriter::setSmoothServo(const uint8_t port, const float targetDeg, const float speedDegPerSec,
+                                   const int easing)
+{
+    raccoon::vector3f_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.x = targetDeg;
+    msg.y = speedDegPerSec;
+    msg.z = static_cast<float>(easing);
+    transport_.publish(Channels::servoSmoothPositionCommand(port), msg, reliableOpts);
+}
+
 void LcmDataWriter::setServoMode(uint8_t port, uint8_t mode)
 {
     raccoon::scalar_i8_t msg{};

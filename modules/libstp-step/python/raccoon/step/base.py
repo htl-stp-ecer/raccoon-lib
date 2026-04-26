@@ -126,17 +126,33 @@ class Step(ClassNameLogger):
         finally:
             if mgr is not None:
                 mgr.release(resources)
+
+            # If the enclosing task is being cancelled, skip any further awaits
+            # in this finally block. A new await here would observe the pending
+            # cancel and, if caught, consume it — silently defeating the outer
+            # cancellation (see shutdown-timer regression).
+            current_task = asyncio.current_task()
+            outer_cancelling = (
+                current_task is not None and current_task.cancelling() > 0
+            )
+
             if watchdog_task is not None:
                 watchdog_task.cancel()
-                try:
-                    await watchdog_task
-                except asyncio.CancelledError:
-                    pass
+                if not outer_cancelling:
+                    try:
+                        await watchdog_task
+                    except asyncio.CancelledError:
+                        pass
 
             elapsed = time.perf_counter() - step_start
             self.debug(f"Finished {self.__class__.__name__} step in {elapsed:.3f}s")
 
-            if track_timing and signature is not None and start_time is not None:
+            if (
+                track_timing
+                and signature is not None
+                and start_time is not None
+                and not outer_cancelling
+            ):
                 duration = time.perf_counter() - start_time
                 try:
                     anomaly = await tracker.record_execution(signature, duration)
@@ -147,6 +163,7 @@ class Step(ClassNameLogger):
                             self.error(f"Step anomaly callback error: {exc}")
                 except asyncio.CancelledError:
                     self.debug("Timing recording cancelled - skipping")
+                    raise
                 except Exception as exc:
                     self.error(f"Failed to record step timing: {exc}")
 

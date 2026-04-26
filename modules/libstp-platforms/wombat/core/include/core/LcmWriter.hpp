@@ -44,6 +44,8 @@ namespace platform::wombat::core
         void setServo(uint8_t port, float degrees);
         /// Publish a servo mode update.
         void setServoMode(uint8_t port, uint8_t mode);
+        /// Publish a smooth servo command; interpolation runs in the C++ reader at 200 Hz.
+        void setSmoothServo(uint8_t port, float targetDeg, float speedDegPerSec, int easing);
         /// Publish per-port PID gains.
         void setMotorPid(uint8_t port, float kp, float ki, float kd);
         /// Reset firmware motor position for one port.

@@ -40,6 +40,8 @@ namespace libstp::hal::servo
         void setPosition(float position);
         /// Return the last commanded position in degrees.
         float getPosition() const;
+        /// Command a smooth move to targetDeg at the given speed; interpolation runs in the C++ reader.
+        void setSmoothPosition(float targetDeg, float speedDegPerSec, int easing);
 
         /// Enable output while preserving the last commanded position.
         void enable() const;

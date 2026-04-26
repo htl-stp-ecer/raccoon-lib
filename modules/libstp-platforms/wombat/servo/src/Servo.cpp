@@ -47,6 +47,13 @@ void libstp::hal::servo::Servo::disable() const
     platform::wombat::core::LcmDataWriter::instance().setServoMode(port, 1); // Disabled
 }
 
+void libstp::hal::servo::Servo::setSmoothPosition(const float targetDeg, const float speedDegPerSec,
+                                                  const int easing)
+{
+    storedPosition = targetDeg;
+    platform::wombat::core::LcmDataWriter::instance().setSmoothServo(port, targetDeg, speedDegPerSec, easing);
+}
+
 void libstp::hal::servo::Servo::fullyDisableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
