@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cmath>
+#include <stdexcept>
 
 namespace libstp::foundation
 {
@@ -27,6 +28,18 @@ namespace libstp::foundation
     {
         double ticks_to_rad{2.0 * 3.14159265359 / 1440.0};
         double vel_lpf_alpha{0.5};
+
+        /// Throws std::invalid_argument if the calibration would silently
+        /// corrupt odometry. ticks_to_rad must be strictly positive (zero
+        /// would divide by zero downstream); vel_lpf_alpha is an IIR weight
+        /// and must lie in [0, 1].
+        void validate() const
+        {
+            if (!(ticks_to_rad > 0.0))
+                throw std::invalid_argument("MotorCalibration: ticks_to_rad must be > 0");
+            if (!(vel_lpf_alpha >= 0.0 && vel_lpf_alpha <= 1.0))
+                throw std::invalid_argument("MotorCalibration: vel_lpf_alpha must be in [0, 1]");
+        }
     };
 
     /// Stateless calculator for the configured feedforward output.

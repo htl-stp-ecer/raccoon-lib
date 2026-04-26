@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace libstp::motion
 {
@@ -29,6 +30,20 @@ namespace libstp::motion
             {
                 return (max_deceleration > 0.0) ? max_deceleration : max_acceleration;
             }
+
+            /// Throws std::invalid_argument when the profile would divide by
+            /// zero or produce NaN. Call this from any factory that builds a
+            /// profile from user-facing config so the error surfaces at config
+            /// time, not during a 100 Hz motion update.
+            void validate() const
+            {
+                if (!(max_velocity > 0.0))
+                    throw std::invalid_argument("TrapezoidalProfile: max_velocity must be positive");
+                if (!(max_acceleration > 0.0))
+                    throw std::invalid_argument("TrapezoidalProfile: max_acceleration must be positive");
+                if (max_deceleration < 0.0)
+                    throw std::invalid_argument("TrapezoidalProfile: max_deceleration must be >= 0");
+            }
         };
 
         struct State
@@ -48,6 +63,7 @@ namespace libstp::motion
             , target_(target)
             , constraints_(constraints)
         {
+            constraints_.validate();
             compute_profile();
         }
 
@@ -116,6 +132,7 @@ namespace libstp::motion
         static State calculate(double dt, const State& current, const State& goal,
                                const Constraints& constraints)
         {
+            constraints.validate();
             const double max_v = constraints.max_velocity;
             const double a_acc = constraints.max_acceleration;
             const double a_dec = constraints.effectiveDeceleration();
