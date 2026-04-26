@@ -28,7 +28,13 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest"]
-dev = ["black", "ruff", "pre-commit"]
+dev = [
+    "black",
+    "ruff",
+    "pre-commit",
+    "mypy>=1.13",
+    "pybind11-stubgen>=2.5",
+]
 
 [project.entry-points.pytest11]
 raccoon_testing = "raccoon.testing.pytest_plugin"
@@ -38,6 +44,77 @@ raccoon_testing = "raccoon.testing.pytest_plugin"
 wheel.expand-macos-universal-tags = true
 minimum-version = "build-system.requires"
 build-dir = "build"
+
+[tool.mypy]
+# Each module's python/raccoon/ is a namespace-package fragment that gets
+# stitched together at install time. Mypy needs to know all the source
+# roots up front, otherwise it fails on the first relative import.
+mypy_path = [
+  "python",
+  "modules/libstp-cam/python",
+  "modules/libstp-debug/python",
+  "modules/libstp-foundation/python",
+  "modules/libstp-mission/python",
+  "modules/libstp-motion/python",
+  "modules/libstp-odometry/python",
+  "modules/libstp-platforms/wombat/python",
+  "modules/libstp-robot/python",
+  "modules/libstp-screen/python",
+  "modules/libstp-servo/python",
+  "modules/libstp-sim/python",
+  "modules/libstp-step/python",
+  "modules/libstp-testing/python",
+  "modules/libstp-timing/python",
+]
+namespace_packages = true
+explicit_package_bases = true
+python_version = "3.11"
+
+# Baseline: catch the obvious mistakes (untyped def in typed scope, missing
+# return-type annotations on functions that already accept typed args)
+# without forcing every old function into compliance. The ``[[overrides]]``
+# blocks below ratchet stricter on the modules that are already ready.
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+
+# pybind11-stubgen + ``stubgen --inspect-mode`` produces .pyi files for
+# every native binding; the CMake target ``raccoon_python_stubs`` writes
+# them under ``build-*/python-staging/`` and the local mypy invocation
+# is run with ``MYPYPATH`` pointing there. With those stubs available we
+# do **not** ignore native imports — mypy gets to validate calls into
+# raccoon.hal, raccoon.foundation, etc.
+#
+# raccoon-transport is a vendored sibling repo that ships its own LCM
+# message bindings without stubs, so it stays on ignore_missing_imports
+# until upstream lands its own stubgen pipeline.
+[[tool.mypy.overrides]]
+module = [
+  "raccoon_transport",
+  "raccoon_transport.*",
+]
+ignore_missing_imports = true
+follow_imports = "silent"
+
+# Generated DSL wrappers and LCM-generated message types: the codegen owns
+# their shape; mypy noise here doesn't help anyone.
+[[tool.mypy.overrides]]
+module = [
+  "*._dsl",
+  "*_dsl",
+  "raccoon.ui.raccoon.*",
+]
+ignore_errors = true
+
+# Tests can be looser — they import optional modules behind importorskip
+# and pytest decorators trip "unused" warnings.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_incomplete_defs = false
+warn_unused_ignores = false
+
 
 [tool.pytest.ini_options]
 minversion = "8.0"

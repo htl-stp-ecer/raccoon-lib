@@ -253,6 +253,55 @@ if(LIBSTP_RUN_RUFF)
   add_dependencies(_core raccoon_python_ruff_lint raccoon_python_ruff_format)
 endif()
 
+# ---------- Python type stubs + mypy ----------
+#
+# Two stages: 1. ``raccoon_python_stubs`` runs scripts/build-stubs.sh in
+# local-dev mode so the generated .pyi files land in <build>/python-staging/.
+# Output mirrors the wheel layout: every native binding gets a sibling .pyi, and
+# the pure-Python modules land alongside via ``stubgen``. 2.
+# ``raccoon_python_mypy`` runs mypy with MYPYPATH pointing at that staging dir,
+# so cross-binding calls (raccoon.hal → raccoon.foundation etc.) are validated
+# end-to-end rather than skipped via ``ignore_missing_imports``.
+#
+# Both off via -DLIBSTP_RUN_MYPY=OFF for the pre-fix interim. Generation
+# requires raccoon already importable in ${Python_EXECUTABLE}; build-stubs.sh
+# emits a clear error pointing at ``pip install -e .[dev]`` if not.
+option(LIBSTP_RUN_MYPY "Run pybind11-stubgen + mypy as a build gate" ON)
+
+if(LIBSTP_RUN_MYPY)
+  set(_RACCOON_STAGING_DIR "${CMAKE_BINARY_DIR}/python-staging")
+  set(_RACCOON_STUBS_STAMP "${CMAKE_BINARY_DIR}/python_stubs.stamp")
+  set(_RACCOON_BUILD_STUBS_SH "${CMAKE_SOURCE_DIR}/scripts/build-stubs.sh")
+
+  add_custom_command(
+    OUTPUT "${_RACCOON_STUBS_STAMP}"
+    COMMAND
+      "${CMAKE_COMMAND}" -E env "STAGING=${_RACCOON_STAGING_DIR}" "SKIP_WHEEL=1"
+      "PYTHON=${Python_EXECUTABLE}" bash "${_RACCOON_BUILD_STUBS_SH}" dev
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_RACCOON_STUBS_STAMP}"
+    DEPENDS _core "${_RACCOON_BUILD_STUBS_SH}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT "Generating Python type stubs (pybind11-stubgen + stubgen)"
+    VERBATIM)
+  add_custom_target(raccoon_python_stubs ALL DEPENDS "${_RACCOON_STUBS_STAMP}")
+
+  set(_RACCOON_MYPY_STAMP "${CMAKE_BINARY_DIR}/python_mypy.stamp")
+  add_custom_command(
+    OUTPUT "${_RACCOON_MYPY_STAMP}"
+    COMMAND
+      "${CMAKE_COMMAND}" -E env "MYPYPATH=${_RACCOON_STAGING_DIR}"
+      "${Python_EXECUTABLE}" -m mypy --config-file
+      "${CMAKE_SOURCE_DIR}/pyproject.toml" "${CMAKE_SOURCE_DIR}/python/raccoon"
+      "${CMAKE_SOURCE_DIR}/modules"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_RACCOON_MYPY_STAMP}"
+    DEPENDS ${_RACCOON_PYTHON_SOURCES} "${_RACCOON_STUBS_STAMP}"
+            "${CMAKE_SOURCE_DIR}/pyproject.toml"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT "Type-checking Python with mypy"
+    VERBATIM)
+  add_custom_target(raccoon_python_mypy ALL DEPENDS "${_RACCOON_MYPY_STAMP}")
+endif()
+
 install(
   DIRECTORY "${CMAKE_SOURCE_DIR}/python/raccoon/"
   DESTINATION raccoon

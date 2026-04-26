@@ -31,6 +31,74 @@ Useful build env vars:
 
 ---
 
+## Local dev setup
+
+Even with the Docker cross-compile flow above, day-to-day editing benefits from
+a local environment so the IDE has working completions and the build's quality
+gates can run without spinning up Docker.
+
+```bash
+# One-time: install the dev tooling and an importable raccoon
+python3 -m pip install -e .[dev]
+pre-commit install            # installs both pre-commit and pre-push hooks
+```
+
+The `[dev]` extras pull in the binaries the build relies on:
+
+| Tool | Used by |
+|:-----|:--------|
+| `ruff` | CMake's lint/format gate, pre-commit, `scripts/run-ruff.sh` |
+| `mypy` | CMake's type-check gate, `scripts/build-stubs.sh` |
+| `pybind11-stubgen` | `scripts/build-stubs.sh` (C++ binding stubs) |
+| `pre-commit` | Local pre-commit + pre-push hooks |
+| `black` | Legacy formatter still used by some tools |
+
+If you skip `pip install -e .`, the stub-generation step will refuse to run with
+a clear error pointing back at this section. `clang-tidy` is the only quality
+tool that doesn't go through pip — install it separately:
+
+```bash
+sudo apt install clang-tidy   # Debian/Ubuntu
+brew install llvm             # macOS
+```
+
+---
+
+## Build-time quality gates
+
+`cmake --build build-mecanum` runs a chain of gates before the wheel is even
+considered. Failure at any stage stops the build; turn individual gates off
+with the listed CMake option if you need to bypass during a refactor.
+
+| Order | Step | Off via |
+|:------|:-----|:--------|
+| 1 | Python syntax (`tools/check_python_syntax.py`) | -- (always on) |
+| 2 | `ruff check` | `-DLIBSTP_RUN_RUFF=OFF` |
+| 3 | `ruff format --check` | `-DLIBSTP_RUN_RUFF=OFF` |
+| 4 | C++ compile (modules, `_core.so`) | -- |
+| 5 | `pybind11-stubgen` + `mypy stubgen` → `build-*/python-staging/` | `-DLIBSTP_RUN_MYPY=OFF` |
+| 6 | `mypy` against the staged stubs | `-DLIBSTP_RUN_MYPY=OFF` |
+
+Stamp files keep every gate incremental: a clean re-run after no changes is
+`ninja: no work to do`.
+
+**Heads up — mypy currently reports ~833 pre-existing errors** because the
+codebase predates type-checking. Those are tracked separately, not silenced.
+Until that backlog is cleared, build with `-DLIBSTP_RUN_MYPY=OFF` if you only
+care about ruff + tests; flip it back on once your branch isn't a regression
+on the count.
+
+`pre-commit install` (above) wires two stages:
+
+- **pre-commit**: ruff lint + format, cmake-format, generated `_dsl.py` drift
+  check, end-of-file fixers.
+- **pre-push**: `scripts/clang-tidy-prepush.sh` lints only the C++ files
+  changed against `@{u}`. It auto-refreshes `compile_commands.json` (cmake
+  configure only, no rebuild) when the cache is stale. Bypass in an emergency
+  with `SKIP_CLANG_TIDY=1 git push`.
+
+---
+
 ## Project layout
 
 ```
@@ -201,16 +269,35 @@ class MyMotion(MotionStep):
 - Headers under `include/<module>/`, sources under `src/`
 - Use `Result<T>` for error handling, not exceptions
 - Prefer `std::shared_ptr` for shared ownership
+- Lint via `bash scripts/run-clang-tidy.sh` (or just `git push` -- the
+  pre-push hook does it for you against changed files only)
 
-**Python** -- the project uses [Ruff](https://docs.astral.sh/ruff/) and targets Python 3.11+:
+**Python** -- the project uses [Ruff](https://docs.astral.sh/ruff/) and
+[mypy](https://mypy.readthedocs.io/) and targets Python 3.11+. With the dev
+extras installed (see [Local dev setup](#local-dev-setup)) the wrappers handle
+discovery for you:
 
 ```bash
-pip install ruff
-ruff check python/ modules/
-ruff format python/ modules/
+# Lint + format (same config the CMake gate uses)
+bash scripts/run-ruff.sh check --fix
+bash scripts/run-ruff.sh format
+
+# Type-check against the live pybind11 stubs
+cmake --build build-mecanum --target raccoon_python_mypy
 ```
 
-Keep `GenericRobot` imports behind `TYPE_CHECKING` to avoid circular imports.
+`pyproject.toml` carries the canonical config. Three rules are globally
+ignored with technical reasons (UP037 conflicts with the step-builder
+codegen, F821 misfires on `TYPE_CHECKING` forward refs, ARG002 trips on
+abstract lifecycle hooks); generated `_dsl.py` files and LCM-generated
+message types are excluded entirely. **Don't add `# noqa` comments** -- if a
+finding looks like noise, reach for a per-file ignore in `pyproject.toml`
+instead, with a comment explaining why.
+
+Keep `GenericRobot` imports behind `TYPE_CHECKING` and use string
+forward-refs (`def f(x: "GenericRobot")`). The codegen reads annotations via
+AST and emits a runtime import for every bare `ast.Name` -- stripping the
+quote would re-introduce the circular import the pattern works around.
 
 ---
 
@@ -239,10 +326,16 @@ Requires the wheel installed. Deploy to the Pi first.
 ## Pull request checklist
 
 - [ ] New C++ module registered in `modules/CMakeLists.txt`
-- [ ] Bindings exported from `python/libstp/__init__.py`
-- [ ] Module Python files placed under `modules/libstp-<name>/python/libstp/`
+- [ ] Bindings exported from `python/raccoon/__init__.py`
+- [ ] Module Python files placed under `modules/libstp-<name>/python/raccoon/`
 - [ ] New step has `@dsl_step(tags=[...])` and a docstring
 - [ ] `_generate_signature()` implemented
 - [ ] Tests added (C++ or Python as appropriate)
-- [ ] `ruff check` passes with no errors
+- [ ] `cmake --build build-mecanum` is green (covers ruff lint, ruff format,
+      Python syntax, and mypy stub regeneration; see
+      [Build-time quality gates](#build-time-quality-gates))
+- [ ] mypy error count did not go up vs. main (run with
+      `-DLIBSTP_RUN_MYPY=ON`; the existing 833 are tracked separately)
 - [ ] `SKIP_TESTS=1 bash build.sh` completes without errors
+- [ ] No new `# noqa` comments -- justify the ignore in `pyproject.toml`
+      with a comment instead
