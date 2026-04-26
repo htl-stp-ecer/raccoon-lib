@@ -70,6 +70,8 @@ namespace libstp::motion
         double setpoint_position_m{0.0};
         double setpoint_velocity_mps{0.0};
         bool saturated{false};
+        // Path tracking health
+        bool off_path{false};               // cross-track error exceeded kOffPathThreshold
     };
 
     /**
@@ -130,6 +132,11 @@ namespace libstp::motion
         double speed_scale_{1.0};
         double heading_scale_{1.0};
         int unsaturated_cycles_{0};
+
+        // Off-path detection: warn once per motion instance when cross-track
+        // error exceeds this threshold to avoid log spam.
+        bool off_path_warned_{false};
+        static constexpr double kOffPathThreshold{0.15};  // 15 cm
 
         // Telemetry
         double elapsed_time_{0.0};
