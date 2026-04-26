@@ -225,8 +225,16 @@ namespace libstp::motion
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);
 
-        // Record telemetry
+        // Record telemetry. Drop the oldest half once the cap is reached
+        // — amortises the O(n) erase across N/2 pushes so the 100 Hz hot
+        // path stays roughly O(1) per sample without changing the public
+        // std::vector return type of getTelemetry().
         const auto sp = profiled_pid_.getSetpoint();
+        if (telemetry_.size() >= kMaxTelemetrySamples)
+        {
+            const auto keep = static_cast<std::ptrdiff_t>(kMaxTelemetrySamples / 2);
+            telemetry_.erase(telemetry_.begin(), telemetry_.end() - keep);
+        }
         telemetry_.push_back(LinearMotionTelemetry{
             .time_s = elapsed_time_,
             .dt = dt,
