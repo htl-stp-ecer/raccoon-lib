@@ -16,10 +16,10 @@ namespace libstp::test
         MOCK_METHOD(bool, supportsLateralMotion, (), (const, override));
         MOCK_METHOD(void, resetEncoders, (), (override));
         MOCK_METHOD(double, getWheelRadius, (), (const, override));
-        MOCK_METHOD(std::vector<hal::motor::IMotor*>, getMotors, (), (const, override));
+        MOCK_METHOD(std::vector<hal::motor::IMotor*>, getMotors, (), (override));
         MOCK_METHOD(void, applyPowerCommand,
                     (const foundation::ChassisVelocity&, int), (override));
-        MOCK_METHOD(StmOdometryConfig, getStmOdometryConfig, (), (const, override));
+        MOCK_METHOD(StmOdometryConfig, getStmOdometryConfig, (), (override));
 
         // Configurable behavior helpers
         void setSupportsLateral(bool supports) {

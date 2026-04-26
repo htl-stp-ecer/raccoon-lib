@@ -4,9 +4,7 @@
 
 #pragma once
 
-#ifdef SAFETY_CHECKS_ENABLED
-#include <set>
-#endif
+#include "hal/PortRegistry.hpp"
 
 namespace libstp::hal::digital
 {
@@ -19,7 +17,7 @@ namespace libstp::hal::digital
     class DigitalSensor
     {
 #ifdef SAFETY_CHECKS_ENABLED
-        static inline std::set<int> used_digital_ports{};
+        static inline detail::PortRegistry registry_{};
         static void registerDigitalPort(int port);
         static void unregisterDigitalPort(int port);
 #endif
