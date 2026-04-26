@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import enum
 import math
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from raccoon.hal import Servo
-from raccoon.robot.api import GenericRobot
 from raccoon.step import Step
 from raccoon.step.annotation import dsl, dsl_step
+
+if TYPE_CHECKING:
+    from raccoon.robot.api import GenericRobot
 
 from .resolver import resolve_servo
 from .utility import estimate_servo_move_time
@@ -117,7 +119,7 @@ class SetServoPosition(Step):
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
         return f"SetServoPosition(servo={servo_label},angle={self._target_angle},duration={self._duration})"
 
-    async def _execute_step(self, robot: GenericRobot) -> None:
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         self._servo_ref.enable()
 
         duration = self._duration
@@ -210,7 +212,7 @@ class ShakeServo(Step):
             f"a={self._angle_a},b={self._angle_b})"
         )
 
-    async def _execute_step(self, robot: GenericRobot) -> None:
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         self._servo_ref.enable()
 
         if self._angle_a == self._angle_b or self._duration == 0:
@@ -311,7 +313,7 @@ class SlowServo(Step):
         easing_name = getattr(self._easing, '__name__', None) or getattr(self._easing, 'name', '?')
         return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed},easing={easing_name})"
 
-    async def _execute_step(self, robot: GenericRobot) -> None:
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         self._servo_ref.enable()
 
         start_angle = self._servo_ref.get_position()
@@ -372,7 +374,7 @@ class FullyDisableServos(Step):
     def _generate_signature(self) -> str:
         return "FullyDisableServos()"
 
-    async def _execute_step(self, robot: GenericRobot) -> None:
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         Servo.fully_disable_all()
 
 
