@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir \
     "mypy>=1.15" \
     build \
     pytest \
+    pytest-asyncio \
     ruff==0.7.3
 ENV CCACHE_DIR=/ccache \
     CCACHE_MAXSIZE=3G \
