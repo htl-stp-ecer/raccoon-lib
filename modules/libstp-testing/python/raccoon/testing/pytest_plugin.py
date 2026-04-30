@@ -291,24 +291,18 @@ def run_step() -> Callable[..., Any]:
 
 @pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
-    """Bypass interpreter shutdown when the mock HAL was exercised.
+    """Bypass interpreter shutdown when the mock bundle is loaded.
 
     The pybind11-bound MockPlatform singleton has a destruction-order race
     with the motor/IMU wrapper destructors that can segfault at interpreter
-    shutdown. The library's own end-to-end tests work around this by
-    running the mission in a subprocess that ``os._exit``s before any
-    destructors run. The plugin does the same thing here, transparently.
+    shutdown. This applies whenever raccoon's C extension is imported —
+    not only when the ``robot`` fixture was used — because the extension
+    initialises global state on import.
 
-    Only fires when:
-    - The ``robot`` fixture was actually used (so we know the mock HAL
-      has state to tear down).
-    - All tests passed — on failure we want pytest's normal exit path so
-      CI gets an accurate error code and any debugger post-mortem runs.
-    - The user hasn't set ``RACCOON_TESTING_NO_EXIT_SHORTCUT=1`` to debug.
+    Passes the real ``exitstatus`` to ``os._exit`` so CI still sees failures.
+    Suppress with ``RACCOON_TESTING_NO_EXIT_SHORTCUT=1`` to debug.
     """
-    if not _MockHal.touched:
-        return
-    if exitstatus != 0:
+    if not _sim_available():
         return
     if os.environ.get("RACCOON_TESTING_NO_EXIT_SHORTCUT"):
         return
@@ -319,4 +313,4 @@ def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
         sys.stderr.flush()
     except (OSError, ValueError):  # pragma: no cover - defensive
         pass
-    os._exit(0)
+    os._exit(int(exitstatus))
