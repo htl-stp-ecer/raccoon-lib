@@ -152,6 +152,12 @@ class _ShutdownHookState:
     installed: bool = False
 
 
+class _StartupState:
+    """Tracks one-shot execution of logging init + startup banner."""
+
+    done: bool = False
+
+
 def _disable_all_motors() -> None:
     """Best-effort motor disarm during process exit.
 
@@ -273,6 +279,15 @@ def _log_startup_banner() -> None:
     )
 
 
-initialize_logging()
-_log_startup_banner()
-_install_shutdown_hooks()
+def _startup_init() -> None:
+    """Initialize logging, print banner, and install shutdown hooks.
+
+    Idempotent. Called by GenericRobot.__init__ so these side effects are
+    deferred until a robot is actually instantiated, not on every import.
+    """
+    if _StartupState.done:
+        return
+    _StartupState.done = True
+    initialize_logging()
+    _log_startup_banner()
+    _install_shutdown_hooks()
