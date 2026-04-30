@@ -238,10 +238,8 @@ namespace logging {
         initialize_timer();
 
         // Ensure the logs directory exists.
-        std::filesystem::path log_dir{"logs"};
-        if (!std::filesystem::exists(log_dir)) {
-            std::filesystem::create_directory(log_dir);
-        }
+        std::filesystem::path log_dir{".raccoon/logs"};
+        std::filesystem::create_directories(log_dir);
 
         // Create console + file sinks.
         // Set to trace level to allow all messages; filtering is done at runtime

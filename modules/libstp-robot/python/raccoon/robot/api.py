@@ -126,6 +126,10 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
     def __init__(self) -> None:
         """Initialize the robot and log configuration status."""
+        import raccoon as _raccoon_pkg
+
+        _raccoon_pkg._startup_init()
+
         self._services: dict[type[RobotService], RobotService] = {}
 
         # Clear STM32 shutdown flag to enable motors and servos
