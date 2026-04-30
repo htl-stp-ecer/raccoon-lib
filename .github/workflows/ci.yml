@@ -76,7 +76,6 @@ jobs:
 
           docker buildx build \
             --platform "$PLATFORM" \
-            --no-cache \
             --load -t "$IMAGE_NAME" .
 
           run_docker() {

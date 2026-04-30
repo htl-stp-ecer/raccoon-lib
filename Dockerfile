@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir \
     scikit-build-core[pyproject] \
     pybind11 \
+    pybind11-stubgen \
+    "mypy>=1.15" \
     build \
     pytest \
     ruff==0.7.3
