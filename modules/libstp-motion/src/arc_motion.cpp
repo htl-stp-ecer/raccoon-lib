@@ -72,6 +72,7 @@ namespace libstp::motion
         telemetry_.clear();
 
         odometry().reset();
+        drive().resetVelocityControllers();
 
         profiled_pid_.reset(0.0);
         profiled_pid_.setGoal(cfg_.arc_angle_rad);

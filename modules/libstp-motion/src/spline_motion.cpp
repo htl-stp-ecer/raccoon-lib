@@ -107,6 +107,7 @@ namespace libstp::motion
         }
 
         odometry().reset();
+        drive().resetVelocityControllers();
         heading_pid_->reset();
 
         // Profile: start at s=0, goal = total arc length

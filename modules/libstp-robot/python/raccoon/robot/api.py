@@ -285,6 +285,26 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 f"after mission {mission} — consider using wait_for_background()"
             )
 
+    async def _run_heartbeat(self) -> None:
+        """Send periodic heartbeats to keep the stm32-data-reader hardware watchdog alive.
+
+        Cancelled automatically when main missions finish or are cancelled.
+        Silently skipped when the Motor HAL is not available (e.g. simulation/mock).
+        """
+        try:
+            from raccoon.hal import Motor
+
+            send = Motor.send_heartbeat
+        except (ImportError, AttributeError):
+            return
+
+        try:
+            while True:
+                send()
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            pass
+
     async def _drain_background_tasks(self) -> None:
         """Cancel all remaining background tasks and await their cleanup."""
         bg_mgr = getattr(self, "_background_manager", None)
@@ -415,6 +435,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
         wdt = get_watchdog_manager(self)
         main_task = asyncio.create_task(self._run_main_missions(missions))
+        heartbeat_task = asyncio.create_task(self._run_heartbeat())
         wdt.attach_main_task(main_task)
 
         try:
@@ -441,6 +462,9 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 if exc is not None:
                     self.error(f"Main missions raised: {exc}")
         finally:
+            heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
             wdt.detach_main_task()
             await wdt.cancel_all()
 

@@ -37,61 +37,13 @@ import json
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENES_DIR = REPO_ROOT / "scenes"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-
-def _build_robot(cfg):
-    from raccoon.drive import ChassisVelocityControlConfig, Drive
-    from raccoon.hal import IMU, Motor, OdometryBridge
-    from raccoon.kinematics_differential import DifferentialKinematics
-    from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
-    from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
-
-    left = Motor(cfg.left_motor_port, cfg.left_motor_inverted)
-    right = Motor(cfg.right_motor_port, cfg.right_motor_inverted)
-    imu = IMU()
-    kin = DifferentialKinematics(left, right, cfg.track_width_m, cfg.wheel_radius_m)
-    drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
-    bridge = OdometryBridge()
-    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
-
-    pid_cfg = UnifiedMotionPidConfig()
-    pid_cfg.linear = AxisConstraints(0.8, 1.5, 1.5)
-    pid_cfg.lateral = AxisConstraints(0.5, 1.0, 1.0)
-    pid_cfg.angular = AxisConstraints(6.0, 12.0, 12.0)
-
-    return SimpleNamespace(
-        drive=drive_obj,
-        odometry=odom,
-        kinematics=kin,
-        motion_pid_config=pid_cfg,
-        _refs=(left, right, imu, bridge),
-    )
-
-
-def _get_config(name: str):
-    from raccoon.testing.sim import SimRobotConfig
-
-    if name == "drumbot":
-        from raccoon.testing.robot_configs import DRUMBOT
-
-        return DRUMBOT
-    if name == "packingbot":
-        from raccoon.testing.robot_configs import PACKINGBOT
-
-        return PACKINGBOT
-    return SimRobotConfig(
-        wheel_radius_m=0.03,
-        track_width_m=0.15,
-        wheelbase_m=0.15,
-        left_motor_port=0,
-        right_motor_port=1,
-        max_wheel_velocity_rad_s=30.0,
-        motor_time_constant_sec=0.02,
-    )
+from _robot_builder import build_robot as _build_robot  # noqa: E402
+from _robot_builder import get_config as _get_config  # noqa: E402
 
 
 def _log(msg: str) -> None:
@@ -125,7 +77,7 @@ async def _scenarios(config_name: str) -> None:
     # ---- Scenario: reference drive+turn+drive (unoptimized) ----
     _log("reference: drive(50) + turn_right(90) + drive(30)")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30))
+        step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), correct=False)
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
         p = pose()
         out["reference_drive_turn_drive"] = [p.x, p.y, p.theta]
@@ -134,7 +86,7 @@ async def _scenarios(config_name: str) -> None:
     # ---- Scenario: optimize=True merges two drives ----
     _log("merge: drive(20) + drive(20) with optimize=True")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(20), drive_forward(20), optimize=True)
+        step = smooth_path(drive_forward(20), drive_forward(20), optimize=True, correct=False)
         await asyncio.wait_for(step.run_step(robot), timeout=12.0)
         p = pose()
         out["merge_two_drives"] = [p.x, p.y, p.theta]
@@ -157,6 +109,7 @@ async def _scenarios(config_name: str) -> None:
             turn_right(90),
             drive_forward(30),
             corner_cut_cm=5.0,
+            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
         p = pose()
@@ -166,7 +119,13 @@ async def _scenarios(config_name: str) -> None:
     # ---- Scenario: spline=True ----
     _log("spline: drive(50) + turn_right(90) + drive(30) + spline=True")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
+        step = smooth_path(
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(30),
+            spline=True,
+            correct=False,
+        )
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
         p = pose()
         out["spline_drive_turn_drive"] = [p.x, p.y, p.theta]
@@ -180,6 +139,7 @@ async def _scenarios(config_name: str) -> None:
             background(_Noop()),
             drive_forward(20),
             optimize=True,
+            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=12.0)
         p = pose()
