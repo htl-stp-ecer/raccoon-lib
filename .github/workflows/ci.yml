@@ -30,7 +30,7 @@ jobs:
           fi
 
   test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 90
 
     steps:
@@ -185,7 +185,7 @@ jobs:
           echo "✓ Python tests passed"
 
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted, macOS]
     needs: [test, changes]
     # Only release on push to main, and only when non-doc files changed.
     if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
