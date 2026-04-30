@@ -290,7 +290,7 @@ def run_step() -> Callable[..., Any]:
 
 
 @pytest.hookimpl(trylast=True)
-def pytest_sessionfinish(_session: Any, exitstatus: int) -> None:
+def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
     """Bypass interpreter shutdown when the mock HAL was exercised.
 
     The pybind11-bound MockPlatform singleton has a destruction-order race
