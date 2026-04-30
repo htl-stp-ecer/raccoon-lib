@@ -61,9 +61,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Prune Docker build cache
-        run: docker buildx prune -f
-
       - name: Run C++ tests
         run: |
           BUILD_JOBS=4 SKIP_TESTS=0 bash -c '
@@ -77,8 +74,10 @@ jobs:
           docker volume create "$CCACHE_VOL" >/dev/null 2>&1 || true
           docker volume create "$PIP_CACHE_VOL" >/dev/null 2>&1 || true
 
+          docker rmi "$IMAGE_NAME" 2>/dev/null || true
           docker buildx build \
             --platform "$PLATFORM" \
+            --no-cache \
             --load -t "$IMAGE_NAME" .
 
           run_docker() {
