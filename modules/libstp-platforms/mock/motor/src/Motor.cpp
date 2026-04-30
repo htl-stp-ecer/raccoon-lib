@@ -40,7 +40,7 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
     if (!zero)
         dir = (inverted_ ? percent < 0 : percent > 0) ? MotorDir::CW : MotorDir::CCW;
     const auto duty = static_cast<uint32_t>(std::abs(percent) * 4); // 0-400
-    LIBSTP_LOG_INFO(
+    LIBSTP_LOG_DEBUG(
         "Mock Motor port={} setSpeed percent={} dir={} duty={} inverted={}",
         port_,
         percent,
@@ -53,7 +53,7 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
 void libstp::hal::motor::Motor::setVelocity(const int velocity)
 {
     const int directionVelocity = inverted_ ? -velocity : velocity;
-    LIBSTP_LOG_INFO("Mock Motor port={} setVelocity={} inverted={}", port_, velocity, inverted_);
+    LIBSTP_LOG_DEBUG("Mock Motor port={} setVelocity={} inverted={}", port_, velocity, inverted_);
     // Closed-loop velocity command — uses the BEMF-units path so the sim can
     // interpret it via the motor calibration instead of as a duty %.
     platform::mock::core::MockPlatform::instance().setMotorVelocity(port_, directionVelocity);
@@ -61,13 +61,13 @@ void libstp::hal::motor::Motor::setVelocity(const int velocity)
 
 void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goalPosition)
 {
-    LIBSTP_LOG_INFO("Mock Motor port={} moveToPosition vel={} goal={}", port_, velocity, goalPosition);
+    LIBSTP_LOG_DEBUG("Mock Motor port={} moveToPosition vel={} goal={}", port_, velocity, goalPosition);
     // Mock: store goal, simulate immediate completion
 }
 
 void libstp::hal::motor::Motor::moveRelative(const int velocity, const int deltaPosition)
 {
-    LIBSTP_LOG_INFO("Mock Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
+    LIBSTP_LOG_DEBUG("Mock Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
     // Mock: store delta, simulate immediate completion
 }
 
@@ -105,7 +105,7 @@ void libstp::hal::motor::Motor::off()
 
 void libstp::hal::motor::Motor::resetPositionCounter()
 {
-    LIBSTP_LOG_INFO("Mock Motor port={} resetPositionCounter", port_);
+    LIBSTP_LOG_DEBUG("Mock Motor port={} resetPositionCounter", port_);
     // Mock: no-op, position comes from bemf() which is simulated
 }
 
