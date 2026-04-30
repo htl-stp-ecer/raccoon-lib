@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir \
     scikit-build-core[pyproject] \
     pybind11 \
     build \
-    pytest
+    pytest \
+    ruff==0.7.3
 ENV CCACHE_DIR=/ccache \
     CCACHE_MAXSIZE=3G \
     CCACHE_COMPRESS=1 \
