@@ -143,7 +143,7 @@ jobs:
             set -euo pipefail
 
             echo '::group::Install mock-bundle wheel'
-            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'
+            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy
             pip install /src/raccoon-transport/python
             CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
               --no-build-isolation \
