@@ -300,6 +300,15 @@ if(LIBSTP_RUN_MYPY)
     COMMENT "Type-checking Python with mypy"
     VERBATIM)
   add_custom_target(raccoon_python_mypy ALL DEPENDS "${_RACCOON_MYPY_STAMP}")
+
+  # Install generated .pyi stubs alongside native modules so that runtime tools
+  # (e.g. raccoon-cli codegen) can read parameter signatures for pybind11
+  # classes that don't expose them via inspect.signature.
+  install(
+    DIRECTORY "${_RACCOON_STAGING_DIR}/raccoon/"
+    DESTINATION raccoon
+    FILES_MATCHING
+    PATTERN "*.pyi")
 endif()
 
 install(
