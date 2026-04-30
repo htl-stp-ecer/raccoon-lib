@@ -71,11 +71,21 @@ jobs:
           docker volume create "$CCACHE_VOL" >/dev/null 2>&1 || true
           docker volume create "$PIP_CACHE_VOL" >/dev/null 2>&1 || true
 
-          docker rmi "$IMAGE_NAME" 2>/dev/null || true
-          docker buildx build \
-            --platform "$PLATFORM" \
-            --no-cache \
-            --load -t "$IMAGE_NAME" .
+          # Rebuild the dev image only when the Dockerfile changes.
+          # Tag includes a hash of the Dockerfile so stale images are
+          # never reused; unrelated runs share the cache.
+          DOCKERFILE_HASH=$(sha256sum Dockerfile | cut -c1-12)
+          VERSIONED_IMAGE="libstp-dev:arm64-${DOCKERFILE_HASH}"
+          if ! docker image inspect "$VERSIONED_IMAGE" >/dev/null 2>&1; then
+            echo "Dockerfile changed (hash $DOCKERFILE_HASH) — rebuilding image..."
+            docker buildx build \
+              --platform "$PLATFORM" \
+              --load -t "$VERSIONED_IMAGE" .
+            docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
+          else
+            echo "Reusing cached image $VERSIONED_IMAGE"
+            docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
+          fi
 
           run_docker() {
             docker run --rm --platform "$PLATFORM" \
