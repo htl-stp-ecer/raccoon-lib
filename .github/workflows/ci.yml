@@ -75,6 +75,7 @@ jobs:
         with:
           path: |
             .cmake-cache-docker-test
+            _skbuild-docker-test
           key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
@@ -226,6 +227,7 @@ jobs:
         with:
           path: |
             .cmake-cache-docker-test
+            _skbuild-docker-test
           key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save compiler and package caches
