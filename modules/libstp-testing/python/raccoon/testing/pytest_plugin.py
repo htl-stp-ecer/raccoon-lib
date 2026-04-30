@@ -33,7 +33,7 @@ import importlib
 import importlib.resources
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -289,8 +289,8 @@ def run_step() -> Callable[..., Any]:
 # --------------------------------------------------------------------------
 
 
-@pytest.hookimpl(trylast=True)
-def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_sessionfinish(session: Any, exitstatus: int) -> Generator:  # noqa: ARG001
     """Bypass interpreter shutdown when the mock bundle is loaded.
 
     The pybind11-bound MockPlatform singleton has a destruction-order race
@@ -301,13 +301,22 @@ def pytest_sessionfinish(session: Any, exitstatus: int) -> None:  # noqa: ARG001
 
     Passes the real ``exitstatus`` to ``os._exit`` so CI still sees failures.
     Suppress with ``RACCOON_TESTING_NO_EXIT_SHORTCUT=1`` to debug.
+
+    Uses ``wrapper=True, tryfirst=True`` so that we are the outermost wrapper
+    and yield first — letting all other hooks (especially the terminal reporter
+    which prints the ERRORS and short-summary sections) complete before we call
+    ``os._exit()``.  With the old ``trylast=True`` non-wrapper approach the
+    terminal reporter's post-yield summary code never ran because ``os._exit``
+    killed the process before it could.
     """
+    yield  # let all other hooks (including terminal reporter summary) run first
+
     if not _sim_available():
         return
     if os.environ.get("RACCOON_TESTING_NO_EXIT_SHORTCUT"):
         return
 
-    # Flush stdio first so pytest's final summary reaches the terminal.
+    # Flush stdio so pytest's final summary reaches the terminal before exit.
     try:
         sys.stdout.flush()
         sys.stderr.flush()
