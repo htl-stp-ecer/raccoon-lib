@@ -94,6 +94,7 @@ jobs:
           echo "::group::Build C++ tests"
           run_docker "cmake -B /src/build-test -G Ninja \
             -DLIBSTP_BUILD_TESTS=ON \
+            -DLIBSTP_RUN_MYPY=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test"
           run_docker "ninja -C /src/build-test -j4"
