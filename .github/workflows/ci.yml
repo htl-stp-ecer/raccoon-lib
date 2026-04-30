@@ -61,6 +61,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Prune Docker build cache
+        run: docker buildx prune -f
+
       - name: Run C++ tests
         run: |
           BUILD_JOBS=4 SKIP_TESTS=0 bash -c '
