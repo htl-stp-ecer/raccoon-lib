@@ -54,6 +54,10 @@ namespace platform::wombat::core
         /// Toggle the STM32-wide shutdown flag for the safest available stop path.
         void setShutdown(bool enabled);
 
+        /// Send a heartbeat to stm32-data-reader. Must be called every ~100 ms
+        /// while missions are running or the hardware watchdog fires.
+        void sendHeartbeat();
+
         /// Send kinematics config to STM32 for on-board odometry.
         void sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
                                   const std::array<float, 4>& ticks_to_rad,
