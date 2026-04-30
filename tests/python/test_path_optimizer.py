@@ -30,7 +30,32 @@ requires_libstp = pytest.mark.skipif(
 
 
 def _imports():
-    return locals()
+    from raccoon.motion import LinearAxis
+    from raccoon.step.motion.path.passes import (
+        build_spline_step,
+        can_merge,
+        merge_two,
+        optimize_nodes,
+        run_corner_cut,
+        run_merge,
+        segments_to_spline_waypoints,
+        try_corner_arc,
+    )
+    from raccoon.step.motion.smooth_path import _Segment, _SideAction
+
+    return {
+        "LinearAxis": LinearAxis,
+        "_Segment": _Segment,
+        "_SideAction": _SideAction,
+        "_can_merge": can_merge,
+        "_merge_two": merge_two,
+        "_pass_merge": run_merge,
+        "_pass_corner_cut": run_corner_cut,
+        "_try_corner_arc": try_corner_arc,
+        "_optimize_nodes": optimize_nodes,
+        "_segments_to_spline_waypoints": segments_to_spline_waypoints,
+        "_build_spline_step": build_spline_step,
+    }
 
 
 # ---------------------------------------------------------------------------
