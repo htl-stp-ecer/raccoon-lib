@@ -25,7 +25,8 @@ _pkg_dir = Path(__file__).resolve().parent
 _ext_spec = None
 for _candidate in _pkg_dir.iterdir():
     if _candidate.name.startswith("cam.") and _candidate.suffix in (".so", ".pyd"):
-        _ext_spec = importlib.util.spec_from_file_location("raccoon._cam_native", _candidate)
+        _stem = _candidate.name.split(".")[0]
+        _ext_spec = importlib.util.spec_from_file_location(_stem, _candidate)
         break
 
 if _ext_spec is None:
