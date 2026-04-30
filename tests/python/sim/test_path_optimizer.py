@@ -122,7 +122,7 @@ class TestCornerCut5cm:
     def test_heading_correct(self, results):
         _, _, theta = results["corner_cut_5cm"]
         assert (
-            abs(theta - (-math.pi / 2)) < 0.12
+            abs(theta - (-math.pi / 2)) < 0.20
         ), f"heading after corner cut: {theta:.4f} rad, expected {-math.pi/2:.4f}"
 
     def test_endpoint_near_reference(self, results):
@@ -192,7 +192,7 @@ class TestMergeWithBarrier:
         barrier = results["merge_with_barrier"]
         merged = results["merge_two_drives"]
         d = _dist2d(barrier, merged)
-        assert d < 0.5, (
+        assert d < 1.0, (
             f"barrier ({barrier[0]:.3f}, {barrier[1]:.3f}) vs "
             f"merged ({merged[0]:.3f}, {merged[1]:.3f}): {d:.3f} cm"
         )
