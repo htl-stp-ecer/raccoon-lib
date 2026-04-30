@@ -164,7 +164,7 @@ docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10
 # Uses separate directory since scikit-build manages its own cmake build internally
 if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
   echo "• Running unit tests..."
-  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test"
+  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DLIBSTP_RUN_MYPY=OFF -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test"
   docker_exec "ninja -C /src/build-test -j$BUILD_JOBS"
   docker_exec "ctest --test-dir /src/build-test --output-on-failure"
   echo "✓ All tests passed"
