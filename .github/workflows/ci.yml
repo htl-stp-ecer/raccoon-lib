@@ -127,8 +127,10 @@ jobs:
               "$IMAGE_NAME" bash -lc "$1"
           }
 
-          echo "::group::Install mock-bundle wheel"
           run_docker "
+            set -euo pipefail
+
+            echo '::group::Install mock-bundle wheel'
             pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'
             pip install /src/raccoon-transport/python
             CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
@@ -136,14 +138,9 @@ jobs:
               --config-settings=cmake.define.DRIVER_BUNDLE=mock \
               --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR \
               --config-settings=cmake.define.LIBSTP_RUN_MYPY=OFF
-          "
-          echo "::endgroup::"
+            echo '::endgroup::'
 
-          echo "::group::Run fast Python tests (skip sim + known-broken)"
-          # The five --ignore'd files are tracked in TESTING_DEBT.md with
-          # per-file reasons and a triage plan. Do not add new ignores
-          # without an entry there.
-          run_docker "
+            echo '::group::Run fast Python tests (skip sim + known-broken)'
             python -m pytest tests/python \
               --ignore=tests/python/sim \
               --ignore=tests/python/test_calibrate_distance.py \
@@ -153,25 +150,21 @@ jobs:
               --ignore=tests/python/testing/test_plugin_end_to_end.py \
               -ra --showlocals -x \
               -W ignore::pytest.PytestAssertRewriteWarning
-          "
-          echo "::endgroup::"
+            echo '::endgroup::'
 
-          echo "::group::Run sim tests (excluding auto-tune)"
-          run_docker "
+            echo '::group::Run sim tests (excluding auto-tune)'
             python -m pytest tests/python/sim \
               --ignore=tests/python/sim/test_auto_tune.py \
               -ra --showlocals \
               -W ignore::pytest.PytestAssertRewriteWarning
-          "
-          echo "::endgroup::"
+            echo '::endgroup::'
 
-          echo "::group::Run auto-tune sim tests"
-          run_docker "
+            echo '::group::Run auto-tune sim tests'
             python -m pytest tests/python/sim/test_auto_tune.py \
               -ra --showlocals -v \
               -W ignore::pytest.PytestAssertRewriteWarning
+            echo '::endgroup::'
           "
-          echo "::endgroup::"
 
           echo "✓ Python tests passed"
 
