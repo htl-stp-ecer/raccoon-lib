@@ -61,6 +61,7 @@ namespace libstp::motion
         telemetry_.clear();
 
         odometry().reset();
+        drive().resetVelocityControllers();
 
         heading_pid_->reset();
 

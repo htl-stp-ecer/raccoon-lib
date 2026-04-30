@@ -265,7 +265,7 @@ class PathExecutor:
         # Spline-mode shortcut: a spline-conversion pass replaced the path
         # with a single SplinePath step; just delegate to it.
         if self._spline_step is not None:
-            await self._spline_step.run_step(robot)
+            await self._spline_step._execute_step(robot)
             return
 
         # 1. Mutable working copies (deferreds get popped, nodes get spliced).
@@ -445,6 +445,7 @@ class PathExecutor:
                         # Cross-type: cold start.  Notify middlewares first
                         # so they can snapshot pre-reset state.
                         self._mw_cold_start(seg, robot)
+                        robot.drive.hard_stop()
                         motion = create_motion(
                             robot,
                             seg,
