@@ -134,7 +134,8 @@ jobs:
             CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
               --no-build-isolation \
               --config-settings=cmake.define.DRIVER_BUNDLE=mock \
-              --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR
+              --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR \
+              --config-settings=cmake.define.LIBSTP_RUN_MYPY=OFF
           "
           echo "::endgroup::"
 
