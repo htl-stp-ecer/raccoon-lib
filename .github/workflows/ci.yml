@@ -63,9 +63,6 @@ jobs:
 
       - name: Run C++ tests
         run: |
-          BUILD_JOBS=4 SKIP_TESTS=0 bash -c '
-            source build.sh --source-only 2>/dev/null || true
-          '
           PLATFORM="linux/arm64/v8"
           IMAGE_NAME="libstp-dev:arm64"
           CCACHE_VOL="libstp-ccache"
