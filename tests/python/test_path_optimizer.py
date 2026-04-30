@@ -465,11 +465,11 @@ class TestSmoothPathConstruction:
 
     @requires_libstp
     def test_spline_rejects_condition_based(self):
-        from raccoon.step.condition import Condition
+        from raccoon.step.condition import StopCondition
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
 
-        class _AlwaysFalse(Condition):
+        class _AlwaysFalse(StopCondition):
             def start(self, robot):
                 pass
 
