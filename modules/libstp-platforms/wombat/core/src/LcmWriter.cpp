@@ -136,6 +136,14 @@ void LcmDataWriter::resetOdometry()
     transport_.publish(Channels::ODOM_RESET_CMD, msg, reliableOpts);
 }
 
+void LcmDataWriter::sendHeartbeat()
+{
+    raccoon::scalar_i32_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.value = 1;
+    transport_.publish(Channels::HEARTBEAT_CMD, msg);
+}
+
 LcmDataWriter::LcmDataWriter()
     : transport_(raccoon::Transport::create())
 {

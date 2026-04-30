@@ -5,7 +5,22 @@
 #include "hal/IMotor.hpp"
 #include "hal/Motor.hpp"
 
+#if __has_include("core/LcmWriter.hpp")
+#include "core/LcmWriter.hpp"
+#define LIBSTP_HAS_WOMBAT_LCM_WRITER 1
+#endif
+
 namespace py = pybind11;
+
+namespace
+{
+    void sendHeartbeat()
+    {
+#if LIBSTP_HAS_WOMBAT_LCM_WRITER
+        platform::wombat::core::LcmDataWriter::instance().sendHeartbeat();
+#endif
+    }
+} // namespace
 
 void init_motor(const py::module& m)
 {
@@ -42,6 +57,8 @@ void init_motor(const py::module& m)
              py::arg("calibration") = libstp::foundation::MotorCalibration{})
         .def_static("disable_all", &libstp::hal::motor::Motor::disableAll)
         .def_static("enable_all", &libstp::hal::motor::Motor::enableAll)
+        .def_static("send_heartbeat", &sendHeartbeat,
+                    "Send a heartbeat to stm32-data-reader to keep the hardware watchdog alive.")
         .def("set_speed", &libstp::hal::motor::Motor::setSpeed, py::arg("percent"))
         .def("set_velocity", &libstp::hal::motor::Motor::setVelocity, py::arg("velocity"))
         .def("move_to_position", &libstp::hal::motor::Motor::moveToPosition,

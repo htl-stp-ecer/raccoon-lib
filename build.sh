@@ -24,6 +24,7 @@ CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-3G}"
 EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS:-}"
 SKBUILD_DIR="${SKBUILD_DIR:-_skbuild-docker}"
 FETCHCONTENT_DIR="${FETCHCONTENT_DIR:-.cmake-cache-docker}"
+DOCKER_BUILDX_CACHE_DIR="${DOCKER_BUILDX_CACHE_DIR:-}"
 
 # -------- Version patching --------
 PYPROJECT="pyproject.toml"
@@ -98,19 +99,38 @@ ensure_binfmt() {
 ensure_image() {
   if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1 || [[ "$REBUILD_IMAGE" == "1" ]]; then
     echo "• Building builder image: $IMAGE_NAME (for $PLATFORM)"
-    # Important: --platform matches FROM --platform in Dockerfile (use $TARGETPLATFORM inside Dockerfile)
-    docker buildx build --platform "$PLATFORM" -t "$IMAGE_NAME" --load .
+    local cache_args=()
+    if [[ -n "$DOCKER_BUILDX_CACHE_DIR" ]]; then
+      mkdir -p "$DOCKER_BUILDX_CACHE_DIR"
+      cache_args=(--cache-from "type=local,src=$DOCKER_BUILDX_CACHE_DIR")
+      cache_args+=(--cache-to "type=local,dest=${DOCKER_BUILDX_CACHE_DIR}-new,mode=max")
+    fi
+
+    docker buildx build --platform "$PLATFORM" -t "$IMAGE_NAME" --load "${cache_args[@]}" .
+
+    if [[ -n "$DOCKER_BUILDX_CACHE_DIR" && -d "${DOCKER_BUILDX_CACHE_DIR}-new" ]]; then
+      rm -rf "$DOCKER_BUILDX_CACHE_DIR"
+      mv "${DOCKER_BUILDX_CACHE_DIR}-new" "$DOCKER_BUILDX_CACHE_DIR"
+    fi
   fi
 }
 
 docker_exec() {
-  local ccache_mount
+  local ccache_mount pip_mount
   if [[ -n "${CCACHE_HOST_DIR:-}" ]]; then
     # Bind-mount host directory (enables GitHub Actions caching)
+    mkdir -p "$CCACHE_HOST_DIR"
     ccache_mount=(-v "${CCACHE_HOST_DIR}:/ccache")
   else
     # Use Docker volume (local dev default)
     ccache_mount=(-v "$CCACHE_VOL:/ccache")
+  fi
+
+  if [[ -n "${PIP_CACHE_HOST_DIR:-}" ]]; then
+    mkdir -p "$PIP_CACHE_HOST_DIR"
+    pip_mount=(-v "${PIP_CACHE_HOST_DIR}:/pip-cache")
+  else
+    pip_mount=(-v "$PIP_CACHE_VOL:/pip-cache")
   fi
 
   local extra_env=()
@@ -121,11 +141,14 @@ docker_exec() {
   docker run --rm --platform="$PLATFORM" \
     -v "$PWD":/src \
     "${ccache_mount[@]}" \
-    -v "$PIP_CACHE_VOL":/root/.cache/pip \
+    "${pip_mount[@]}" \
     -e CCACHE_DIR=/ccache \
     -e CCACHE_MAXSIZE="$CCACHE_MAXSIZE" \
     -e CCACHE_COMPRESS=1 \
-    -e PIP_CACHE_DIR=/root/.cache/pip \
+    -e CCACHE_BASEDIR=/src \
+    -e CCACHE_NOHASHDIR=1 \
+    -e CCACHE_COMPILERCHECK=content \
+    -e PIP_CACHE_DIR=/pip-cache/root-cache \
     -e PYTHONUNBUFFERED=1 \
     -e PYTHONDONTWRITEBYTECODE=1 \
     -e GIT_CONFIG_COUNT=1 \
@@ -139,7 +162,7 @@ docker_exec() {
     --cpus="$BUILD_JOBS" \
     -w /src \
     "$IMAGE_NAME" \
-    bash -lc "$*"
+    bash -lc "mkdir -p \"\$PIP_CACHE_DIR\" && chown 0:0 \"\$PIP_CACHE_DIR\" && $*"
 }
 
 need_builder
@@ -147,7 +170,9 @@ ensure_binfmt
 if [[ -z "${CCACHE_HOST_DIR:-}" ]]; then
   docker volume create "$CCACHE_VOL" >/dev/null
 fi
-docker volume create "$PIP_CACHE_VOL" >/dev/null
+if [[ -z "${PIP_CACHE_HOST_DIR:-}" ]]; then
+  docker volume create "$PIP_CACHE_VOL" >/dev/null
+fi
 ensure_image
 
 if [[ "$FORCE_REBUILD" == "1" ]]; then
@@ -164,7 +189,7 @@ docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10
 # Uses separate directory since scikit-build manages its own cmake build internally
 if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
   echo "• Running unit tests..."
-  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DLIBSTP_RUN_MYPY=OFF -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test"
+  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DLIBSTP_RUN_MYPY=OFF -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache"
   docker_exec "ninja -C /src/build-test -j$BUILD_JOBS"
   docker_exec "ctest --test-dir /src/build-test --output-on-failure"
   echo "✓ All tests passed"
@@ -176,7 +201,7 @@ echo "• Generating step builder DSL code..."
 docker_exec "python tools/generate_step_builders.py"
 
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
-CMAKE_ARGS="-DFETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR"
+CMAKE_ARGS="-DFETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache;-DCMAKE_C_COMPILER_LAUNCHER=ccache"
 if [[ -n "$EXTRA_CMAKE_ARGS" ]]; then
   CMAKE_ARGS="$CMAKE_ARGS;$EXTRA_CMAKE_ARGS"
 fi
