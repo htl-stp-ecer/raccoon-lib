@@ -27,7 +27,7 @@ if command -v ruff >/dev/null 2>&1; then
     exec ruff "$@"
 fi
 
-if python3 -c "import ruff" >/dev/null 2>&1; then
+if python3 -m ruff --version >/dev/null 2>&1; then
     exec python3 -m ruff "$@"
 fi
 
