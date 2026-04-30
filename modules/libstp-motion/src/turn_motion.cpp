@@ -57,6 +57,7 @@ namespace libstp::motion
         filtered_velocity_ = 0.0;
 
         odometry().reset();
+        drive().resetVelocityControllers();
 
         // Reset profiled PID at current position (0 after odometry reset)
         profiled_pid_.reset(0.0);
