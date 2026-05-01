@@ -64,7 +64,7 @@ from raccoon.hal import IMU
 from raccoon.hal import IOdometryBridge, OdometryBridge
 from raccoon.kinematics_differential import DifferentialKinematics
 from raccoon.kmeans import KMeans, KMeansResult
-from raccoon.robot.table_map import TableMap, MapSegment
+from raccoon.map import WorldMap as TableMap, MapSegment
 from raccoon.robot.map_corrected_odometry import MapCorrectedOdometry
 
 __all__ = [

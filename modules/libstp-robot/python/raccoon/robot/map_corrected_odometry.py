@@ -59,8 +59,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from raccoon.map import WorldMap as TableMap
     from raccoon.robot.geometry import SensorPosition
-    from raccoon.robot.table_map import TableMap
 
 logger = logging.getLogger("raccoon.map_odom")
 

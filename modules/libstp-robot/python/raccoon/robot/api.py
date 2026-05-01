@@ -23,9 +23,9 @@ _S = TypeVar("_S", bound=RobotService)
 
 if TYPE_CHECKING:
     from raccoon.drive import Drive
+    from raccoon.map import WorldMap as TableMap
     from raccoon.mission.api import MissionProtocol, SetupMission
     from raccoon.odometry import Odometry
-    from raccoon.robot.table_map import TableMap
 
 
 @runtime_checkable

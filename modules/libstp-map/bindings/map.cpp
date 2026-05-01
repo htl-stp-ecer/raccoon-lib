@@ -198,6 +198,13 @@ PYBIND11_MODULE(map, m)
         .def("lines", &WorldMap::lines)
         .def("walls", &WorldMap::walls,
              "Wall segments plus the four synthesized table-border edges.")
+        // ``all_segments`` mirrors the legacy Python TableMap property —
+        // every authored segment (lines + explicit walls) without the
+        // synthesized table-border walls. ``lines()``/``walls()`` above stay
+        // method-style; existing call sites already use the method form.
+        .def_property_readonly("all_segments", &WorldMap::segments,
+             "Authored segments (lines + explicit walls), excluding the "
+             "synthesized table-border walls.")
 
         .def("is_on_line", &WorldMap::isOnLine, py::arg("x_cm"), py::arg("y_cm"))
         .def("is_on_black_line", &WorldMap::isOnBlackLine,
@@ -261,5 +268,16 @@ PYBIND11_MODULE(map, m)
             },
             py::arg("data"),
             "Build a WorldMap from a parsed ftmap dict (the same shape that "
-            "raccoon.project.yml stores under robot.physical.table_map).");
+            "raccoon.project.yml stores under robot.physical.table_map).")
+
+        .def("__repr__", [](const WorldMap& m) {
+            // Match the legacy Python TableMap repr so log lines and
+            // assertions that grew up around it keep working.
+            const auto lines = m.lines();
+            const auto walls = m.walls();
+            return "TableMap(" + std::to_string(m.tableWidthCm()) + "x" +
+                   std::to_string(m.tableHeightCm()) + "cm, " +
+                   std::to_string(lines.size()) + " lines, " +
+                   std::to_string(walls.size()) + " walls)";
+        });
 }
