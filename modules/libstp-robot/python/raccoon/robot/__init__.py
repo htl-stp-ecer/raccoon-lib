@@ -6,7 +6,6 @@ from .api import GenericRobot, RobotDefinitionsProtocol
 from .geometry import RobotGeometry, SensorPosition, WheelPosition
 from .service import RobotService
 from raccoon.map import WorldMap as TableMap, MapSegment
-from .map_corrected_odometry import MapCorrectedOdometry
 
 __all__ = [
     "GenericRobot",
@@ -17,5 +16,4 @@ __all__ = [
     "WheelPosition",
     "TableMap",
     "MapSegment",
-    "MapCorrectedOdometry",
 ]
