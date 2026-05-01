@@ -25,8 +25,15 @@ def get_config(name: str):
     )
 
 
-def build_robot(cfg):
-    """Build a HAL robot whose kinematics match the given SimRobotConfig."""
+def build_robot(cfg, *, enable_localization: bool = False):
+    """Build a HAL robot whose kinematics match the given SimRobotConfig.
+
+    When ``enable_localization=True`` the returned namespace exposes a
+    ``localization`` attribute holding a ``raccoon.localization.Localization``
+    instance wrapping the same odometry. The default stays ``False`` so
+    existing tests (which assert ``robot.localization is None``) keep
+    passing — opt-in only.
+    """
     from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge
     from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
@@ -68,10 +75,19 @@ def build_robot(cfg):
     pid_cfg.lateral = AxisConstraints(0.5, 1.0, 1.0)
     pid_cfg.angular = AxisConstraints(6.0, 12.0, 12.0)
 
+    localization = None
+    if enable_localization:
+        from raccoon.localization import Localization, LocalizationConfig
+
+        # Fast tick (5 ms) keeps the worker responsive during short test
+        # scenarios; the production default is 10 ms.
+        localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
+
     return SimpleNamespace(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,
         motion_pid_config=pid_cfg,
+        localization=localization,
         _refs=(*refs, bridge),
     )

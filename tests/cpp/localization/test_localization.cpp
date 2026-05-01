@@ -173,6 +173,46 @@ TEST(Localization, StopAndDestructorJoinPromptly) {
     EXPECT_LT(std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count(), 200);
 }
 
+// Phase-2 headline promise: "Welt-Pose lebt über Motion-Grenzen hinweg."
+// Every motion start() still calls odometry.reset() (cleanup is Phase 4);
+// the pass-through must notice that the underlying odom snapped back to
+// the origin and treat the jump as a rebase, not as a real -0.20 m delta.
+TEST(Localization, WorldPoseSurvivesOdometryReset) {
+    auto odom = std::make_shared<FakeOdometry>();
+    odom->setPose(0.0f, 0.0f, 0.0f);
+
+    Localization loc(odom, fastConfig());
+    waitTicks(2);
+
+    // Simulate motion 1: odometry integrates to 0.20 m forward.
+    odom->setPose(0.20f, 0.0f, 0.0f);
+    waitTicks(4);
+    {
+        const auto pose = loc.getPose();
+        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-4f);
+    }
+
+    // Motion 2 starts — the motion's start() calls odometry.reset(). The
+    // world pose must NOT collapse: localization owns the world frame.
+    odom->reset();
+    waitTicks(4);
+    {
+        const auto pose = loc.getPose();
+        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-3f)
+            << "world pose collapsed after odometry.reset() — Phase-2 promise "
+               "broken; localization needs reset detection";
+    }
+
+    // Motion 2 integrates another 0.20 m forward (odom counts from 0).
+    odom->setPose(0.20f, 0.0f, 0.0f);
+    waitTicks(4);
+    {
+        const auto pose = loc.getPose();
+        EXPECT_NEAR(pose.position.x(), 0.40f, 1e-3f)
+            << "world pose did not advance across the second motion";
+    }
+}
+
 TEST(Localization, ObserveWithInfiniteSigmaLeavesAxisUntouched) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
@@ -196,4 +236,83 @@ TEST(Localization, ObserveWithInfiniteSigmaLeavesAxisUntouched) {
     EXPECT_NEAR(pose.position.x(), 0.40f, 1e-4f);
     EXPECT_NEAR(pose.position.y(), 1.00f, 1e-4f);
     EXPECT_NEAR(pose.heading, 0.0f, 1e-4f);
+}
+
+// After observe() snaps the world pose, an odometry reset must still leave
+// the snapped world pose intact — otherwise the very first motion that fires
+// after a resync collapses everything we just measured.
+TEST(Localization, WorldPoseSurvivesResetAfterObserve) {
+    auto odom = std::make_shared<FakeOdometry>();
+    odom->setPose(0.0f, 0.0f, 0.0f);
+
+    Localization loc(odom, fastConfig());
+    waitTicks(2);
+
+    // Drive a bit so the odometry frame is non-trivial.
+    odom->setPose(0.30f, 0.10f, 0.0f);
+    waitTicks(4);
+
+    // Soft-snap the world pose to a known-good location (e.g. resync).
+    Observation obs;
+    obs.pose.position.x() = 1.5f;
+    obs.pose.position.y() = 1.5f;
+    obs.pose.heading = 0.0f;
+    obs.sigma = Eigen::Vector3d{1e-3, 1e-3, 1e-3};
+    loc.observe(obs);
+
+    {
+        const auto pose = loc.getPose();
+        EXPECT_NEAR(pose.position.x(), 1.5f, 1e-4f);
+        EXPECT_NEAR(pose.position.y(), 1.5f, 1e-4f);
+    }
+
+    // Next motion starts → odometry.reset(). World pose must hold at (1.5, 1.5).
+    odom->reset();
+    waitTicks(4);
+
+    const auto pose = loc.getPose();
+    EXPECT_NEAR(pose.position.x(), 1.5f, 1e-3f)
+        << "snapped world pose collapsed when motion reset the odometry";
+    EXPECT_NEAR(pose.position.y(), 1.5f, 1e-3f);
+    EXPECT_NEAR(pose.heading, 0.0f, 1e-3f);
+}
+
+// Defensive arm of the reset heuristic: any single-tick jump larger than
+// ``kMaxPlausibleStep`` (0.5 m) is physically impossible for the platform
+// and must be treated as a rebase rather than accumulated. This protects
+// against unclean reset paths and any future odometry source whose reset
+// does not land exactly on the origin.
+TEST(Localization, ImpossibleJumpIsTreatedAsReset) {
+    auto odom = std::make_shared<FakeOdometry>();
+    odom->setPose(0.0f, 0.0f, 0.0f);
+
+    Localization loc(odom, fastConfig());
+    waitTicks(2);
+
+    // Build up a normal world pose first.
+    odom->setPose(0.20f, 0.0f, 0.0f);
+    waitTicks(4);
+    {
+        const auto pose = loc.getPose();
+        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-4f);
+    }
+
+    // Teleport the odometry to (10, 10, 0) — far beyond the per-tick step
+    // budget. World pose must NOT accumulate the +9.8 m delta.
+    odom->setPose(10.0f, 10.0f, 0.0f);
+    waitTicks(5);
+    {
+        const auto pose = loc.getPose();
+        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-3f)
+            << "impossible jump was accumulated instead of rebased";
+        EXPECT_NEAR(pose.position.y(), 0.0f, 1e-3f);
+    }
+
+    // From the rebase point, a small motion (10.0 → 10.05) must be picked
+    // up normally — i.e. the rebase did not break the delta path.
+    odom->setPose(10.05f, 10.0f, 0.0f);
+    waitTicks(5);
+    const auto pose = loc.getPose();
+    EXPECT_NEAR(pose.position.x(), 0.25f, 1e-3f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 1e-3f);
 }

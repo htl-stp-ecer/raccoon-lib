@@ -84,15 +84,56 @@ void Localization::tickLoop() {
                 m_worldPose = cur;
                 m_initialized = true;
             } else {
-                const float dx = cur.position.x() - m_lastOdom.position.x();
-                const float dy = cur.position.y() - m_lastOdom.position.y();
-                const float dth = wrapAnglef(cur.heading - m_lastOdom.heading);
+                // Reset / impossible-jump detection.
+                //
+                // Until Phase 4 lifts ``odometry.reset()`` out of motion
+                // ``start()``, the localization pass-through has to survive
+                // the discrete jump that a reset injects into the underlying
+                // odometry. IOdometry does not (yet) expose a monotonic
+                // reset counter, so we detect the reset heuristically:
+                //
+                //   * reset signature: the new sample lands exactly at the
+                //     origin while the previous sample was meaningfully off
+                //     it. That is the only way ``Stm32Odometry::reset()``
+                //     leaves the pose.
+                //   * defensive: any single-tick jump greater than
+                //     ``kMaxPlausibleStep`` (0.5 m at 100 Hz ⇒ 50 m/s) is
+                //     physically impossible for the platform and is treated
+                //     the same way — rebase, do not accumulate.
+                //
+                // Both branches collapse to "swallow the delta and rebase
+                // ``m_lastOdom``" so the next genuine motion delta is
+                // measured from the post-reset reference. The world pose
+                // stays put, which is exactly the Phase-2 promise.
+                constexpr float kOriginEps = 1e-4f;
+                constexpr float kMeaningfulEps = 1e-3f;
+                constexpr float kMaxPlausibleStep = 0.5f;
 
-                m_worldPose.position.x() += dx;
-                m_worldPose.position.y() += dy;
-                m_worldPose.heading = wrapAnglef(m_worldPose.heading + dth);
+                const bool currentIsOrigin =
+                    cur.position.norm() < kOriginEps &&
+                    std::abs(cur.heading) < kOriginEps;
+                const bool lastWasMeaningful =
+                    m_lastOdom.position.norm() > kMeaningfulEps ||
+                    std::abs(m_lastOdom.heading) > kMeaningfulEps;
+                const float stepNorm =
+                    (cur.position - m_lastOdom.position).norm();
+                const bool jumpTooBig = stepNorm > kMaxPlausibleStep;
 
-                m_lastOdom = cur;
+                if ((currentIsOrigin && lastWasMeaningful) || jumpTooBig) {
+                    // Rebase silently. World pose is preserved; the next
+                    // tick will measure delta from the new ``cur``.
+                    m_lastOdom = cur;
+                } else {
+                    const float dx = cur.position.x() - m_lastOdom.position.x();
+                    const float dy = cur.position.y() - m_lastOdom.position.y();
+                    const float dth = wrapAnglef(cur.heading - m_lastOdom.heading);
+
+                    m_worldPose.position.x() += dx;
+                    m_worldPose.position.y() += dy;
+                    m_worldPose.heading = wrapAnglef(m_worldPose.heading + dth);
+
+                    m_lastOdom = cur;
+                }
             }
         }
 
