@@ -65,6 +65,7 @@ from raccoon.hal import IOdometryBridge, OdometryBridge
 from raccoon.kinematics_differential import DifferentialKinematics
 from raccoon.kmeans import KMeans, KMeansResult
 from raccoon.map import WorldMap as TableMap, MapSegment
+from raccoon.localization import Localization, LocalizationConfig, Observation
 
 __all__ = [
     # Core hardware
@@ -114,6 +115,10 @@ __all__ = [
     # Table map
     "TableMap",
     "MapSegment",
+    # Localization
+    "Localization",
+    "LocalizationConfig",
+    "Observation",
     # Calibration
     "Feedforward",
     "FeedforwardController",
