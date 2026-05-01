@@ -1,1 +1,1 @@
-register_libstp_module(sim "FALSE" "yaml-cpp::yaml-cpp")
+register_libstp_module(sim "FALSE" "map;yaml-cpp::yaml-cpp")

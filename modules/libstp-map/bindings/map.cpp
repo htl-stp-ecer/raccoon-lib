@@ -245,6 +245,10 @@ PYBIND11_MODULE(map, m)
              [](WorldMap& self, const std::string& path) { self.loadFtmap(path); },
              py::arg("path"),
              "Load an .ftmap file from disk (TableMapFileV1 schema).")
+        .def("load_ftmap",
+             [](WorldMap& self, const std::string& path) { self.loadFtmap(path); },
+             py::arg("path"),
+             "Legacy alias for load(), kept for libstp-sim compatibility.")
         .def("parse_ftmap",
              [](WorldMap& self, const std::string& content) { self.parseFtmap(content); },
              py::arg("content"),
