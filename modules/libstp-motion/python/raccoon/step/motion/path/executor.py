@@ -4,22 +4,17 @@ Drives the unified control loop: cycle the active motion, watch for
 condition / distance / angle / opaque completion, then transition to the
 next segment with the appropriate warm-vs-cold start, executing any side
 actions in between.
-
-Middlewares are invoked at well-defined hook points (path start/end,
-segment start/end, cold start) and may return a ``Correction`` that the
-motion factory consumes when constructing the next motion.
 """
 
 from __future__ import annotations
 
 import asyncio
-import math
 from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
 from .._heading_utils import get_world_heading_rad
-from .ir import Correction, PathNode, Segment, SideAction
+from .ir import PathNode, Segment, SideAction
 from .motion_factory import create_motion
 from .passes import flatten_steps, is_same_type
 
@@ -42,7 +37,6 @@ if TYPE_CHECKING:
 
     from ...logic.defer import Defer
     from .. import Step
-    from .middleware import PathMiddleware
 
 
 # ---------------------------------------------------------------------------
@@ -90,31 +84,24 @@ def _check_segment_reached(
     robot: "GenericRobot",
     seg: Segment,
     seg_origin: float,
-    correction: Correction | None = None,
 ) -> bool:
     """Manual position check for non-terminal segments.
 
-    Compares odometry-based distance traveled against the (possibly
-    corrected) segment target.  Used instead of the C++ check when the
-    profile target is inflated with overshoot.
+    Compares odometry-based distance traveled against the segment target.
+    Used instead of the C++ check when the profile target is inflated with
+    overshoot.
     """
     current = _get_position_offset(robot, seg)
     traveled = current - seg_origin
 
     if seg.kind == "linear":
         target = seg.distance_m
-        if correction and target is not None:
-            target -= math.copysign(correction.distance_adjust_m, target)
         tol = DISTANCE_TOL_M
     elif seg.kind == "turn":
         target = seg.angle_rad
-        if correction and target is not None:
-            target -= correction.angle_adjust_rad
         tol = ANGLE_TOL_RAD
     elif seg.kind == "arc":
         target = seg.arc_angle_rad
-        if correction and target is not None:
-            target -= correction.angle_adjust_rad
         tol = ANGLE_TOL_RAD
     else:
         return False
@@ -220,8 +207,7 @@ class PathExecutor:
     """Runs a compiled plan against a robot.
 
     The executor owns the control loop, manages segment transitions
-    (warm/cold start), executes side actions at transition points, and
-    fans out hook calls to registered middlewares.
+    (warm/cold start), and executes side actions at transition points.
     """
 
     DEFAULT_HZ = 100
@@ -231,48 +217,12 @@ class PathExecutor:
         nodes: list[PathNode | None],
         deferred: list[tuple[int, "Defer"]],
         spline_step: "Step" | None = None,
-        middlewares: list["PathMiddleware"] | None = None,
         hz: int = DEFAULT_HZ,
     ) -> None:
         self._nodes = nodes
         self._deferred = deferred
         self._spline_step = spline_step
-        self._middlewares: list["PathMiddleware"] = list(middlewares or [])
         self._hz = hz
-
-    # -- Middleware fan-out ------------------------------------------------
-
-    def _mw_path_start(self, robot: "GenericRobot") -> None:
-        for mw in self._middlewares:
-            mw.on_path_start(robot)
-
-    def _mw_segment_start(
-        self,
-        seg: Segment,
-        is_first: bool,
-        robot: "GenericRobot",
-    ) -> Correction | None:
-        # If multiple middlewares produce a correction, the last one wins.
-        # (For Phase 1 there's only WorldCorrection; merging strategies for
-        # multi-middleware setups belong to the public-API layer.)
-        result: Correction | None = None
-        for mw in self._middlewares:
-            c = mw.on_segment_start(seg, is_first, robot)
-            if c is not None:
-                result = c
-        return result
-
-    def _mw_cold_start(self, seg: Segment, robot: "GenericRobot") -> None:
-        for mw in self._middlewares:
-            mw.on_cold_start(seg, robot)
-
-    def _mw_segment_end(self, seg: Segment, robot: "GenericRobot") -> None:
-        for mw in self._middlewares:
-            mw.on_segment_end(seg, robot)
-
-    def _mw_path_end(self, robot: "GenericRobot") -> None:
-        for mw in self._middlewares:
-            mw.on_path_end(robot)
 
     # -- Main entrypoint ---------------------------------------------------
 
@@ -328,27 +278,14 @@ class PathExecutor:
             seg: Segment = nodes[node_idx]  # type: ignore[assignment]
             is_last = _is_last_segment(nodes, node_idx)
 
-            # First motion is constructed without a correction (no prior
-            # segment to correct against).  start() also resets the odometry,
-            # which is why on_path_start must run AFTER start() — middlewares
-            # like WorldCorrection initialize their tracker against the
-            # post-reset frame.
-            seg_correction = None
             motion = create_motion(
                 robot,
                 seg,
                 is_last,
-                seg_correction,
                 current_world_heading_rad=_world_heading_for_seg(robot, seg),
             )
             motion.start()
             seg_origin = _get_position_offset(robot, seg)
-
-            self._mw_path_start(robot)
-            # Inform middlewares about the first segment too (so they can
-            # update internal "is_first" state); the result is discarded
-            # since the first motion was already constructed.
-            self._mw_segment_start(seg, is_first=True, robot=robot)
 
             if seg.condition is not None:
                 seg.condition.start(robot)
@@ -388,7 +325,6 @@ class PathExecutor:
                             robot,
                             seg,
                             seg_origin,
-                            seg_correction,
                         )
 
                 # Opaque steps: adapter signals completion via is_finished().
@@ -398,9 +334,6 @@ class PathExecutor:
                 if transition:
                     current_vel = motion.get_filtered_velocity()
                     prev_seg = seg
-
-                    # Notify middlewares the segment ended (advances trackers).
-                    self._mw_segment_end(prev_seg, robot)
 
                     node_idx += 1
 
@@ -417,8 +350,7 @@ class PathExecutor:
 
                     # Was the next node a Defer?  If so, resolve it now —
                     # heading-dependent steps need the current heading.
-                    was_deferred = nodes[node_idx] is None and node_idx in deferred_map
-                    if was_deferred:
+                    if nodes[node_idx] is None and node_idx in deferred_map:
                         _resolve_node_at(
                             robot,
                             nodes,
@@ -440,18 +372,6 @@ class PathExecutor:
                     seg = nodes[node_idx]  # type: ignore[assignment]
                     is_last = _is_last_segment(nodes, node_idx)
 
-                    # Ask middlewares for the next segment's correction.
-                    seg_correction = self._mw_segment_start(
-                        seg,
-                        is_first=False,
-                        robot=robot,
-                    )
-                    # Deferred heading turns already used the current heading
-                    # to compute their angle — zero out angle correction so
-                    # we don't double-correct.
-                    if was_deferred and seg_correction is not None and seg.kind in ("turn", "arc"):
-                        seg_correction.angle_adjust_rad = 0.0
-
                     next_world_heading = _world_heading_for_seg(robot, seg)
                     if is_same_type(prev_seg, seg):
                         # Same type: warm start — carry velocity seamlessly.
@@ -460,20 +380,16 @@ class PathExecutor:
                             robot,
                             seg,
                             is_last,
-                            seg_correction,
                             current_world_heading_rad=next_world_heading,
                         )
                         motion.start_warm(offset, current_vel)
                     else:
-                        # Cross-type: cold start.  Notify middlewares first
-                        # so they can snapshot pre-reset state.
-                        self._mw_cold_start(seg, robot)
+                        # Cross-type: cold start.
                         robot.drive.hard_stop()
                         motion = create_motion(
                             robot,
                             seg,
                             is_last,
-                            seg_correction,
                             current_world_heading_rad=next_world_heading,
                         )
                         motion.start()
@@ -485,7 +401,6 @@ class PathExecutor:
 
                 await asyncio.sleep(update_rate)
         finally:
-            self._mw_path_end(robot)
             robot.drive.hard_stop()
             # Clean up any background side-action tasks.
             for task in bg_tasks:

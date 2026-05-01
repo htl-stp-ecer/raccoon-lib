@@ -77,7 +77,7 @@ async def _scenarios(config_name: str) -> None:
     # ---- Scenario: reference drive+turn+drive (unoptimized) ----
     _log("reference: drive(50) + turn_right(90) + drive(30)")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), correct=False)
+        step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30))
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
         p = pose()
         out["reference_drive_turn_drive"] = [p.x, p.y, p.theta]
@@ -86,7 +86,7 @@ async def _scenarios(config_name: str) -> None:
     # ---- Scenario: optimize=True merges two drives ----
     _log("merge: drive(20) + drive(20) with optimize=True")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(20), drive_forward(20), optimize=True, correct=False)
+        step = smooth_path(drive_forward(20), drive_forward(20), optimize=True)
         await asyncio.wait_for(step.run_step(robot), timeout=12.0)
         p = pose()
         out["merge_two_drives"] = [p.x, p.y, p.theta]
@@ -109,7 +109,6 @@ async def _scenarios(config_name: str) -> None:
             turn_right(90),
             drive_forward(30),
             corner_cut_cm=5.0,
-            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
         p = pose()
@@ -124,7 +123,6 @@ async def _scenarios(config_name: str) -> None:
             turn_right(90),
             drive_forward(30),
             spline=True,
-            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=20.0)
         p = pose()
@@ -139,7 +137,6 @@ async def _scenarios(config_name: str) -> None:
             background(_Noop()),
             drive_forward(20),
             optimize=True,
-            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=12.0)
         p = pose()

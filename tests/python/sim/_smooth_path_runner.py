@@ -44,7 +44,7 @@ async def _scenarios(config_name: str):
     # ---- Scenario 1: single segment (should behave like normal drive) ----
     _log("scenario 1: smooth_path single drive(30)")
     with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(cm=30.0), correct=False)
+        step = smooth_path(drive_forward(cm=30.0))
         await asyncio.wait_for(step.run_step(robot), timeout=8.0)
         p = pose()
         out["single_drive"] = [p.x, p.y, p.theta]
@@ -56,7 +56,6 @@ async def _scenarios(config_name: str):
         step = smooth_path(
             drive_forward(cm=20.0),
             drive_forward(cm=20.0),
-            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=8.0)
         p = pose()
@@ -79,7 +78,6 @@ async def _scenarios(config_name: str):
             drive_forward(cm=15.0),
             drive_forward(cm=15.0),
             drive_forward(cm=15.0),
-            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=8.0)
         p = pose()
@@ -93,7 +91,6 @@ async def _scenarios(config_name: str):
             drive_forward(cm=20.0),
             turn_right(90),
             drive_forward(cm=20.0),
-            correct=False,
         )
         await asyncio.wait_for(step.run_step(robot), timeout=12.0)
         p = pose()

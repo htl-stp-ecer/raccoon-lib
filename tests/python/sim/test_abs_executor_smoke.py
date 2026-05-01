@@ -9,7 +9,7 @@ shifts in ways the dumb dispatcher does not account for.
 
 The skip is per the explicit Phase-3 out-clause in the migration plan
 and the implementation task brief. Re-enable this test in Phase 4 when
-``WorldCorrectionMiddleware`` is removed and motions are absolute-aware.
+motions are fully absolute-aware (Commit 4+).
 """
 
 from __future__ import annotations

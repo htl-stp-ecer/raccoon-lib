@@ -2,14 +2,12 @@
 
 The pipeline turns a tree of Step objects into an executable plan through a
 sequence of compiler passes (lowering, merge, corner-cut, spline, ...) and
-runs it via PathExecutor with optional segment middlewares (world-frame
-correction, telemetry, ...).
+runs it via PathExecutor.
 
 Public API:
-    Segment, SideAction, PathNode, Correction   — IR types
+    Segment, SideAction, PathNode               — IR types
     CompilerPass, CompiledPlan, PathCompiler    — compilation
     PathExecutor                                 — runtime
-    PathMiddleware, WorldCorrectionMiddleware   — middleware protocol + builtin
     create_motion                                — motion factory
 """
 
@@ -19,7 +17,6 @@ from .ir import (
     Segment,
     SideAction,
     PathNode,
-    Correction,
     SENTINEL_DISTANCE_M,
 )
 from .abs_ir import (
@@ -46,18 +43,12 @@ from .motion_factory import (
     OVERSHOOT_M,
     OVERSHOOT_RAD,
 )
-from .middleware import (
-    PathMiddleware,
-    WorldCorrectionMiddleware,
-    WorldPoseTracker,
-)
 
 __all__ = [
     # IR (relative)
     "Segment",
     "SideAction",
     "PathNode",
-    "Correction",
     "SENTINEL_DISTANCE_M",
     # IR (absolute, Phase 3)
     "Goto",
@@ -87,8 +78,4 @@ __all__ = [
     "SplineAdapter",
     "OVERSHOOT_M",
     "OVERSHOOT_RAD",
-    # Middleware
-    "PathMiddleware",
-    "WorldCorrectionMiddleware",
-    "WorldPoseTracker",
 ]

@@ -1,7 +1,7 @@
 """Motion factory — constructs a controller for one ``Segment``.
 
-The executor calls ``create_motion(robot, seg, is_last, correction)`` and
-gets back an object with the uniform motion-controller interface:
+The executor calls ``create_motion(robot, seg, is_last)`` and gets back an
+object with the uniform motion-controller interface:
 
     motion.start()
     motion.start_warm(offset, velocity)
@@ -33,7 +33,7 @@ from raccoon.motion import (
     TurnMotion,
 )
 
-from .ir import SENTINEL_DISTANCE_M, Correction, Segment
+from .ir import SENTINEL_DISTANCE_M, Segment
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -146,18 +146,11 @@ def _create_linear_motion(
     robot: "GenericRobot",
     seg: Segment,
     is_last: bool,
-    correction: Correction | None = None,
     current_world_heading_rad: float | None = None,
 ) -> LinearMotion:
     config = LinearMotionConfig()
     config.axis = seg.axis
     actual = seg.distance_m if seg.distance_m is not None else seg.sign * SENTINEL_DISTANCE_M
-
-    # Apply along-track correction
-    if correction and seg.distance_m is not None:
-        # Positive distance_adjust_m = overshot = drive less.
-        # For negative distances (backward), the sign is already in actual.
-        actual -= math.copysign(correction.distance_adjust_m, actual)
 
     if not is_last and seg.distance_m is not None:
         # Inflate target so profile cruises through the actual endpoint.
@@ -169,9 +162,6 @@ def _create_linear_motion(
     # Heading: phase 4 made target_heading_rad mandatory. Priority is
     #   1. user-specified seg.heading_deg (relative to HeadingReference),
     #   2. current world heading from localization (passed in by executor).
-    # ``correction.heading_target_rad`` is intentionally ignored — the
-    # relative-correction path becomes a no-op in phase 4 and is removed
-    # entirely in phase 5 with WorldCorrectionMiddleware.
     if seg.heading_deg is not None:
         from raccoon.robot.heading_reference import HeadingReferenceService
 
@@ -205,7 +195,6 @@ def _create_turn_motion(
     robot: "GenericRobot",
     seg: Segment,
     is_last: bool,
-    correction: Correction | None = None,
     current_world_heading_rad: float | None = None,  # noqa: ARG001 — TurnMotion is delta-based
 ) -> TurnMotion:
     config = TurnConfig()
@@ -214,10 +203,6 @@ def _create_turn_motion(
         if seg.angle_rad is not None
         else seg.sign * math.radians(180)  # sentinel for condition-based
     )
-
-    # Apply heading correction
-    if correction and seg.angle_rad is not None:
-        actual -= correction.angle_adjust_rad
 
     if not is_last and seg.angle_rad is not None:
         config.target_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)
@@ -240,16 +225,11 @@ def _create_arc_motion(
     robot: "GenericRobot",
     seg: Segment,
     is_last: bool,
-    correction: Correction | None = None,
     current_world_heading_rad: float | None = None,  # noqa: ARG001 — ArcMotion is delta-based
 ) -> ArcMotion:
     config = ArcMotionConfig()
     config.radius_m = seg.radius_m
     actual = seg.arc_angle_rad
-
-    # Apply heading correction
-    if correction and actual is not None:
-        actual -= correction.angle_adjust_rad
 
     if not is_last and actual is not None:
         config.arc_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)
@@ -278,7 +258,6 @@ def create_motion(
     robot: "GenericRobot",
     seg: Segment,
     is_last: bool,
-    correction: Correction | None = None,
     current_world_heading_rad: float | None = None,
 ):
     """Construct a controller for the given segment kind.
@@ -292,11 +271,11 @@ def create_motion(
     ``spline`` adapters (those steps fetch the heading themselves).
     """
     if seg.kind == "linear":
-        return _create_linear_motion(robot, seg, is_last, correction, current_world_heading_rad)
+        return _create_linear_motion(robot, seg, is_last, current_world_heading_rad)
     if seg.kind == "turn":
-        return _create_turn_motion(robot, seg, is_last, correction, current_world_heading_rad)
+        return _create_turn_motion(robot, seg, is_last, current_world_heading_rad)
     if seg.kind == "arc":
-        return _create_arc_motion(robot, seg, is_last, correction, current_world_heading_rad)
+        return _create_arc_motion(robot, seg, is_last, current_world_heading_rad)
     if seg.kind == "follow_line":
         return LineFollowAdapter(seg.opaque_step, robot)
     if seg.kind == "spline":
