@@ -315,6 +315,7 @@ Wie der `flow()` Step, soll es fürs Absolute Mode eine option geben oder so - r
 
 - **Phase 3 — Python-IR statt C++-IR**: compile_plan ist Mission-Startup, kein Hot-Path. Action-Knoten wickeln Python-Steps; ein C++-IR mit py::object würde Bindings-Komplexität ohne Performance-Gewinn bringen. Folge: Phase 5 (Optimizer-Passes) bleibt ebenfalls Python. Die ursprüngliche Aussage 'Desugaring + Optimizer in C++' im Architektur-Abschnitt 'Wo das läuft' ist damit überholt.
 - **Phase 3 — Snapshot-Tests**: IR-Repr-Snapshots in Phase 3 (billig, deterministisch). Trajektorien-Snapshots gegen Sim-Recordings sind Phase-4-Pflicht, wenn Motion-Klassen auf absolute Targets umgestellt werden — vorher wäre der Snapshot ein Doppel-Aufwand.
+- _Phase-4 Commit 4: AbsolutePathExecutor wieder entfernt; PathExecutor führt absolute Targets jetzt direkt aus. abs_ir / abs_compiler / abs_factory bleiben für Phase 5._
 
 ## Offen / zu klären
 
