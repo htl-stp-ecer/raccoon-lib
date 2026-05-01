@@ -14,6 +14,7 @@ across the codebase.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,7 +38,15 @@ def get_world_heading_rad(robot: "GenericRobot") -> float:
     loc = getattr(robot, "localization", None)
     if loc is None:
         raise RuntimeError(_REQUIRED_MSG)
-    return float(loc.get_pose().heading)
+    world_heading = float(loc.get_pose().heading)
+    odom = getattr(robot, "odometry", None)
+    if odom is None:
+        return world_heading
+
+    odom_heading = float(odom.get_pose().heading)
+    if abs(math.remainder(world_heading - odom_heading, 2.0 * math.pi)) > 0.02:
+        return odom_heading
+    return world_heading
 
 
 def get_world_pose(robot: "GenericRobot"):

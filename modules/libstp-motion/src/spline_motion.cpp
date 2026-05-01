@@ -156,7 +156,7 @@ namespace libstp::motion
         const double body_forward = dx * cos_h + dy * sin_h;
         const double body_lateral = -dx * sin_h + dy * cos_h;
         const Eigen::Vector2d robot_pos(body_forward, body_lateral);
-        const double current_heading = odometry().getAbsoluteHeading();
+        const double current_heading = odometry().getHeading();
 
         // Project robot position onto spline.
         // Rate-limit backward jumps: allow at most max_velocity * dt backward per cycle.
@@ -236,7 +236,8 @@ namespace libstp::motion
         // Spline frame: x=forward, y=right-positive. Heading convention: positive=CCW.
         // Convert by negating y for atan2 (left-handed frame → right-handed heading).
         Eigen::Vector2d tangent = spline_->tangentAt(s_setpoint);
-        double path_angle = std::atan2(-tangent.y(), tangent.x());
+        double path_angle = std::atan2(-tangent.y(), tangent.x())
+                          + initial_absolute_heading_rad_;
         double rel_angle = path_angle - current_heading;
 
         double vx = speed_cmd * std::cos(rel_angle);

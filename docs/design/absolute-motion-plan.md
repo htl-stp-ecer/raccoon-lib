@@ -135,6 +135,8 @@ Bei jedem Segment-Start:
 
 **Kein `odometry.reset()` zwischen Motions mehr.** Lokale Achsen leben in der Motion-Klasse selbst (Profile-Position startet bei 0), aber die Welt-Pose wird aus `localization` gelesen und nicht angefasst.
 
+Phase-4 note (Mai 2026): `PathExecutor` liest die Heading für jedes lineare Segment am Segment-Start neu. Weil `Localization` aktuell noch ein Background-Pass-Through ist, wartet der Executor an Segmentgrenzen kurz auf den frisch aktualisierten Localization-Snapshot; falls der Thread nicht rechtzeitig nachzieht, verwendet er die aktuelle Odometry-Heading für genau diesen Segment-Start, damit kein alter Heading-Target eingefroren wird.
+
 ### 4. Resync-Steps
 
 Explizite Punkte, an denen die Mission der Localization eine **stark gewichtete Observation** zuschiebt — *nicht* eine harte Pose-Setzung. Begründung: die Roboter sind mechanisch nie genau genug, um eine Wand-Berührung als Wahrheit zu deklarieren. Heading ist die einzige Größe, die hart genug ist, dass ein Snap vertretbar wäre — aber weiches Snappen funktioniert da auch, mit kleiner Varianz.

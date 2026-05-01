@@ -54,7 +54,7 @@ namespace libstp::motion
 
         // No odometry reset — snapshot current absolute heading instead.
         // accumulated_heading_ measures the unwrapped delta from start.
-        prev_heading_ = odometry().getAbsoluteHeading();
+        prev_heading_ = odometry().getHeading();
         accumulated_heading_ = 0.0;
         filtered_velocity_ = 0.0;
 
@@ -82,7 +82,7 @@ namespace libstp::motion
 
         // Do NOT reset odometry -- carry heading continuously
         // Set prev_heading_ to current so the first delta is correct
-        prev_heading_ = odometry().getAbsoluteHeading();
+        prev_heading_ = odometry().getHeading();
         accumulated_heading_ = 0.0;
         filtered_velocity_ = initial_angular_velocity;
 
@@ -114,7 +114,7 @@ namespace libstp::motion
         cycle_++;
         odometry().update(dt);
 
-        const double current_heading = odometry().getAbsoluteHeading();
+        const double current_heading = odometry().getHeading();
         const double current_heading_deg = current_heading / kDegToRad;
 
         // Accumulate unwrapped heading to handle ±π wraparound for turns > 180°.

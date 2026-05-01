@@ -112,18 +112,17 @@ namespace libstp::motion
         speed_scale_ = 1.0;
         heading_scale_ = 1.0;
         unsaturated_cycles_ = 0;
-        position_offset_m_ = position_offset_m;
+        // Absolute mode snapshots a fresh segment origin below, so carrying
+        // the caller's old odometry offset would double-count prior segments.
+        position_offset_m_ = 0.0;
 
         prev_primary_position_ = 0.0;
         filtered_velocity_ = initial_velocity_mps;
         elapsed_time_ = 0.0;
         telemetry_.clear();
 
-        // Do NOT reset odometry -- carry position continuously.
-        // Snapshot the current pose as this segment's body-frame origin; the
-        // caller-supplied position_offset_m_ is still subtracted in update()
-        // for warm-chain bookkeeping, but in the new absolute model that
-        // offset is typically zero (caller can pass 0).
+        // Do NOT reset odometry -- carry velocity continuously. Position
+        // starts from this segment's captured body-frame origin.
         captureInitialPose();
         heading_pid_->reset();
 
@@ -134,7 +133,7 @@ namespace libstp::motion
         LIBSTP_LOG_TRACE("LinearMotion warm-started: axis={}, target={:.3f} m, offset={:.3f} m, "
                     "initial_vel={:.3f} m/s, max_velocity={:.3f} m/s (scale={:.2f}), target_heading={:.3f} rad",
                     (cfg_.axis == LinearAxis::Forward ? "Forward" : "Lateral"),
-                    cfg_.distance_m, position_offset_m_, initial_velocity_mps,
+                    cfg_.distance_m, position_offset_m, initial_velocity_mps,
                     max_velocity_, cfg_.speed_scale, cfg_.target_heading_rad);
     }
 
@@ -163,7 +162,7 @@ namespace libstp::motion
         odometry().update(dt);
 
         const auto [body_forward, body_lateral] = projectBodyFrame();
-        const double current_heading = odometry().getAbsoluteHeading();
+        const double current_heading = odometry().getHeading();
 
         // Heading error to absolute target: positive = turn CCW (left) to
         // reach target. Matches angularError(current, target) = wrap(target - current).
