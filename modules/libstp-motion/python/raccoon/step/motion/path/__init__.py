@@ -36,6 +36,7 @@ from .abs_factory import (
     action,
 )
 from .compiler import CompilerPass, CompiledPlan, PathCompiler
+from .abs_compiler import CompiledAbsolutePlan, compile_plan
 from .executor import PathExecutor
 from .motion_factory import (
     create_motion,
@@ -72,6 +73,9 @@ __all__ = [
     "CompilerPass",
     "CompiledPlan",
     "PathCompiler",
+    # Compilation (absolute, Phase 3)
+    "CompiledAbsolutePlan",
+    "compile_plan",
     # Executor
     "PathExecutor",
     # Motion factory
