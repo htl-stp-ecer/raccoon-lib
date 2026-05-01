@@ -39,11 +39,18 @@ def _build_robot():
     pid_cfg.lateral = AxisConstraints(0.5, 1.0, 1.0)
     pid_cfg.angular = AxisConstraints(6.0, 12.0, 12.0)
 
+    # Phase 4: motions need an absolute target_heading_rad → localization
+    # is now required for every robot that runs a motion step.
+    from raccoon.localization import Localization, LocalizationConfig
+
+    localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
+
     return SimpleNamespace(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,
         motion_pid_config=pid_cfg,
+        localization=localization,
         _refs=(left, right, imu, bridge),
     )
 

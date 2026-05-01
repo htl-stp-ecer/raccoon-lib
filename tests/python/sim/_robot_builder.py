@@ -25,14 +25,15 @@ def get_config(name: str):
     )
 
 
-def build_robot(cfg, *, enable_localization: bool = False):
+def build_robot(cfg, *, enable_localization: bool = True):
     """Build a HAL robot whose kinematics match the given SimRobotConfig.
 
-    When ``enable_localization=True`` the returned namespace exposes a
-    ``localization`` attribute holding a ``raccoon.localization.Localization``
-    instance wrapping the same odometry. The default stays ``False`` so
-    existing tests (which assert ``robot.localization is None``) keep
-    passing — opt-in only.
+    Phase 4 of the absolute-motion plan made ``robot.localization`` a hard
+    requirement for any motion step (motions need an absolute
+    ``target_heading_rad`` and read it from
+    ``robot.localization.get_pose().heading``). The default therefore flips
+    to ``True``; pass ``enable_localization=False`` only when the test
+    explicitly checks the ``robot.localization is None`` path.
     """
     from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge

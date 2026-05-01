@@ -18,9 +18,24 @@ from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
+from .._heading_utils import get_world_heading_rad
 from .ir import Correction, PathNode, Segment, SideAction
 from .motion_factory import create_motion
 from .passes import flatten_steps, is_same_type
+
+
+def _world_heading_for_seg(robot: "GenericRobot", seg: Segment) -> float | None:
+    """Read absolute world heading for segment kinds that need it.
+
+    Linear segments require ``target_heading_rad`` on the config; the rest
+    (turn/arc are delta-based; follow_line/spline are opaque adapters) do
+    not read this argument and we skip the read so executor tests for
+    those kinds don't have to mock localization.
+    """
+    if seg.kind == "linear":
+        return get_world_heading_rad(robot)
+    return None
+
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -319,7 +334,13 @@ class PathExecutor:
             # like WorldCorrection initialize their tracker against the
             # post-reset frame.
             seg_correction = None
-            motion = create_motion(robot, seg, is_last, seg_correction)
+            motion = create_motion(
+                robot,
+                seg,
+                is_last,
+                seg_correction,
+                current_world_heading_rad=_world_heading_for_seg(robot, seg),
+            )
             motion.start()
             seg_origin = _get_position_offset(robot, seg)
 
@@ -431,6 +452,7 @@ class PathExecutor:
                     if was_deferred and seg_correction is not None and seg.kind in ("turn", "arc"):
                         seg_correction.angle_adjust_rad = 0.0
 
+                    next_world_heading = _world_heading_for_seg(robot, seg)
                     if is_same_type(prev_seg, seg):
                         # Same type: warm start — carry velocity seamlessly.
                         offset = _get_position_offset(robot, prev_seg)
@@ -439,6 +461,7 @@ class PathExecutor:
                             seg,
                             is_last,
                             seg_correction,
+                            current_world_heading_rad=next_world_heading,
                         )
                         motion.start_warm(offset, current_vel)
                     else:
@@ -451,6 +474,7 @@ class PathExecutor:
                             seg,
                             is_last,
                             seg_correction,
+                            current_world_heading_rad=next_world_heading,
                         )
                         motion.start()
 

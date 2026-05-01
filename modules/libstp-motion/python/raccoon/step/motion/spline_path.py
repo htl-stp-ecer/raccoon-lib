@@ -84,7 +84,11 @@ class SplinePath(MotionStep):
             config.headings_rad = [math.radians(wp[2]) for wp in self._waypoints]
 
         config.speed_scale = self._speed
-        config.use_absolute_heading = self._absolute_heading
+        # Phase 4: SplineMotion is absolute-heading-only — the C++ side always
+        # captures getAbsoluteHeading() at start and adds it to relative target
+        # headings during update(). The legacy ``use_absolute_heading`` toggle
+        # is gone; ``_absolute_heading`` only changes how ``final_heading_deg``
+        # is interpreted (absolute reference vs. relative-to-start) below.
 
         if self._final_heading_deg is not None and not self._has_headings:
             if self._absolute_heading:
