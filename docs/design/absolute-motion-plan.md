@@ -284,6 +284,7 @@ Mission-Author schreibt wie heute, kriegt Drift-Resistenz + Optimierung geschenk
 2. **`Localization` C++-Service** mit Pass-Through (kein Filter, nimmt `Stm32Odometry` direkt durch). Eigener Thread, `observe()`-API. Wird auf `robot.localization` exposed. Motions ignorieren ihn noch. Sofortiger Gewinn: stabile Welt-Pose über Motion-Grenzen hinweg. Da `Stm32Odometry` nur kumulierte Pose liefert, berechnet Localization das Delta selbst (`current - last_seen`) — kein STM32-Firmware-Change nötig.
    _Status (Mai 2026): ✅ erledigt. Service + Bindings + `robot.localization`-Property (`110916c`, `1f33998`), Sim-Builder-Wiring + Reset-Resilienz-Repro (Commit C), Reset-Detection in `tickLoop()` + Cross-Motion-Smoke + aktivierte Reset-Tests (Commit D). Die Headline-Promise „Welt-Pose lebt über Motion-Grenzen" ist End-to-End reproduziert: zwei back-to-back `drive_forward(20)`-Steps akkumulieren die Welt-Pose auf ~`(0.40, 0, 0)` trotz `odometry.reset()` in `start()`. Die Reset-Erkennung ist heuristisch (Origin-Snap-Signatur + `>0.5 m/Tick`-Defensivpfad), weil `IOdometry` keinen monotonen Reset-Counter exposed; sie wird in Phase 4 redundant, sobald `odometry.reset()` aus dem Motion-Start verschwindet, kann aber bis dahin auch unsaubere Reset-Pfade absorbieren._
 3. **`Pose`-Type + IR mit absoluten Targets** (auch C++, mit Bindings). Compiler kann beides erzeugen, Executor kann beides ausführen. Snapshot-Tests gegen heutige Mission-Outputs.
+   _Status (Mai 2026): Phase 3 in Python (statt C++) — siehe Phase-3-Implementation-Note unten._
 4. **Motions bekommen `absolute_target`-Pfad — harter Umstieg.** Kein Adapter, kein Doppel-Pfad. Alle Motions werden auf das absolute Target umgezogen, `WorldCorrectionMiddleware` wird in derselben Phase ersatzlos entfernt. Drumbot-Toleranzen aus `374cd5b` werden hier zurückgedreht. Mehr Risiko in einer Phase, aber kein Code-Doppel mit Lifetime > 0.
 5. **DSL desugart** auf absolute Plan-IR. Konservativer Optimizer (nur `validate_reachable` + `fold_implicit_turns`). Default flippt für neue Code-Pfade; alte DSL bleibt funktional.
 6. **Particle Filter** ersetzt den Pass-Through in Localization. Resync-Steps (`align_to_wall`, `find_line`, `resync_at_start_pose`) werden funktional. Performance-Profil auf Pi3.
@@ -309,6 +310,11 @@ Jede Phase ist deploybar.
 ## Relative API darf neben Absolute leben
 
 Wie der `flow()` Step, soll es fürs Absolute Mode eine option geben oder so - relativ soll weiterhin der Default sein; in manchen Situationen ist relativ immer noch besser- Smarter ist nicht immer gleich gut für gewisse Situationen.
+
+## Implementation Notes
+
+- **Phase 3 — Python-IR statt C++-IR**: compile_plan ist Mission-Startup, kein Hot-Path. Action-Knoten wickeln Python-Steps; ein C++-IR mit py::object würde Bindings-Komplexität ohne Performance-Gewinn bringen. Folge: Phase 5 (Optimizer-Passes) bleibt ebenfalls Python. Die ursprüngliche Aussage 'Desugaring + Optimizer in C++' im Architektur-Abschnitt 'Wo das läuft' ist damit überholt.
+- **Phase 3 — Snapshot-Tests**: IR-Repr-Snapshots in Phase 3 (billig, deterministisch). Trajektorien-Snapshots gegen Sim-Recordings sind Phase-4-Pflicht, wenn Motion-Klassen auf absolute Targets umgestellt werden — vorher wäre der Snapshot ein Doppel-Aufwand.
 
 ## Offen / zu klären
 

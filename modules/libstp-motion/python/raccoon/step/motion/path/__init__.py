@@ -22,6 +22,19 @@ from .ir import (
     Correction,
     SENTINEL_DISTANCE_M,
 )
+from .abs_ir import (
+    Goto,
+    TurnTo,
+    Resync,
+    Action,
+    AbsoluteNode,
+)
+from .abs_factory import (
+    goto,
+    turn_to,
+    resync,
+    action,
+)
 from .compiler import CompilerPass, CompiledPlan, PathCompiler
 from .executor import PathExecutor
 from .motion_factory import (
@@ -38,12 +51,23 @@ from .middleware import (
 )
 
 __all__ = [
-    # IR
+    # IR (relative)
     "Segment",
     "SideAction",
     "PathNode",
     "Correction",
     "SENTINEL_DISTANCE_M",
+    # IR (absolute, Phase 3)
+    "Goto",
+    "TurnTo",
+    "Resync",
+    "Action",
+    "AbsoluteNode",
+    # IR factories (absolute, cm/deg)
+    "goto",
+    "turn_to",
+    "resync",
+    "action",
     # Compilation
     "CompilerPass",
     "CompiledPlan",
