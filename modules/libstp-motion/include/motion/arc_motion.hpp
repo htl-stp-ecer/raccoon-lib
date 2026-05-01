@@ -102,6 +102,11 @@ namespace libstp::motion
         bool suppress_hard_stop_{false};
         double heading_offset_rad_{0.0};
 
+        // Absolute heading at start; subtracted from current absolute heading to
+        // produce the body-frame arc progress. Replaces the historical
+        // odometry-reset semantics.
+        double initial_absolute_heading_rad_{0.0};
+
         // Velocity tracking for settling detection
         double prev_heading_{0.0};
         double filtered_velocity_{0.0};

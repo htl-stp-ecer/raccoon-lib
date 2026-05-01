@@ -14,7 +14,8 @@ void init_diagonal_motion(py::module_& m)
         .def(py::init<>())
         .def_readwrite("angle_rad", &DiagonalMotionConfig::angle_rad)
         .def_readwrite("distance_m", &DiagonalMotionConfig::distance_m)
-        .def_readwrite("speed_scale", &DiagonalMotionConfig::speed_scale);
+        .def_readwrite("speed_scale", &DiagonalMotionConfig::speed_scale)
+        .def_readwrite("target_heading_rad", &DiagonalMotionConfig::target_heading_rad);
 
     py::class_<DiagonalMotionTelemetry>(m, "DiagonalMotionTelemetry")
         .def_readonly("time_s", &DiagonalMotionTelemetry::time_s)

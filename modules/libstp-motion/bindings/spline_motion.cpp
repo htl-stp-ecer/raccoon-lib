@@ -15,7 +15,6 @@ void init_spline_motion(py::module_& m)
         .def_readwrite("waypoints_m", &SplineMotionConfig::waypoints_m)
         .def_readwrite("headings_rad", &SplineMotionConfig::headings_rad)
         .def_readwrite("speed_scale", &SplineMotionConfig::speed_scale)
-        .def_readwrite("use_absolute_heading", &SplineMotionConfig::use_absolute_heading)
         .def_readwrite("final_heading_rad", &SplineMotionConfig::final_heading_rad);
 
     py::class_<SplineMotionTelemetry>(m, "SplineMotionTelemetry")

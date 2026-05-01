@@ -159,6 +159,21 @@ protected:
     UnifiedMotionPidConfig pid_config_{};
 };
 
+// Helper: set the mock pose using world-frame x/y and absolute heading.
+// Keeps getDistanceFromOrigin paths stale-but-unused (the new motion code
+// reads getPose()/getAbsoluteHeading() exclusively).
+static void setWorldPose(NiceMock<MockOdometry>& mock,
+                         double x, double y, double heading_rad)
+{
+    libstp::foundation::Pose pose;
+    pose.position = Eigen::Vector3f(static_cast<float>(x),
+                                     static_cast<float>(y),
+                                     0.0f);
+    pose.heading = static_cast<float>(heading_rad);
+    mock.setPose(pose);
+    ON_CALL(mock, getAbsoluteHeading()).WillByDefault(testing::Return(heading_rad));
+}
+
 TEST_F(SplineMotionTest, StartsNotFinished)
 {
     SplineMotionConfig cfg;
@@ -166,8 +181,21 @@ TEST_F(SplineMotionTest, StartsNotFinished)
     cfg.speed_scale = 0.5;
 
     auto motion = makeMotion(cfg);
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);
     motion->start();
     EXPECT_FALSE(motion->isFinished());
+}
+
+TEST_F(SplineMotionTest, StartDoesNotResetOdometry)
+{
+    SplineMotionConfig cfg;
+    cfg.waypoints_m = {{0.3, 0.0}, {0.6, 0.0}};
+    cfg.speed_scale = 0.5;
+
+    auto motion = makeMotion(cfg);
+    EXPECT_CALL(*mock_odometry_, reset()).Times(0);
+    setWorldPose(*mock_odometry_, 1.5, 0.7, 0.3);
+    motion->start();
 }
 
 TEST_F(SplineMotionTest, FinishesWhenAtGoal)
@@ -177,12 +205,11 @@ TEST_F(SplineMotionTest, FinishesWhenAtGoal)
     cfg.speed_scale = 0.5;
 
     auto motion = makeMotion(cfg);
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);
     motion->start();
 
-    // Simulate the robot reaching the end of the spline
-    mock_odometry_->simulateForwardProgress(0.20);
-    mock_odometry_->setHeading(0.0);
-    mock_odometry_->setHeadingError(0.0);
+    // Simulate the robot reaching the end of the spline (body-forward 0.20)
+    setWorldPose(*mock_odometry_, 0.20, 0.0, 0.0);
 
     // Run enough updates for the profiled PID to converge
     for (int i = 0; i < 500; ++i)
@@ -202,9 +229,10 @@ TEST_F(SplineMotionTest, TelemetryIsPopulated)
     cfg.speed_scale = 0.5;
 
     auto motion = makeMotion(cfg);
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);
     motion->start();
 
-    mock_odometry_->simulateForwardProgress(0.05);
+    setWorldPose(*mock_odometry_, 0.05, 0.0, 0.0);
     motion->update(kDt);
 
     const auto& telem = motion->getTelemetry();

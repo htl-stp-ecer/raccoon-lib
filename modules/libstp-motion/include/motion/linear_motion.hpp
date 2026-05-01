@@ -2,7 +2,10 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
+
+#include <Eigen/Core>
 
 #include "motion/motion.hpp"
 #include "motion/motion_pid.hpp"
@@ -27,11 +30,10 @@ namespace libstp::motion
         double distance_m{0.0};
         double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.max_velocity
 
-        /// When set, the controller holds this absolute IMU heading (radians)
-        /// instead of the heading captured at start.  The heading PID error
-        /// is computed from getAbsoluteHeading() rather than the reset-relative
-        /// getHeading(), so it stays stable across odometry resets.
-        std::optional<double> target_heading_rad{};
+        /// Absolute world-frame heading (radians) the controller holds during
+        /// the motion. Required — the path executor sets this per segment.
+        /// Heading PID error is computed against `getAbsoluteHeading()`.
+        double target_heading_rad{0.0};
     };
 
     /** Per-cycle diagnostics captured while a `LinearMotion` instance runs. */
@@ -115,12 +117,22 @@ namespace libstp::motion
     private:
         void complete();
 
+        /// Snapshot the current pose as the body-frame origin for this motion.
+        /// Replaces the historical `odometry().reset()` call in start()/startWarm().
+        void captureInitialPose();
+
+        /// Project the current world-frame pose into the body frame captured
+        /// at start. Returns (forward, lateral) signed distances in the same
+        /// convention as `IOdometry::getDistanceFromOrigin` (lateral positive
+        /// = right of initial heading).
+        [[nodiscard]] std::pair<double, double> projectBodyFrame() const;
+
         LinearMotionConfig cfg_{};
         double max_velocity_{0.0};  // computed from speed_scale * AxisConstraints
         std::unique_ptr<foundation::PidController> heading_pid_;
         ProfiledPIDController profiled_pid_;
+        Eigen::Vector2d initial_position_m_{Eigen::Vector2d::Zero()};
         double initial_heading_rad_{0.0};
-        bool use_absolute_heading_{false};
         bool finished_{false};
         bool suppress_hard_stop_{false};
         double position_offset_m_{0.0};  // subtracted from odometry in warm-start mode

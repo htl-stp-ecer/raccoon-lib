@@ -60,7 +60,13 @@ namespace libstp::motion
         elapsed_time_ = 0.0;
         telemetry_.clear();
 
-        odometry().reset();
+        // Snapshot start pose; do not reset odometry.
+        {
+            const auto pose = odometry().getPose();
+            initial_position_m_ = Eigen::Vector2d(static_cast<double>(pose.position.x()),
+                                                  static_cast<double>(pose.position.y()));
+            initial_heading_rad_ = static_cast<double>(pose.heading);
+        }
         drive().resetVelocityControllers();
 
         heading_pid_->reset();
@@ -68,8 +74,6 @@ namespace libstp::motion
         // Reset profiled PID at origin, goal = target distance
         profiled_pid_.reset(0.0);
         profiled_pid_.setGoal(cfg_.distance_m);
-
-        initial_heading_rad_ = odometry().getHeading();
 
         LIBSTP_LOG_TRACE("DiagonalMotion started: angle={:.3f} rad, target={:.3f} m, max_velocity={:.3f} m/s (scale={:.2f})",
                     cfg_.angle_rad, cfg_.distance_m, max_velocity_, cfg_.speed_scale);
@@ -99,14 +103,25 @@ namespace libstp::motion
 
         odometry().update(dt);
 
-        const auto distance_info = odometry().getDistanceFromOrigin();
-        const double current_heading = odometry().getHeading();
-        const double yaw_error = odometry().getHeadingError(initial_heading_rad_);
+        // Project current world-frame pose into the body frame captured at start.
+        const auto pose = odometry().getPose();
+        const double dx = static_cast<double>(pose.position.x()) - initial_position_m_.x();
+        const double dy = static_cast<double>(pose.position.y()) - initial_position_m_.y();
+        const double cos_h = std::cos(initial_heading_rad_);
+        const double sin_h = std::sin(initial_heading_rad_);
+        const double body_forward = dx * cos_h + dy * sin_h;
+        const double body_lateral = -dx * sin_h + dy * cos_h;
 
-        // Project odometry onto rotated coordinate frame
+        const double current_heading = odometry().getAbsoluteHeading();
+        // Heading error to absolute target.
+        const double yaw_error = std::remainder(
+            cfg_.target_heading_rad - current_heading,
+            2.0 * std::numbers::pi);
+
+        // Project body-frame displacement onto rotated travel frame
         // Primary axis = along travel direction, cross-track = perpendicular
-        const double primary_position = distance_info.forward * cos_angle_ + distance_info.lateral * sin_angle_;
-        const double cross_track_position = -distance_info.forward * sin_angle_ + distance_info.lateral * cos_angle_;
+        const double primary_position = body_forward * cos_angle_ + body_lateral * sin_angle_;
+        const double cross_track_position = -body_forward * sin_angle_ + body_lateral * cos_angle_;
 
         // Filtered velocity for settling detection
         const double raw_velocity = (primary_position - prev_primary_position_) / dt;
