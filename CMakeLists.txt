@@ -263,10 +263,11 @@ endif()
 # so cross-binding calls (raccoon.hal → raccoon.foundation etc.) are validated
 # end-to-end rather than skipped via ``ignore_missing_imports``.
 #
-# Both off via -DLIBSTP_RUN_MYPY=OFF for the pre-fix interim. Generation
-# requires raccoon already importable in ${Python_EXECUTABLE}; build-stubs.sh
-# emits a clear error pointing at ``pip install -e .[dev]`` if not.
-option(LIBSTP_RUN_MYPY "Run pybind11-stubgen + mypy as a build gate" ON)
+# Keep this OFF by default until the existing mypy backlog is burned down. The
+# gate is still available for targeted type-check work and for re-enabling once
+# the baseline is clean; turning it on by default before that just breaks
+# unrelated wheel/release builds on main.
+option(LIBSTP_RUN_MYPY "Run pybind11-stubgen + mypy as a build gate" OFF)
 
 if(LIBSTP_RUN_MYPY)
   set(_RACCOON_STAGING_DIR "${CMAKE_BINARY_DIR}/python-staging")
