@@ -60,16 +60,6 @@ jobs:
           restore-keys: |
             ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-
 
-      - name: Restore CMake dependency cache
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            .cmake-cache-docker-test
-            _skbuild-docker-test
-          key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-native-
-
       - name: Run C++ tests
         run: |
           IMAGE_NAME="libstp-dev:test"
@@ -201,15 +191,6 @@ jobs:
 
           run_docker "ccache --show-stats"
           echo "✓ Python tests passed"
-
-      - name: Save CMake dependency cache
-        if: always()
-        uses: actions/cache/save@v5
-        with:
-          path: |
-            .cmake-cache-docker-test
-            _skbuild-docker-test
-          key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save compiler and package caches
         if: always()
