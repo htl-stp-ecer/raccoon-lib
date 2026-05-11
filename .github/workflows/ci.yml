@@ -92,14 +92,14 @@ jobs:
               "$IMAGE_NAME" bash -lc "mkdir -p \"\$PIP_CACHE_DIR\" && chown 0:0 \"\$PIP_CACHE_DIR\" && $1"
           }
 
-          echo "::group::Install build dependencies"
-          run_docker "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
-          echo "::endgroup::"
-
-          echo "::group::Build editable package + test binaries"
           run_docker "
             set -euo pipefail
+
+            echo '::group::Install build dependencies'
             pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy
+            echo '::endgroup::'
+
+            echo '::group::Build editable package + test binaries'
             pip install /src/raccoon-transport/python
             CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
               --no-build-isolation \
@@ -110,11 +110,8 @@ jobs:
               --config-settings=cmake.define.CMAKE_BUILD_TYPE=Release \
               --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test \
               --config-settings=cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache \
-              --config-settings=cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache"
-          echo "::endgroup::"
-
-          run_docker "
-            set -euo pipefail
+              --config-settings=cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
+            echo '::endgroup::'
 
             echo '::group::Run C++ tests'
             ctest --test-dir /src/_skbuild-docker-test --output-on-failure -E MockSimIntegration
