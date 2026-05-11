@@ -30,7 +30,7 @@ jobs:
           fi
 
   test:
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 90
     env:
       CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
@@ -215,7 +215,7 @@ jobs:
           key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   build:
-    runs-on: [self-hosted, Linux]
+    runs-on: [self-hosted, Linux, X64]
     needs: [test, changes]
     # Only release on push to main, and only when non-doc files changed.
     if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
