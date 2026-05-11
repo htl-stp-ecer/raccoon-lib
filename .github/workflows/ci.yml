@@ -44,6 +44,12 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           clean: false
 
+      - name: Clean stale test build artifacts
+        run: |
+          rm -rf .cmake-cache-docker-test
+          rm -rf _skbuild-docker-test
+          rm -rf build-test
+
       - name: Restore compiler and package caches
         uses: actions/cache/restore@v5
         with:
