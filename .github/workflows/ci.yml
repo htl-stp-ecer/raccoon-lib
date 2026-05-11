@@ -276,38 +276,21 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           clean: false
 
-      - name: Restore compiler and package caches
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
-
-      - name: Restore CMake dependency cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            .cmake-cache-docker
-            .cmake-cache-docker-mock
-          key: ci-cmake-release-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-cmake-release-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Clean old build artifacts
+      - name: Clean old build artifacts and release caches
         run: |
-          find build-docker -name '*.whl' -delete 2>/dev/null || true
+          rm -rf .gha-cache
+          rm -rf .cmake-cache-docker .cmake-cache-docker-mock
+          rm -rf _skbuild-docker _skbuild-docker-mock
+          rm -rf build-docker build-docker-mock build-docker-stubs
+          rm -rf docs/_build docs-site release-bundle
           docker run --rm -v "$PWD":/src alpine sh -c \
-            "rm -rf /src/build-docker-stubs /src/build-docker-mock /src/_skbuild-docker-mock"
+            "rm -rf /src/.gha-cache /src/.cmake-cache-docker /src/.cmake-cache-docker-mock /src/_skbuild-docker /src/_skbuild-docker-mock /src/build-docker /src/build-docker-mock /src/build-docker-stubs /src/docs/_build /src/docs-site /src/release-bundle"
 
       - name: Build ARM64 wheel
         run: |
@@ -343,25 +326,6 @@ jobs:
             -v "$CCACHE_HOST_DIR":/ccache \
             -e CCACHE_DIR=/ccache \
             libstp-dev:arm64 ccache --show-stats
-
-      - name: Save release CMake dependency cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .cmake-cache-docker
-            .cmake-cache-docker-mock
-          key: ci-cmake-release-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Save release compiler and package caches
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Generate stubs and build universal wheel
         run: |
