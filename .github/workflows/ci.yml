@@ -35,7 +35,6 @@ jobs:
     env:
       CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
       PIP_CACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/pip
-      DOCKER_BUILDX_CACHE_DIR: ${{ github.workspace }}/.gha-cache/buildx
 
     steps:
       - name: Checkout with submodules
@@ -51,10 +50,9 @@ jobs:
           path: |
             .gha-cache/ccache
             .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
+            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-
 
       - name: Restore CMake dependency cache
         uses: actions/cache/restore@v5
@@ -62,37 +60,20 @@ jobs:
           path: |
             .cmake-cache-docker-test
             _skbuild-docker-test
-          key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+            ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-native-
 
       - name: Run C++ tests
         run: |
-          PLATFORM="linux/arm64/v8"
-          IMAGE_NAME="libstp-dev:arm64"
-          mkdir -p "$CCACHE_HOST_DIR" "$PIP_CACHE_HOST_DIR" "$DOCKER_BUILDX_CACHE_DIR"
+          IMAGE_NAME="libstp-dev:test"
+          mkdir -p "$CCACHE_HOST_DIR" "$PIP_CACHE_HOST_DIR"
 
-          # Rebuild the dev image only when the Dockerfile changes.
-          # Tag includes a hash of the Dockerfile so stale images are
-          # never reused; unrelated runs share the cache.
           DOCKERFILE_HASH=$(sha256sum .github/docker/Dockerfile | cut -c1-12)
-          VERSIONED_IMAGE="libstp-dev:arm64-${DOCKERFILE_HASH}"
+          VERSIONED_IMAGE="libstp-dev:test-${DOCKERFILE_HASH}"
           if ! docker image inspect "$VERSIONED_IMAGE" >/dev/null 2>&1; then
             echo "Dockerfile changed (hash $DOCKERFILE_HASH) — rebuilding image..."
-            docker buildx build \
-              --platform "$PLATFORM" \
-              -f .github/docker/Dockerfile \
-              --cache-from "type=local,src=$DOCKER_BUILDX_CACHE_DIR" \
-              --cache-to "type=local,dest=${DOCKER_BUILDX_CACHE_DIR}-new,mode=max" \
-              --load -t "$VERSIONED_IMAGE" .
-            rm -rf "$DOCKER_BUILDX_CACHE_DIR"
-            mv "${DOCKER_BUILDX_CACHE_DIR}-new" "$DOCKER_BUILDX_CACHE_DIR"
+            docker build -f .github/docker/Dockerfile -t "$VERSIONED_IMAGE" .
             docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
           else
             echo "Reusing cached image $VERSIONED_IMAGE"
@@ -100,7 +81,7 @@ jobs:
           fi
 
           run_docker() {
-            docker run --rm --platform "$PLATFORM" \
+            docker run --rm \
               -v "$PWD":/src \
               -v "$CCACHE_HOST_DIR":/ccache \
               -v "$PIP_CACHE_HOST_DIR":/pip-cache \
@@ -147,12 +128,11 @@ jobs:
 
       - name: Run Python tests
         run: |
-          PLATFORM="linux/arm64/v8"
-          IMAGE_NAME="libstp-dev:arm64"
+          IMAGE_NAME="libstp-dev:test"
           FETCHCONTENT_DIR=".cmake-cache-docker-test"
 
           run_docker() {
-            docker run --rm --platform "$PLATFORM" \
+            docker run --rm \
               -v "$PWD":/src \
               -v "$CCACHE_HOST_DIR":/ccache \
               -v "$PIP_CACHE_HOST_DIR":/pip-cache \
@@ -223,7 +203,7 @@ jobs:
           path: |
             .cmake-cache-docker-test
             _skbuild-docker-test
-          key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-cmake-test-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('CMakeLists.txt', '**/CMakeLists.txt') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save compiler and package caches
         if: always()
@@ -232,8 +212,7 @@ jobs:
           path: |
             .gha-cache/ccache
             .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   build:
     runs-on: [self-hosted, Linux]
