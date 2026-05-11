@@ -7,6 +7,8 @@ BUILD_DOCS="${BUILD_DOCS:-0}"
 BUILD_DIR="${BUILD_DIR:-build-docker}"
 PLATFORM="${PLATFORM:-linux/arm64/v8}"
 IMAGE_NAME="${IMAGE_NAME:-libstp-dev:arm64}"
+DOCKERFILE_PATH="${DOCKERFILE_PATH:-.github/docker/Dockerfile}"
+DOCKER_BUILD_CONTEXT="${DOCKER_BUILD_CONTEXT:-.}"
 CCACHE_VOL="${CCACHE_VOL:-libstp-ccache}"
 PIP_CACHE_VOL="${PIP_CACHE_VOL:-libstp-pip-cache}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
@@ -107,7 +109,7 @@ ensure_image() {
       cache_args+=(--cache-to "type=local,dest=${DOCKER_BUILDX_CACHE_DIR}-new,mode=max")
     fi
 
-    docker buildx build --platform "$PLATFORM" -t "$IMAGE_NAME" --load "${cache_args[@]}" .
+    docker buildx build --platform "$PLATFORM" -f "$DOCKERFILE_PATH" -t "$IMAGE_NAME" --load "${cache_args[@]}" "$DOCKER_BUILD_CONTEXT"
 
     if [[ -n "$DOCKER_BUILDX_CACHE_DIR" && -d "${DOCKER_BUILDX_CACHE_DIR}-new" ]]; then
       rm -rf "$DOCKER_BUILDX_CACHE_DIR"

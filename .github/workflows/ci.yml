@@ -30,7 +30,7 @@ jobs:
           fi
 
   test:
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 90
     env:
       CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
@@ -38,20 +38,6 @@ jobs:
       DOCKER_BUILDX_CACHE_DIR: ${{ github.workspace }}/.gha-cache/buildx
 
     steps:
-      - name: Ensure Docker (Colima) is running
-        run: |
-          if docker info >/dev/null 2>&1; then
-            echo "Docker already running"
-            exit 0
-          fi
-          echo "Docker not available, resetting Colima..."
-          colima stop --force 2>/dev/null || true
-          colima delete --force 2>/dev/null || true
-          colima start --cpu 4 --memory 4 --disk 60
-          docker context use colima 2>/dev/null || true
-          docker info > /dev/null
-          echo "Docker is ready"
-
       - name: Checkout with submodules
         uses: actions/checkout@v6
         with:
@@ -66,7 +52,7 @@ jobs:
             .gha-cache/ccache
             .gha-cache/pip
             .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
 
@@ -95,12 +81,13 @@ jobs:
           # Rebuild the dev image only when the Dockerfile changes.
           # Tag includes a hash of the Dockerfile so stale images are
           # never reused; unrelated runs share the cache.
-          DOCKERFILE_HASH=$(sha256sum Dockerfile | cut -c1-12)
+          DOCKERFILE_HASH=$(sha256sum .github/docker/Dockerfile | cut -c1-12)
           VERSIONED_IMAGE="libstp-dev:arm64-${DOCKERFILE_HASH}"
           if ! docker image inspect "$VERSIONED_IMAGE" >/dev/null 2>&1; then
             echo "Dockerfile changed (hash $DOCKERFILE_HASH) — rebuilding image..."
             docker buildx build \
               --platform "$PLATFORM" \
+              -f .github/docker/Dockerfile \
               --cache-from "type=local,src=$DOCKER_BUILDX_CACHE_DIR" \
               --cache-to "type=local,dest=${DOCKER_BUILDX_CACHE_DIR}-new,mode=max" \
               --load -t "$VERSIONED_IMAGE" .
@@ -246,10 +233,10 @@ jobs:
             .gha-cache/ccache
             .gha-cache/pip
             .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   build:
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, Linux]
     needs: [test, changes]
     # Only release on push to main, and only when non-doc files changed.
     if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
@@ -262,21 +249,6 @@ jobs:
       DOCKER_BUILDX_CACHE_DIR: ${{ github.workspace }}/.gha-cache/buildx
 
     steps:
-      - name: Ensure Docker (Colima) is running
-        run: |
-          if docker info >/dev/null 2>&1; then
-            echo "Docker already running"
-            exit 0
-          fi
-
-          echo "Docker not available, resetting Colima..."
-          colima stop --force 2>/dev/null || true
-          colima delete --force 2>/dev/null || true
-          colima start --cpu 4 --memory 4 --disk 60
-          docker context use colima 2>/dev/null || true
-          docker info > /dev/null
-          echo "Docker is ready"
-
       - name: Checkout with submodules
         uses: actions/checkout@v6
         with:
