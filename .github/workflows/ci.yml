@@ -132,15 +132,21 @@ jobs:
           run_docker "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27'"
           echo "::endgroup::"
 
-          echo "::group::Build C++ tests"
-          run_docker "cmake -B /src/build-test -G Ninja \
-            -DLIBSTP_BUILD_TESTS=ON \
-            -DLIBSTP_RUN_MYPY=OFF \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test"
-          run_docker "ninja -C /src/build-test -j4"
+          echo "::group::Build editable package + C++ tests"
+          run_docker "
+            set -euo pipefail
+            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy
+            pip install /src/raccoon-transport/python
+            CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
+              --no-build-isolation \
+              --config-settings=build-dir=/src/_skbuild-docker-test \
+              --config-settings=cmake.define.LIBSTP_BUILD_TESTS=ON \
+              --config-settings=cmake.define.DRIVER_BUNDLE=mock \
+              --config-settings=cmake.define.LIBSTP_RUN_MYPY=OFF \
+              --config-settings=cmake.define.CMAKE_BUILD_TYPE=Release \
+              --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test \
+              --config-settings=cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache \
+              --config-settings=cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache"
           echo "::endgroup::"
 
           echo "Running C++ tests..."
@@ -148,7 +154,7 @@ jobs:
           # teardown between test cases. This is a real bug in MockPlatform,
           # not a test bug. Tracked in TESTING_DEBT.md — fix before claiming
           # full test coverage.
-          run_docker "ctest --test-dir /src/build-test --output-on-failure -E MockSimIntegration"
+          run_docker "ctest --test-dir /src/_skbuild-docker-test --output-on-failure -E MockSimIntegration"
           run_docker "ccache --show-stats"
           echo "✓ C++ tests passed (MockSimIntegration excluded — see TESTING_DEBT.md)"
 
@@ -178,15 +184,17 @@ jobs:
           run_docker "
             set -euo pipefail
 
-            echo '::group::Install mock-bundle wheel'
+            echo '::group::Reuse editable package build'
             pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy
             pip install /src/raccoon-transport/python
             CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
               --no-build-isolation \
               --config-settings=build-dir=/src/_skbuild-docker-test \
+              --config-settings=cmake.define.LIBSTP_BUILD_TESTS=ON \
               --config-settings=cmake.define.DRIVER_BUNDLE=mock \
               --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR \
               --config-settings=cmake.define.LIBSTP_RUN_MYPY=OFF \
+              --config-settings=cmake.define.CMAKE_BUILD_TYPE=Release \
               --config-settings=cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache \
               --config-settings=cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
             echo '::endgroup::'
