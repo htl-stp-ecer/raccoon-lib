@@ -60,7 +60,7 @@ jobs:
           clean: false
 
       - name: Restore compiler and package caches
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             .gha-cache/ccache
@@ -71,7 +71,7 @@ jobs:
             ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
 
       - name: Restore CMake dependency cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             .cmake-cache-docker-test
@@ -223,7 +223,7 @@ jobs:
 
       - name: Save CMake dependency cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             .cmake-cache-docker-test
@@ -232,7 +232,7 @@ jobs:
 
       - name: Save compiler and package caches
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: |
             .gha-cache/ccache
