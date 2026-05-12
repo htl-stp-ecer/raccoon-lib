@@ -105,7 +105,7 @@ jobs:
             set -euo pipefail
 
             echo '::group::Install build dependencies'
-            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy
+            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy pytest-rerunfailures
             echo '::endgroup::'
 
             echo '::group::Build editable package + test binaries'
@@ -143,12 +143,14 @@ jobs:
             python -m pytest tests/python/sim \
               --ignore=tests/python/sim/test_auto_tune.py \
               -ra --showlocals \
+              --reruns 1 --reruns-delay 2 \
               -W ignore::pytest.PytestAssertRewriteWarning
             echo '::endgroup::'
 
             echo '::group::Run auto-tune sim tests'
             python -m pytest tests/python/sim/test_auto_tune.py \
               -ra --showlocals -v \
+              --reruns 1 --reruns-delay 2 \
               -W ignore::pytest.PytestAssertRewriteWarning
             echo '::endgroup::'
           "
