@@ -1,12 +1,14 @@
 #include <gtest/gtest.h>
 
 #include "foundation/types.hpp"
+#include "libstp/map/WorldMap.hpp"
 #include "localization/localization.hpp"
 #include "odometry/odometry.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -68,9 +70,38 @@ private:
 
 // Small helper: tick period 5 ms in tests so we don't have to wait long.
 constexpr int kTickMs = 5;
+constexpr char kSingleLineFtmap[] = R"({
+  "format":"flowchart-table-map",
+  "version":1,
+  "table":{"widthCm":200,"heightCm":100},
+  "lines":[
+    {"kind":"line","startX":20,"startY":50,"endX":180,"endY":50,"widthCm":1.5}
+  ]
+})";
 
 LocalizationConfig fastConfig() {
-    return LocalizationConfig{kTickMs};
+    LocalizationConfig cfg;
+    cfg.tick_period_ms = kTickMs;
+    cfg.particle_count = 256;
+    cfg.rng_seed = 1234;
+    return cfg;
+}
+
+libstp::map::WorldMap makeSingleLineMap() {
+    libstp::map::WorldMap map;
+    map.parseFtmap(kSingleLineFtmap);
+    return map;
+}
+
+LocalizationConfig deterministicConfig() {
+    LocalizationConfig cfg = fastConfig();
+    cfg.process_translation_noise_m = 0.0;
+    cfg.process_translation_noise_per_m = 0.0;
+    cfg.process_heading_noise_rad = 0.0;
+    cfg.process_heading_noise_per_rad = 0.0;
+    cfg.observation_injection_ratio = 1.0;
+    cfg.resample_effective_sample_ratio = 1.0;
+    return cfg;
 }
 
 void waitTicks(int n) {
@@ -83,7 +114,7 @@ TEST(Localization, PropagatesPose) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(3);
 
     odom->setPose(0.1f, 0.0f, 0.0f);
@@ -92,16 +123,16 @@ TEST(Localization, PropagatesPose) {
     waitTicks(5);
 
     const auto pose = loc.getPose();
-    EXPECT_NEAR(pose.position.x(), 0.2f, 1e-4f);
-    EXPECT_NEAR(pose.position.y(), 0.0f, 1e-4f);
-    EXPECT_NEAR(pose.heading, 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.x(), 0.2f, 3e-3f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 3e-3f);
+    EXPECT_NEAR(pose.heading, 0.0f, 3e-3f);
 }
 
 TEST(Localization, ObserveSnapsAllAxes) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(2);
 
     Observation obs;
@@ -113,16 +144,16 @@ TEST(Localization, ObserveSnapsAllAxes) {
 
     // Snap is immediate (synchronous under the lock).
     const auto pose = loc.getPose();
-    EXPECT_NEAR(pose.position.x(), 1.5f, 1e-4f);
-    EXPECT_NEAR(pose.position.y(), 1.5f, 1e-4f);
-    EXPECT_NEAR(pose.heading, 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.x(), 1.5f, 5e-3f);
+    EXPECT_NEAR(pose.position.y(), 1.5f, 5e-3f);
+    EXPECT_NEAR(pose.heading, 0.0f, 5e-3f);
 }
 
 TEST(Localization, ObserveDoesNotDoubleCount) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(2);
 
     // Accumulate some odom drift first.
@@ -131,7 +162,7 @@ TEST(Localization, ObserveDoesNotDoubleCount) {
 
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 0.30f, 1e-4f);
+        EXPECT_NEAR(pose.position.x(), 0.30f, 3e-3f);
     }
 
     // Snap to a known absolute pose.
@@ -144,7 +175,7 @@ TEST(Localization, ObserveDoesNotDoubleCount) {
 
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 1.0f, 1e-4f);
+        EXPECT_NEAR(pose.position.x(), 1.0f, 5e-3f);
     }
 
     // Move odom further; world pose must advance by the new delta only,
@@ -153,8 +184,8 @@ TEST(Localization, ObserveDoesNotDoubleCount) {
     waitTicks(5);
 
     const auto pose = loc.getPose();
-    EXPECT_NEAR(pose.position.x(), 1.20f, 1e-4f);
-    EXPECT_NEAR(pose.position.y(), 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.x(), 1.20f, 5e-3f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 5e-3f);
 }
 
 TEST(Localization, StopAndDestructorJoinPromptly) {
@@ -181,7 +212,7 @@ TEST(Localization, WorldPoseSurvivesOdometryReset) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(2);
 
     // Simulate motion 1: odometry integrates to 0.20 m forward.
@@ -189,7 +220,7 @@ TEST(Localization, WorldPoseSurvivesOdometryReset) {
     waitTicks(4);
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-4f);
+        EXPECT_NEAR(pose.position.x(), 0.20f, 3e-3f);
     }
 
     // Motion 2 starts — the motion's start() calls odometry.reset(). The
@@ -198,7 +229,7 @@ TEST(Localization, WorldPoseSurvivesOdometryReset) {
     waitTicks(4);
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-3f)
+        EXPECT_NEAR(pose.position.x(), 0.20f, 3e-3f)
             << "world pose collapsed after odometry.reset() — Phase-2 promise "
                "broken; localization needs reset detection";
     }
@@ -208,7 +239,7 @@ TEST(Localization, WorldPoseSurvivesOdometryReset) {
     waitTicks(4);
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 0.40f, 1e-3f)
+        EXPECT_NEAR(pose.position.x(), 0.40f, 5e-3f)
             << "world pose did not advance across the second motion";
     }
 }
@@ -217,7 +248,7 @@ TEST(Localization, ObserveWithInfiniteSigmaLeavesAxisUntouched) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(2);
 
     odom->setPose(0.40f, 0.25f, 0.0f);
@@ -233,9 +264,9 @@ TEST(Localization, ObserveWithInfiniteSigmaLeavesAxisUntouched) {
     loc.observe(obs);
 
     const auto pose = loc.getPose();
-    EXPECT_NEAR(pose.position.x(), 0.40f, 1e-4f);
-    EXPECT_NEAR(pose.position.y(), 1.00f, 1e-4f);
-    EXPECT_NEAR(pose.heading, 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.x(), 0.40f, 5e-3f);
+    EXPECT_NEAR(pose.position.y(), 1.00f, 5e-3f);
+    EXPECT_NEAR(pose.heading, 0.0f, 5e-3f);
 }
 
 // After observe() snaps the world pose, an odometry reset must still leave
@@ -245,7 +276,7 @@ TEST(Localization, WorldPoseSurvivesResetAfterObserve) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(2);
 
     // Drive a bit so the odometry frame is non-trivial.
@@ -262,8 +293,8 @@ TEST(Localization, WorldPoseSurvivesResetAfterObserve) {
 
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 1.5f, 1e-4f);
-        EXPECT_NEAR(pose.position.y(), 1.5f, 1e-4f);
+        EXPECT_NEAR(pose.position.x(), 1.5f, 5e-3f);
+        EXPECT_NEAR(pose.position.y(), 1.5f, 5e-3f);
     }
 
     // Next motion starts → odometry.reset(). World pose must hold at (1.5, 1.5).
@@ -271,10 +302,10 @@ TEST(Localization, WorldPoseSurvivesResetAfterObserve) {
     waitTicks(4);
 
     const auto pose = loc.getPose();
-    EXPECT_NEAR(pose.position.x(), 1.5f, 1e-3f)
+    EXPECT_NEAR(pose.position.x(), 1.5f, 5e-3f)
         << "snapped world pose collapsed when motion reset the odometry";
-    EXPECT_NEAR(pose.position.y(), 1.5f, 1e-3f);
-    EXPECT_NEAR(pose.heading, 0.0f, 1e-3f);
+    EXPECT_NEAR(pose.position.y(), 1.5f, 5e-3f);
+    EXPECT_NEAR(pose.heading, 0.0f, 5e-3f);
 }
 
 // Defensive arm of the reset heuristic: any single-tick jump larger than
@@ -286,7 +317,7 @@ TEST(Localization, ImpossibleJumpIsTreatedAsReset) {
     auto odom = std::make_shared<FakeOdometry>();
     odom->setPose(0.0f, 0.0f, 0.0f);
 
-    Localization loc(odom, fastConfig());
+    Localization loc(odom, deterministicConfig());
     waitTicks(2);
 
     // Build up a normal world pose first.
@@ -294,7 +325,7 @@ TEST(Localization, ImpossibleJumpIsTreatedAsReset) {
     waitTicks(4);
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-4f);
+        EXPECT_NEAR(pose.position.x(), 0.20f, 3e-3f);
     }
 
     // Teleport the odometry to (10, 10, 0) — far beyond the per-tick step
@@ -303,9 +334,9 @@ TEST(Localization, ImpossibleJumpIsTreatedAsReset) {
     waitTicks(5);
     {
         const auto pose = loc.getPose();
-        EXPECT_NEAR(pose.position.x(), 0.20f, 1e-3f)
+        EXPECT_NEAR(pose.position.x(), 0.20f, 3e-3f)
             << "impossible jump was accumulated instead of rebased";
-        EXPECT_NEAR(pose.position.y(), 0.0f, 1e-3f);
+        EXPECT_NEAR(pose.position.y(), 0.0f, 3e-3f);
     }
 
     // From the rebase point, a small motion (10.0 → 10.05) must be picked
@@ -313,6 +344,138 @@ TEST(Localization, ImpossibleJumpIsTreatedAsReset) {
     odom->setPose(10.05f, 10.0f, 0.0f);
     waitTicks(5);
     const auto pose = loc.getPose();
-    EXPECT_NEAR(pose.position.x(), 0.25f, 1e-3f);
-    EXPECT_NEAR(pose.position.y(), 0.0f, 1e-3f);
+    EXPECT_NEAR(pose.position.x(), 0.25f, 5e-3f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 5e-3f);
+}
+
+TEST(Localization, ObservationSoftensInsteadOfHardSnapWhenInjectionDisabled) {
+    auto odom = std::make_shared<FakeOdometry>();
+    odom->setPose(0.0f, 0.0f, 0.0f);
+
+    auto cfg = deterministicConfig();
+    cfg.observation_injection_ratio = 0.0;
+
+    Localization loc(odom, cfg);
+    waitTicks(2);
+
+    odom->setPose(0.50f, 0.0f, 0.0f);
+    waitTicks(4);
+
+    Observation obs;
+    obs.pose.position.x() = 1.0f;
+    obs.pose.position.y() = 0.0f;
+    obs.pose.heading = 0.0f;
+    obs.sigma = Eigen::Vector3d{0.25, 0.25, 0.25};
+    loc.observe(obs);
+
+    const auto pose = loc.getPose();
+    EXPECT_GT(pose.position.x(), 0.50f);
+    EXPECT_LT(pose.position.x(), 1.0f);
+}
+
+TEST(Localization, ObserveCanInitializeBeforeFirstTick) {
+    auto odom = std::make_shared<FakeOdometry>();
+    odom->setPose(0.0f, 0.0f, 0.0f);
+
+    Localization loc(odom, deterministicConfig());
+
+    Observation obs;
+    obs.pose.position.x() = 0.8f;
+    obs.pose.position.y() = 0.4f;
+    obs.pose.heading = 0.2f;
+    obs.sigma = Eigen::Vector3d{1e-3, 1e-3, 1e-3};
+    loc.observe(obs);
+
+    const auto pose = loc.getPose();
+    EXPECT_NEAR(pose.position.x(), 0.8f, 5e-3f);
+    EXPECT_NEAR(pose.position.y(), 0.4f, 5e-3f);
+    EXPECT_NEAR(pose.heading, 0.2f, 5e-3f);
+}
+
+TEST(Localization, SurfaceMeasurementPullsEstimateTowardObservedLine) {
+    auto cfg = fastConfig();
+    cfg.process_translation_noise_m = 0.01;
+    cfg.process_translation_noise_per_m = 0.03;
+    cfg.process_heading_noise_rad = 0.0;
+    cfg.process_heading_noise_per_rad = 0.0;
+    cfg.observation_injection_ratio = 1.0;
+    cfg.resample_effective_sample_ratio = 1.0;
+    cfg.particle_count = 1024;
+    cfg.rng_seed = 42;
+
+    Observation poseOnlyObs;
+    poseOnlyObs.pose.position.x() = 1.0f;
+    poseOnlyObs.pose.position.y() = 0.60f;
+    poseOnlyObs.pose.heading = 0.0f;
+    poseOnlyObs.sigma = Eigen::Vector3d{0.02, 0.10, std::numeric_limits<double>::infinity()};
+
+    Observation surfaceObs = poseOnlyObs;
+    surfaceObs.surface_measurements.push_back(Observation::SurfaceMeasurement{
+        Observation::SurfaceKind::Line,
+        libstp::map::SensorOffset{0.0f, 0.0f},
+        true,
+        0.6,
+    });
+
+    auto odomBaseline = std::make_shared<FakeOdometry>();
+    odomBaseline->setPose(1.0f, 0.50f, 0.0f);
+    Localization baseline(odomBaseline, cfg, makeSingleLineMap());
+    waitTicks(2);
+    baseline.observe(poseOnlyObs);
+    const auto baselinePose = baseline.getPose();
+
+    auto odomSurface = std::make_shared<FakeOdometry>();
+    odomSurface->setPose(1.0f, 0.50f, 0.0f);
+    Localization withSurface(odomSurface, cfg, makeSingleLineMap());
+    waitTicks(2);
+    withSurface.observe(surfaceObs);
+    const auto surfacePose = withSurface.getPose();
+
+    EXPECT_NEAR(surfacePose.position.x(), 1.0f, 2e-2f);
+    EXPECT_LT(std::abs(surfacePose.position.y() - 0.50f),
+              std::abs(baselinePose.position.y() - 0.50f));
+}
+
+TEST(Localization, SurfaceMeasurementCanPenalizeFalseLineDetection) {
+    auto cfg = fastConfig();
+    cfg.process_translation_noise_m = 0.01;
+    cfg.process_translation_noise_per_m = 0.03;
+    cfg.process_heading_noise_rad = 0.0;
+    cfg.process_heading_noise_per_rad = 0.0;
+    cfg.observation_injection_ratio = 1.0;
+    cfg.resample_effective_sample_ratio = 1.0;
+    cfg.particle_count = 1024;
+    cfg.rng_seed = 7;
+
+    Observation poseOnlyObs;
+    poseOnlyObs.pose.position.x() = 1.0f;
+    poseOnlyObs.pose.position.y() = 0.55f;
+    poseOnlyObs.pose.heading = 0.0f;
+    poseOnlyObs.sigma = Eigen::Vector3d{0.02, 0.10, std::numeric_limits<double>::infinity()};
+
+    Observation surfaceObs = poseOnlyObs;
+    surfaceObs.surface_measurements.push_back(Observation::SurfaceMeasurement{
+        Observation::SurfaceKind::Line,
+        libstp::map::SensorOffset{0.0f, 0.0f},
+        false,
+        0.6,
+    });
+
+    auto odomBaseline = std::make_shared<FakeOdometry>();
+    odomBaseline->setPose(1.0f, 0.50f, 0.0f);
+    Localization baseline(odomBaseline, cfg, makeSingleLineMap());
+    waitTicks(2);
+    baseline.observe(poseOnlyObs);
+    const auto baselinePose = baseline.getPose();
+
+    auto odomSurface = std::make_shared<FakeOdometry>();
+    odomSurface->setPose(1.0f, 0.50f, 0.0f);
+    Localization withSurface(odomSurface, cfg, makeSingleLineMap());
+    waitTicks(2);
+    withSurface.observe(surfaceObs);
+    const auto surfacePose = withSurface.getPose();
+
+    EXPECT_NEAR(surfacePose.position.x(), 1.0f, 2e-2f);
+    EXPECT_GT(std::abs(surfacePose.position.y() - 0.50f),
+              std::abs(baselinePose.position.y() - 0.50f));
 }

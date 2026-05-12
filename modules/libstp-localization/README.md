@@ -1,23 +1,28 @@
 # libstp-localization
 
-Phase-2 pass-through localization service. Owns a background thread that
-polls an `IOdometry` source at 100 Hz (configurable via `LocalizationConfig`)
-and propagates per-tick deltas into a world-frame pose snapshot.
+Phase-6 localization service. Owns a background thread that polls an
+`IOdometry` source at 100 Hz (configurable via `LocalizationConfig`),
+propagates a particle cloud from per-tick odometry deltas, and exposes the
+weighted pose estimate as a world-frame snapshot.
 
-This module deliberately does **not** filter. It exists to give the rest of
-the stack a stable, persistent world pose across motion-step boundaries —
-the property that `Stm32Odometry` alone cannot provide because of its reset
-behavior.
+This is the first particle-filter increment, not the full end state from the
+design doc. The core filter path now exists and explicit pose observations are
+functional for resync steps; map/sensor likelihoods can plug into the same
+particle representation later.
 
 ## API surface
 
 - `Localization(std::shared_ptr<IOdometry>, LocalizationConfig)` — RAII; the
   constructor starts the worker thread, the destructor joins.
 - `getPose()` — thread-safe snapshot.
-- `observe(Observation)` — hard-snap selected axes (any axis whose sigma is
-  finite). After a snap, the next tick rebases its delta from the current
-  odometry sample so the snap is not undone.
+- `observe(Observation)` — sigma-weighted pose update. Infinite-sigma axes are
+  ignored. After an observation, the next tick rebases its delta from the
+  current odometry sample so the update is not immediately skewed by a stale
+  delta.
 - `start()` / `stop()` — idempotent, exposed for tests.
+- `LocalizationConfig` additionally controls particle count, process noise,
+  resampling aggressiveness, observation injection ratio, and deterministic RNG
+  seeding.
 
 ## Wiring example
 
@@ -38,7 +43,7 @@ class MyRobot(GenericRobot):
         self._odometry = Stm32Odometry(
             imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig()
         )
-        # 100 Hz pass-through; finer ticks (e.g. 5 ms) are appropriate for
+        # 100 Hz localization; finer ticks (e.g. 5 ms) are appropriate for
         # short-running tests.
         self._localization = Localization(self._odometry, LocalizationConfig())
         super().__init__()
@@ -79,8 +84,12 @@ The end-to-end behaviour is covered by
 `tests/cpp/localization/test_localization.cpp`, plus the cross-motion
 smoke test in `tests/python/sim/test_localization_cross_motion.py`.
 
-## Phase 6 follow-up
+## Current limits
 
-The pass-through is replaced by a particle filter that consumes
-`Observation` as a soft, sigma-weighted likelihood. Until then, finite sigma
-means "snap exactly", infinite sigma means "leave that axis alone".
+- Observation input is pose-only today. The map-projected sensor observation
+  path from the Phase-6 plan is still pending.
+- To make `resync_at_start_pose` and similar explicit resync steps useful even
+  after large drift, the filter injects a configurable fraction of particles
+  around each observation. This is intentional and documented, not a hidden
+  hard snap.
+- There is still no covariance API; consumers read the estimated pose only.

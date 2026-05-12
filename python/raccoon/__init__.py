@@ -38,6 +38,7 @@ from raccoon import foundation
 from raccoon.step import *
 from raccoon.step import __all__ as _step_all
 from raccoon.step.servo.preset import ServoPreset
+from raccoon.step.arm.preset import ArmPreset
 from raccoon.ui import __all__ as _ui_all
 from raccoon.robot import __all__ as _robot_all
 from raccoon.robot import *
@@ -65,13 +66,20 @@ from raccoon.hal import IOdometryBridge, OdometryBridge
 from raccoon.kinematics_differential import DifferentialKinematics
 from raccoon.kmeans import KMeans, KMeansResult
 from raccoon.map import WorldMap as TableMap, MapSegment
-from raccoon.localization import Localization, LocalizationConfig, Observation
+from raccoon.localization import (
+    Localization,
+    LocalizationConfig,
+    Observation,
+    SurfaceKind,
+    SurfaceMeasurement,
+)
 
 __all__ = [
     # Core hardware
     "Motor",
     "Servo",
     "ServoPreset",
+    "ArmPreset",
     "AnalogSensor",
     "DigitalSensor",
     # Submodules
@@ -119,6 +127,8 @@ __all__ = [
     "Localization",
     "LocalizationConfig",
     "Observation",
+    "SurfaceKind",
+    "SurfaceMeasurement",
     # Calibration
     "Feedforward",
     "FeedforwardController",

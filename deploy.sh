@@ -25,9 +25,10 @@ else
   exit 1
 fi
 
-# Build
-echo "▶ Building wheel..."
-bash ./build.sh
+# Build — prefer cross build when BUILD_SCRIPT is set, otherwise Docker
+BUILD_SCRIPT="${BUILD_SCRIPT:-build.sh}"
+echo "▶ Building wheel via $BUILD_SCRIPT..."
+bash "./$BUILD_SCRIPT"
 
 # Find the built wheel
 WHEEL_FILE=$(find "$BUILD_DIR" -name "*.whl" -type f -exec ls -t {} + | head -1)

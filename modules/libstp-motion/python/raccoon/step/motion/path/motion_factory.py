@@ -161,13 +161,16 @@ def _create_linear_motion(
 
     # Heading: phase 4 made target_heading_rad mandatory. Priority is
     #   1. user-specified seg.heading_deg (relative to HeadingReference),
-    #   2. current world heading from localization (passed in by executor).
+    #   2. absolute target heading from the Phase-5 absolute-plan bridge,
+    #   3. current world heading from localization (passed in by executor).
     if seg.heading_deg is not None:
         from raccoon.robot.heading_reference import HeadingReferenceService
 
         ref_svc = robot.get_service(HeadingReferenceService)
         sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
         config.target_heading_rad = ref_svc._reference_rad + sign * math.radians(seg.heading_deg)
+    elif seg.target_heading_rad is not None:
+        config.target_heading_rad = seg.target_heading_rad
     elif current_world_heading_rad is not None:
         config.target_heading_rad = current_world_heading_rad
     else:
@@ -195,16 +198,25 @@ def _create_turn_motion(
     robot: "GenericRobot",
     seg: Segment,
     is_last: bool,
-    current_world_heading_rad: float | None = None,  # noqa: ARG001 — TurnMotion is delta-based
+    current_world_heading_rad: float | None = None,
 ) -> TurnMotion:
     config = TurnConfig()
-    actual = (
-        seg.angle_rad
-        if seg.angle_rad is not None
-        else seg.sign * math.radians(180)  # sentinel for condition-based
-    )
+    if seg.target_heading_rad is not None:
+        if current_world_heading_rad is None:
+            msg = (
+                "_create_turn_motion: absolute turn requires "
+                "current_world_heading_rad from localization."
+            )
+            raise RuntimeError(msg)
+        actual = math.remainder(seg.target_heading_rad - current_world_heading_rad, 2.0 * math.pi)
+    else:
+        actual = (
+            seg.angle_rad
+            if seg.angle_rad is not None
+            else seg.sign * math.radians(180)  # sentinel for condition-based
+        )
 
-    if not is_last and seg.angle_rad is not None:
+    if not is_last:
         config.target_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)
     else:
         config.target_angle_rad = actual
@@ -265,10 +277,10 @@ def create_motion(
     ``current_world_heading_rad`` is the absolute world heading at the
     moment the executor is about to start this segment, read from
     ``robot.localization.get_pose().heading``. Used by ``linear`` segments
-    that have no user-specified ``heading_deg`` to populate the now
-    mandatory ``target_heading_rad`` on ``LinearMotionConfig``. Ignored by
-    ``turn`` / ``arc`` (delta-based) and by the opaque ``follow_line`` /
-    ``spline`` adapters (those steps fetch the heading themselves).
+    that have no user-specified ``heading_deg`` and by absolute
+    ``turn`` segments bridged from the Phase-5 plan IR. Ignored by
+    ``arc`` and by the opaque ``follow_line`` / ``spline`` adapters
+    (those steps fetch the heading themselves).
     """
     if seg.kind == "linear":
         return _create_linear_motion(robot, seg, is_last, current_world_heading_rad)

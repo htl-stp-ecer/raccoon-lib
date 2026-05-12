@@ -34,6 +34,13 @@ from .abs_factory import (
 )
 from .compiler import CompilerPass, CompiledPlan, PathCompiler
 from .abs_compiler import CompiledAbsolutePlan, compile_plan
+from .abs_desugar import (
+    IntendedPose,
+    absolute_to_relative_nodes,
+    compile_relative_to_absolute,
+    nodes_to_absolute,
+)
+from .abs_passes import CompileError, fold_implicit_turns, validate_reachable
 from .executor import PathExecutor
 from .motion_factory import (
     create_motion,
@@ -67,6 +74,13 @@ __all__ = [
     # Compilation (absolute, Phase 3)
     "CompiledAbsolutePlan",
     "compile_plan",
+    "CompileError",
+    "IntendedPose",
+    "absolute_to_relative_nodes",
+    "compile_relative_to_absolute",
+    "nodes_to_absolute",
+    "fold_implicit_turns",
+    "validate_reachable",
     # Executor
     "PathExecutor",
     # Motion factory

@@ -1,45 +1,72 @@
 #pragma once
 
 #include "foundation/types.hpp"
+#include "libstp/map/Geometry.hpp"
+#include "libstp/map/WorldMap.hpp"
 #include "odometry/odometry.hpp"
 
 #include <Eigen/Core>
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <random>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace libstp::localization {
 
 /**
- * @brief Soft-snap observation pushed by Resync-Steps.
+ * @brief Sigma-weighted pose observation pushed by Resync-Steps.
  *
  * `sigma` is the measurement standard deviation per axis (x, y, theta).
- * In the Phase-2 pass-through service, an axis with finite sigma is hard-snapped;
- * an infinite sigma leaves that axis untouched. The proper soft snap (likelihood
- * weighting) lands when the particle filter replaces the pass-through in Phase 6.
+ * Infinite sigma leaves that axis untouched.
  */
 struct Observation {
+    enum class SurfaceKind : uint8_t {
+        Line = 0,
+        Wall = 1,
+    };
+
+    struct SurfaceMeasurement {
+        SurfaceKind kind{SurfaceKind::Line};
+        libstp::map::SensorOffset sensor{};
+        bool detected{true};
+        double sigma_cm{1.0};
+    };
+
     libstp::foundation::Pose pose{};
     Eigen::Vector3d sigma{1e-3, 1e-3, 1e-3};
+    std::vector<SurfaceMeasurement> surface_measurements;
 };
 
 struct LocalizationConfig {
     int tick_period_ms{10};  ///< 100 Hz default
+    int particle_count{128};
+    double process_translation_noise_m{0.002};
+    double process_translation_noise_per_m{0.02};
+    double process_heading_noise_rad{0.01};
+    double process_heading_noise_per_rad{0.05};
+    double observation_injection_ratio{0.35};
+    double resample_effective_sample_ratio{0.5};
+    uint32_t rng_seed{0x5EED1234u};
 };
 
 /**
- * @brief Thread-safe pass-through localization service.
+ * @brief Thread-safe particle-filter localization service.
  *
  * Owns a background thread that polls the supplied IOdometry at a fixed rate,
- * accumulates the per-tick delta into a world-frame pose, and exposes that pose
- * via @ref getPose(). @ref observe() lets resync sites snap selected axes.
+ * propagates a particle cloud from the per-tick odometry delta, and exposes the
+ * estimated world pose via @ref getPose(). @ref observe() lets resync sites
+ * inject sigma-weighted absolute pose observations.
  *
- * Phase-2 contract: pass-through only. No filter, no covariance. The world frame
- * matches the odometry frame except for the discrete jumps introduced by
- * @ref observe(); after each observe call the next tick's delta is rebased so
- * the accumulated pose does not double-count.
+ * This Phase-6 increment keeps the existing IO contract but replaces the
+ * pass-through state with a low-variance-resampled particle filter. Explicit
+ * pose observations become functional; sensor/map likelihoods can plug into
+ * the same particle representation later.
  *
  * Lifecycle:
  *   - The constructor calls start(); the destructor calls stop() and joins.
@@ -48,7 +75,8 @@ struct LocalizationConfig {
 class Localization {
 public:
     Localization(std::shared_ptr<libstp::odometry::IOdometry> odometry,
-                 LocalizationConfig config = {});
+                 LocalizationConfig config = {},
+                 std::optional<libstp::map::WorldMap> tableMap = std::nullopt);
     ~Localization();
 
     Localization(const Localization&) = delete;
@@ -59,7 +87,7 @@ public:
     /// Snapshot of the current world pose. Thread-safe.
     [[nodiscard]] libstp::foundation::Pose getPose() const;
 
-    /// Apply a soft observation (Phase 2: hard snap on finite-sigma axes).
+    /// Apply a sigma-weighted pose observation. Infinite-sigma axes are ignored.
     void observe(const Observation& obs);
 
     /// Idempotent. The constructor already calls this; tests may re-call.
@@ -69,6 +97,21 @@ public:
     void stop();
 
 private:
+    struct Particle {
+        libstp::foundation::Pose pose{};
+        double weight{1.0};
+    };
+
+    void initializeLocked(const libstp::foundation::Pose& anchorPose);
+    void initializeParticlesLocked(const libstp::foundation::Pose& anchorPose,
+                                   const Eigen::Vector3d& sigma);
+    void predictLocked(const libstp::foundation::Pose& odomDelta);
+    void integrateObservationLocked(const Observation& obs);
+    [[nodiscard]] double computeParticleLogWeight(const Particle& particle,
+                                                  const Observation& obs) const;
+    void normalizeWeightsLocked();
+    void resampleLocked();
+    void updateEstimateLocked();
     void tickLoop();
 
     std::shared_ptr<libstp::odometry::IOdometry> m_odometry;
@@ -77,7 +120,10 @@ private:
     mutable std::mutex m_mutex;
     libstp::foundation::Pose m_worldPose{};
     libstp::foundation::Pose m_lastOdom{};
+    std::vector<Particle> m_particles;
     bool m_initialized{false};
+    std::mt19937 m_rng;
+    std::optional<libstp::map::WorldMap> m_tableMap;
 
     std::atomic<bool> m_running{false};
     std::thread m_thread;

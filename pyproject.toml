@@ -60,6 +60,7 @@ mypy_path = [
   "modules/libstp-platforms/wombat/python",
   "modules/libstp-robot/python",
   "modules/libstp-screen/python",
+  "modules/libstp-arm/python",
   "modules/libstp-servo/python",
   "modules/libstp-sim/python",
   "modules/libstp-step/python",

@@ -11,6 +11,7 @@ This module is now a thin DSL wrapper.  The actual pipeline lives in
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from .. import Step, dsl
@@ -105,7 +106,9 @@ class SmoothPath(Step):
                 corner_cut_m=corner_cut_m,
             ),
         )
-        self._plan: CompiledPlan = compiler.compile(steps)
+        self._plan: CompiledPlan = compiler.compile_via_absolute_bridge(steps)
+        self._absolute_plan = self._plan.absolute_plan
+        self._absolute_bridge_fallback_reason = self._plan.fallback_reason
 
         # Backwards-compat: expose the IR fields via the same attribute names
         # the previous implementation used.
@@ -140,8 +143,6 @@ class SmoothPath(Step):
         return frozenset(result)
 
     def _generate_signature(self) -> str:
-        import math
-
         parts: list[str] = []
         for node in self._nodes:
             if node is None:
@@ -184,6 +185,7 @@ class SmoothPath(Step):
         executor = PathExecutor(
             nodes=self._plan.nodes,
             deferred=self._plan.deferred,
+            absolute_nodes=None if self._absolute_plan is None else self._absolute_plan.nodes,
             spline_step=self._spline_step,
             hz=self.hz,
         )

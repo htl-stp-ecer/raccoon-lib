@@ -12,9 +12,13 @@ import asyncio
 import math
 from typing import TYPE_CHECKING
 
+from raccoon.foundation import Pose
+from raccoon.localization import Observation
 from raccoon.motion import LinearAxis
+from raccoon.step.calibration import check_distance_calibration
 
 from .._heading_utils import get_world_heading_rad
+from .abs_ir import Action, Goto, Resync, TurnTo
 from .ir import PathNode, Segment, SideAction
 from .motion_factory import create_motion
 from .passes import flatten_steps, is_same_type
@@ -33,7 +37,7 @@ async def _world_heading_for_seg(robot: "GenericRobot", seg: Segment) -> float |
     event-loop tick; yielding briefly lets localization publish that pose
     before the next linear segment freezes its absolute heading target.
     """
-    if seg.kind == "linear":
+    if seg.kind == "linear" or (seg.kind == "turn" and seg.target_heading_rad is not None):
         odom_heading = 0.0
         for _ in range(10):
             world_heading = get_world_heading_rad(robot)
@@ -58,6 +62,10 @@ if TYPE_CHECKING:
 
 DISTANCE_TOL_M = 0.005  # 5mm tolerance for manual distance check
 ANGLE_TOL_RAD = 0.035  # ~2° tolerance for manual angle check
+ABS_AXIS_TOL_M = 0.02  # absolute runtime accepts 2cm off-axis drift
+ABS_ARC_TOL_M = 0.03  # arc reconstruction must fit within 3cm
+RESYNC_SIGMA_TIGHT = 1e-3
+ZERO_DISTANCE_TOL_M = 0.005
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +105,7 @@ def _check_segment_reached(
     robot: "GenericRobot",
     seg: Segment,
     seg_origin: float,
+    motion,
 ) -> bool:
     """Manual position check for non-terminal segments.
 
@@ -111,6 +120,8 @@ def _check_segment_reached(
         target = seg.distance_m
         tol = DISTANCE_TOL_M
     elif seg.kind == "turn":
+        if seg.target_heading_rad is not None:
+            return motion.has_reached_angle()
         target = seg.angle_rad
         tol = ANGLE_TOL_RAD
     elif seg.kind == "arc":
@@ -124,6 +135,265 @@ def _check_segment_reached(
     if target >= 0:
         return traveled >= target - tol
     return traveled <= target + tol
+
+
+def _wrap_angle(angle_rad: float) -> float:
+    return math.remainder(angle_rad, 2.0 * math.pi)
+
+
+def _world_to_body(dx_m: float, dy_m: float, theta_rad: float) -> tuple[float, float]:
+    return (
+        dx_m * math.cos(theta_rad) + dy_m * math.sin(theta_rad),
+        dx_m * math.sin(theta_rad) - dy_m * math.cos(theta_rad),
+    )
+
+
+def _current_runtime_pose(robot: "GenericRobot"):
+    """Pose snapshot for absolute runtime lowering.
+
+    Position is taken from odometry so segment boundaries see the same pose
+    source the motion controllers just updated. Heading stays on the Phase-4
+    world-frame helper, which already falls back to odometry when localization
+    lags a tick behind.
+    """
+    odom_pose = robot.odometry.get_pose()
+    pose = Pose()
+    pose.position = odom_pose.position
+    pose.heading = get_world_heading_rad(robot)
+    return pose
+
+
+def _infer_arc_geometry(
+    forward_m: float,
+    strafe_right_m: float,
+    angle_rad: float,
+) -> tuple[float, bool]:
+    theta = abs(angle_rad)
+    if theta <= 1e-6:
+        msg = "absolute Goto(via='arc') requires a non-zero heading delta"
+        raise RuntimeError(msg)
+
+    candidates: list[tuple[float, bool, float]] = []
+
+    sin_theta = math.sin(theta)
+    one_minus_cos = 1.0 - math.cos(theta)
+    if abs(sin_theta) > 1e-9:
+        radius = abs(forward_m) / abs(sin_theta)
+        expected_strafe = radius * one_minus_cos * (-1.0 if angle_rad > 0.0 else 1.0)
+        err = abs(forward_m - radius * sin_theta) + abs(strafe_right_m - expected_strafe)
+        candidates.append((radius, False, err))
+
+        radius = abs(strafe_right_m) / abs(sin_theta)
+        expected_forward = radius * one_minus_cos
+        expected_strafe = (1.0 if angle_rad < 0.0 else -1.0) * radius * sin_theta
+        err = abs(forward_m - expected_forward) + abs(strafe_right_m - expected_strafe)
+        candidates.append((radius, True, err))
+
+    if not candidates:
+        msg = "absolute Goto(via='arc') could not infer arc geometry"
+        raise RuntimeError(msg)
+
+    radius_m, lateral, error_m = min(candidates, key=lambda item: item[2])
+    if not math.isfinite(radius_m) or radius_m <= 0.0 or error_m > ABS_ARC_TOL_M:
+        msg = "absolute Goto(via='arc') does not match a safe runtime arc reconstruction"
+        raise RuntimeError(msg)
+    return radius_m, lateral
+
+
+def _lower_absolute_turn(current_heading_rad: float, node: TurnTo) -> Segment:
+    angle_rad = _wrap_angle(node.theta_rad - current_heading_rad)
+    return Segment(
+        kind="turn",
+        sign=1.0 if angle_rad >= 0.0 else -1.0,
+        angle_rad=angle_rad,
+        target_heading_rad=node.theta_rad,
+        has_known_endpoint=True,
+    )
+
+
+def _lower_absolute_goto(current_pose, node: Goto) -> Segment:
+    heading_rad = float(current_pose.heading)
+    dx_m = float(node.x_m) - float(current_pose.position[0])
+    dy_m = float(node.y_m) - float(current_pose.position[1])
+    forward_m, strafe_right_m = _world_to_body(dx_m, dy_m, heading_rad)
+    target_heading_rad = heading_rad if node.theta_rad is None else node.theta_rad
+
+    if node.via == "forward":
+        if abs(strafe_right_m) > ABS_AXIS_TOL_M:
+            msg = "absolute Goto(via='forward') is not body-collinear at runtime"
+            raise RuntimeError(msg)
+        distance_m = math.copysign(math.hypot(forward_m, strafe_right_m), forward_m)
+        return Segment(
+            kind="linear",
+            axis=LinearAxis.Forward,
+            sign=1.0 if distance_m >= 0.0 else -1.0,
+            distance_m=distance_m,
+            speed_scale=node.speed_scale,
+            target_heading_rad=target_heading_rad,
+            has_known_endpoint=True,
+        )
+
+    if node.via == "lateral":
+        if abs(forward_m) > ABS_AXIS_TOL_M:
+            msg = "absolute Goto(via='lateral') is not body-collinear at runtime"
+            raise RuntimeError(msg)
+        distance_m = math.copysign(math.hypot(forward_m, strafe_right_m), strafe_right_m)
+        return Segment(
+            kind="linear",
+            axis=LinearAxis.Lateral,
+            sign=1.0 if distance_m >= 0.0 else -1.0,
+            distance_m=distance_m,
+            speed_scale=node.speed_scale,
+            target_heading_rad=target_heading_rad,
+            has_known_endpoint=True,
+        )
+
+    if node.via == "auto":
+        if abs(strafe_right_m) <= ABS_AXIS_TOL_M:
+            return Segment(
+                kind="linear",
+                axis=LinearAxis.Forward,
+                sign=1.0 if forward_m >= 0.0 else -1.0,
+                distance_m=forward_m,
+                speed_scale=node.speed_scale,
+                target_heading_rad=target_heading_rad,
+                has_known_endpoint=True,
+            )
+        if abs(forward_m) <= ABS_AXIS_TOL_M:
+            return Segment(
+                kind="linear",
+                axis=LinearAxis.Lateral,
+                sign=1.0 if strafe_right_m >= 0.0 else -1.0,
+                distance_m=strafe_right_m,
+                speed_scale=node.speed_scale,
+                target_heading_rad=target_heading_rad,
+                has_known_endpoint=True,
+            )
+        msg = "absolute Goto(via='auto') needs a single-axis runtime delta"
+        raise RuntimeError(msg)
+
+    if node.via == "arc":
+        if node.theta_rad is None:
+            msg = "absolute Goto(via='arc') requires theta_rad"
+            raise RuntimeError(msg)
+        arc_angle_rad = _wrap_angle(node.theta_rad - heading_rad)
+        radius_m, lateral = _infer_arc_geometry(forward_m, strafe_right_m, arc_angle_rad)
+        return Segment(
+            kind="arc",
+            radius_m=radius_m,
+            arc_angle_rad=arc_angle_rad,
+            speed_scale=node.speed_scale,
+            lateral=lateral,
+            has_known_endpoint=True,
+        )
+
+    msg = f"unsupported absolute Goto(via={node.via!r})"
+    raise RuntimeError(msg)
+
+
+def _lower_absolute_goto_segments(current_pose, node: Goto) -> list[Segment]:
+    heading_rad = float(current_pose.heading)
+    dx_m = float(node.x_m) - float(current_pose.position[0])
+    dy_m = float(node.y_m) - float(current_pose.position[1])
+    distance_m = math.hypot(dx_m, dy_m)
+    final_heading_rad = heading_rad if node.theta_rad is None else node.theta_rad
+
+    if node.via == "forward" and distance_m > ZERO_DISTANCE_TOL_M:
+        path_heading_rad = math.atan2(dy_m, dx_m)
+        segments: list[Segment] = []
+        turn_in_rad = _wrap_angle(path_heading_rad - heading_rad)
+        if abs(turn_in_rad) > ANGLE_TOL_RAD:
+            segments.append(
+                Segment(
+                    kind="turn",
+                    sign=1.0 if turn_in_rad >= 0.0 else -1.0,
+                    angle_rad=turn_in_rad,
+                    target_heading_rad=path_heading_rad,
+                    has_known_endpoint=True,
+                )
+            )
+        segments.append(
+            Segment(
+                kind="linear",
+                axis=LinearAxis.Forward,
+                sign=1.0,
+                distance_m=distance_m,
+                speed_scale=node.speed_scale,
+                target_heading_rad=path_heading_rad,
+                has_known_endpoint=True,
+            )
+        )
+        turn_out_rad = _wrap_angle(final_heading_rad - path_heading_rad)
+        if abs(turn_out_rad) > ANGLE_TOL_RAD:
+            segments.append(
+                Segment(
+                    kind="turn",
+                    sign=1.0 if turn_out_rad >= 0.0 else -1.0,
+                    angle_rad=turn_out_rad,
+                    target_heading_rad=final_heading_rad,
+                    has_known_endpoint=True,
+                )
+            )
+        return segments
+
+    if distance_m <= ZERO_DISTANCE_TOL_M:
+        if node.theta_rad is None:
+            return []
+        turn_rad = _wrap_angle(node.theta_rad - heading_rad)
+        if abs(turn_rad) <= ANGLE_TOL_RAD:
+            return []
+        return [
+            Segment(
+                kind="turn",
+                sign=1.0 if turn_rad >= 0.0 else -1.0,
+                angle_rad=turn_rad,
+                target_heading_rad=node.theta_rad,
+                has_known_endpoint=True,
+            )
+        ]
+
+    return [_lower_absolute_goto(current_pose, node)]
+
+
+def _segments_for_absolute_node(robot: "GenericRobot", node: Goto | TurnTo) -> list[Segment]:
+    if isinstance(node, TurnTo):
+        return [_lower_absolute_turn(get_world_heading_rad(robot), node)]
+    return _lower_absolute_goto_segments(_current_runtime_pose(robot), node)
+
+
+def _resolve_absolute_motion_node(
+    robot: "GenericRobot",
+    nodes: list[Goto | TurnTo | Resync | Action | Segment],
+    idx: int,
+) -> None:
+    node = nodes[idx]
+    if isinstance(node, Segment):
+        return
+    if not isinstance(node, Goto | TurnTo):
+        return
+    nodes[idx : idx + 1] = _segments_for_absolute_node(robot, node)
+
+
+def _resync_sigma(node: Resync) -> tuple[float, float, float]:
+    return tuple(RESYNC_SIGMA_TIGHT if snap else math.inf for snap in node.snap_axes)
+
+
+def _apply_resync(robot: "GenericRobot", node: Resync) -> None:
+    loc = getattr(robot, "localization", None)
+    if loc is None:
+        msg = "absolute Resync requires robot.localization"
+        raise RuntimeError(msg)
+
+    pose = loc.get_pose()
+    obs_pose = Pose()
+    x_m = float(pose.position[0]) if node.expected_x_m is None else node.expected_x_m
+    y_m = float(pose.position[1]) if node.expected_y_m is None else node.expected_y_m
+    z_m = float(pose.position[2]) if len(pose.position) > 2 else 0.0
+    obs_pose.position = (x_m, y_m, z_m)
+    obs_pose.heading = pose.heading
+    if node.expected_theta_rad is not None:
+        obs_pose.heading = node.expected_theta_rad
+    loc.observe(Observation(pose=obs_pose, sigma=_resync_sigma(node)))
 
 
 # ---------------------------------------------------------------------------
@@ -229,11 +499,13 @@ class PathExecutor:
         self,
         nodes: list[PathNode | None],
         deferred: list[tuple[int, "Defer"]],
+        absolute_nodes: tuple[Goto | TurnTo | Resync | Action, ...] | None = None,
         spline_step: "Step" | None = None,
         hz: int = DEFAULT_HZ,
     ) -> None:
         self._nodes = nodes
         self._deferred = deferred
+        self._absolute_nodes = absolute_nodes
         self._spline_step = spline_step
         self._hz = hz
 
@@ -245,6 +517,9 @@ class PathExecutor:
         if self._spline_step is not None:
             await self._spline_step._execute_step(robot)
             return
+        if self._absolute_nodes is not None:
+            await self._run_absolute(robot)
+            return
 
         # 1. Mutable working copies (deferreds get popped, nodes get spliced).
         nodes: list[PathNode | None] = list(self._nodes)
@@ -255,8 +530,6 @@ class PathExecutor:
             isinstance(n, Segment) and n.kind == "linear" and n.has_known_endpoint for n in nodes
         )
         if has_calibrated_drive:
-            from raccoon.step.calibration import check_distance_calibration
-
             check_distance_calibration()
 
         # 3. Execute the path.
@@ -338,6 +611,7 @@ class PathExecutor:
                             robot,
                             seg,
                             seg_origin,
+                            motion,
                         )
 
                 # Opaque steps: adapter signals completion via is_finished().
@@ -416,6 +690,147 @@ class PathExecutor:
         finally:
             robot.drive.hard_stop()
             # Clean up any background side-action tasks.
+            for task in bg_tasks:
+                if not task.done():
+                    task.cancel()
+            if bg_tasks:
+                await asyncio.gather(*bg_tasks, return_exceptions=True)
+
+    async def _run_absolute(self, robot: "GenericRobot") -> None:
+        absolute_nodes: list[Goto | TurnTo | Resync | Action | Segment] = list(
+            self._absolute_nodes or ()
+        )
+        bg_tasks: list[asyncio.Task] = []
+
+        try:
+            node_idx = 0
+            while node_idx < len(absolute_nodes) and not isinstance(
+                absolute_nodes[node_idx], Segment
+            ):
+                node = absolute_nodes[node_idx]
+                _resolve_absolute_motion_node(robot, absolute_nodes, node_idx)
+                if node_idx >= len(absolute_nodes):
+                    break
+                if node_idx < len(absolute_nodes) and isinstance(absolute_nodes[node_idx], Segment):
+                    break
+                node = absolute_nodes[node_idx]
+                if isinstance(node, Action):
+                    if node.blocking:
+                        await node.step.run_step(robot)
+                    else:
+                        bg_tasks.append(asyncio.create_task(node.step.run_step(robot)))
+                elif isinstance(node, Resync):
+                    _apply_resync(robot, node)
+                node_idx += 1
+
+            if node_idx >= len(absolute_nodes):
+                return
+
+            _resolve_absolute_motion_node(robot, absolute_nodes, node_idx)
+            if node_idx >= len(absolute_nodes):
+                return
+            seg = absolute_nodes[node_idx]
+            if not isinstance(seg, Segment):
+                msg = "absolute runtime lowered to no executable motion segment"
+                raise RuntimeError(msg)
+            is_last = not any(
+                isinstance(node, Goto | TurnTo | Segment) for node in absolute_nodes[node_idx + 1 :]
+            )
+            motion = create_motion(
+                robot,
+                seg,
+                is_last,
+                current_world_heading_rad=await _world_heading_for_seg(robot, seg),
+            )
+            motion.start()
+            seg_origin = _get_position_offset(robot, seg)
+
+            update_rate = 1.0 / self._hz
+            loop = asyncio.get_event_loop()
+            last_time = loop.time() - update_rate
+
+            while True:
+                current_time = loop.time()
+                dt = max(current_time - last_time, 0.0)
+                last_time = current_time
+
+                if dt < 1e-4:
+                    await asyncio.sleep(update_rate)
+                    continue
+
+                motion.update(dt)
+                if is_last:
+                    transition = _has_reached_target(motion, seg)
+                else:
+                    transition = _check_segment_reached(robot, seg, seg_origin, motion)
+
+                if not transition and seg.kind in ("follow_line", "spline"):
+                    transition = motion.is_finished()
+
+                if transition:
+                    current_vel = motion.get_filtered_velocity()
+                    prev_seg = seg
+                    node_idx += 1
+
+                    while node_idx < len(absolute_nodes) and not isinstance(
+                        absolute_nodes[node_idx], Segment
+                    ):
+                        node = absolute_nodes[node_idx]
+                        _resolve_absolute_motion_node(robot, absolute_nodes, node_idx)
+                        if node_idx >= len(absolute_nodes):
+                            break
+                        if node_idx < len(absolute_nodes) and isinstance(
+                            absolute_nodes[node_idx], Segment
+                        ):
+                            break
+                        node = absolute_nodes[node_idx]
+                        if isinstance(node, Action):
+                            if node.blocking:
+                                await node.step.run_step(robot)
+                            else:
+                                bg_tasks.append(asyncio.create_task(node.step.run_step(robot)))
+                        elif isinstance(node, Resync):
+                            _apply_resync(robot, node)
+                        node_idx += 1
+
+                    if node_idx >= len(absolute_nodes):
+                        break
+
+                    _resolve_absolute_motion_node(robot, absolute_nodes, node_idx)
+                    if node_idx >= len(absolute_nodes):
+                        break
+                    seg = absolute_nodes[node_idx]
+                    if not isinstance(seg, Segment):
+                        msg = "absolute runtime lowered to no executable motion segment"
+                        raise RuntimeError(msg)
+                    is_last = not any(
+                        isinstance(node, Goto | TurnTo | Segment)
+                        for node in absolute_nodes[node_idx + 1 :]
+                    )
+                    next_world_heading = await _world_heading_for_seg(robot, seg)
+                    if is_same_type(prev_seg, seg):
+                        offset = _get_position_offset(robot, prev_seg)
+                        motion = create_motion(
+                            robot,
+                            seg,
+                            is_last,
+                            current_world_heading_rad=next_world_heading,
+                        )
+                        motion.start_warm(offset, current_vel)
+                    else:
+                        robot.drive.hard_stop()
+                        motion = create_motion(
+                            robot,
+                            seg,
+                            is_last,
+                            current_world_heading_rad=next_world_heading,
+                        )
+                        motion.start()
+                    seg_origin = _get_position_offset(robot, seg)
+
+                await asyncio.sleep(update_rate)
+        finally:
+            robot.drive.hard_stop()
             for task in bg_tasks:
                 if not task.done():
                     task.cancel()

@@ -54,8 +54,7 @@ def _run_runner() -> dict:
     )
     if proc.returncode != 0:
         msg = (
-            f"runner failed (exit={proc.returncode})\n"
-            f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+            f"runner failed (exit={proc.returncode})\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
         )
         raise AssertionError(msg)
 
@@ -72,6 +71,8 @@ def test_world_pose_accumulates_across_two_drives() -> None:
 
     p1 = out["after_motion_1"]
     p2 = out["after_motion_2"]
+    sim_p1 = out["sim_after_motion_1"]
+    sim_p2 = out["sim_after_motion_2"]
 
     # First motion: ~0.20 m forward in the localization frame.
     assert p1[0] == pytest.approx(0.20, abs=0.05), f"after motion 1: {p1}"
@@ -84,3 +85,25 @@ def test_world_pose_accumulates_across_two_drives() -> None:
         f"motion 2 ended at {p2} (expected ~0.40 m)"
     )
     assert p2[1] == pytest.approx(0.00, abs=0.05), f"after motion 2: {p2}"
+
+    # Snapshot-equivalence guard: localization should track the simulator's
+    # world frame across both motion boundaries, not only grow monotonically.
+    assert p1[0] == pytest.approx(
+        sim_p1[0] - 0.50, abs=0.03
+    ), f"localization/sim mismatch after motion 1: loc={p1}, sim={sim_p1}"
+    assert p1[1] == pytest.approx(
+        sim_p1[1] - 0.50, abs=0.03
+    ), f"localization/sim mismatch after motion 1: loc={p1}, sim={sim_p1}"
+    assert p1[2] == pytest.approx(
+        sim_p1[2], abs=0.05
+    ), f"heading mismatch after motion 1: loc={p1}, sim={sim_p1}"
+
+    assert p2[0] == pytest.approx(
+        sim_p2[0] - 0.50, abs=0.03
+    ), f"localization/sim mismatch after motion 2: loc={p2}, sim={sim_p2}"
+    assert p2[1] == pytest.approx(
+        sim_p2[1] - 0.50, abs=0.03
+    ), f"localization/sim mismatch after motion 2: loc={p2}, sim={sim_p2}"
+    assert p2[2] == pytest.approx(
+        sim_p2[2], abs=0.05
+    ), f"heading mismatch after motion 2: loc={p2}, sim={sim_p2}"

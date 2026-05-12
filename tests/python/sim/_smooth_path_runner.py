@@ -29,6 +29,15 @@ def _log(msg: str) -> None:
     sys.stderr.flush()
 
 
+async def _run_scenario(out: dict[str, object], key: str, label: str, coro) -> None:
+    _log(label)
+    try:
+        await coro
+    except Exception as exc:
+        out[key] = {"error": f"{type(exc).__name__}: {exc}"}
+        _log(f"  failed: {type(exc).__name__}: {exc}")
+
+
 async def _scenarios(config_name: str):
     from raccoon.step.motion.drive_dsl import drive_forward
     from raccoon.step.motion.smooth_path import smooth_path
@@ -42,75 +51,111 @@ async def _scenarios(config_name: str):
     out: dict[str, list[float]] = {}
 
     # ---- Scenario 1: single segment (should behave like normal drive) ----
-    _log("scenario 1: smooth_path single drive(30)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(cm=30.0))
-        await asyncio.wait_for(step.run_step(robot), timeout=8.0)
-        p = pose()
-        out["single_drive"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _single_drive() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(drive_forward(cm=30.0))
+            await asyncio.wait_for(step.run_step(robot), timeout=8.0)
+            p = pose()
+            out["single_drive"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(
+        out, "single_drive", "scenario 1: smooth_path single drive(30)", _single_drive()
+    )
 
     # ---- Scenario 2: two same-type drives (should carry velocity) ----
-    _log("scenario 2: smooth_path drive(20) + drive(20)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(
-            drive_forward(cm=20.0),
-            drive_forward(cm=20.0),
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=8.0)
-        p = pose()
-        out["two_drives"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _two_drives() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(
+                drive_forward(cm=20.0),
+                drive_forward(cm=20.0),
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=8.0)
+            p = pose()
+            out["two_drives"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(
+        out, "two_drives", "scenario 2: smooth_path drive(20) + drive(20)", _two_drives()
+    )
 
     # ---- Scenario 3: same total distance via seq() for comparison ----
-    _log("scenario 3: seq drive(20) + drive(20) for timing comparison")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = seq([drive_forward(cm=20.0), drive_forward(cm=20.0)])
-        await asyncio.wait_for(step.run_step(robot), timeout=8.0)
-        p = pose()
-        out["two_drives_seq"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _two_drives_seq() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = seq([drive_forward(cm=20.0), drive_forward(cm=20.0)])
+            await asyncio.wait_for(step.run_step(robot), timeout=8.0)
+            p = pose()
+            out["two_drives_seq"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(
+        out,
+        "two_drives_seq",
+        "scenario 3: seq drive(20) + drive(20) for timing comparison",
+        _two_drives_seq(),
+    )
 
     # ---- Scenario 4: three drives ----
-    _log("scenario 4: smooth_path drive(15) + drive(15) + drive(15)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(30.0, 50.0, 0.0)):
-        step = smooth_path(
-            drive_forward(cm=15.0),
-            drive_forward(cm=15.0),
-            drive_forward(cm=15.0),
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=8.0)
-        p = pose()
-        out["three_drives"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _three_drives() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(30.0, 50.0, 0.0)):
+            step = smooth_path(
+                drive_forward(cm=15.0),
+                drive_forward(cm=15.0),
+                drive_forward(cm=15.0),
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=8.0)
+            p = pose()
+            out["three_drives"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(
+        out,
+        "three_drives",
+        "scenario 4: smooth_path drive(15) + drive(15) + drive(15)",
+        _three_drives(),
+    )
 
     # ---- Scenario 5: cross-type drive + turn + drive ----
-    _log("scenario 5: smooth_path drive(20) + turn_right(90) + drive(20)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(
-            drive_forward(cm=20.0),
-            turn_right(90),
-            drive_forward(cm=20.0),
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=12.0)
-        p = pose()
-        out["drive_turn_drive"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
-
-    # ---- Scenario 6: cross-type via seq() for comparison ----
-    _log("scenario 6: seq drive(20) + turn_right(90) + drive(20)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = seq(
-            [
+    async def _drive_turn_drive() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(
                 drive_forward(cm=20.0),
                 turn_right(90),
                 drive_forward(cm=20.0),
-            ]
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=12.0)
-        p = pose()
-        out["drive_turn_drive_seq"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=12.0)
+            p = pose()
+            out["drive_turn_drive"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+
+    await _run_scenario(
+        out,
+        "drive_turn_drive",
+        "scenario 5: smooth_path drive(20) + turn_right(90) + drive(20)",
+        _drive_turn_drive(),
+    )
+
+    # ---- Scenario 6: cross-type via seq() for comparison ----
+    async def _drive_turn_drive_seq() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = seq(
+                [
+                    drive_forward(cm=20.0),
+                    turn_right(90),
+                    drive_forward(cm=20.0),
+                ]
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=12.0)
+            p = pose()
+            out["drive_turn_drive_seq"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+
+    await _run_scenario(
+        out,
+        "drive_turn_drive_seq",
+        "scenario 6: seq drive(20) + turn_right(90) + drive(20)",
+        _drive_turn_drive_seq(),
+    )
 
     _log("all scenarios complete")
     sys.stdout.write("RESULTS:" + json.dumps(out) + "\n")

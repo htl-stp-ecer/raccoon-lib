@@ -55,6 +55,7 @@ class Segment:
     distance_m: float | None = None  # None = condition-only (sentinel)
     speed_scale: float = 1.0
     heading_deg: float | None = None
+    target_heading_rad: float | None = None
 
     # Turn params
     angle_rad: float | None = None
