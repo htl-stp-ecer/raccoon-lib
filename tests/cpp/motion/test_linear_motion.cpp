@@ -57,6 +57,7 @@ protected:
                                          0.0f);
         pose.heading = static_cast<float>(heading_rad);
         mock_odometry_->setPose(pose);
+        mock_odometry_->setHeading(heading_rad);
         ON_CALL(*mock_odometry_, getAbsoluteHeading())
             .WillByDefault(Return(heading_rad));
     }
