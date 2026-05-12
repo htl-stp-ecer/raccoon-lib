@@ -66,12 +66,14 @@ namespace libstp::motion
         cycle_ = 0;
         heading_offset_rad_ = 0.0;
 
-        prev_heading_ = 0.0;
+        // No odometry reset — snapshot the absolute heading; arc progress is
+        // computed as (current_abs - initial_abs).
+        initial_absolute_heading_rad_ = odometry().getAbsoluteHeading();
+        prev_heading_ = initial_absolute_heading_rad_;
         filtered_velocity_ = 0.0;
         elapsed_time_ = 0.0;
         telemetry_.clear();
 
-        odometry().reset();
         drive().resetVelocityControllers();
 
         profiled_pid_.reset(0.0);
@@ -93,7 +95,8 @@ namespace libstp::motion
         heading_offset_rad_ = heading_offset_rad;
 
         // Do NOT reset odometry
-        prev_heading_ = odometry().getHeading();
+        initial_absolute_heading_rad_ = odometry().getAbsoluteHeading();
+        prev_heading_ = initial_absolute_heading_rad_;
         filtered_velocity_ = initial_angular_velocity;
         elapsed_time_ = 0.0;
         telemetry_.clear();
@@ -128,12 +131,17 @@ namespace libstp::motion
 
         odometry().update(dt);
 
-        const double raw_heading = odometry().getHeading();
-        const double current_heading = raw_heading - heading_offset_rad_;
+        const double raw_heading = odometry().getAbsoluteHeading();
+        // Body-frame arc progress: signed difference from start, wrapped.
+        const double current_heading = std::remainder(
+            raw_heading - initial_absolute_heading_rad_,
+            2.0 * std::numbers::pi);
         const double heading_error = cfg_.arc_angle_rad - current_heading;
 
-        // Filtered angular velocity for settling detection
-        const double raw_velocity = (raw_heading - prev_heading_) / dt;
+        // Filtered angular velocity for settling detection (use shortest-path
+        // delta to absorb ±π wrap).
+        const double raw_velocity = std::remainder(raw_heading - prev_heading_,
+                                                   2.0 * std::numbers::pi) / dt;
         filtered_velocity_ = kVelocityFilterAlpha * raw_velocity + (1.0 - kVelocityFilterAlpha) * filtered_velocity_;
         prev_heading_ = raw_heading;
 
@@ -211,7 +219,9 @@ namespace libstp::motion
     {
         if (finished_) return true;
         if (!started_) return false;
-        const double current_heading = odometry().getHeading() - heading_offset_rad_;
+        const double current_heading = std::remainder(
+            odometry().getAbsoluteHeading() - initial_absolute_heading_rad_,
+            2.0 * std::numbers::pi);
         const double heading_error = cfg_.arc_angle_rad - current_heading;
         return std::abs(heading_error) <= ctx_.pid_config.angle_tolerance_rad;
     }

@@ -51,6 +51,15 @@ def _log(msg: str) -> None:
     sys.stderr.flush()
 
 
+async def _run_scenario(out: dict[str, object], key: str, label: str, coro) -> None:
+    _log(label)
+    try:
+        await coro
+    except Exception as exc:
+        out[key] = {"error": f"{type(exc).__name__}: {exc}"}
+        _log(f"  failed: {type(exc).__name__}: {exc}")
+
+
 async def _scenarios(config_name: str) -> None:
     from raccoon.step.base import Step
     from raccoon.step.logic.background import background
@@ -74,77 +83,111 @@ async def _scenarios(config_name: str) -> None:
     robot = _build_robot(cfg)
     out: dict[str, list[float]] = {}
 
-    # ---- Scenario: reference drive+turn+drive (unoptimized) ----
-    _log("reference: drive(50) + turn_right(90) + drive(30)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), correct=False)
-        await asyncio.wait_for(step.run_step(robot), timeout=20.0)
-        p = pose()
-        out["reference_drive_turn_drive"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
-
     # ---- Scenario: optimize=True merges two drives ----
-    _log("merge: drive(20) + drive(20) with optimize=True")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(drive_forward(20), drive_forward(20), optimize=True, correct=False)
-        await asyncio.wait_for(step.run_step(robot), timeout=12.0)
-        p = pose()
-        out["merge_two_drives"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _merge_two_drives() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(drive_forward(20), drive_forward(20), optimize=True)
+            await asyncio.wait_for(step.run_step(robot), timeout=12.0)
+            p = pose()
+            out["merge_two_drives"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(
+        out,
+        "merge_two_drives",
+        "merge: drive(20) + drive(20) with optimize=True",
+        _merge_two_drives(),
+    )
 
     # ---- Scenario: reference single drive(40) for merge comparison ----
-    _log("ref: drive(40)")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = drive_forward(40)
-        await asyncio.wait_for(step.run_step(robot), timeout=12.0)
-        p = pose()
-        out["merge_ref_drive"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _merge_ref_drive() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = drive_forward(40)
+            await asyncio.wait_for(step.run_step(robot), timeout=12.0)
+            p = pose()
+            out["merge_ref_drive"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(out, "merge_ref_drive", "ref: drive(40)", _merge_ref_drive())
+
+    # ---- Scenario: reference drive+turn+drive (unoptimized) ----
+    async def _reference_drive_turn_drive() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30))
+            await asyncio.wait_for(step.run_step(robot), timeout=20.0)
+            p = pose()
+            out["reference_drive_turn_drive"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+
+    await _run_scenario(
+        out,
+        "reference_drive_turn_drive",
+        "reference: drive(50) + turn_right(90) + drive(30)",
+        _reference_drive_turn_drive(),
+    )
 
     # ---- Scenario: corner_cut_cm=5 ----
-    _log("corner_cut: drive(50) + turn_right(90) + drive(30) + corner_cut_cm=5")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(
-            drive_forward(50),
-            turn_right(90),
-            drive_forward(30),
-            corner_cut_cm=5.0,
-            correct=False,
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=20.0)
-        p = pose()
-        out["corner_cut_5cm"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+    async def _corner_cut() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(
+                drive_forward(50),
+                turn_right(90),
+                drive_forward(30),
+                corner_cut_cm=5.0,
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=20.0)
+            p = pose()
+            out["corner_cut_5cm"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+
+    await _run_scenario(
+        out,
+        "corner_cut_5cm",
+        "corner_cut: drive(50) + turn_right(90) + drive(30) + corner_cut_cm=5",
+        _corner_cut(),
+    )
 
     # ---- Scenario: spline=True ----
-    _log("spline: drive(50) + turn_right(90) + drive(30) + spline=True")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(
-            drive_forward(50),
-            turn_right(90),
-            drive_forward(30),
-            spline=True,
-            correct=False,
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=20.0)
-        p = pose()
-        out["spline_drive_turn_drive"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+    async def _spline() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(
+                drive_forward(50),
+                turn_right(90),
+                drive_forward(30),
+                spline=True,
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=20.0)
+            p = pose()
+            out["spline_drive_turn_drive"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}, theta={p.theta:.3f}")
+
+    await _run_scenario(
+        out,
+        "spline_drive_turn_drive",
+        "spline: drive(50) + turn_right(90) + drive(30) + spline=True",
+        _spline(),
+    )
 
     # ---- Scenario: optimize=True with background() barrier ----
-    _log("merge_barrier: drive(20) + background(noop) + drive(20) + optimize=True")
-    with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
-        step = smooth_path(
-            drive_forward(20),
-            background(_Noop()),
-            drive_forward(20),
-            optimize=True,
-            correct=False,
-        )
-        await asyncio.wait_for(step.run_step(robot), timeout=12.0)
-        p = pose()
-        out["merge_with_barrier"] = [p.x, p.y, p.theta]
-        _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+    async def _merge_with_barrier() -> None:
+        with use_scene(SCENES_DIR / "empty_table.ftmap", robot=cfg, start=(50.0, 50.0, 0.0)):
+            step = smooth_path(
+                drive_forward(20),
+                background(_Noop()),
+                drive_forward(20),
+                optimize=True,
+            )
+            await asyncio.wait_for(step.run_step(robot), timeout=12.0)
+            p = pose()
+            out["merge_with_barrier"] = [p.x, p.y, p.theta]
+            _log(f"  ended at x={p.x:.2f}, y={p.y:.2f}")
+
+    await _run_scenario(
+        out,
+        "merge_with_barrier",
+        "merge_barrier: drive(20) + background(noop) + drive(20) + optimize=True",
+        _merge_with_barrier(),
+    )
 
     _log("all scenarios complete")
     sys.stdout.write("RESULTS:" + json.dumps(out) + "\n")

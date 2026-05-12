@@ -350,8 +350,9 @@ class after_lateral_cm(_AxisDisplacementCondition):
 class after_degrees(StopCondition):
     """Stop after turning a given angle (degrees).
 
-    Uses the absolute IMU heading so it is unaffected by odometry resets.
-    Tracks total unsigned rotation — works regardless of turn direction.
+    Reads the world heading from ``robot.localization.get_pose().heading``
+    so it is unaffected by odometry resets. Tracks total unsigned rotation —
+    works regardless of turn direction.
     """
 
     def __init__(self, degrees: float):
@@ -364,11 +365,22 @@ class after_degrees(StopCondition):
         self._target_rad = math.radians(abs(degrees))
         self._start_heading: float = 0.0
 
+    @staticmethod
+    def _world_heading(robot: "GenericRobot") -> float:
+        loc = getattr(robot, "localization", None)
+        if loc is None:
+            msg = (
+                "after_degrees requires robot.localization "
+                "(world heading is read from localization.get_pose().heading)."
+            )
+            raise RuntimeError(msg)
+        return float(loc.get_pose().heading)
+
     def start(self, robot: "GenericRobot") -> None:
-        self._start_heading = robot.odometry.get_absolute_heading()
+        self._start_heading = self._world_heading(robot)
 
     def check(self, robot: "GenericRobot") -> bool:
-        current = robot.odometry.get_absolute_heading()
+        current = self._world_heading(robot)
         delta = abs(current - self._start_heading)
         if delta > math.pi:
             delta = 2 * math.pi - delta

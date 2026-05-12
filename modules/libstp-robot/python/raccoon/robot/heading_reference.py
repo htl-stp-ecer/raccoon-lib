@@ -18,6 +18,18 @@ def _normalize_angle(angle: float) -> float:
     return angle
 
 
+def _world_heading(robot: "GenericRobot") -> float:
+    """Read the absolute world heading from ``robot.localization``."""
+    loc = getattr(robot, "localization", None)
+    if loc is None:
+        msg = (
+            "HeadingReferenceService requires robot.localization "
+            "(world heading is read from localization.get_pose().heading)."
+        )
+        raise RuntimeError(msg)
+    return float(loc.get_pose().heading)
+
+
 class HeadingReferenceService(RobotService):
     """Stores an absolute IMU heading reference and computes turns relative to it.
 
@@ -30,7 +42,7 @@ class HeadingReferenceService(RobotService):
         self._positive_direction: str = "left"
 
     def mark(self, origin_offset_deg: float = 0.0, positive_direction: str = "left") -> None:
-        """Capture the current absolute IMU heading as the reference.
+        """Capture the current absolute world heading as the reference.
 
         Args:
             origin_offset_deg: Offset in degrees added to the captured heading.
@@ -43,7 +55,7 @@ class HeadingReferenceService(RobotService):
                 standard mathematical convention.  ``"right"`` flips the sign so
                 CW is positive.
         """
-        raw = self.robot.odometry.get_absolute_heading()
+        raw = _world_heading(self.robot)
         self._reference_rad = raw + math.radians(origin_offset_deg)
         self._positive_direction = positive_direction
         self.info(
@@ -83,6 +95,9 @@ class HeadingReferenceService(RobotService):
     ) -> float:
         """Compute the signed relative turn angle to reach *target_deg* from reference.
 
+        Reads the current world heading from ``robot.localization`` (the
+        absolute-motion plan's first-class world-pose source).
+
         Args:
             target_deg: Desired heading in degrees relative to the reference.
             force_direction: ``"left"`` to force CCW, ``"right"`` to force CW,
@@ -102,7 +117,7 @@ class HeadingReferenceService(RobotService):
 
         sign = 1.0 if self._positive_direction == "left" else -1.0
         target_absolute = self._reference_rad + sign * math.radians(target_deg)
-        current_absolute = self.robot.odometry.get_absolute_heading()
+        current_absolute = _world_heading(self.robot)
         relative_rad = _normalize_angle(target_absolute - current_absolute)
         relative_deg = math.degrees(relative_rad)
 

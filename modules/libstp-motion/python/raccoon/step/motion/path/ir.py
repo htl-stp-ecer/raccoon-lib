@@ -55,6 +55,7 @@ class Segment:
     distance_m: float | None = None  # None = condition-only (sentinel)
     speed_scale: float = 1.0
     heading_deg: float | None = None
+    target_heading_rad: float | None = None
 
     # Turn params
     angle_rad: float | None = None
@@ -91,21 +92,3 @@ class SideAction:
 # into ``PathNode`` itself, so type-narrowing on a non-None entry yields a
 # concrete Segment-or-SideAction.
 PathNode = Segment | SideAction
-
-
-@dataclass
-class Correction:
-    """World-frame parameter adjustment for the next segment.
-
-    Produced by middleware (e.g. ``WorldCorrectionMiddleware``) and consumed
-    by the motion factory when constructing the next segment's controller.
-    """
-
-    distance_adjust_m: float = 0.0
-    """Subtract from linear distance target (positive = overshot, drive less)."""
-
-    heading_target_rad: float | None = None
-    """Absolute heading to hold during the next linear segment (cross-track bias)."""
-
-    angle_adjust_rad: float = 0.0
-    """Subtract from turn/arc angle target (positive = over-rotated, turn less)."""

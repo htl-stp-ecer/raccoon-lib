@@ -25,8 +25,16 @@ def get_config(name: str):
     )
 
 
-def build_robot(cfg):
-    """Build a HAL robot whose kinematics match the given SimRobotConfig."""
+def build_robot(cfg, *, enable_localization: bool = True):
+    """Build a HAL robot whose kinematics match the given SimRobotConfig.
+
+    Phase 4 of the absolute-motion plan made ``robot.localization`` a hard
+    requirement for any motion step (motions need an absolute
+    ``target_heading_rad`` and read it from
+    ``robot.localization.get_pose().heading``). The default therefore flips
+    to ``True``; pass ``enable_localization=False`` only when the test
+    explicitly checks the ``robot.localization is None`` path.
+    """
     from raccoon.drive import ChassisVelocityControlConfig, Drive
     from raccoon.hal import IMU, Motor, OdometryBridge
     from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
@@ -68,10 +76,19 @@ def build_robot(cfg):
     pid_cfg.lateral = AxisConstraints(0.5, 1.0, 1.0)
     pid_cfg.angular = AxisConstraints(6.0, 12.0, 12.0)
 
+    localization = None
+    if enable_localization:
+        from raccoon.localization import Localization, LocalizationConfig
+
+        # Fast tick (5 ms) keeps the worker responsive during short test
+        # scenarios; the production default is 10 ms.
+        localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
+
     return SimpleNamespace(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,
         motion_pid_config=pid_cfg,
+        localization=localization,
         _refs=(*refs, bridge),
     )

@@ -712,10 +712,13 @@ async def _run_linear_trial(
     """
     Run a linear drive trial. Returns (settling_time, overshoot, final_error).
     """
+    from ._heading_utils import get_world_heading_rad
+
     config = LinearMotionConfig()
     config.axis = axis if axis is not None else LinearAxis.Forward
     config.distance_m = distance_m
     config.speed_scale = speed_scale
+    config.target_heading_rad = get_world_heading_rad(robot)
 
     motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
 

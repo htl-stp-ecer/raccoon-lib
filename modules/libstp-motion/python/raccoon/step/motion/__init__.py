@@ -95,6 +95,14 @@ from .line_follow_dsl import (
     strafe_follow_line_single,
     directional_follow_line_single,
 )
+from .resync import (
+    AlignToWallResync,
+    FindLineResync,
+    ResyncAtStartPose,
+    align_to_wall_resync,
+    find_line_resync,
+    resync_at_start_pose,
+)
 
 from .at_distance import WaitUntilDistance
 from .at_distance_dsl import wait_until_distance
@@ -186,6 +194,10 @@ __all__ = [
     "strafe_follow_line",
     "strafe_follow_line_single",
     "directional_follow_line_single",
+    # Localization resync
+    "align_to_wall_resync",
+    "find_line_resync",
+    "resync_at_start_pose",
     # Distance wait
     "wait_until_distance",
     # Heading wait

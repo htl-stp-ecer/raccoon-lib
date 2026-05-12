@@ -1,0 +1,70 @@
+FROM python:3.13-trixie
+# Cross-compilation builder for ARM64 (aarch64) — runs natively on x86_64.
+# No QEMU, no emulation: the compiler is aarch64-linux-gnu-g++ running on the host CPU.
+#
+# Usage via wrapper:
+#   bash build-cross-docker.sh
+#
+# Direct usage:
+#   docker build -t raccoon-cross-builder -f Dockerfile.cross .
+#   docker run --rm -v "$PWD":/src -v raccoon-ccache-cross:/ccache \
+#     raccoon-cross-builder bash build-cross.sh
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG TZ=Europe/Vienna
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ >/etc/timezone
+
+# Enable ARM64 multiarch so apt can fetch aarch64 packages from Debian mirrors.
+RUN dpkg --add-architecture arm64
+
+# Cross-toolchain + host tools.
+# liblcm-dev provides /usr/bin/lcm-gen (x86_64) for build-time code generation.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      gcc-aarch64-linux-gnu \
+      g++-aarch64-linux-gnu \
+      binutils-aarch64-linux-gnu \
+      ccache \
+      liblcm-dev \
+      libglib2.0-dev:arm64 \
+      git \
+      cmake \
+      ninja-build \
+      pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# ARM64 Python 3.13 headers (pyconfig.h).
+# Cannot install libpython3.13-dev:arm64 directly: it depends on
+# python3.13-minimal:arm64 whose postinst tries to execute an ARM64 binary.
+# We download the .deb and extract only the headers we need.
+RUN apt-get update \
+    && apt-get download libpython3.13-dev:arm64 \
+    && dpkg-deb --extract libpython3.13-dev_*.deb /tmp/py313-arm64 \
+    && mkdir -p /usr/include/aarch64-linux-gnu \
+    && cp -r /tmp/py313-arm64/usr/include/aarch64-linux-gnu/python3.13 \
+             /usr/include/aarch64-linux-gnu/ \
+    && rm -rf libpython3.13-dev_*.deb /tmp/py313-arm64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python build tools needed by build-cross.sh.
+RUN pip install --no-cache-dir \
+    'scikit-build-core>=0.10' \
+    pybind11 \
+    build \
+    pytest \
+    pytest-asyncio \
+    ruff==0.7.3
+
+# Cross-compile defaults — build-cross.sh overrides these where needed.
+ENV _PYTHON_HOST_PLATFORM=linux-aarch64 \
+    CCACHE_DIR=/ccache \
+    CCACHE_MAXSIZE=3G \
+    CCACHE_COMPRESS=1 \
+    CCACHE_BASEDIR=/src \
+    CCACHE_NOHASHDIR=1 \
+    CCACHE_COMPILERCHECK=content \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN git config --global --add safe.directory '*'
+WORKDIR /src
+CMD ["/bin/bash"]

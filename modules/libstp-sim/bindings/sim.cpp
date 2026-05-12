@@ -121,42 +121,17 @@ PYBIND11_MODULE(sim, m)
         .def_readwrite("coulomb_friction_rad_s2", &SimMotorMap::coulombFrictionRadSS)
         .def_readwrite("bemf_noise_stddev", &SimMotorMap::bemfNoiseStddev);
 
-    // ──────────────────── MapSegment ────────────────────
-    py::class_<MapSegment> mapSeg(m, "MapSegment");
-    py::enum_<MapSegment::Kind>(mapSeg, "Kind")
-        .value("LINE", MapSegment::Kind::Line)
-        .value("WALL", MapSegment::Kind::Wall);
-    mapSeg
-        .def(py::init<>())
-        .def_readwrite("kind", &MapSegment::kind)
-        .def_readwrite("start_x", &MapSegment::startX)
-        .def_readwrite("start_y", &MapSegment::startY)
-        .def_readwrite("end_x", &MapSegment::endX)
-        .def_readwrite("end_y", &MapSegment::endY)
-        .def_readwrite("width_cm", &MapSegment::widthCm);
-
-    // ──────────────────── WorldMap ────────────────────
-    py::class_<WorldMap>(m, "WorldMap")
-        .def(py::init<>())
-        .def_property_readonly("table_width_cm", &WorldMap::tableWidthCm)
-        .def_property_readonly("table_height_cm", &WorldMap::tableHeightCm)
-        .def("set_table", &WorldMap::setTable, py::arg("width_cm"), py::arg("height_cm"))
-        .def("add_segment", &WorldMap::addSegment)
-        .def("clear", &WorldMap::clear)
-        .def("segments", &WorldMap::segments)
-        .def("lines", &WorldMap::lines)
-        .def("walls", &WorldMap::walls)
-        .def("is_on_black_line", &WorldMap::isOnBlackLine, py::arg("x_cm"), py::arg("y_cm"))
-        .def("load_ftmap",
-            [](WorldMap& self, const std::string& path) { self.loadFtmap(path); },
-            py::arg("path"),
-            "Load a .ftmap scene produced by the web-ide's map editor.")
-        .def("parse_ftmap",
-            [](WorldMap& self, const std::string& content) { self.parseFtmap(content); },
-            py::arg("content"),
-            "Parse ftmap content from an in-memory string.");
-
-    py::register_exception<FtmapParseError>(m, "FtmapParseError");
+    // ──────────────────── MapSegment / WorldMap / FtmapParseError ────────────────────
+    // The canonical bindings live in raccoon.map (libstp-map). pybind11 only
+    // allows one py::class_ registration per C++ type process-wide, so we
+    // re-export the same classes under raccoon.sim for backwards compatibility
+    // with existing sim users instead of re-binding them here.
+    {
+        py::module_ mapMod = py::module_::import("raccoon.map");
+        m.attr("WorldMap") = mapMod.attr("WorldMap");
+        m.attr("MapSegment") = mapMod.attr("MapSegment");
+        m.attr("FtmapParseError") = mapMod.attr("FtmapParseError");
+    }
 
     // ──────────────────── SimWorld ────────────────────
     py::class_<SimWorld>(m, "SimWorld")

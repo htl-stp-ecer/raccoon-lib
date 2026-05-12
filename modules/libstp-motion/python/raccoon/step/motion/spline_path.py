@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from raccoon.motion import SplineMotion, SplineMotionConfig
 
 from .. import dsl
+from ._heading_utils import get_world_heading_rad
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -84,7 +85,11 @@ class SplinePath(MotionStep):
             config.headings_rad = [math.radians(wp[2]) for wp in self._waypoints]
 
         config.speed_scale = self._speed
-        config.use_absolute_heading = self._absolute_heading
+        # Phase 4: SplineMotion is absolute-heading-only — the C++ side always
+        # captures the world heading at start and adds it to relative target
+        # headings during update(). The legacy ``use_absolute_heading`` toggle
+        # is gone; ``_absolute_heading`` only changes how ``final_heading_deg``
+        # is interpreted (absolute reference vs. relative-to-start) below.
 
         if self._final_heading_deg is not None and not self._has_headings:
             if self._absolute_heading:
@@ -99,7 +104,7 @@ class SplinePath(MotionStep):
                 abs_target_rad = ref_svc._reference_rad + sign * math.radians(
                     self._final_heading_deg
                 )
-                current_abs_rad = robot.odometry.get_absolute_heading()
+                current_abs_rad = get_world_heading_rad(robot)
                 config.final_heading_rad = abs_target_rad - current_abs_rad
             else:
                 config.final_heading_rad = math.radians(self._final_heading_deg)
@@ -141,8 +146,9 @@ def spline(
       drivetrains only — raises ``ValueError`` on differential bots.
 
     **Absolute heading mode** (``absolute_heading=True``): the heading PID
-    computes its error against the IMU's absolute heading
-    (``get_absolute_heading()``) which is never reset by odometry resets.
+    computes its error against the world heading from
+    ``robot.localization.get_pose().heading``, which lives across motion
+    boundaries and is independent of any odometry reset.
     The absolute heading at the start of the step is captured and used as
     an offset so that waypoint headings are still expressed relative to the
     robot's facing direction at the start — the convention is unchanged.
