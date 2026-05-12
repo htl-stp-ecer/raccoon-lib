@@ -110,7 +110,7 @@ jobs:
 
             echo '::group::Build editable package + test binaries'
             pip install /src/raccoon-transport/python
-            CMAKE_BUILD_PARALLEL_LEVEL=4 pip install -e /src \
+            CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) pip install -e /src \
               --no-build-isolation \
               --config-settings=build-dir=/src/_skbuild-docker-test \
               --config-settings=cmake.define.LIBSTP_BUILD_TESTS=ON \
@@ -219,7 +219,7 @@ jobs:
         run: |
           SKIP_TESTS=1 \
           BUILD_NUMBER=${{ github.run_number }} \
-          BUILD_JOBS=4 \
+          BUILD_JOBS=$(nproc) \
           bash build.sh
           docker run --rm --platform=linux/arm64/v8 \
             -v "$CCACHE_HOST_DIR":/ccache \
@@ -239,7 +239,7 @@ jobs:
         run: |
           SKIP_TESTS=1 \
           BUILD_NUMBER=${{ github.run_number }} \
-          BUILD_JOBS=4 \
+          BUILD_JOBS=$(nproc) \
           BUILD_DIR=build-docker-mock \
           SKBUILD_DIR=_skbuild-docker-mock \
           FETCHCONTENT_DIR=.cmake-cache-docker-mock \
