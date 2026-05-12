@@ -90,8 +90,9 @@ class HeadingOrigin(enum.Enum):
 
     HEADING_REFERENCE
         Degrees are counted from the global heading reference set by
-        ``mark_heading_reference()``.  Uses the raw IMU heading
-        (``get_absolute_heading()``), which is never reset by motion steps.
+        ``mark_heading_reference()``.  Uses the world heading from
+        ``robot.localization.get_pose().heading``, which lives across
+        motion boundaries and is independent of any odometry reset.
 
         Use this when you want to trigger an action at a board-absolute
         heading rather than at an angle relative to the current turn.
@@ -216,6 +217,8 @@ class WaitUntilDegrees(Step):
         else:  # HEADING_REFERENCE
             from raccoon.robot.heading_reference import HeadingReferenceService
 
+            from ._heading_utils import get_world_heading_rad
+
             service = robot.get_service(HeadingReferenceService)
             if service.reference_deg is None:
                 msg = (
@@ -226,7 +229,7 @@ class WaitUntilDegrees(Step):
             ref_rad = math.radians(service.reference_deg)
 
             def _turned() -> float:
-                current = robot.odometry.get_absolute_heading()
+                current = get_world_heading_rad(robot)
                 return abs(_normalize_angle(current - ref_rad))
 
         loop = asyncio.get_event_loop()

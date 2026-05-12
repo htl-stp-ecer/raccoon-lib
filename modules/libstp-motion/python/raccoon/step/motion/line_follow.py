@@ -125,6 +125,8 @@ class LineFollow(MotionStep):
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
+        from ._heading_utils import get_world_heading_rad
+
         cfg = self.config
 
         motion_config = LinearMotionConfig()
@@ -134,6 +136,9 @@ class LineFollow(MotionStep):
         else:
             motion_config.distance_m = _SENTINEL_DISTANCE_M
         motion_config.speed_scale = cfg.speed_scale
+        # PID overrides omega each tick, but the underlying LinearMotion still
+        # needs a valid absolute heading for its profile reference.
+        motion_config.target_heading_rad = get_world_heading_rad(robot)
 
         self._motion = LinearMotion(
             robot.drive,
@@ -235,6 +240,8 @@ class SingleSensorLineFollow(MotionStep):
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
+        from ._heading_utils import get_world_heading_rad
+
         cfg = self.config
 
         motion_config = LinearMotionConfig()
@@ -244,6 +251,7 @@ class SingleSensorLineFollow(MotionStep):
         else:
             motion_config.distance_m = _SENTINEL_DISTANCE_M
         motion_config.speed_scale = cfg.speed_scale
+        motion_config.target_heading_rad = get_world_heading_rad(robot)
 
         self._motion = LinearMotion(
             robot.drive,

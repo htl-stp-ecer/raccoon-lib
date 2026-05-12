@@ -52,11 +52,12 @@ namespace libstp::motion
         finished_ = false;
         heading_offset_rad_ = 0.0;
 
-        prev_heading_ = 0.0;
+        // No odometry reset — snapshot current absolute heading instead.
+        // accumulated_heading_ measures the unwrapped delta from start.
+        prev_heading_ = odometry().getHeading();
         accumulated_heading_ = 0.0;
         filtered_velocity_ = 0.0;
 
-        odometry().reset();
         drive().resetVelocityControllers();
 
         // Reset profiled PID at current position (0 after odometry reset)

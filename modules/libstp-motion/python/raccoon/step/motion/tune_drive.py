@@ -236,10 +236,13 @@ class TuneDrive(Step):
     async def _run_drive(
         self, robot: "GenericRobot", distance_m: float, max_speed: float
     ) -> list[LinearMotionTelemetry]:
+        from ._heading_utils import get_world_heading_rad
+
         config = LinearMotionConfig()
         config.axis = self.axis
         config.distance_m = distance_m
         config.speed_scale = max_speed
+        config.target_heading_rad = get_world_heading_rad(robot)
 
         motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
         motion.start()

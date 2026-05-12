@@ -45,11 +45,16 @@ def _build_robot(cfg):
     pid_cfg.lateral = AxisConstraints(0.2, 0.3, 0.3)
     pid_cfg.angular = AxisConstraints(2.0, 3.0, 3.0)
 
+    from raccoon.localization import Localization, LocalizationConfig
+
+    localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
+
     return SimpleNamespace(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,
         motion_pid_config=pid_cfg,
+        localization=localization,
         _refs=(left, right, imu, bridge),
     )
 

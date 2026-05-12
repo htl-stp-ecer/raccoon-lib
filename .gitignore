@@ -166,3 +166,4 @@ logs/
 *.db
 *.sqlite
 *.sqlite-journal
+.codex/

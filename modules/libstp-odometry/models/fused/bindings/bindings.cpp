@@ -92,7 +92,11 @@ PYBIND11_MODULE(odometry_fused, m)
              "    0 = facing initial forward direction\n"
              "    positive = rotated CCW, negative = rotated CW")
         .def("get_absolute_heading", &libstp::odometry::fused::FusedOdometry::getAbsoluteHeading,
-             "Get absolute IMU heading unaffected by reset().\n\n"
+             "Internal: absolute IMU heading unaffected by reset().\n\n"
+             "Phase 4 of the absolute-motion plan retired this as a Python\n"
+             "user-facing API — read the world heading from\n"
+             "``robot.localization.get_pose().heading`` instead. The C++\n"
+             "Localization service still consumes this internally.\n\n"
              "Returns:\n"
              "    Heading in radians (CCW-positive). Stable across odometry resets.")
         .def("get_path_length", &libstp::odometry::fused::FusedOdometry::getPathLength,

@@ -131,10 +131,13 @@ class DriveToAnalogTarget(MotionStep):
         )
         sign = 1.0 if self._driving_forward else -1.0
 
+        from ._heading_utils import get_world_heading_rad
+
         config = LinearMotionConfig()
         config.axis = LinearAxis.Forward
         config.distance_m = sign * distance_m
         config.speed_scale = self._speed
+        config.target_heading_rad = get_world_heading_rad(robot)
         self._motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
         self._motion.start()
 

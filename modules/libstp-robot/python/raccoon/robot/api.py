@@ -23,9 +23,10 @@ _S = TypeVar("_S", bound=RobotService)
 
 if TYPE_CHECKING:
     from raccoon.drive import Drive
+    from raccoon.localization import Localization
+    from raccoon.map import WorldMap as TableMap
     from raccoon.mission.api import MissionProtocol, SetupMission
     from raccoon.odometry import Odometry
-    from raccoon.robot.table_map import TableMap
 
 
 @runtime_checkable
@@ -93,6 +94,17 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     def table_map(self) -> "TableMap" | None:
         """Table map with field line/wall geometry. ``None`` if not configured."""
         return None
+
+    @property
+    def localization(self) -> "Localization | None":
+        """Optional world-pose localization service.
+
+        Phase-2 contract: ``GenericRobot`` does not instantiate the service —
+        robot subclasses opt in by setting ``self._localization`` (typically
+        in ``__init__``) to a ``raccoon.localization.Localization`` wrapping
+        their odometry. Defaults to ``None``; motions ignore it for now.
+        """
+        return getattr(self, "_localization", None)
 
     @property
     def motion_pid_config(self) -> UnifiedMotionPidConfig:

@@ -20,7 +20,11 @@ PYBIND11_MODULE(odometry, m)
              py::arg("dt"))
         .def("get_pose", &libstp::odometry::IOdometry::getPose)
         .def("get_absolute_heading", &libstp::odometry::IOdometry::getAbsoluteHeading,
-             "Get absolute IMU heading unaffected by reset().\n\n"
+             "Internal: absolute IMU heading unaffected by reset().\n\n"
+             "Phase 4 of the absolute-motion plan retired this as a Python\n"
+             "user-facing API — read the world heading from\n"
+             "``robot.localization.get_pose().heading`` instead. The C++\n"
+             "Localization service still consumes this internally.\n\n"
              "Returns:\n"
              "    Heading in radians (CCW-positive). Stable across odometry resets.")
         .def("get_path_length", &libstp::odometry::IOdometry::getPathLength,

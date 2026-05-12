@@ -49,6 +49,29 @@ namespace libstp::motion
         heading_pid_ = createPidController(ctx_.pid_config, PidType::Heading);
     }
 
+    void LinearMotion::captureInitialPose()
+    {
+        const auto pose = odometry().getPose();
+        initial_position_m_ = Eigen::Vector2d(static_cast<double>(pose.position.x()),
+                                              static_cast<double>(pose.position.y()));
+        initial_heading_rad_ = static_cast<double>(pose.heading);
+    }
+
+    std::pair<double, double> LinearMotion::projectBodyFrame() const
+    {
+        const auto pose = odometry().getPose();
+        const double dx = static_cast<double>(pose.position.x()) - initial_position_m_.x();
+        const double dy = static_cast<double>(pose.position.y()) - initial_position_m_.y();
+        const double cos_h = std::cos(initial_heading_rad_);
+        const double sin_h = std::sin(initial_heading_rad_);
+        // Match IOdometry::getDistanceFromOrigin convention:
+        //   forward = pos · (cos θ0, sin θ0)
+        //   lateral = pos · (-sin θ0, cos θ0)   ("right-positive" by libstp-odometry convention)
+        const double forward = dx * cos_h + dy * sin_h;
+        const double lateral = -dx * sin_h + dy * cos_h;
+        return {forward, lateral};
+    }
+
     void LinearMotion::start()
     {
         if (started_) return;
@@ -64,7 +87,10 @@ namespace libstp::motion
         elapsed_time_ = 0.0;
         telemetry_.clear();
 
-        odometry().reset();
+        // No more odometry().reset() — world pose lives in localization and is
+        // never disturbed by motion start. We snapshot the start pose instead
+        // and project subsequent reads into that body frame.
+        captureInitialPose();
         drive().resetVelocityControllers();
 
         heading_pid_->reset();
@@ -73,21 +99,10 @@ namespace libstp::motion
         profiled_pid_.reset(0.0);
         profiled_pid_.setGoal(cfg_.distance_m);
 
-        if (cfg_.target_heading_rad.has_value())
-        {
-            initial_heading_rad_ = cfg_.target_heading_rad.value();
-            use_absolute_heading_ = true;
-        }
-        else
-        {
-            initial_heading_rad_ = odometry().getHeading();
-            use_absolute_heading_ = false;
-        }
-
-        LIBSTP_LOG_TRACE("LinearMotion started: axis={}, target={:.3f} m, max_velocity={:.3f} m/s (scale={:.2f}), heading_mode={}",
+        LIBSTP_LOG_TRACE("LinearMotion started: axis={}, target={:.3f} m, max_velocity={:.3f} m/s (scale={:.2f}), target_heading={:.3f} rad",
                     (cfg_.axis == LinearAxis::Forward ? "Forward" : "Lateral"),
                     cfg_.distance_m, max_velocity_, cfg_.speed_scale,
-                    (use_absolute_heading_ ? "absolute" : "relative"));
+                    cfg_.target_heading_rad);
     }
 
     void LinearMotion::startWarm(double position_offset_m, double initial_velocity_mps)
@@ -97,33 +112,29 @@ namespace libstp::motion
         speed_scale_ = 1.0;
         heading_scale_ = 1.0;
         unsaturated_cycles_ = 0;
-        position_offset_m_ = position_offset_m;
+        // Absolute mode snapshots a fresh segment origin below, so carrying
+        // the caller's old odometry offset would double-count prior segments.
+        position_offset_m_ = 0.0;
 
         prev_primary_position_ = 0.0;
         filtered_velocity_ = initial_velocity_mps;
         elapsed_time_ = 0.0;
         telemetry_.clear();
 
-        // Do NOT reset odometry -- carry position continuously
+        // Do NOT reset odometry -- carry velocity continuously. Position
+        // starts from this segment's captured body-frame origin.
+        captureInitialPose();
         heading_pid_->reset();
 
         // Start profile at position 0 with current velocity, goal = segment distance
         profiled_pid_.reset(0.0, initial_velocity_mps);
         profiled_pid_.setGoal(cfg_.distance_m);
 
-        // Always use absolute heading in warm-start mode (odometry not reset)
-        if (cfg_.target_heading_rad.has_value()) {
-            initial_heading_rad_ = cfg_.target_heading_rad.value();
-        } else {
-            initial_heading_rad_ = odometry().getAbsoluteHeading();
-        }
-        use_absolute_heading_ = true;
-
         LIBSTP_LOG_TRACE("LinearMotion warm-started: axis={}, target={:.3f} m, offset={:.3f} m, "
-                    "initial_vel={:.3f} m/s, max_velocity={:.3f} m/s (scale={:.2f})",
+                    "initial_vel={:.3f} m/s, max_velocity={:.3f} m/s (scale={:.2f}), target_heading={:.3f} rad",
                     (cfg_.axis == LinearAxis::Forward ? "Forward" : "Lateral"),
-                    cfg_.distance_m, position_offset_m_, initial_velocity_mps,
-                    max_velocity_, cfg_.speed_scale);
+                    cfg_.distance_m, position_offset_m, initial_velocity_mps,
+                    max_velocity_, cfg_.speed_scale, cfg_.target_heading_rad);
     }
 
     void LinearMotion::update(double dt)
@@ -150,23 +161,20 @@ namespace libstp::motion
 
         odometry().update(dt);
 
-        const auto distance_info = odometry().getDistanceFromOrigin();
+        const auto [body_forward, body_lateral] = projectBodyFrame();
         const double current_heading = odometry().getHeading();
 
-        // Heading error: absolute mode uses getAbsoluteHeading() so it stays
-        // stable across odometry resets; relative mode uses the local heading.
-        // Sign convention: positive = need to turn CCW (left) to reach target,
-        // matching angularError(current, target) = wrapAngle(target - current).
-        const double yaw_error = use_absolute_heading_
-            ? std::remainder(initial_heading_rad_ - odometry().getAbsoluteHeading(),
-                             2.0 * std::numbers::pi)
-            : odometry().getHeadingError(initial_heading_rad_);
+        // Heading error to absolute target: positive = turn CCW (left) to
+        // reach target. Matches angularError(current, target) = wrap(target - current).
+        const double yaw_error = std::remainder(
+            cfg_.target_heading_rad - current_heading,
+            2.0 * std::numbers::pi);
 
         // Extract axis-dependent positions (offset for warm-start segments)
         const bool is_forward = (cfg_.axis == LinearAxis::Forward);
-        const double raw_primary = is_forward ? distance_info.forward : distance_info.lateral;
+        const double raw_primary = is_forward ? body_forward : body_lateral;
         const double primary_position = raw_primary - position_offset_m_;
-        const double cross_track_position = is_forward ? distance_info.lateral : distance_info.forward;
+        const double cross_track_position = is_forward ? body_lateral : body_forward;
 
         // Filtered velocity for settling detection
         const double raw_velocity = (primary_position - prev_primary_position_) / dt;
@@ -327,9 +335,9 @@ namespace libstp::motion
         if (finished_) return true;
         if (!started_) return false;
         // Check distance only, ignore velocity settling
-        const auto distance_info = odometry().getDistanceFromOrigin();
+        const auto [body_forward, body_lateral] = projectBodyFrame();
         const bool is_forward = (cfg_.axis == LinearAxis::Forward);
-        const double raw_primary = is_forward ? distance_info.forward : distance_info.lateral;
+        const double raw_primary = is_forward ? body_forward : body_lateral;
         const double primary_position = raw_primary - position_offset_m_;
         const double actual_error = cfg_.distance_m - primary_position;
         return std::abs(actual_error) <= ctx_.pid_config.distance_tolerance_m;

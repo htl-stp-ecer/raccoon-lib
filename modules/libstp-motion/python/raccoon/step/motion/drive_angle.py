@@ -82,10 +82,13 @@ class DriveAngle(MotionStep):
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
+        from ._heading_utils import get_world_heading_rad
+
         config = DiagonalMotionConfig()
         config.angle_rad = math.radians(self._angle_deg)
         config.distance_m = self._cm / 100.0 if self._cm is not None else self._SENTINEL_DISTANCE_M
         config.speed_scale = self._speed
+        config.target_heading_rad = get_world_heading_rad(robot)
         self._motion = DiagonalMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
         self._motion.start()
 

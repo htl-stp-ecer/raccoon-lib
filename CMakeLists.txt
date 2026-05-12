@@ -153,6 +153,16 @@ FetchContent_MakeAvailable(yaml-cpp)
 
 python_add_library(_core MODULE main.cpp WITH_SOABI)
 
+# When cross-compiling for aarch64 the host Python interpreter reports the
+# x86_64 SOABI, so the .so gets the wrong name.  Patch the SUFFIX directly after
+# target creation by substituting the architecture component.
+if(CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  string(REGEX REPLACE "(cpython-[0-9]+-)([^-]+)(-linux-gnu)" "\\1aarch64\\3"
+                       _aarch64_soabi "${Python_SOABI}")
+  message(STATUS "Cross-compile: setting _core SOABI to ${_aarch64_soabi}")
+  set_target_properties(_core PROPERTIES SUFFIX ".${_aarch64_soabi}.so")
+endif()
+
 target_link_libraries(_core PRIVATE pybind11::headers spdlog::spdlog
                                     Eigen3::Eigen yaml-cpp::yaml-cpp)
 

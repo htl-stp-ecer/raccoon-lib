@@ -6,11 +6,12 @@ flattened into a linear path of motion segments and side actions at
 construction time, with deferred steps resolved at runtime.
 
 This module is now a thin DSL wrapper.  The actual pipeline lives in
-``raccoon.step.motion.path`` (compiler passes, executor, middleware).
+``raccoon.step.motion.path`` (compiler passes, executor).
 """
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from .. import Step, dsl
@@ -21,7 +22,6 @@ from .path import (
     CompiledPlan,
     PathCompiler,
     PathExecutor,
-    WorldCorrectionMiddleware,
 )
 from .path import (
     Segment as _Segment,
@@ -79,7 +79,6 @@ class SmoothPath(Step):
     def __init__(
         self,
         steps: list,
-        correct: bool = True,
         optimize: bool = False,
         corner_cut_m: float = 0.0,
         spline: bool = False,
@@ -96,7 +95,6 @@ class SmoothPath(Step):
             raise ValueError(msg)
 
         self._raw_steps = steps
-        self._correct = correct
         self._optimize = optimize
         self._corner_cut_m = corner_cut_m
         self._spline_flag = spline
@@ -108,7 +106,9 @@ class SmoothPath(Step):
                 corner_cut_m=corner_cut_m,
             ),
         )
-        self._plan: CompiledPlan = compiler.compile(steps)
+        self._plan: CompiledPlan = compiler.compile_via_absolute_bridge(steps)
+        self._absolute_plan = self._plan.absolute_plan
+        self._absolute_bridge_fallback_reason = self._plan.fallback_reason
 
         # Backwards-compat: expose the IR fields via the same attribute names
         # the previous implementation used.
@@ -143,8 +143,6 @@ class SmoothPath(Step):
         return frozenset(result)
 
     def _generate_signature(self) -> str:
-        import math
-
         parts: list[str] = []
         for node in self._nodes:
             if node is None:
@@ -184,15 +182,11 @@ class SmoothPath(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """Run the compiled plan via the path executor."""
-        middlewares: list = []
-        if self._correct:
-            middlewares.append(WorldCorrectionMiddleware())
-
         executor = PathExecutor(
             nodes=self._plan.nodes,
             deferred=self._plan.deferred,
+            absolute_nodes=None if self._absolute_plan is None else self._absolute_plan.nodes,
             spline_step=self._spline_step,
-            middlewares=middlewares,
             hz=self.hz,
         )
         await executor.run(robot)
@@ -206,7 +200,6 @@ class SmoothPath(Step):
 @dsl(tags=["motion", "path"])
 def smooth_path(
     *steps,
-    correct: bool = True,
     optimize: bool = False,
     corner_cut_cm: float | None = None,
     spline: bool = False,
@@ -224,12 +217,10 @@ def smooth_path(
     a soft stop is used which smoothly decelerates without resetting
     PID state.
 
-    When ``correct`` is enabled (default), the path tracks the robot's
-    world-frame pose and corrects accumulated position and heading
-    errors at each segment transition. Along-track errors adjust the
-    next linear segment's distance, cross-track errors bias the heading
-    hold, and heading errors adjust turn/arc angles. All corrections
-    are clamped to safe limits (3 cm distance, 5 deg heading).
+    Each linear segment holds an absolute world-frame heading read from
+    ``robot.localization.get_pose()`` at segment start, so accumulated
+    heading drift is naturally absorbed without an explicit correction
+    pass between segments.
 
     Supports composite steps:
 
@@ -286,9 +277,6 @@ def smooth_path(
             nested ``seq()``, ``parallel()`` with a motion spine,
             ``background()``, and their builder variants with
             ``.until()`` and ``.speed()``.
-        correct: Enable world-frame error correction across segment
-            transitions. Default ``True``. Set to ``False`` for the
-            legacy uncorrected behavior.
         optimize: Merge adjacent same-type segments algebraically.
             Default ``False`` (opt-in).
         corner_cut_cm: If set, replace right-angle drive+turn+drive
@@ -336,7 +324,6 @@ def smooth_path(
     do_merge = optimize or (corner_cut_cm is not None)
     return SmoothPath(
         list(steps),
-        correct=correct,
         optimize=do_merge,
         corner_cut_m=cut_m,
         spline=spline,

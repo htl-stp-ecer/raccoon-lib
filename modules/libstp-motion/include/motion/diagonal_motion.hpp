@@ -8,6 +8,8 @@
 #include "motion/profiled_pid_controller.hpp"
 #include "foundation/types.hpp"
 
+#include <Eigen/Core>
+
 namespace libstp::motion
 {
     /**
@@ -21,6 +23,10 @@ namespace libstp::motion
         double angle_rad{0.0};               // Travel angle: 0 = forward, pi/2 = right, -pi/2 = left
         double distance_m{0.0};              // Distance along the travel direction
         double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.max_velocity
+
+        /// Absolute world-frame heading (radians) the controller holds during
+        /// the motion. Required — path executor sets this per segment.
+        double target_heading_rad{0.0};
     };
 
     /** Per-cycle diagnostics captured while a `DiagonalMotion` instance runs. */
@@ -85,6 +91,7 @@ namespace libstp::motion
         double sin_angle_{0.0};  // precomputed sin(angle_rad)
         std::unique_ptr<foundation::PidController> heading_pid_;
         ProfiledPIDController profiled_pid_;
+        Eigen::Vector2d initial_position_m_{Eigen::Vector2d::Zero()};
         double initial_heading_rad_{0.0};
         bool finished_{false};
         double speed_scale_{1.0};

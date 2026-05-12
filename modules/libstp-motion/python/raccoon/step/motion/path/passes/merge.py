@@ -7,9 +7,18 @@ deferred-placeholder (``None``) entries act as merge barriers.
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 
 from ..ir import PathNode, Segment
+
+
+def _same_angle(a: float | None, b: float | None, *, tol: float = 1e-9) -> bool:
+    if a is None and b is None:
+        return True
+    if a is None or b is None:
+        return False
+    return abs(math.atan2(math.sin(a - b), math.cos(a - b))) <= tol
 
 
 def can_merge(a: Segment, b: Segment) -> bool:
@@ -19,7 +28,12 @@ def can_merge(a: Segment, b: Segment) -> bool:
     if not a.has_known_endpoint or not b.has_known_endpoint:
         return False
     if a.kind == "linear" and b.kind == "linear":
-        return a.axis == b.axis and a.sign == b.sign and a.heading_deg == b.heading_deg
+        return (
+            a.axis == b.axis
+            and a.sign == b.sign
+            and a.heading_deg == b.heading_deg
+            and _same_angle(a.target_heading_rad, b.target_heading_rad)
+        )
     if a.kind == "turn" and b.kind == "turn":
         # Only merge if the combined angle stays non-zero.
         combined = (a.angle_rad or 0.0) + (b.angle_rad or 0.0)
@@ -42,6 +56,7 @@ def merge_two(a: Segment, b: Segment) -> Segment:
         angle_rad=combined,
         sign=1.0 if combined >= 0 else -1.0,
         speed_scale=min(a.speed_scale, b.speed_scale),
+        target_heading_rad=b.target_heading_rad,
     )
 
 

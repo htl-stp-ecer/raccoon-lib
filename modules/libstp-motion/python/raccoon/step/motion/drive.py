@@ -83,11 +83,19 @@ class _ConditionalDrive(MotionStep):
         )
         config.speed_scale = self._speed
 
+        # Phase 4: target_heading_rad is mandatory. When the user pinned an
+        # absolute heading we honour it via HeadingReferenceService; otherwise
+        # we hold the current world heading from localization (no relative
+        # fallback exists any more).
         if self._heading_deg is not None:
             from raccoon.robot.heading_reference import HeadingReferenceService
 
             ref_svc = robot.get_service(HeadingReferenceService)
             config.target_heading_rad = ref_svc.target_absolute_rad(self._heading_deg)
+        else:
+            from ._heading_utils import get_world_heading_rad
+
+            config.target_heading_rad = get_world_heading_rad(robot)
 
         self._motion = LinearMotion(
             robot.drive,
