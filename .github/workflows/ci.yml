@@ -197,6 +197,9 @@ jobs:
           restore-keys: |
             ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
 
+      - name: Install host tools
+        run: sudo apt-get install -y --no-install-recommends jq
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
