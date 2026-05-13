@@ -33,6 +33,12 @@ if(ENABLE_SAFETY_CHECKS)
   add_compile_definitions(SAFETY_CHECKS_ENABLED)
 endif()
 
+# MSVC does not define M_PI / M_E by default — opt in to the POSIX math
+# constants in <cmath> before any system header pulls it in.
+if(WIN32)
+  add_compile_definitions(_USE_MATH_DEFINES)
+endif()
+
 if(LIBSTP_TRACE_LOGGING)
   message(STATUS "Enabling trace logging in foundation macros (level: TRACE)")
   message(
