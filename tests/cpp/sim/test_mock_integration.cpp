@@ -176,6 +176,24 @@ TEST_F(MockSimIntegrationTest, BrakeStopsSimMotors)
     EXPECT_LT(xAfterBrake - xAfterDrive, 8.0f);
 }
 
+TEST_F(MockSimIntegrationTest, HalMotorPositionReflectsSimEncoderTicks)
+{
+    configureOpenTable({20.0f, 50.0f, 0.0f});
+
+    libstp::hal::motor::Motor leftMotor{0, false};
+    libstp::hal::motor::Motor rightMotor{1, false};
+    leftMotor.setSpeed(100);
+    rightMotor.setSpeed(100);
+
+    run(0.5f);
+
+    const int leftPos = leftMotor.getPosition();
+    const int rightPos = rightMotor.getPosition();
+    EXPECT_GT(leftPos, 0);
+    EXPECT_EQ(leftPos, rightPos);
+    EXPECT_GT(leftMotor.getBemf(), 0);
+}
+
 TEST_F(MockSimIntegrationTest, IMUGyroZReflectsSimYawRate)
 {
     configureOpenTable({50.0f, 50.0f, 0.0f});

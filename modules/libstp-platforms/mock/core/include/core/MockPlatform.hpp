@@ -41,17 +41,18 @@ namespace platform::mock::core
         /// through the motor calibration rather than as a duty.
         void setMotorVelocity(uint8_t port, int signedBemfUnits);
         float getBemf(uint8_t port) const;
-        
+        int getMotorPosition(uint8_t port) const;
+
         // Servo control
         void setServo(uint8_t port, ServoMode mode, uint16_t pos);
-        
+
         // Analog sensors (simulated)
         uint16_t getAnalog(uint8_t port) const;
-        
+
         // Digital inputs (simulated)
         bool getDigital(uint8_t bit) const;
         uint16_t getDigitalRaw() const;
-        
+
         // IMU data (simulated)
         float getGyroX() const;
         float getGyroY() const;
@@ -62,7 +63,7 @@ namespace platform::mock::core
         float getMagX() const;
         float getMagY() const;
         float getMagZ() const;
-        
+
         uint32_t getLastUpdateUs() const;
 
         // Test utilities for contributors and higher-level tests.
@@ -132,7 +133,7 @@ namespace platform::mock::core
             float position = 0.0f;  // Simulated encoder position
             float bemf = 0.0f;      // Back EMF simulation
         };
-        
+
         // Servo state
         struct ServoState {
             ServoMode mode = ServoMode::Disabled;
@@ -210,15 +211,15 @@ namespace platform::mock::core
     inline float gyroX() { return MockPlatform::instance().getGyroX(); }
     inline float gyroY() { return MockPlatform::instance().getGyroY(); }
     inline float gyroZ() { return MockPlatform::instance().getGyroZ(); }
-    
+
     inline float accelX() { return MockPlatform::instance().getAccelX(); }
     inline float accelY() { return MockPlatform::instance().getAccelY(); }
     inline float accelZ() { return MockPlatform::instance().getAccelZ(); }
-    
+
     inline float magX() { return MockPlatform::instance().getMagX(); }
     inline float magY() { return MockPlatform::instance().getMagY(); }
     inline float magZ() { return MockPlatform::instance().getMagZ(); }
-    
+
     inline uint32_t lastUpdateUs()
     {
         return MockPlatform::instance().getLastUpdateUs();

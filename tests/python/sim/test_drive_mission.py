@@ -89,15 +89,15 @@ def test_drive_steps_against_sim():
 
     # Scenario 1: drive(30) on an open table starting at (50, 50, 0).
     x, y, theta = results["drive_30"]
-    assert 76.0 < x < 86.0, f"drive(30) ended at x={x:.2f}, expected ~80 ± 6"
-    assert abs(y - 50.0) < 3.0
-    assert abs(theta) < 0.1
+    assert x == pytest.approx(80.32, abs=0.05)
+    assert y == pytest.approx(50.0, abs=0.05)
+    assert theta == pytest.approx(0.0, abs=0.01)
 
     # Scenario 2: drive(15) starting at (20, 50, 0).
     x, y, _ = results["drive_15"]
-    assert 31.0 < x < 41.0, f"drive(15) ended at x={x:.2f}, expected ~35 ± 6"
-    assert abs(y - 50.0) < 3.0
+    assert x == pytest.approx(35.20, abs=0.05)
+    assert y == pytest.approx(50.0, abs=0.15)
 
     # Scenario 3: wall_box scene blocks the robot before it reaches its goal.
     x, _, _ = results["wall"]
-    assert 80.0 < x < 95.0, f"wall didn't stop robot in expected range — x={x:.2f}"
+    assert x == pytest.approx(91.0, abs=0.01)
