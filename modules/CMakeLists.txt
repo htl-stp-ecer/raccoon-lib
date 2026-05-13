@@ -36,9 +36,16 @@ function(register_libstp_module module_name is_interface additional_libraries)
     else()
       # Default to STATIC libs to avoid shared-lib cycles across modules.
       set(_lib_type STATIC)
-      # Some modules need to be shared so state lives in one place across
-      # bindings.
-      if(module_name STREQUAL "button" OR module_name STREQUAL "foundation")
+      # button and foundation must be SHARED on Linux/macOS so that a single
+      # instance of their state (button registry, logger config) is shared
+      # across all pybind11 extension modules in one Python process. On
+      # Windows/MSVC SHARED brings intractable DLL-export issues
+      # (WINDOWS_EXPORT_ALL_SYMBOLS pulls in internal __-prefixed symbols from
+      # transitively-linked STATIC platform drivers and LNK2001 fires). For
+      # Windows builds (development only, not robot targets) STATIC is
+      # sufficient — state is scoped per .pyd but that is acceptable.
+      if((module_name STREQUAL "button" OR module_name STREQUAL "foundation")
+         AND NOT MSVC)
         set(_lib_type SHARED)
       endif()
       add_library(${module_name} ${_lib_type} ${MODULE_SRC})
@@ -57,21 +64,6 @@ function(register_libstp_module module_name is_interface additional_libraries)
         # pybind11 modules.
         if(APPLE)
           target_link_options(${module_name} PRIVATE -undefined dynamic_lookup)
-        endif()
-        if(MSVC)
-          # Auto-export all symbols so MSVC generates the companion import
-          # library (.lib) that downstream targets need to link against.
-          set_target_properties(${module_name}
-                                PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-          # On Linux/macOS platform-driver symbols (e.g. DigitalSensor ctor) are
-          # resolved lazily at runtime. MSVC requires all DLL symbols to be
-          # resolved at link time, so link against platform explicitly. Only
-          # modules that actually use hardware abstractions need this;
-          # foundation only uses Eigen/spdlog and must NOT link platform
-          # (platform -> hal -> foundation would create a dependency cycle).
-          if(module_name STREQUAL "button")
-            target_link_libraries(${module_name} PRIVATE platform)
-          endif()
         endif()
         # Install shared libs alongside Python modules so $ORIGIN works.
         install(TARGETS ${module_name} DESTINATION raccoon)
