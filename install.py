@@ -88,11 +88,11 @@ def install_local() -> None:
     script_dir = Path(__file__).resolve().parent
 
     # Look for raccoon_lib wheel next to this script, then in build-docker
-    wheels = glob.glob(str(script_dir / "raccoon_lib-*.whl"))
+    wheels = glob.glob(str(script_dir / "raccoon_library-*.whl"))
     if not wheels:
-        wheels = glob.glob(str(script_dir / "build-docker" / "raccoon_lib-*.whl"))
+        wheels = glob.glob(str(script_dir / "build-docker" / "raccoon_library-*.whl"))
     if not wheels:
-        print("Error: No raccoon_lib-*.whl found.")
+        print("Error: No raccoon_library-*.whl found.")
         print("  Run the build first, or download from a GitHub release.")
         sys.exit(1)
 

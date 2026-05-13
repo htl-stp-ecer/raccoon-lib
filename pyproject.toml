@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 
 [project]
-name = "raccoon-lib"
+name = "raccoon-library"
 version = "1.0.0"
 description="Raccoon robotics library (formerly libstp)"
 readme = "README.md"
