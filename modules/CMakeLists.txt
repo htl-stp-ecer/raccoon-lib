@@ -58,11 +58,20 @@ function(register_libstp_module module_name is_interface additional_libraries)
         if(APPLE)
           target_link_options(${module_name} PRIVATE -undefined dynamic_lookup)
         endif()
-        # On Windows/MSVC, automatically export all symbols so the linker
-        # generates the companion import library (.lib) that dependents need.
         if(MSVC)
+          # Auto-export all symbols so MSVC generates the companion import
+          # library (.lib) that downstream targets need to link against.
           set_target_properties(${module_name}
                                 PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+          # On Linux/macOS platform-driver symbols (e.g. DigitalSensor ctor) are
+          # resolved lazily at runtime. MSVC requires all DLL symbols to be
+          # resolved at link time, so link against platform explicitly. Only
+          # modules that actually use hardware abstractions need this;
+          # foundation only uses Eigen/spdlog and must NOT link platform
+          # (platform -> hal -> foundation would create a dependency cycle).
+          if(module_name STREQUAL "button")
+            target_link_libraries(${module_name} PRIVATE platform)
+          endif()
         endif()
         # Install shared libs alongside Python modules so $ORIGIN works.
         install(TARGETS ${module_name} DESTINATION raccoon)
@@ -86,6 +95,14 @@ function(register_libstp_module module_name is_interface additional_libraries)
       target_link_libraries(${PY_LIB_NAME} PRIVATE ${additional_libraries})
     endif()
     install(TARGETS ${PY_LIB_NAME} DESTINATION raccoon)
+    # MSVC generates an import library (<name>.lib) alongside every MODULE
+    # (.pyd). Its name matches OUTPUT_NAME, which collides with the module's own
+    # .lib (STATIC or SHARED import lib) in the same output directory. Python
+    # never uses .pyd import libs (it uses LoadLibrary directly), so suppress
+    # them to avoid the LNK1149 "output matches input" error.
+    if(MSVC)
+      target_link_options(${PY_LIB_NAME} PRIVATE /NOIMPLIB /NOEXP)
+    endif()
   endif()
 
   set(_PY_PKG_DIR "${CMAKE_CURRENT_LIST_DIR}/python/raccoon")
