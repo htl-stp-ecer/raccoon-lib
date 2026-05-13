@@ -34,9 +34,12 @@ if(ENABLE_SAFETY_CHECKS)
 endif()
 
 # MSVC does not define M_PI / M_E by default — opt in to the POSIX math
-# constants in <cmath> before any system header pulls it in.
-if(WIN32)
+# constants in <cmath> before any system header pulls it in. /Zc:preprocessor
+# enables the conformant MSVC preprocessor required for __VA_OPT__ support
+# (C++20 feature used in logging.hpp macros).
+if(MSVC)
   add_compile_definitions(_USE_MATH_DEFINES)
+  add_compile_options(/Zc:preprocessor)
 endif()
 
 if(LIBSTP_TRACE_LOGGING)
