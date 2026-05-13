@@ -33,15 +33,6 @@ if(ENABLE_SAFETY_CHECKS)
   add_compile_definitions(SAFETY_CHECKS_ENABLED)
 endif()
 
-# MSVC does not define M_PI / M_E by default — opt in to the POSIX math
-# constants in <cmath> before any system header pulls it in. /Zc:preprocessor
-# enables the conformant MSVC preprocessor required for __VA_OPT__ support
-# (C++20 feature used in logging.hpp macros).
-if(MSVC)
-  add_compile_definitions(_USE_MATH_DEFINES)
-  add_compile_options(/Zc:preprocessor)
-endif()
-
 if(LIBSTP_TRACE_LOGGING)
   message(STATUS "Enabling trace logging in foundation macros (level: TRACE)")
   message(
@@ -60,6 +51,16 @@ project(
   ${SKBUILD_PROJECT_NAME}
   VERSION ${SKBUILD_PROJECT_VERSION}
   LANGUAGES CXX)
+
+# MSVC does not define M_PI / M_E by default — opt in to the POSIX math
+# constants in <cmath> before any system header pulls it in. /Zc:preprocessor
+# enables the conformant MSVC preprocessor required for __VA_OPT__ support
+# (C++20 feature used in logging.hpp macros). NOTE: must be after project()
+# which performs compiler detection and sets MSVC.
+if(MSVC)
+  add_compile_definitions(_USE_MATH_DEFINES)
+  add_compile_options(/Zc:preprocessor)
+endif()
 
 # Find the module development requirements (requires FindPython from 3.17 or
 # scikit-build-core's built-in backport)
