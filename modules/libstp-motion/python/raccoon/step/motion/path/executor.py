@@ -90,6 +90,12 @@ def _has_reached_target(motion, seg: Segment) -> bool:
 def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
     """Get the current odometry position to use as offset for warm-start."""
     if seg.kind == "linear":
+        if seg.target_heading_rad is not None:
+            # Project world position onto the segment's heading direction so
+            # _check_segment_reached works correctly regardless of robot heading.
+            pos = robot.odometry.get_pose().position
+            h = seg.target_heading_rad
+            return float(pos[0]) * math.cos(h) + float(pos[1]) * math.sin(h)
         info = robot.odometry.get_distance_from_origin()
         return info.forward if seg.axis == LinearAxis.Forward else info.lateral
     if seg.kind in ("turn", "arc"):
@@ -105,7 +111,6 @@ def _check_segment_reached(
     robot: "GenericRobot",
     seg: Segment,
     seg_origin: float,
-    motion,
 ) -> bool:
     """Manual position check for non-terminal segments.
 
@@ -120,8 +125,6 @@ def _check_segment_reached(
         target = seg.distance_m
         tol = DISTANCE_TOL_M
     elif seg.kind == "turn":
-        if seg.target_heading_rad is not None:
-            return motion.has_reached_angle()
         target = seg.angle_rad
         tol = ANGLE_TOL_RAD
     elif seg.kind == "arc":
@@ -371,7 +374,8 @@ def _resolve_absolute_motion_node(
         return
     if not isinstance(node, Goto | TurnTo):
         return
-    nodes[idx : idx + 1] = _segments_for_absolute_node(robot, node)
+    segs = _segments_for_absolute_node(robot, node)
+    nodes[idx : idx + 1] = segs
 
 
 def _resync_sigma(node: Resync) -> tuple[float, float, float]:
@@ -611,7 +615,6 @@ class PathExecutor:
                             robot,
                             seg,
                             seg_origin,
-                            motion,
                         )
 
                 # Opaque steps: adapter signals completion via is_finished().
@@ -762,7 +765,7 @@ class PathExecutor:
                 if is_last:
                     transition = _has_reached_target(motion, seg)
                 else:
-                    transition = _check_segment_reached(robot, seg, seg_origin, motion)
+                    transition = _check_segment_reached(robot, seg, seg_origin)
 
                 if not transition and seg.kind in ("follow_line", "spline"):
                     transition = motion.is_finished()

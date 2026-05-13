@@ -19,6 +19,7 @@ namespace libstp::sim
         m_robot = robot;
         m_motors = motors;
         m_wheelOmega.fill(0.0f);
+        m_wheelAngleRad.fill(0.0f);
         m_yawRateRadS = 0.0f;
         m_motorTargetOmega.fill(0.0f);
     }
@@ -63,6 +64,14 @@ namespace libstp::sim
             bemf += m_motors.bemfNoiseStddev * m_noiseDist(m_rng);
         }
         return static_cast<int>(std::lround(bemf));
+    }
+
+    int SimWorld::motorPositionTicks(uint8_t port) const
+    {
+        const auto wheelIdx = portToWheelIndex(port);
+        if (wheelIdx >= activeWheelCount()) return 0;
+        const float ticksToRad = std::max(1e-9f, m_motors.ticksToRad);
+        return static_cast<int>(std::lround(m_wheelAngleRad[wheelIdx] / ticksToRad));
     }
 
     std::size_t SimWorld::activeWheelCount() const noexcept
@@ -128,35 +137,47 @@ namespace libstp::sim
     {
         if (dt <= 0.0f) return;
 
-        // First-order motor response. Exact discrete form — stable for any dt.
+        // Wheel dynamics: commanded ω acts like the no-load speed target,
+        // while viscous + Coulomb losses reduce the net acceleration.
+        // This keeps drag in the plant itself instead of as a post-hoc clamp,
+        // which makes low-speed and high-drag behavior more characterizable.
         const float tau = std::max(1e-4f, m_motors.motorTimeConstantSec);
         const float alpha = 1.0f - std::exp(-dt / tau);
         const std::size_t nWheels = activeWheelCount();
         for (std::size_t i = 0; i < nWheels; ++i)
         {
             const float target = targetOmega(i);
-            m_wheelOmega[i] += (target - m_wheelOmega[i]) * alpha;
+            const float omega = m_wheelOmega[i];
+            const float driveAccel = (target - omega) * (alpha / std::max(dt, 1e-6f));
+            const float viscousAccel = m_motors.viscousDragCoeff * omega;
 
-            // Viscous drag: velocity-proportional resistance (bearings, back-EMF).
-            if (m_motors.viscousDragCoeff > 0.0f)
+            float frictionSign = 0.0f;
+            if (std::abs(omega) > 1e-4f)
             {
-                m_wheelOmega[i] *= (1.0f - m_motors.viscousDragCoeff * dt);
+                frictionSign = std::copysign(1.0f, omega);
+            }
+            else if (std::abs(target) > 1e-4f)
+            {
+                frictionSign = std::copysign(1.0f, target);
             }
 
-            // Coulomb friction: constant deceleration opposing motion.
-            if (m_motors.coulombFrictionRadSS > 0.0f &&
-                std::abs(m_wheelOmega[i]) > 1e-3f)
+            const float coulombAccel = m_motors.coulombFrictionRadSS * frictionSign;
+            if (std::abs(omega) <= 1e-4f &&
+                std::abs(driveAccel) <= std::abs(coulombAccel) + 1e-6f)
             {
-                const float frictionDelta = m_motors.coulombFrictionRadSS * dt;
-                if (std::abs(m_wheelOmega[i]) <= frictionDelta)
-                {
-                    m_wheelOmega[i] = 0.0f;   // clamp — don't reverse through friction
-                }
-                else
-                {
-                    m_wheelOmega[i] -= std::copysign(frictionDelta, m_wheelOmega[i]);
-                }
+                m_wheelOmega[i] = 0.0f;
             }
+            else
+            {
+                float nextOmega = omega + (driveAccel - viscousAccel - coulombAccel) * dt;
+                if (std::abs(target) <= 1e-4f && omega * nextOmega < 0.0f)
+                {
+                    nextOmega = 0.0f;
+                }
+                m_wheelOmega[i] = nextOmega;
+            }
+
+            m_wheelAngleRad[i] += m_wheelOmega[i] * dt;
         }
 
         // Forward kinematics → chassis velocity in body frame. The mecanum

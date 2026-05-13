@@ -73,7 +73,7 @@ void libstp::hal::motor::Motor::moveRelative(const int velocity, const int delta
 
 int libstp::hal::motor::Motor::getPosition() const
 {
-    const int value = static_cast<int>(platform::mock::core::bemf(port_));
+    const int value = platform::mock::core::MockPlatform::instance().getMotorPosition(port_);
     LIBSTP_LOG_TRACE("Mock Motor port={} getPosition -> {}", port_, value);
     return value;
 }

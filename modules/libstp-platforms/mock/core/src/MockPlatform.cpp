@@ -105,6 +105,21 @@ namespace platform::mock::core
         return m_motors[port].bemf;
     }
 
+    int MockPlatform::getMotorPosition(uint8_t port) const
+    {
+        if (port >= m_motors.size()) return 0;
+
+        {
+            std::lock_guard<std::mutex> simLock(m_simMutex);
+            if (m_sim)
+            {
+                return m_sim->motorPositionTicks(port);
+            }
+        }
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return static_cast<int>(std::lround(m_motors[port].position));
+    }
+
     void MockPlatform::setServo(uint8_t port, ServoMode mode, uint16_t pos)
     {
         if (port >= m_servos.size()) return;

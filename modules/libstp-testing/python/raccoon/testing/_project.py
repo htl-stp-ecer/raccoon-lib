@@ -99,36 +99,83 @@ def derive_sim_config(data: dict[str, Any]) -> SimRobotConfig:
         cfg.rotation_center_forward_cm = rc_y - length / 2.0
 
     kinematics = ((robot_cfg.get("drive") or {}).get("kinematics")) or {}
+    drivetrain = kinematics.get("type")
+    if drivetrain == "mecanum":
+        cfg.drivetrain = "mecanum"
     wheel_radius = _as_float(kinematics.get("wheel_radius"))
     wheelbase = _as_float(kinematics.get("wheelbase"))
+    track_width = _as_float(kinematics.get("track_width"))
     if wheel_radius is not None:
         cfg.wheel_radius_m = wheel_radius
     if wheelbase is not None:
-        cfg.track_width_m = wheelbase
         cfg.wheelbase_m = wheelbase
+    if track_width is not None:
+        cfg.track_width_m = track_width
+    elif wheelbase is not None:
+        cfg.track_width_m = wheelbase
 
-    left_name = kinematics.get("left_motor")
-    right_name = kinematics.get("right_motor")
-    left_def = definitions.get(left_name) if isinstance(left_name, str) else None
-    right_def = definitions.get(right_name) if isinstance(right_name, str) else None
+    motor_names: list[str] = []
+    if cfg.drivetrain == "mecanum":
+        name_to_attr = {
+            "front_left_motor": ("fl_motor_port", "fl_motor_inverted"),
+            "front_right_motor": ("fr_motor_port", "fr_motor_inverted"),
+            "back_left_motor": ("bl_motor_port", "bl_motor_inverted"),
+            "back_right_motor": ("br_motor_port", "br_motor_inverted"),
+        }
+        for key, (port_attr, inv_attr) in name_to_attr.items():
+            motor_name = kinematics.get(key)
+            motor_def = definitions.get(motor_name) if isinstance(motor_name, str) else None
+            if not motor_def:
+                continue
+            motor_names.append(motor_name)
+            port = _as_int(motor_def.get("port"))
+            if port is not None:
+                setattr(cfg, port_attr, port)
+            inverted = motor_def.get("inverted")
+            if isinstance(inverted, bool):
+                setattr(cfg, inv_attr, inverted)
+    else:
+        left_name = kinematics.get("left_motor")
+        right_name = kinematics.get("right_motor")
+        left_def = definitions.get(left_name) if isinstance(left_name, str) else None
+        right_def = definitions.get(right_name) if isinstance(right_name, str) else None
 
-    left_port = _as_int((left_def or {}).get("port"))
-    right_port = _as_int((right_def or {}).get("port"))
-    if left_port is not None:
-        cfg.left_motor_port = left_port
-    if right_port is not None:
-        cfg.right_motor_port = right_port
+        left_port = _as_int((left_def or {}).get("port"))
+        right_port = _as_int((right_def or {}).get("port"))
+        if left_port is not None:
+            cfg.left_motor_port = left_port
+        if right_port is not None:
+            cfg.right_motor_port = right_port
 
-    left_inv = (left_def or {}).get("inverted")
-    right_inv = (right_def or {}).get("inverted")
-    if isinstance(left_inv, bool):
-        cfg.left_motor_inverted = left_inv
-    if isinstance(right_inv, bool):
-        cfg.right_motor_inverted = right_inv
+        left_inv = (left_def or {}).get("inverted")
+        right_inv = (right_def or {}).get("inverted")
+        if isinstance(left_inv, bool):
+            cfg.left_motor_inverted = left_inv
+        if isinstance(right_inv, bool):
+            cfg.right_motor_inverted = right_inv
 
-    ticks_to_rad = _as_float(((left_def or {}).get("calibration") or {}).get("ticks_to_rad"))
-    if ticks_to_rad is not None and ticks_to_rad > 0:
-        cfg.ticks_to_rad = ticks_to_rad
+        if isinstance(left_name, str):
+            motor_names.append(left_name)
+
+    ticks_to_rad_values: list[float] = []
+    motor_calibration_by_port: dict[int, tuple[float, float]] = {}
+    for motor_name in motor_names:
+        motor_def = definitions.get(motor_name) or {}
+        port = _as_int(motor_def.get("port"))
+        calibration = motor_def.get("calibration") or {}
+        ticks_to_rad = _as_float(calibration.get("ticks_to_rad"))
+        vel_lpf_alpha = _as_float(calibration.get("vel_lpf_alpha"))
+        if ticks_to_rad is None or ticks_to_rad <= 0 or port is None:
+            continue
+        ticks_to_rad_values.append(ticks_to_rad)
+        motor_calibration_by_port[port] = (
+            ticks_to_rad,
+            vel_lpf_alpha if vel_lpf_alpha is not None else 1.0,
+        )
+
+    if ticks_to_rad_values:
+        cfg.ticks_to_rad = sum(ticks_to_rad_values) / len(ticks_to_rad_values)
+        cfg.motor_calibration_by_port = motor_calibration_by_port
 
     motion_pid = robot_cfg.get("motion_pid") or {}
     linear_max = _as_float((motion_pid.get("linear") or {}).get("max_velocity"))
