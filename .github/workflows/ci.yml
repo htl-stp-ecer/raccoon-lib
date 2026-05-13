@@ -365,6 +365,23 @@ jobs:
           key: cmake-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'raccoon-transport/CMakeLists.txt') }}
           restore-keys: cmake-deps-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Set wheel version
+        shell: python
+        run: |
+          import re
+          run_number = "${{ github.run_number }}"
+          with open("pyproject.toml") as f:
+              content = f.read()
+          new_content = re.sub(
+              r'^version = "[^"]*"',
+              f'version = "1.0.{run_number}"',
+              content,
+              flags=re.MULTILINE,
+          )
+          with open("pyproject.toml", "w") as f:
+              f.write(new_content)
+          print(f"Version set to: 1.0.{run_number}")
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21
         env:
