@@ -58,6 +58,12 @@ function(register_libstp_module module_name is_interface additional_libraries)
         if(APPLE)
           target_link_options(${module_name} PRIVATE -undefined dynamic_lookup)
         endif()
+        # On Windows/MSVC, automatically export all symbols so the linker
+        # generates the companion import library (.lib) that dependents need.
+        if(MSVC)
+          set_target_properties(${module_name}
+                                PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+        endif()
         # Install shared libs alongside Python modules so $ORIGIN works.
         install(TARGETS ${module_name} DESTINATION raccoon)
       endif()
