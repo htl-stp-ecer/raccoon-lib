@@ -385,6 +385,25 @@ jobs:
           # clang doesn't fall back to an older SDK default.
           CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=11.0
 
+          # ── Wheel repair: bundle wheel-internal shared libs ───────────────
+          # libfoundation and libbutton are SHARED so all pybind11 extension
+          # modules share one copy of global state (logger registry, etc.).
+          # auditwheel/delocate don't find them via $ORIGIN resolution, so we
+          # extract the wheel first, add its directories to the library search
+          # path, then run the repair tool.
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: >-
+            bash -c 'set -e; D=$(mktemp -d);
+            python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$1" "$D";
+            DIRS=$(find "$D" -name "*.so" | sed "s|/[^/]*$||" | sort -u | tr "\n" ":");
+            LD_LIBRARY_PATH="$DIRS$LD_LIBRARY_PATH" auditwheel repair -w "$2" "$1";
+            rm -rf "$D"' _ {wheel} {dest_dir}
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
+            bash -c 'set -e; D=$(mktemp -d);
+            python -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "$1" "$D";
+            DIRS=$(find "$D" \( -name "*.so" -o -name "*.dylib" \) | sed "s|/[^/]*$||" | sort -u | tr "\n" ":");
+            DYLD_LIBRARY_PATH="$DIRS$DYLD_LIBRARY_PATH" delocate-wheel --require-archs $3 -w "$2" -v "$1";
+            rm -rf "$D"' _ {wheel} {dest_dir} {delocate_archs}
+
           # ── CMake config settings per platform ────────────────────────────
           # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
