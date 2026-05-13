@@ -119,9 +119,17 @@ set(BUILD_SHARED_LIBS
     CACHE BOOL "Build vendored libraries as shared" FORCE)
 
 # ---------- raccoon-transport (brings LCM + message types) ----------
-FetchContent_Declare(raccoon_transport
-                     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/raccoon-transport)
-FetchContent_MakeAvailable(raccoon_transport)
+# Mock builds skip LCM entirely. Provide an empty stub target so that modules
+# declaring raccoon::transport as a dependency still configure without errors.
+if(DRIVER_BUNDLE STREQUAL "mock")
+  add_library(_raccoon_transport_stub INTERFACE)
+  add_library(raccoon::transport ALIAS _raccoon_transport_stub)
+  add_compile_definitions(DRIVER_BUNDLE_MOCK)
+else()
+  FetchContent_Declare(raccoon_transport
+                       SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/raccoon-transport)
+  FetchContent_MakeAvailable(raccoon_transport)
+endif()
 
 set(SPDLOG_BUILD_SHARED
     OFF

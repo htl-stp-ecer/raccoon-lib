@@ -6,7 +6,9 @@
 
 #include <string>
 
+#ifndef DRIVER_BUNDLE_MOCK
 #include <raccoon/Transport.h>
+#endif
 
 namespace libstp::hal::screen_render {
     /**
@@ -17,7 +19,9 @@ namespace libstp::hal::screen_render {
      */
     class ScreenRender {
         std::string screenName;
+#ifndef DRIVER_BUNDLE_MOCK
         raccoon::Transport transport_;
+#endif
     public:
 
         static ScreenRender& instance()
