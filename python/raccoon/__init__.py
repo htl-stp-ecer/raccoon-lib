@@ -25,7 +25,6 @@ from raccoon.foundation import initialize_logging
 from raccoon.log import error, info, debug, warn, trace
 from raccoon.sensor_ir import IRSensor, IRSensorCalibration
 from raccoon.sensor_et import ETSensor
-from raccoon.cam import CamSensor
 
 # Core hardware
 Motor = _hal.Motor
@@ -101,7 +100,6 @@ __all__ = [
     "IRSensor",
     "IRSensorCalibration",
     "ETSensor",
-    "CamSensor",
     # Timing
     "StepTimingTracker",
     # UI
