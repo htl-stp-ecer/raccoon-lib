@@ -360,17 +360,6 @@ jobs:
           key: cmake-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'raccoon-transport/CMakeLists.txt') }}
           restore-keys: cmake-deps-${{ runner.os }}-${{ runner.arch }}-
 
-      # ccache persists compiled objects across workflow runs on Linux/macOS.
-      # On the first run everything is a miss; afterwards incremental changes
-      # are fast. Windows uses MSVC's own incremental build instead.
-      - name: Cache ccache (Linux / macOS)
-        if: runner.os != 'Windows'
-        uses: actions/cache@v4
-        with:
-          path: .cibw-ccache
-          key: cibw-ccache-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
-          restore-keys: cibw-ccache-${{ runner.os }}-${{ runner.arch }}-
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21
         env:
@@ -386,42 +375,10 @@ jobs:
           # Install it from the checked-out submodule before each wheel build.
           CIBW_BEFORE_BUILD: pip install {project}/raccoon-transport/python
 
-          # ── Install ccache in the manylinux container ──────────────────────
-          CIBW_BEFORE_ALL_LINUX: dnf install -y ccache
-          CIBW_BEFORE_ALL_MACOS: brew install ccache
-
-          # ── Per-platform environment: ccache wired up for Linux / macOS ───
-          # On Linux the project is bind-mounted at /project inside the
-          # manylinux container, so /project/.cibw-ccache maps to the
-          # workspace directory that actions/cache will persist.
-          CIBW_ENVIRONMENT_LINUX: >-
-            CCACHE_DIR=/project/.cibw-ccache
-            CCACHE_MAXSIZE=2G
-            CCACHE_COMPRESS=1
-            CCACHE_NOHASHDIR=1
-          CIBW_ENVIRONMENT_MACOS: >-
-            CCACHE_DIR={project}/.cibw-ccache
-            CCACHE_MAXSIZE=2G
-            CCACHE_COMPRESS=1
-            CCACHE_NOHASHDIR=1
-
           # ── CMake config settings per platform ────────────────────────────
           # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
-          # ccache launcher wired in on Linux and macOS only.
-          CIBW_CONFIG_SETTINGS_LINUX: >-
-            cmake.define.DRIVER_BUNDLE=mock
-            cmake.define.LIBSTP_RUN_RUFF=OFF
-            cmake.define.LIBSTP_RUN_MYPY=OFF
-            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache
-            cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
-          CIBW_CONFIG_SETTINGS_MACOS: >-
-            cmake.define.DRIVER_BUNDLE=mock
-            cmake.define.LIBSTP_RUN_RUFF=OFF
-            cmake.define.LIBSTP_RUN_MYPY=OFF
-            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache
-            cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
-          CIBW_CONFIG_SETTINGS_WINDOWS: >-
+          CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
             cmake.define.LIBSTP_RUN_MYPY=OFF
