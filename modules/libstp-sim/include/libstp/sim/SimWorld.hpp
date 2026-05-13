@@ -139,6 +139,10 @@ namespace libstp::sim
         /// it round-trips with `Motor::getBemf`.
         int motorBemf(uint8_t port) const;
 
+        /// Integrated motor encoder position for `port`, returned in encoder
+        /// ticks so it round-trips with `Motor::getPosition`.
+        int motorPositionTicks(uint8_t port) const;
+
         /// Advance the simulation by dt seconds (fixed-step integration for
         /// determinism).
         void tick(float dt);
@@ -195,6 +199,7 @@ namespace libstp::sim
 
         std::array<float, kNumMotorPorts> m_motorTargetOmega{};   // rad/s, signed
         std::array<float, kMaxWheels> m_wheelOmega{};             // rad/s
+        std::array<float, kMaxWheels> m_wheelAngleRad{};          // rad, signed
         float m_yawRateRadS{0.0f};
         std::vector<Pose2D> m_trace;
         std::unordered_map<uint8_t, SensorEntry> m_sensors;

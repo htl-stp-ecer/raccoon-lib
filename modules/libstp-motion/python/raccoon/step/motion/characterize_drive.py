@@ -34,6 +34,7 @@ _VEL_EMA_ALPHA = 0.3
 # Plateau detection: derivative below this for N consecutive cycles
 _PLATEAU_DERIV_THRESHOLD = 0.005  # m/s per cycle
 _PLATEAU_HOLD_CYCLES = 20
+_PLATEAU_MIN_PEAK_FRAC = 0.70
 
 # Stopped threshold
 _STOPPED_THRESHOLD_MPS = 0.005
@@ -90,13 +91,16 @@ def _find_plateau(samples: list[_Sample]) -> int | None:
     """Find the index where velocity plateaus. Returns None if no plateau."""
     if len(samples) < _PLATEAU_HOLD_CYCLES + 2:
         return None
+    peak_velocity = max(abs(s.velocity) for s in samples)
+    min_plateau_velocity = max(_STOPPED_THRESHOLD_MPS, peak_velocity * _PLATEAU_MIN_PEAK_FRAC)
     hold = 0
     for i in range(2, len(samples)):
         dt = samples[i].time - samples[i - 1].time
         if dt < 1e-6:
             continue
         deriv = abs(samples[i].velocity - samples[i - 1].velocity) / dt
-        if deriv < _PLATEAU_DERIV_THRESHOLD:
+        velocity = abs(samples[i].velocity)
+        if velocity >= min_plateau_velocity and deriv < _PLATEAU_DERIV_THRESHOLD:
             hold += 1
             if hold >= _PLATEAU_HOLD_CYCLES:
                 return i - _PLATEAU_HOLD_CYCLES + 1
@@ -111,6 +115,17 @@ def _analyze_max_velocity(samples: list[_Sample], plateau_start: int) -> float:
     if not plateau_vels:
         return 0.0
     return statistics.median(plateau_vels)
+
+
+def _fallback_max_velocity(samples: list[_Sample]) -> float:
+    """Robust fallback when no stable plateau is found."""
+    velocities = sorted(
+        abs(s.velocity) for s in samples if abs(s.velocity) > _STOPPED_THRESHOLD_MPS
+    )
+    if not velocities:
+        return 0.0
+    top_start = max(0, int(len(velocities) * 0.80))
+    return statistics.median(velocities[top_start:])
 
 
 def _analyze_accel(samples: list[_Sample], max_vel: float) -> float:
@@ -130,7 +145,10 @@ def _analyze_accel(samples: list[_Sample], max_vel: float) -> float:
             break
 
     if t_low is None or t_high is None or t_high <= t_low:
-        return 0.0
+        peak_sample = max(samples, key=lambda s: abs(s.velocity), default=None)
+        if peak_sample is None or peak_sample.time <= 1e-6:
+            return 0.0
+        return max_vel / peak_sample.time if max_vel > 0.0 else 0.0
 
     return (high - low) / (t_high - t_low)
 
@@ -392,13 +410,12 @@ class CharacterizeDrive(Step):
         if plateau_idx is not None:
             result.max_velocity = _analyze_max_velocity(accel_samples, plateau_idx)
         else:
-            # No plateau found — use 90th percentile instead of max to
-            # reject noise spikes from finite-difference jitter.
+            # No plateau found — use the median of the top 20% of velocities
+            # to reject single-sample spikes from finite-difference jitter.
             sorted_vels = sorted(abs(s.velocity) for s in accel_samples)
-            p90_idx = int(len(sorted_vels) * 0.90)
-            result.max_velocity = sorted_vels[min(p90_idx, len(sorted_vels) - 1)]
+            result.max_velocity = _fallback_max_velocity(accel_samples)
             self.warn(
-                f"    No velocity plateau detected — using p90 "
+                f"    No velocity plateau detected — using top-window median "
                 f"({result.max_velocity:.4f}) instead of max "
                 f"({sorted_vels[-1]:.4f})"
             )

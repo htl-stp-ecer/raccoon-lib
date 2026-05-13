@@ -159,6 +159,45 @@ TEST(SimWorldTest, MotorRampUpIsMonotonic)
     EXPECT_GT(lastOmega, 0.95f * 30.0f);
 }
 
+TEST(SimWorldTest, EncoderPositionTracksWheelRotation)
+{
+    SimWorld sim;
+    sim.configure(defaultRobot(), defaultMotors());
+    sim.setPose({0.0f, 0.0f, 0.0f});
+    sim.setMotorCommand(0, 100);
+    sim.setMotorCommand(1, 100);
+    run(sim, 0.5f);
+
+    const int leftTicks = sim.motorPositionTicks(0);
+    const int rightTicks = sim.motorPositionTicks(1);
+    EXPECT_GT(leftTicks, 0);
+    EXPECT_EQ(leftTicks, rightTicks);
+
+    const float leftRad = static_cast<float>(leftTicks) * defaultMotors().ticksToRad;
+    EXPECT_NEAR(leftRad, sim.pose().x / (defaultRobot().wheelRadiusM * 100.0f), 0.25f);
+}
+
+TEST(SimWorldTest, HighDragVelocityCommandStillProducesForwardMotion)
+{
+    auto motors = defaultMotors();
+    motors.motorTimeConstantSec = 0.06f;
+    motors.viscousDragCoeff = 1.2f;
+    motors.coulombFrictionRadSS = 2.0f;
+
+    SimWorld sim;
+    sim.configure(defaultRobot(), motors);
+    sim.setPose({0.0f, 0.0f, 0.0f});
+
+    // 20 BEMF units ≈ 17.45 rad/s with the default ticks/sample calibration.
+    sim.setMotorVelocityCommand(0, 20);
+    sim.setMotorVelocityCommand(1, 20);
+    run(sim, 1.0f);
+
+    EXPECT_GT(sim.pose().x, 30.0f);
+    EXPECT_GT(sim.wheelOmegaLeft(), 5.0f);
+    EXPECT_GT(sim.motorBemf(0), 0);
+}
+
 TEST(SimWorldTest, WallStopsForwardMotion)
 {
     SimWorld sim;

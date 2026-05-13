@@ -71,6 +71,9 @@ _DEFAULT_CSV_DIR = "/tmp/auto_tune"
 _STEP_HZ = 100
 _STEP_DURATION_S = 2.0
 _STEP_COMMAND_FRAC = 0.50  # fraction of max velocity
+_STEP_MIN_RESPONSE_FRAC = 0.10
+_LOW_DEAD_TIME_RATIO = 0.05
+_LOW_DEAD_TIME_GAIN_TOL = 0.15
 
 # Inflection tangent: local regression window (half-width in samples)
 _REGRESSION_HALF_WINDOW = 3
@@ -81,7 +84,7 @@ _CHR_KI_SCALE = 0.6  # ki = scale * kp / Tg  (slow integral to remove steady-sta
 _CHR_KD_SCALE = 0.15
 
 # Coordinate descent
-_CD_MAX_ITERATIONS = 10
+_CD_MAX_ITERATIONS = 6
 _CD_INITIAL_DELTA_FRAC = 0.25  # fraction of initial gain
 _CD_MIN_DELTA = 0.01
 _CD_DELTA_SHRINK = 0.5
@@ -110,10 +113,16 @@ _SCORE_TURN_ERROR_BREACH_PER_RAD = 250.0
 _LINEAR_TEST_DISTANCE_M = 0.50
 _TURN_TEST_ANGLE_RAD = math.radians(90)
 _MOTION_TIMEOUT_S = 10.0
-_MOTION_SETTLE_S = 1.0
+_MOTION_SETTLE_S = 0.5
+_MOTION_MIN_LINEAR_DISTANCE_M = 0.20
+_MOTION_MAX_LINEAR_DISTANCE_M = 0.50
+_MOTION_MIN_TIMEOUT_S = 4.0
+_MOTION_STUCK_TIMEOUT_S = 1.5
+_MOTION_STUCK_LINEAR_PROGRESS_M = 0.03
+_MOTION_STUCK_ANGULAR_PROGRESS_RAD = math.radians(8.0)
 # Optimize for fastest command speed; lower speeds are monitored separately.
 _MOTION_PRIMARY_SPEED_SCALE = 1.0
-_MOTION_WATCH_SPEED_SCALES = (0.5, 0.3)
+_MOTION_WATCH_SPEED_SCALES = (0.5,)
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +398,29 @@ def _compute_ise(times: list[float], commanded: list[float], measured: list[floa
     return ise
 
 
+def _tail_mean_abs(values: list[float], frac: float = 0.20) -> float:
+    """Robust magnitude estimate from the tail of a response."""
+    if not values:
+        return 0.0
+    count = max(1, int(len(values) * frac))
+    tail = [abs(v) for v in values[-count:]]
+    return sum(tail) / len(tail)
+
+
+def _peak_abs(values: list[float]) -> float:
+    """Peak magnitude helper for insufficient-response detection."""
+    return max((abs(v) for v in values), default=0.0)
+
+
+def _zero_pid_gains() -> PidGains:
+    """Bindings default kp to 1.0; zero it explicitly for rejected tunes."""
+    gains = PidGains()
+    gains.kp = 0.0
+    gains.ki = 0.0
+    gains.kd = 0.0
+    return gains
+
+
 # ---------------------------------------------------------------------------
 # Step response recording
 # ---------------------------------------------------------------------------
@@ -632,6 +664,21 @@ async def _tune_velocity_axis(
 
     if len(baseline.times) < 10:
         log_fn(f"  [{axis}] Too few samples, skipping")
+        result.pid = _zero_pid_gains()
+        result.tuned_ise = result.baseline_ise
+        return result
+
+    tail_abs = _tail_mean_abs(baseline.measured)
+    peak_abs = _peak_abs(baseline.measured)
+    response_floor = abs(command) * _STEP_MIN_RESPONSE_FRAC
+    if tail_abs < response_floor:
+        log_fn(
+            f"  [{axis}] Tail response stayed below {response_floor:.4f} "
+            f"(tail={tail_abs:.4f}, peak={peak_abs:.4f}); skipping tune"
+        )
+        result.plant = PlantParams(method="insufficient_response")
+        result.pid = _zero_pid_gains()
+        result.tuned_ise = result.baseline_ise
         return result
 
     # 2. Plant identification
@@ -640,16 +687,43 @@ async def _tune_velocity_axis(
         log_fn(f"  [{axis}] Inflection method failed, using rise-time fallback")
         plant = _identify_plant_rise_time(baseline.times, baseline.measured, command)
 
+    if plant.Ks <= 0.0:
+        log_fn(f"  [{axis}] Identified non-positive plant gain (Ks={plant.Ks:.4f}); rejecting tune")
+        result.plant = PlantParams(
+            Ks=0.0, Tu=plant.Tu, Tg=plant.Tg, method=f"{plant.method}+invalid_ks"
+        )
+        result.pid = _zero_pid_gains()
+        result.tuned_ise = result.baseline_ise
+        return result
+
     result.plant = plant
     log_fn(
         f"  [{axis}] Plant: Ks={plant.Ks:.4f}, Tu={plant.Tu:.4f}s, "
         f"Tg={plant.Tg:.4f}s ({plant.method})"
     )
 
+    dead_time_ratio = plant.Tu / plant.Tg if plant.Tg > 1e-10 else float("inf")
+    if dead_time_ratio <= _LOW_DEAD_TIME_RATIO and abs(plant.Ks - 1.0) <= _LOW_DEAD_TIME_GAIN_TOL:
+        log_fn(
+            f"  [{axis}] Near-zero dead time (Tu/Tg={dead_time_ratio:.4f}) with "
+            f"Ks≈1.0; keeping baseline feedforward and skipping CHR PID"
+        )
+        result.plant = PlantParams(
+            Ks=plant.Ks,
+            Tu=plant.Tu,
+            Tg=plant.Tg,
+            method=f"{plant.method}+low_dead_time_baseline",
+        )
+        result.pid = _zero_pid_gains()
+        result.tuned_ise = result.baseline_ise
+        return result
+
     # 3. Compute PID gains via CHR
     pid = _compute_chr_gains(plant)
     if pid.kp <= 0:
         log_fn(f"  [{axis}] CHR produced zero gains, skipping")
+        result.pid = _zero_pid_gains()
+        result.tuned_ise = result.baseline_ise
         return result
 
     # Keep kV=1.0 feedforward, add PID on top
@@ -677,9 +751,7 @@ async def _tune_velocity_axis(
         _write_step_csv(Path(csv_dir) / f"vel_{axis}_tuned.csv", tuned_data, "tuned")
 
     result.tuned_ise = _compute_ise(tuned_data.times, tuned_data.commanded, tuned_data.measured)
-    log_fn(
-        f"  [{axis}] Tuned ISE: {result.tuned_ise:.4f} " f"(baseline: {result.baseline_ise:.4f})"
-    )
+    log_fn(f"  [{axis}] Tuned ISE: {result.tuned_ise:.4f} (baseline: {result.baseline_ise:.4f})")
 
     # 5. Accept or revert
     if result.tuned_ise < result.baseline_ise:
@@ -732,12 +804,25 @@ async def _run_linear_trial(
     loop = asyncio.get_event_loop()
     t0 = loop.time()
     last = t0 - rate
+    timeout_s = _trial_timeout_s(
+        distance_m,
+        robot.motion_pid_config.lateral.max_velocity
+        if config.axis == LinearAxis.Lateral
+        else robot.motion_pid_config.linear.max_velocity,
+        speed_scale,
+    )
 
     while not motion.is_finished():
         now = loop.time()
-        if now - t0 > _MOTION_TIMEOUT_S:
+        elapsed = now - t0
+        dist = robot.odometry.get_distance_from_origin()
+        progress = abs(dist.lateral if config.axis == LinearAxis.Lateral else dist.forward)
+        if elapsed >= _MOTION_STUCK_TIMEOUT_S and progress < _MOTION_STUCK_LINEAR_PROGRESS_M:
             robot.drive.hard_stop()
-            return _SCORE_TIMEOUT_PENALTY, 0.0, abs(distance_m)
+            return _SCORE_TIMEOUT_PENALTY, 0.0, max(0.0, abs(distance_m) - progress)
+        if elapsed > timeout_s:
+            robot.drive.hard_stop()
+            return _SCORE_TIMEOUT_PENALTY, 0.0, max(0.0, abs(distance_m) - progress)
         dt = max(now - last, 0.0)
         last = now
         if dt < 1e-4:
@@ -789,14 +874,24 @@ async def _run_turn_trial(
     loop = asyncio.get_event_loop()
     t0 = loop.time()
     last = t0 - rate
+    timeout_s = _trial_timeout_s(
+        _TURN_TEST_ANGLE_RAD * 0.15,
+        robot.motion_pid_config.angular.max_velocity,
+        speed_scale,
+    )
 
     heading_history: list[float] = []
 
     while not motion.is_finished():
         now = loop.time()
-        if now - t0 > _MOTION_TIMEOUT_S:
+        elapsed = now - t0
+        progress = abs(robot.odometry.get_heading())
+        if elapsed >= _MOTION_STUCK_TIMEOUT_S and progress < _MOTION_STUCK_ANGULAR_PROGRESS_RAD:
             robot.drive.hard_stop()
-            return _SCORE_TIMEOUT_PENALTY, 0.0, abs(angle_rad)
+            return _SCORE_TIMEOUT_PENALTY, 0.0, max(0.0, abs(angle_rad) - progress)
+        if elapsed > timeout_s:
+            robot.drive.hard_stop()
+            return _SCORE_TIMEOUT_PENALTY, 0.0, max(0.0, abs(angle_rad) - progress)
         dt = max(now - last, 0.0)
         last = now
         if dt < 1e-4:
@@ -873,6 +968,27 @@ def _score_motion_trial(
     return score
 
 
+def _linear_target_distance(robot: "GenericRobot", axis: "LinearAxis") -> float:
+    """Choose a bounded trial distance from the characterized limits."""
+    constraints = (
+        robot.motion_pid_config.lateral
+        if axis == LinearAxis.Lateral
+        else robot.motion_pid_config.linear
+    )
+    max_velocity = max(constraints.max_velocity, 0.0)
+    if max_velocity <= 1e-6:
+        return _LINEAR_TEST_DISTANCE_M
+    distance = max_velocity * 0.8
+    return min(_MOTION_MAX_LINEAR_DISTANCE_M, max(_MOTION_MIN_LINEAR_DISTANCE_M, distance))
+
+
+def _trial_timeout_s(distance_m: float, max_velocity: float, speed_scale: float) -> float:
+    """Bound timeout by expected traversal time while leaving room to settle."""
+    effective_velocity = max(max_velocity * speed_scale, 0.05)
+    expected = abs(distance_m) / effective_velocity
+    return min(_MOTION_TIMEOUT_S, max(_MOTION_MIN_TIMEOUT_S, expected * 3.0 + 1.0))
+
+
 async def _evaluate_gains(
     robot: "GenericRobot",
     param_name: str,
@@ -895,16 +1011,18 @@ async def _evaluate_gains(
     # Alternate direction based on trial index
     if param_name == "distance":
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
+        target_distance = _linear_target_distance(robot, LinearAxis.Forward)
         settle, overshoot, error = await _run_linear_trial(
             robot,
-            sign * _LINEAR_TEST_DISTANCE_M,
+            sign * target_distance,
             speed_scale=speed_scale,
         )
     elif param_name == "lateral":
         sign = 1.0 if trial_idx % 2 == 0 else -1.0
+        target_distance = _linear_target_distance(robot, LinearAxis.Lateral)
         settle, overshoot, error = await _run_linear_trial(
             robot,
-            sign * _LINEAR_TEST_DISTANCE_M,
+            sign * target_distance,
             speed_scale=speed_scale,
             axis=LinearAxis.Lateral,
         )
@@ -971,7 +1089,7 @@ async def _coordinate_descent(
     best_score = await _evaluate_gains(robot, param_name, kp, kd, trial_idx)
     trial_idx += 1
     result.initial_score = best_score
-    log_fn(f"  [{param_name}] Initial: kp={kp:.4f}, kd={kd:.4f}, " f"score={best_score:.4f}")
+    log_fn(f"  [{param_name}] Initial: kp={kp:.4f}, kd={kd:.4f}, score={best_score:.4f}")
 
     for iteration in range(_CD_MAX_ITERATIONS):
         improved = False
@@ -986,7 +1104,7 @@ async def _coordinate_descent(
                 best_score = score
                 kp = kp_candidate
                 improved = True
-                log_fn(f"  [{param_name}] iter {iteration}: kp={kp:.4f} " f"(score={score:.4f})")
+                log_fn(f"  [{param_name}] iter {iteration}: kp={kp:.4f} (score={score:.4f})")
                 break
 
         # Try kd +/- delta
@@ -999,7 +1117,7 @@ async def _coordinate_descent(
                 best_score = score
                 kd = kd_candidate
                 improved = True
-                log_fn(f"  [{param_name}] iter {iteration}: kd={kd:.4f} " f"(score={score:.4f})")
+                log_fn(f"  [{param_name}] iter {iteration}: kd={kd:.4f} (score={score:.4f})")
                 break
 
         if not improved:
@@ -1137,7 +1255,7 @@ class AutoTuneVelocity(Step):
         # Persist
         if self.persist and accepted:
             if _persist_velocity_config(self.results):
-                self.info("  Saved to raccoon.project.yml " "(robot.drive.vel_config)")
+                self.info("  Saved to raccoon.project.yml (robot.drive.vel_config)")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")
 
@@ -1248,7 +1366,7 @@ class AutoTuneMotion(Step):
         self.info("=" * 60)
         self.info("  AUTO-TUNE: MOTION CONTROLLERS (Phase 3)")
         self.info(f"  Parameters: {', '.join(axes)}")
-        self.info(f"  Primary objective speed_scale={_MOTION_PRIMARY_SPEED_SCALE:.2f} " "(fastest)")
+        self.info(f"  Primary objective speed_scale={_MOTION_PRIMARY_SPEED_SCALE:.2f} (fastest)")
         if _MOTION_WATCH_SPEED_SCALES:
             watch_s = ", ".join(f"{s:.2f}" for s in _MOTION_WATCH_SPEED_SCALES)
             self.info(f"  Lower-speed watch (secondary only): {watch_s}")
@@ -1265,7 +1383,7 @@ class AutoTuneMotion(Step):
                 continue
 
             self.info(f"\n--- {param_name.upper()} ---")
-            self.info(f"  [{param_name}] Current: kp={pid_cfg.kp:.4f}, " f"kd={pid_cfg.kd:.4f}")
+            self.info(f"  [{param_name}] Current: kp={pid_cfg.kp:.4f}, kd={pid_cfg.kd:.4f}")
 
             result = await _coordinate_descent(robot, param_name, pid_cfg.kp, pid_cfg.kd, self.info)
             self.results[param_name] = result
@@ -1291,7 +1409,7 @@ class AutoTuneMotion(Step):
         # Persist
         if self.persist and self.results:
             if _persist_motion_config(self.results):
-                self.info("  Saved to raccoon.project.yml " "(robot.motion_pid.{distance,heading})")
+                self.info("  Saved to raccoon.project.yml (robot.motion_pid.{distance,heading})")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")
 

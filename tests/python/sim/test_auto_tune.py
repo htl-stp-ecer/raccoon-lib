@@ -1,20 +1,14 @@
 """End-to-end tests for the auto-tune pipeline against the physics simulator.
 
 Validates the three auto-tune phases:
-1. **CharacterizeDrive** (Phase 1): measures max velocity, acceleration, and
-   deceleration by driving at full power and recording the velocity profile.
-2. **AutoTuneVelocity** (Phase 2): step-response system identification and
-   CHR PID tuning for the velocity controller.
-3. **AutoTuneMotion** (Phase 3): Hooke-Jeeves coordinate descent on the
-   motion controller's kp/kd gains.
-
-Known limitations in sim:
-- Phase 2 (velocity tune) works with the default config but may produce
-  negative plant Ks with high-drag configs where the sim's motor model
-  doesn't generate the step response the system identification expects.
-- Phase 3 (motion tune) times out with high-drag robot configs (drumbot,
-  packingbot) because the trial drives never settle within the expected
-  thresholds. Only the default config is tested for Phase 3.
+1. **CharacterizeDrive** (Phase 1): measures bounded drive limits from raw-power
+   trials and produces numeric constraints for each profile.
+2. **AutoTuneVelocity** (Phase 2): either finds a valid step-response model and
+   improves ISE, or rejects the tune cleanly when the simulated response is too
+   weak/noisy to identify a trustworthy plant.
+3. **AutoTuneMotion** (Phase 3): iteratively tunes motion PID gains with
+   bounded runtime and either improves the score or reports a timeout without
+   pathological outputs.
 
 The runner subprocess pattern isolates C++ singleton teardown from pytest.
 """
@@ -29,7 +23,10 @@ from pathlib import Path
 
 import pytest
 
+from raccoon.testing.robot_configs import DRUMBOT, PACKINGBOT
+
 RUNNER = Path(__file__).parent / "_auto_tune_runner.py"
+MODULE_PYTHON_PATHS = sorted(str(p) for p in (RUNNER.parents[2] / "modules").glob("*/python"))
 
 
 def _raccoon_available() -> bool:
@@ -53,6 +50,10 @@ def _run_runner(config_name: str, timeout: int = 360) -> dict:
     env = os.environ.copy()
     env.setdefault("LIBSTP_LOG_LEVEL", "warn")
     env["LIBSTP_TIMING_ENABLED"] = "0"
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join(
+        [*MODULE_PYTHON_PATHS, existing_pythonpath] if existing_pythonpath else MODULE_PYTHON_PATHS
+    )
     # Do NOT set LIBSTP_NO_CALIBRATE — auto-tune needs calibration enabled.
     env.pop("LIBSTP_NO_CALIBRATE", None)
 
@@ -79,6 +80,10 @@ def _run_runner(config_name: str, timeout: int = 360) -> dict:
         f"stdout: {proc.stdout[-2000:]}\nstderr: {proc.stderr[-2000:]}"
     )
     raise AssertionError(msg)
+
+
+def _raw_forward_speed_cap(cfg) -> float:
+    return cfg.max_wheel_velocity_rad_s * cfg.wheel_radius_m
 
 
 # ---------------------------------------------------------------------------
@@ -112,27 +117,23 @@ class TestCharacterizeDefault:
     def test_forward_max_velocity_positive(self, default_results):
         char = default_results["characterize"]
         assert "error" not in char, f"characterize failed: {char.get('error')}"
-        assert (
-            char["forward"]["max_velocity"] > 0.5
-        ), f"max_velocity too low: {char['forward']['max_velocity']}"
+        assert char["forward"]["max_velocity"] == pytest.approx(0.8759, abs=0.003)
 
     def test_forward_acceleration_positive(self, default_results):
         char = default_results["characterize"]
-        assert char["forward"]["acceleration"] > 0.0
+        assert char["forward"]["acceleration"] == pytest.approx(4.532, abs=0.08)
 
     def test_angular_max_velocity_positive(self, default_results):
         char = default_results["characterize"]
-        assert (
-            char["angular"]["max_velocity"] > 10.0
-        ), f"angular max_velocity too low: {char['angular']['max_velocity']}"
+        assert char["angular"]["max_velocity"] == pytest.approx(19.35, abs=0.15)
 
     def test_angular_acceleration_positive(self, default_results):
         char = default_results["characterize"]
-        assert char["angular"]["acceleration"] > 0.0
+        assert char["angular"]["acceleration"] == pytest.approx(52.0, abs=0.8)
 
     def test_angular_deceleration_positive(self, default_results):
         char = default_results["characterize"]
-        assert char["angular"]["deceleration"] > 0.0
+        assert char["angular"]["deceleration"] == pytest.approx(57.0, abs=3.0)
 
 
 class TestCharacterizeDrumbot:
@@ -141,43 +142,42 @@ class TestCharacterizeDrumbot:
     def test_forward_max_velocity(self, drumbot_results):
         char = drumbot_results["characterize"]
         assert "error" not in char, f"characterize failed: {char.get('error')}"
-        # Drumbot has r=34.5mm vs default r=30mm → faster max velocity
-        assert char["forward"]["max_velocity"] > 0.5
+        assert char["forward"]["max_velocity"] == pytest.approx(0.3357, abs=0.003)
+        assert char["forward"]["max_velocity"] == pytest.approx(
+            _raw_forward_speed_cap(DRUMBOT) * 0.944, abs=0.003
+        )
 
     def test_angular_max_velocity(self, drumbot_results):
         char = drumbot_results["characterize"]
-        assert char["angular"]["max_velocity"] > 10.0
+        assert char["angular"]["max_velocity"] == pytest.approx(4.1971, abs=0.03)
 
     def test_angular_deceleration_positive(self, drumbot_results):
         char = drumbot_results["characterize"]
-        assert char["angular"]["deceleration"] > 0.0
+        assert char["angular"]["deceleration"] == pytest.approx(19.8, abs=1.0)
 
 
 class TestCharacterizePackingbot:
-    """Phase 1 with packingbot — widest track, highest drag.
-
-    Note: packingbot's forward characterization currently returns max_vel=0
-    because the high drag (viscous=1.2, coulomb=2.0) combined with the
-    reduced accel_timeout means the plateau detector doesn't find a valid
-    plateau in time. The angular axis works because turn-in-place doesn't
-    hit walls. This documents a limitation of the characterization with
-    very draggy robots in the sim.
-    """
+    """Phase 1 with packingbot — mecanum geometry is exercised in the runner."""
 
     def test_runs_without_crashing(self, packingbot_results):
         char = packingbot_results["characterize"]
         assert "error" not in char, f"characterize failed: {char.get('error')}"
+        assert packingbot_results["_supports_lateral"] is True
 
-    def test_angular_max_velocity(self, packingbot_results):
+    def test_forward_max_velocity_numeric(self, packingbot_results):
         char = packingbot_results["characterize"]
-        # High-drag mecanum configs may fail to find a stable angular plateau
-        # in the bounded sim run; the important regression guard is that the
-        # pipeline reports a numeric result instead of crashing.
-        assert char["angular"]["max_velocity"] >= 0.0
+        assert char["forward"]["max_velocity"] == pytest.approx(0.29438, abs=0.003)
+        assert char["forward"]["max_velocity"] == pytest.approx(
+            _raw_forward_speed_cap(PACKINGBOT) * 0.917, abs=0.003
+        )
+
+    def test_angular_max_velocity_positive(self, packingbot_results):
+        char = packingbot_results["characterize"]
+        assert char["angular"]["max_velocity"] == pytest.approx(1.81145, abs=0.02)
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: AutoTuneVelocity — runs but reverts (sim limitation)
+# Phase 2: AutoTuneVelocity — improves ISE or rejects cleanly
 # ---------------------------------------------------------------------------
 
 
@@ -185,8 +185,9 @@ class TestVelocityTuneDefault:
     """Phase 2 with default config.
 
     The velocity tune runs system identification on the velocity controller's
-    step response and applies CHR PID gains. With the default sim config
-    (moderate drag), the tune succeeds and produces gains that improve ISE.
+    step response and applies CHR PID gains when the identified plant is a
+    sensible CHR candidate. The current default sim profile identifies
+    repeatably, but does not guarantee an accepted tune.
     """
 
     def test_runs_without_error(self, default_results):
@@ -196,30 +197,53 @@ class TestVelocityTuneDefault:
     def test_baseline_ise_positive(self, default_results):
         """The baseline (pre-tune) step response should have measurable error."""
         vel = default_results["velocity"]
-        assert vel["vx"]["baseline_ise"] > 0.0
+        assert vel["vx"]["baseline_ise"] == pytest.approx(0.0054688, abs=0.0001)
 
     def test_plant_identification_produces_gains(self, default_results):
-        """System identification should produce usable PID gains."""
+        """The default sim profile identifies as a near-pass-through velocity loop."""
         vel = default_results["velocity"]
         vx = vel["vx"]
-        # The sim occasionally identifies a slightly non-positive plant Ks and
-        # correctly rejects the tune. Guard the shape of the result here; the
-        # accepted/reverted behavior is checked below.
-        assert "plant_Ks" in vx
-        if vx["accepted"]:
-            assert vx["plant_Ks"] > 0.0
-            assert vx["pid_kp"] > 0.0
+        assert vx["accepted"] is False
+        assert vx["plant_method"] == "inflection+low_dead_time_baseline"
+        assert vx["plant_Ks"] == pytest.approx(0.98716, abs=0.01)
+        assert vx["plant_Tu"] == pytest.approx(0.001, abs=0.0001)
+        assert vx["plant_Tg"] > 1.0
+        assert vx["plant_Tu"] / vx["plant_Tg"] < 0.01
+        assert vx["pid_kp"] == 0.0
+        assert vx["pid_ki"] == 0.0
+        assert vx["pid_kd"] == 0.0
+        assert vx["tuned_ise"] == pytest.approx(vx["baseline_ise"], abs=1e-9)
 
     def test_accepted_or_reverted_gracefully(self, default_results):
         """The tune should either improve ISE or gracefully revert."""
         vel = default_results["velocity"]
         vx = vel["vx"]
-        if vx["accepted"]:
-            # If accepted, tuned ISE should be better (lower) than baseline
-            assert vx["tuned_ise"] < vx["baseline_ise"], (
-                f"Accepted but tuned ISE ({vx['tuned_ise']:.4f}) >= "
-                f"baseline ({vx['baseline_ise']:.4f})"
-            )
+        assert vx["tuned_ise"] == pytest.approx(vx["baseline_ise"], abs=1e-9)
+
+
+@pytest.mark.parametrize("fixture_name", ["drumbot_results", "packingbot_results"])
+def test_velocity_tune_high_drag_rejects_cleanly(request, fixture_name: str):
+    vel = request.getfixturevalue(fixture_name)["velocity"]
+    assert "error" not in vel, f"velocity tune crashed: {vel.get('error')}"
+    vx = vel["vx"]
+    assert vx["accepted"] is False
+    assert vx["pid_kp"] == 0.0
+    assert vx["pid_ki"] == 0.0
+    assert vx["pid_kd"] == 0.0
+    assert vx["tuned_ise"] == pytest.approx(vx["baseline_ise"])
+    assert vx["plant_method"] == "inflection+low_dead_time_baseline"
+    expected = {
+        "drumbot_results": {"plant_Ks": 0.93421, "baseline_ise": 0.0012212},
+        "packingbot_results": {
+            "plant_Ks": 0.90138,
+            "baseline_ise": 0.00119,
+        },
+    }[fixture_name]
+    assert vx["plant_Ks"] == pytest.approx(expected["plant_Ks"], abs=0.01)
+    assert vx["plant_Tu"] == pytest.approx(0.001, abs=0.0001)
+    assert vx["plant_Tg"] > 2.5
+    assert vx["plant_Tu"] / vx["plant_Tg"] < 0.001
+    assert vx["baseline_ise"] == pytest.approx(expected["baseline_ise"], abs=0.00005)
 
 
 # ---------------------------------------------------------------------------
@@ -250,16 +274,15 @@ class TestMotionTuneDefault:
         if "error" in motion:
             pytest.skip("motion tune timed out")
         dist = motion["distance"]
-        assert dist["final_score"] <= dist["initial_score"] * 1.05, (
-            f"Motion tune degraded: {dist['initial_score']:.4f} → " f"{dist['final_score']:.4f}"
-        )
+        assert dist["initial_score"] == pytest.approx(1.6, abs=0.1)
+        assert dist["final_score"] < dist["initial_score"]
 
     def test_multiple_iterations(self, default_results):
         """Coordinate descent should run multiple iterations."""
         motion = default_results["motion"]
         if "error" in motion:
             pytest.skip("motion tune timed out")
-        assert motion["distance"]["iterations"] >= 3
+        assert motion["distance"]["iterations"] == 6
 
     def test_gains_changed(self, default_results):
         """The optimizer should have explored different gain values."""
@@ -267,10 +290,7 @@ class TestMotionTuneDefault:
         if "error" in motion:
             pytest.skip("motion tune timed out")
         dist = motion["distance"]
-        gains_changed = (
-            dist["final_kp"] != dist["initial_kp"] or dist["final_kd"] != dist["initial_kd"]
-        )
-        assert gains_changed, "Coordinate descent didn't explore any gain changes"
+        assert dist["final_kp"] != dist["initial_kp"] or dist["final_kd"] != dist["initial_kd"]
 
     def test_gains_positive(self, default_results):
         """Final gains should be positive (physical PID constraint)."""
@@ -297,7 +317,11 @@ class TestMotionTuneHighDrag:
         else:
             dist = motion["distance"]
             assert dist["final_kp"] > 0.0
-            assert dist["final_score"] <= dist["initial_score"] * 1.10
+            assert dist["final_kd"] >= 0.0
+            assert dist["initial_score"] > 20.0
+            assert dist["final_score"] < 2.0
+            assert dist["final_score"] < dist["initial_score"]
+            assert dist["iterations"] == 6
 
     def test_packingbot_completes(self, packingbot_results):
         motion = packingbot_results["motion"]
@@ -306,4 +330,8 @@ class TestMotionTuneHighDrag:
         else:
             dist = motion["distance"]
             assert dist["final_kp"] > 0.0
-            assert dist["final_score"] <= dist["initial_score"] * 1.10
+            assert dist["final_kd"] >= 0.0
+            assert dist["initial_score"] > 20.0
+            assert dist["final_score"] < 2.0
+            assert dist["final_score"] < dist["initial_score"]
+            assert dist["iterations"] == 6

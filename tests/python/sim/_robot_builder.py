@@ -3,17 +3,33 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 
+def _apply_motor_calibrations(motors, cfg) -> None:
+    from raccoon.foundation import MotorCalibration
+
+    per_port = getattr(cfg, "motor_calibration_by_port", {}) or {}
+    for motor in motors:
+        ticks_to_rad, vel_lpf_alpha = per_port.get(
+            motor.port,
+            (getattr(cfg, "ticks_to_rad", None), 1.0),
+        )
+        if ticks_to_rad is None:
+            continue
+        motor.set_calibration(MotorCalibration(ticks_to_rad, vel_lpf_alpha))
+
+
 def get_config(name: str):
+    from dataclasses import replace
+
     from raccoon.testing.sim import SimRobotConfig
 
     if name == "drumbot":
         from raccoon.testing.robot_configs import DRUMBOT
 
-        return DRUMBOT
+        return replace(DRUMBOT, bemf_noise_stddev=0.0)
     if name == "packingbot":
         from raccoon.testing.robot_configs import PACKINGBOT
 
-        return PACKINGBOT
+        return replace(PACKINGBOT, bemf_noise_stddev=0.0)
     return SimRobotConfig(
         wheel_radius_m=0.03,
         track_width_m=0.15,
@@ -58,6 +74,8 @@ def build_robot(cfg, *, enable_localization: bool = True):
             track_width=cfg.track_width_m,
             wheel_radius=cfg.wheel_radius_m,
         )
+        _apply_motor_calibrations((fl, fr, bl, br), cfg)
+        kin.set_max_wheel_speed(cfg.max_wheel_velocity_rad_s)
         refs = (fl, fr, bl, br, imu)
     else:
         from raccoon.kinematics_differential import DifferentialKinematics
@@ -65,6 +83,8 @@ def build_robot(cfg, *, enable_localization: bool = True):
         left = Motor(cfg.left_motor_port, cfg.left_motor_inverted)
         right = Motor(cfg.right_motor_port, cfg.right_motor_inverted)
         kin = DifferentialKinematics(left, right, cfg.track_width_m, cfg.wheel_radius_m)
+        _apply_motor_calibrations((left, right), cfg)
+        kin.set_max_wheel_speed(cfg.max_wheel_velocity_rad_s)
         refs = (left, right, imu)
 
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)

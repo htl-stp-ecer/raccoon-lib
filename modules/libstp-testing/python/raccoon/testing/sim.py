@@ -111,6 +111,7 @@ class SimRobotConfig:
     motor_time_constant_sec: float = 0.05
 
     ticks_to_rad: float = 2.0 * 3.14159265358979 / 1440.0
+    motor_calibration_by_port: dict[int, tuple[float, float]] = field(default_factory=dict)
 
     viscous_drag_coeff: float = 0.0
     coulomb_friction_rad_s2: float = 0.0
