@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 
 [project]
-name = "raccoon"
+name = "raccoon-lib"
 version = "1.0.0"
 description="Raccoon robotics library (formerly libstp)"
 readme = "README.md"
@@ -232,6 +232,8 @@ isort.known-first-party = ["raccoon", "raccoon_cli", "raccoon_transport"]
 # subprocess. Keep ruff useful but don't lint scripts as if they were
 # library code.
 "tools/**" = ["T20", "EXE001", "EXE002"]
+"install.py" = ["T20", "EXE001", "PTH207"]
+"deploy.sh" = ["T20", "EXE001", "EXE002"]
 # UI/screen modules use `from raccoon.ui import *` to pull in the widget
 # vocabulary (Card, Row, Split, Text, ...). Star-import is the documented
 # layout pattern; don't lint the resulting "may be undefined" noise.

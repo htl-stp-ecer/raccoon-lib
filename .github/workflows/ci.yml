@@ -167,6 +167,7 @@ jobs:
             .gha-cache/pip
           key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+  # ─── ARM64 release wheel (for Raspberry Pi / Wombat) ──────────────────────
   build:
     runs-on: [self-hosted, Linux, X64]
     needs: [test, changes]
@@ -174,7 +175,6 @@ jobs:
     if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
     permissions:
       contents: write
-      id-token: write
     env:
       CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
       PIP_CACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/pip
@@ -210,12 +210,12 @@ jobs:
 
       - name: Clean old build artifacts and release caches
         run: |
-          rm -rf .cmake-cache-docker .cmake-cache-docker-mock
-          rm -rf _skbuild-docker _skbuild-docker-mock
-          rm -rf build-docker build-docker-mock build-docker-stubs
+          rm -rf .cmake-cache-docker
+          rm -rf _skbuild-docker
+          rm -rf build-docker
           rm -rf docs/_build docs-site release-bundle
           docker run --rm -v "$PWD":/src alpine sh -c \
-            "rm -rf /src/.cmake-cache-docker /src/.cmake-cache-docker-mock /src/_skbuild-docker /src/_skbuild-docker-mock /src/build-docker /src/build-docker-mock /src/build-docker-stubs /src/docs/_build /src/docs-site /src/release-bundle"
+            "rm -rf /src/.cmake-cache-docker /src/_skbuild-docker /src/build-docker /src/docs/_build /src/docs-site /src/release-bundle"
 
       - name: Build ARM64 wheel
         run: |
@@ -232,65 +232,10 @@ jobs:
         id: version
         run: |
           WHL=$(find build-docker -name '*.whl' -type f -exec ls -t {} + | head -1)
-          VERSION=$(basename "$WHL" | sed 's/^raccoon-//;s/-.*//')
+          VERSION=$(basename "$WHL" | sed 's/^raccoon_lib-//;s/-.*//')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
           echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
-
-      - name: Build mock-platform wheel for stub generation
-        run: |
-          SKIP_TESTS=1 \
-          BUILD_NUMBER=${{ github.run_number }} \
-          BUILD_JOBS=$(nproc) \
-          BUILD_DIR=build-docker-mock \
-          SKBUILD_DIR=_skbuild-docker-mock \
-          FETCHCONTENT_DIR=.cmake-cache-docker-mock \
-          EXTRA_CMAKE_ARGS="-DDRIVER_BUNDLE=mock" \
-          bash build.sh
-          docker run --rm --platform=linux/arm64/v8 \
-            -v "$CCACHE_HOST_DIR":/ccache \
-            -e CCACHE_DIR=/ccache \
-            libstp-dev:arm64 ccache --show-stats
-
-      - name: Generate stubs and build universal wheel
-        run: |
-          MOCK_WHL=$(find build-docker-mock -name '*.whl' -type f | head -1)
-          VERSION="${{ steps.version.outputs.version }}"
-
-          docker run --rm --platform=linux/arm64/v8 \
-            -v "$PWD":/src -w /src \
-            libstp-dev:arm64 bash -lc "
-              set -euo pipefail
-              pip install --quiet pybind11-stubgen 'mypy>=1.15' /src/raccoon-transport/python /src/$MOCK_WHL
-              bash /src/scripts/build-stubs.sh $VERSION
-            "
-
-          echo "✓ Stubs wheel built"
-          ls -la build-docker-stubs/*.whl
-
-      - name: Mint PyPI token from OIDC
-        id: pypi-token
-        run: |
-          OIDC_TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pypi" | jq -r '.value')
-          PYPI_TOKEN=$(curl -sS -X POST https://pypi.org/_/oidc/mint-token \
-            -H "Content-Type: application/json" \
-            -d "{\"token\": \"$OIDC_TOKEN\"}" | jq -r '.token')
-          echo "::add-mask::$PYPI_TOKEN"
-          echo "token=$PYPI_TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Publish raccoon-stubs to PyPI
-        run: |
-          docker run --rm \
-            -v "$PWD/build-docker-stubs":/dist \
-            -e TWINE_USERNAME=__token__ \
-            -e TWINE_PASSWORD="$PYPI_TOKEN" \
-            python:3.11-slim bash -c '
-              pip install --quiet twine
-              twine upload /dist/*.whl
-            '
-        env:
-          PYPI_TOKEN: ${{ steps.pypi-token.outputs.token }}
 
       - name: Build documentation
         run: |
@@ -348,15 +293,10 @@ jobs:
             RPI_HOST=<your-pi-ip> python3 install.py
             ```
 
-            **Install on laptop (any platform — for codegen & IDE support):**
+            **Install on laptop (any platform — for development & IDE support):**
             ```bash
-            pip install raccoon-stubs==${{ steps.version.outputs.version }}
+            pip install raccoon-lib==${{ steps.version.outputs.version }}
             ```
-            Or from the release asset:
-            ```bash
-            pip install raccoon_stubs-${{ steps.version.outputs.version }}-py3-none-any.whl
-            ```
-            Use `raccoon update` to install automatically.
 
             **View documentation:**
             1. Download and unzip `raccoon-docs-${{ steps.version.outputs.version }}.zip`
@@ -365,7 +305,6 @@ jobs:
           files: |
             raccoon-${{ steps.version.outputs.version }}.tar.gz
             ${{ steps.version.outputs.wheel }}
-            build-docker-stubs/*.whl
             raccoon-docs-${{ steps.version.outputs.version }}.zip
 
       - name: Trigger documentation rebuild
@@ -393,3 +332,128 @@ jobs:
             .gha-cache/pip
             .gha-cache/buildx
           key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  # ─── Multi-platform wheels for PyPI (Win / Linux x86_64 / macOS) ──────────
+  build-wheels:
+    name: Wheels • ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: [test, changes]
+    if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      # FetchContent deps (pybind11, LCM, spdlog, yaml-cpp, eigen) are
+      # fetched once and reused across runs. Keyed on CMakeLists so they
+      # refresh when a dep version bumps.
+      - name: Cache CMake FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: .cmake-cache
+          key: cmake-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'raccoon-transport/CMakeLists.txt') }}
+          restore-keys: cmake-deps-${{ runner.os }}-${{ runner.arch }}-
+
+      # ccache persists compiled objects across workflow runs on Linux/macOS.
+      # On the first run everything is a miss; afterwards incremental changes
+      # are fast. Windows uses MSVC's own incremental build instead.
+      - name: Cache ccache (Linux / macOS)
+        if: runner.os != 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: .cibw-ccache
+          key: cibw-ccache-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: cibw-ccache-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21
+        env:
+          CIBW_BUILD: cp311-* cp312-* cp313-*
+          CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
+          # macOS: build a single universal2 wheel (arm64 + x86_64 merged by lipo)
+          CIBW_ARCHS_MACOS: universal2
+          # manylinux_2_28 = AlmaLinux 8, supports C++20 and glibc 2.28+
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_BUILD_VERBOSITY: 1
+
+          # raccoon-transport is a pure-Python runtime dep (LCM message types).
+          # Install it from the checked-out submodule before each wheel build.
+          CIBW_BEFORE_BUILD: pip install {project}/raccoon-transport/python
+
+          # ── Install ccache in the manylinux container ──────────────────────
+          CIBW_BEFORE_ALL_LINUX: dnf install -y ccache
+          CIBW_BEFORE_ALL_MACOS: brew install ccache
+
+          # ── Per-platform environment: ccache wired up for Linux / macOS ───
+          # On Linux the project is bind-mounted at /project inside the
+          # manylinux container, so /project/.cibw-ccache maps to the
+          # workspace directory that actions/cache will persist.
+          CIBW_ENVIRONMENT_LINUX: >-
+            CCACHE_DIR=/project/.cibw-ccache
+            CCACHE_MAXSIZE=2G
+            CCACHE_COMPRESS=1
+            CCACHE_NOHASHDIR=1
+          CIBW_ENVIRONMENT_MACOS: >-
+            CCACHE_DIR={project}/.cibw-ccache
+            CCACHE_MAXSIZE=2G
+            CCACHE_COMPRESS=1
+            CCACHE_NOHASHDIR=1
+
+          # ── CMake config settings per platform ────────────────────────────
+          # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
+          # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
+          # ccache launcher wired in on Linux and macOS only.
+          CIBW_CONFIG_SETTINGS_LINUX: >-
+            cmake.define.DRIVER_BUNDLE=mock
+            cmake.define.LIBSTP_RUN_RUFF=OFF
+            cmake.define.LIBSTP_RUN_MYPY=OFF
+            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache
+            cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
+          CIBW_CONFIG_SETTINGS_MACOS: >-
+            cmake.define.DRIVER_BUNDLE=mock
+            cmake.define.LIBSTP_RUN_RUFF=OFF
+            cmake.define.LIBSTP_RUN_MYPY=OFF
+            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache
+            cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
+          CIBW_CONFIG_SETTINGS_WINDOWS: >-
+            cmake.define.DRIVER_BUNDLE=mock
+            cmake.define.LIBSTP_RUN_RUFF=OFF
+            cmake.define.LIBSTP_RUN_MYPY=OFF
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  # ─── Publish all platform wheels to PyPI ──────────────────────────────────
+  publish-pypi:
+    name: Publish raccoon-lib to PyPI
+    runs-on: ubuntu-latest
+    needs: [build-wheels]
+    # Run only when every matrix variant of build-wheels succeeded.
+    if: always() && needs.build-wheels.result == 'success'
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Show wheels to be published
+        run: ls -la dist/
+
+      - name: Publish to PyPI (OIDC trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

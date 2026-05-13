@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""install.py — Install raccoon locally (stubs) or deploy to Raspberry Pi.
+"""install.py — Install raccoon-lib locally or deploy to Raspberry Pi.
 
 Usage:
-    python install.py                         # Install stubs on this machine
-    python install.py --stubs                 # Same as above (explicit)
+    python install.py                         # Install raccoon-lib on this machine
     RPI_HOST=10.x.x.x python install.py      # Deploy full wheel to Pi
 
 Env vars (Pi deploy only):
@@ -12,6 +11,8 @@ Env vars (Pi deploy only):
     PROJECT_NAME  — Python import name (default: raccoon)
     PYTHON_CMD    — Python command on Pi (default: python3)
 """
+
+from __future__ import annotations
 
 import glob
 import ipaddress
@@ -52,9 +53,12 @@ def _validate_host(host: str) -> str:
 # accept-new pins the host key on first connect and rejects later changes,
 # which is the right tradeoff for a deploy script that talks to one Pi.
 _SSH_OPTS = [
-    "-o", "ConnectTimeout=5",
-    "-o", "StrictHostKeyChecking=accept-new",
-    "-o", "BatchMode=yes",  # password prompts are scripting smells
+    "-o",
+    "ConnectTimeout=5",
+    "-o",
+    "StrictHostKeyChecking=accept-new",
+    "-o",
+    "BatchMode=yes",  # password prompts are scripting smells
 ]
 
 
@@ -63,6 +67,7 @@ def ssh(host: str, user: str, command: str, check: bool = True) -> int:
     result = subprocess.run(
         ["ssh", *_SSH_OPTS, f"{user}@{host}", command],
         capture_output=not check,
+        check=False,
     )
     if check and result.returncode != 0:
         print(f"ERROR: SSH command failed: {command}")
@@ -72,37 +77,45 @@ def ssh(host: str, user: str, command: str, check: bool = True) -> int:
 
 def scp(source: str, dest: str) -> None:
     """Copy a file to the Pi via SCP."""
-    result = subprocess.run(["scp", *_SSH_OPTS, source, dest])
+    result = subprocess.run(["scp", *_SSH_OPTS, source, dest], check=False)
     if result.returncode != 0:
         print(f"ERROR: SCP failed: {source} -> {dest}")
         sys.exit(1)
 
 
-def install_stubs() -> None:
-    """Install the platform-independent stubs wheel on this machine."""
+def install_local() -> None:
+    """Install the raccoon-lib wheel on this machine."""
     script_dir = Path(__file__).resolve().parent
 
-    # Look for stubs wheel next to this script, then in build-docker-stubs
-    stubs = glob.glob(str(script_dir / "raccoon_stubs-*.whl"))
-    if not stubs:
-        stubs = glob.glob(str(script_dir / "build-docker-stubs" / "raccoon_stubs-*.whl"))
-    if not stubs:
-        print("Error: No raccoon_stubs-*.whl found.")
+    # Look for raccoon_lib wheel next to this script, then in build-docker
+    wheels = glob.glob(str(script_dir / "raccoon_lib-*.whl"))
+    if not wheels:
+        wheels = glob.glob(str(script_dir / "build-docker" / "raccoon_lib-*.whl"))
+    if not wheels:
+        print("Error: No raccoon_lib-*.whl found.")
         print("  Run the build first, or download from a GitHub release.")
         sys.exit(1)
 
-    wheel_file = stubs[0]
+    wheel_file = wheels[0]
     print(f"▶ Installing {Path(wheel_file).name} locally")
 
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--force-reinstall",
-         "--break-system-packages", wheel_file],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--force-reinstall",
+            "--break-system-packages",
+            wheel_file,
+        ],
+        check=False,
     )
     if result.returncode != 0:
         print("⚠ pip install failed")
         sys.exit(1)
 
-    print("✓ raccoon-stubs installed (type hints & IDE support)")
+    print("✓ raccoon-lib installed")
 
 
 def deploy_to_pi() -> None:
@@ -114,10 +127,7 @@ def deploy_to_pi() -> None:
     rpi_host = _validate_host(os.environ["RPI_HOST"])
 
     # Find the platform wheel (not stubs)
-    wheels = [
-        w for w in glob.glob(str(script_dir / "*.whl"))
-        if "stubs" not in Path(w).name
-    ]
+    wheels = [w for w in glob.glob(str(script_dir / "*.whl")) if "stubs" not in Path(w).name]
     if not wheels:
         print(f"Error: No .whl file found in {script_dir}")
         sys.exit(1)
@@ -149,9 +159,15 @@ def deploy_to_pi() -> None:
     # due to hardware cleanup segfault in atexit handler)
     print("• Verifying import...")
     result = subprocess.run(
-        ["ssh", *_SSH_OPTS, f"{rpi_user}@{rpi_host}",
-         f"{python_cmd} -c 'import {project_name}; print(\"{project_name} OK\")'"],
-        capture_output=True, text=True,
+        [
+            "ssh",
+            *_SSH_OPTS,
+            f"{rpi_user}@{rpi_host}",
+            f"{python_cmd} -c 'import {project_name}; print(\"{project_name} OK\")'",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if f"{project_name} OK" in result.stdout:
         print(f"✓ {project_name} deployed successfully to {rpi_user}@{rpi_host}")
@@ -162,8 +178,8 @@ def deploy_to_pi() -> None:
 
 
 def main() -> None:
-    if "--stubs" in sys.argv or not os.environ.get("RPI_HOST"):
-        install_stubs()
+    if not os.environ.get("RPI_HOST"):
+        install_local()
     else:
         deploy_to_pi()
 
