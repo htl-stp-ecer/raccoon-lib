@@ -15,6 +15,7 @@ from .steps import ShakeServo, SlowServo, FullyDisableServos, Easing, EasingFunc
 from raccoon.hal import Servo
 from .preset import ServoPreset
 
+
 class ShakeServoBuilder(StepBuilder):
     """Builder for ShakeServo. Auto-generated — do not edit."""
 
@@ -55,7 +56,12 @@ class ShakeServoBuilder(StepBuilder):
 
 
 @dsl(tags=["servo", "actuator"])
-def shake_servo(servo: Servo | ServoPreset = _UNSET, duration: float = _UNSET, angle_a: float = _UNSET, angle_b: float = _UNSET):
+def shake_servo(
+    servo: Servo | ServoPreset = _UNSET,
+    duration: float = _UNSET,
+    angle_a: float = _UNSET,
+    angle_b: float = _UNSET,
+):
     """
     Oscillate a servo back and forth between two angles for a set time.
 
@@ -131,7 +137,12 @@ class SlowServoBuilder(StepBuilder):
 
 
 @dsl(tags=["servo", "actuator"])
-def slow_servo(servo: Servo | ServoPreset = _UNSET, angle: float = _UNSET, speed: float = 60.0, easing: Easing | EasingFunc = Easing.EASE_IN_OUT):
+def slow_servo(
+    servo: Servo | ServoPreset = _UNSET,
+    angle: float = _UNSET,
+    speed: float = 60.0,
+    easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+):
     """
     Move a servo to an angle with smooth interpolated motion.
 
@@ -215,4 +226,11 @@ def fully_disable_servos():
     return b
 
 
-__all__ = ['ShakeServoBuilder', 'shake_servo', 'SlowServoBuilder', 'slow_servo', 'FullyDisableServosBuilder', 'fully_disable_servos']
+__all__ = [
+    "ShakeServoBuilder",
+    "shake_servo",
+    "SlowServoBuilder",
+    "slow_servo",
+    "FullyDisableServosBuilder",
+    "fully_disable_servos",
+]

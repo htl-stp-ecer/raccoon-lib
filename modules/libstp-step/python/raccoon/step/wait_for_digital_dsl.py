@@ -21,7 +21,7 @@ class WaitForDigitalBuilder(StepBuilder):
         self._sensor = _UNSET
         self._pressed = True
 
-    def sensor(self, value: 'DigitalSensor'):
+    def sensor(self, value: "DigitalSensor"):
         self._sensor = value
         return self
 
@@ -38,7 +38,7 @@ class WaitForDigitalBuilder(StepBuilder):
 
 
 @dsl(tags=["timing", "wait", "sensor"])
-def wait_for_digital(sensor: 'DigitalSensor' = _UNSET, pressed: bool = True):
+def wait_for_digital(sensor: "DigitalSensor" = _UNSET, pressed: bool = True):
     """
     Block until a digital sensor reads the desired state.
 
@@ -73,4 +73,4 @@ def wait_for_digital(sensor: 'DigitalSensor' = _UNSET, pressed: bool = True):
     return b
 
 
-__all__ = ['WaitForDigitalBuilder', 'wait_for_digital']
+__all__ = ["WaitForDigitalBuilder", "wait_for_digital"]

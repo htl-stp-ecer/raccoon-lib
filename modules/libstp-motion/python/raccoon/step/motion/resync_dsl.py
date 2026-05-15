@@ -61,7 +61,14 @@ class ResyncAtStartPoseBuilder(StepBuilder):
 
 
 @dsl(tags=["localization", "resync"])
-def resync_at_start_pose(expected_x_cm: float | None = None, expected_y_cm: float | None = None, expected_theta_deg: float | None = None, snap_axes: tuple[bool, bool, bool] = (True, True, True), sigma_xy_cm: float = 1.0, sigma_theta_deg: float = 5.0):
+def resync_at_start_pose(
+    expected_x_cm: float | None = None,
+    expected_y_cm: float | None = None,
+    expected_theta_deg: float | None = None,
+    snap_axes: tuple[bool, bool, bool] = (True, True, True),
+    sigma_xy_cm: float = 1.0,
+    sigma_theta_deg: float = 5.0,
+):
     """
     Inject a direct absolute pose observation without additional motion.
 
@@ -96,4 +103,4 @@ def resync_at_start_pose(expected_x_cm: float | None = None, expected_y_cm: floa
     return b
 
 
-__all__ = ['ResyncAtStartPoseBuilder', 'resync_at_start_pose']
+__all__ = ["ResyncAtStartPoseBuilder", "resync_at_start_pose"]

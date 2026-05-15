@@ -19,13 +19,13 @@ class MarkHeadingReferenceBuilder(StepBuilder):
     def __init__(self):
         super().__init__()
         self._origin_offset_deg = 0.0
-        self._positive_direction = 'left'
+        self._positive_direction = "left"
 
     def origin_offset_deg(self, value: float):
         self._origin_offset_deg = value
         return self
 
-    def positive_direction(self, value: Literal['left', 'right']):
+    def positive_direction(self, value: Literal["left", "right"]):
         self._positive_direction = value
         return self
 
@@ -37,7 +37,9 @@ class MarkHeadingReferenceBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "turn"])
-def mark_heading_reference(origin_offset_deg: float = 0.0, positive_direction: Literal['left', 'right'] = 'left'):
+def mark_heading_reference(
+    origin_offset_deg: float = 0.0, positive_direction: Literal["left", "right"] = "left"
+):
     """
     Mark the current IMU heading as a reference point for absolute turns.
 
@@ -86,4 +88,4 @@ def mark_heading_reference(origin_offset_deg: float = 0.0, positive_direction: L
     return b
 
 
-__all__ = ['MarkHeadingReferenceBuilder', 'mark_heading_reference']
+__all__ = ["MarkHeadingReferenceBuilder", "mark_heading_reference"]

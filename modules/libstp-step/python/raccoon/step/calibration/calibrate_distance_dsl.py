@@ -50,7 +50,7 @@ class CalibrateDistanceBuilder(StepBuilder):
         self._calibration_sets = value
         return self
 
-    def exclude_ir_sensors(self, value: list['IRSensor'] | None):
+    def exclude_ir_sensors(self, value: list["IRSensor"] | None):
         self._exclude_ir_sensors = value
         return self
 
@@ -67,7 +67,15 @@ class CalibrateDistanceBuilder(StepBuilder):
 
 
 @dsl(tags=["calibration", "distance"])
-def calibrate_distance(distance_cm: float = 30.0, speed: float = 1.0, calibrate_light_sensors: bool = False, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: list[str] | None = None, exclude_ir_sensors: list['IRSensor'] | None = None):
+def calibrate_distance(
+    distance_cm: float = 30.0,
+    speed: float = 1.0,
+    calibrate_light_sensors: bool = False,
+    persist_to_yaml: bool = True,
+    ema_alpha: float = 0.7,
+    calibration_sets: list[str] | None = None,
+    exclude_ir_sensors: list["IRSensor"] | None = None,
+):
     """
     Calibrate per-wheel distance estimation via encoder measurement.
 
@@ -120,4 +128,4 @@ def calibrate_distance(distance_cm: float = 30.0, speed: float = 1.0, calibrate_
     return b
 
 
-__all__ = ['CalibrateDistanceBuilder', 'calibrate_distance']
+__all__ = ["CalibrateDistanceBuilder", "calibrate_distance"]

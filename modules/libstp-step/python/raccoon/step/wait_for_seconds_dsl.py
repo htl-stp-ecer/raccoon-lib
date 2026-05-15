@@ -68,4 +68,4 @@ def wait_for_seconds(seconds: float | int = _UNSET):
     return b
 
 
-__all__ = ['WaitForSecondsBuilder', 'wait_for_seconds']
+__all__ = ["WaitForSecondsBuilder", "wait_for_seconds"]

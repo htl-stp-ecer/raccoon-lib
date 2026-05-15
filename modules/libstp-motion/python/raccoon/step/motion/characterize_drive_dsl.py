@@ -23,6 +23,7 @@ class CharacterizeDriveBuilder(StepBuilder):
         self._power_percent = 100
         self._accel_timeout = 3.0
         self._decel_timeout = 3.0
+        self._sample_hz = 500
         self._persist = True
 
     def axes(self, value: list[str] | None):
@@ -45,6 +46,10 @@ class CharacterizeDriveBuilder(StepBuilder):
         self._decel_timeout = value
         return self
 
+    def sample_hz(self, value: int):
+        self._sample_hz = value
+        return self
+
     def persist(self, value: bool):
         self._persist = value
         return self
@@ -56,12 +61,21 @@ class CharacterizeDriveBuilder(StepBuilder):
         kwargs["power_percent"] = self._power_percent
         kwargs["accel_timeout"] = self._accel_timeout
         kwargs["decel_timeout"] = self._decel_timeout
+        kwargs["sample_hz"] = self._sample_hz
         kwargs["persist"] = self._persist
         return CharacterizeDrive(**kwargs)
 
 
 @dsl(tags=["motion", "calibration", "characterize"])
-def characterize_drive(axes: list[str] | None = None, trials: int = 3, power_percent: int = 100, accel_timeout: float = 3.0, decel_timeout: float = 3.0, persist: bool = True):
+def characterize_drive(
+    axes: list[str] | None = None,
+    trials: int = 3,
+    power_percent: int = 100,
+    accel_timeout: float = 3.0,
+    decel_timeout: float = 3.0,
+    sample_hz: int = 500,
+    persist: bool = True,
+):
     """
     Characterize the robot's physical drive limits at full motor power.
 
@@ -74,7 +88,7 @@ def characterize_drive(axes: list[str] | None = None, trials: int = 3, power_per
     phases:
 
     1. **Acceleration phase** -- commands 100 %% power and records odometry at
-       ~100 Hz until a velocity plateau is detected or the timeout expires.
+       up to 500 Hz until a velocity plateau is detected or the timeout expires.
        Max velocity and acceleration are extracted with 10 %%--90 %% rise-time
        analysis.
 
@@ -96,10 +110,11 @@ def characterize_drive(axes: list[str] | None = None, trials: int = 3, power_per
         power_percent: Motor power percentage (1--100). Default 100 for true maximum characterization.
         accel_timeout: Maximum time in seconds to wait for the acceleration phase before giving up. Default 3.0.
         decel_timeout: Maximum time in seconds to record the deceleration (coast-down) phase. Default 3.0.
+        sample_hz: Position sampling rate in Hz for the C++ measurement loop. Default 500. Higher values give better accel/decel resolution.
         persist: If ``True``, write the measured limits to ``raccoon.project.yml`` under ``robot.motion_pid``. Default ``True``.
 
     Returns:
-        A CharacterizeDriveBuilder (chainable via ``.axes()``, ``.trials()``, ``.power_percent()``, ``.accel_timeout()``, ``.decel_timeout()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A CharacterizeDriveBuilder (chainable via ``.axes()``, ``.trials()``, ``.power_percent()``, ``.accel_timeout()``, ``.decel_timeout()``, ``.sample_hz()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -127,8 +142,9 @@ def characterize_drive(axes: list[str] | None = None, trials: int = 3, power_per
     b._power_percent = power_percent
     b._accel_timeout = accel_timeout
     b._decel_timeout = decel_timeout
+    b._sample_hz = sample_hz
     b._persist = persist
     return b
 
 
-__all__ = ['CharacterizeDriveBuilder', 'characterize_drive']
+__all__ = ["CharacterizeDriveBuilder", "characterize_drive"]
