@@ -69,4 +69,4 @@ def custom_velocity(velocity_fn: VelocityFn = _UNSET, until: StopCondition | Non
     return b
 
 
-__all__ = ['CustomVelocityBuilder', 'custom_velocity']
+__all__ = ["CustomVelocityBuilder", "custom_velocity"]

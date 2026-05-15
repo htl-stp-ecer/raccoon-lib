@@ -14,6 +14,7 @@ from .loop import LoopForever, LoopFor
 
 from .. import StepProtocol
 
+
 class LoopForeverBuilder(StepBuilder):
     """Builder for LoopForever. Auto-generated — do not edit."""
 
@@ -126,4 +127,4 @@ def loop_for(step: StepProtocol = _UNSET, iterations: int = _UNSET):
     return b
 
 
-__all__ = ['LoopForeverBuilder', 'loop_forever', 'LoopForBuilder', 'loop_for']
+__all__ = ["LoopForeverBuilder", "loop_forever", "LoopForBuilder", "loop_for"]

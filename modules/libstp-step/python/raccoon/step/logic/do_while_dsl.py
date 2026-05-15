@@ -14,6 +14,7 @@ from .do_while import DoWhileActive
 
 from .. import Step
 
+
 class DoWhileActiveBuilder(StepBuilder):
     """Builder for DoWhileActive. Auto-generated — do not edit."""
 
@@ -85,4 +86,4 @@ def do_while_active(reference_step: Step = _UNSET, task: Step = _UNSET):
     return b
 
 
-__all__ = ['DoWhileActiveBuilder', 'do_while_active']
+__all__ = ["DoWhileActiveBuilder", "do_while_active"]

@@ -10,7 +10,12 @@ _UNSET = object()
 from raccoon.step.step_builder import StepBuilder
 from raccoon.step.condition import StopCondition
 from raccoon.step.annotation import dsl
-from .wall_align import WallAlignForward, WallAlignBackward, WallAlignStrafeLeft, WallAlignStrafeRight
+from .wall_align import (
+    WallAlignForward,
+    WallAlignBackward,
+    WallAlignStrafeLeft,
+    WallAlignStrafeRight,
+)
 
 
 class WallAlignForwardBuilder(StepBuilder):
@@ -55,7 +60,13 @@ class WallAlignForwardBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_forward(speed: float = 1.0, accel_threshold: float = 0.5, settle_duration: float = 0.2, max_duration: float = 5.0, grace_period: float = 0.3):
+def wall_align_forward(
+    speed: float = 1.0,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+):
     """
     Drive forward into a wall and align the front of the robot.
 
@@ -142,7 +153,13 @@ class WallAlignBackwardBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_backward(speed: float = 1.0, accel_threshold: float = 0.5, settle_duration: float = 0.2, max_duration: float = 5.0, grace_period: float = 0.3):
+def wall_align_backward(
+    speed: float = 1.0,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+):
     """
     Drive backward into a wall and align the back of the robot.
 
@@ -218,7 +235,13 @@ class WallAlignStrafeLeftBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_strafe_left(speed: float = 0.5, accel_threshold: float = 0.5, settle_duration: float = 0.2, max_duration: float = 5.0, grace_period: float = 0.3):
+def wall_align_strafe_left(
+    speed: float = 0.5,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+):
     """
     Strafe left into a wall and align the left side of the robot.
 
@@ -295,7 +318,13 @@ class WallAlignStrafeRightBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "wall"])
-def wall_align_strafe_right(speed: float = 0.5, accel_threshold: float = 0.5, settle_duration: float = 0.2, max_duration: float = 5.0, grace_period: float = 0.3):
+def wall_align_strafe_right(
+    speed: float = 0.5,
+    accel_threshold: float = 0.5,
+    settle_duration: float = 0.2,
+    max_duration: float = 5.0,
+    grace_period: float = 0.3,
+):
     """
     Strafe right into a wall and align the right side of the robot.
 
@@ -330,4 +359,13 @@ def wall_align_strafe_right(speed: float = 0.5, accel_threshold: float = 0.5, se
     return b
 
 
-__all__ = ['WallAlignForwardBuilder', 'wall_align_forward', 'WallAlignBackwardBuilder', 'wall_align_backward', 'WallAlignStrafeLeftBuilder', 'wall_align_strafe_left', 'WallAlignStrafeRightBuilder', 'wall_align_strafe_right']
+__all__ = [
+    "WallAlignForwardBuilder",
+    "wall_align_forward",
+    "WallAlignBackwardBuilder",
+    "wall_align_backward",
+    "WallAlignStrafeLeftBuilder",
+    "wall_align_strafe_left",
+    "WallAlignStrafeRightBuilder",
+    "wall_align_strafe_right",
+]

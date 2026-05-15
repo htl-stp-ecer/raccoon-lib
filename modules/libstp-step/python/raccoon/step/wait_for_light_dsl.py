@@ -14,6 +14,7 @@ from .wait_for_light import WaitForLight, WaitForLightLegacy
 
 from raccoon.hal import AnalogSensor
 
+
 class WaitForLightBuilder(StepBuilder):
     """Builder for WaitForLight. Auto-generated — do not edit."""
 
@@ -57,7 +58,13 @@ class WaitForLightBuilder(StepBuilder):
 
 
 @dsl(tags=["timing", "wait"])
-def wait_for_light(sensor: AnalogSensor = _UNSET, drop_fraction: float = 0.15, confirm_count: int = 3, warmup_seconds: float = 1.0, poll_interval: float = 0.005):
+def wait_for_light(
+    sensor: AnalogSensor = _UNSET,
+    drop_fraction: float = 0.15,
+    confirm_count: int = 3,
+    warmup_seconds: float = 1.0,
+    poll_interval: float = 0.005,
+):
     """
     Wait for the start lamp using automatic Kalman-filtered flank detection.
 
@@ -159,4 +166,9 @@ def wait_for_light_legacy(sensor: AnalogSensor = _UNSET):
     return b
 
 
-__all__ = ['WaitForLightBuilder', 'wait_for_light', 'WaitForLightLegacyBuilder', 'wait_for_light_legacy']
+__all__ = [
+    "WaitForLightBuilder",
+    "wait_for_light",
+    "WaitForLightLegacyBuilder",
+    "wait_for_light_legacy",
+]

@@ -45,7 +45,7 @@ class CalibrateBuilder(StepBuilder):
         self._calibration_sets = value
         return self
 
-    def exclude_ir_sensors(self, value: list['IRSensor'] | None):
+    def exclude_ir_sensors(self, value: list["IRSensor"] | None):
         self._exclude_ir_sensors = value
         return self
 
@@ -61,7 +61,14 @@ class CalibrateBuilder(StepBuilder):
 
 
 @dsl(tags=["calibration"])
-def calibrate(distance_cm: float = 30.0, speed: float = 1.0, persist_to_yaml: bool = True, ema_alpha: float = 0.7, calibration_sets: list[str] | None = None, exclude_ir_sensors: list['IRSensor'] | None = None):
+def calibrate(
+    distance_cm: float = 30.0,
+    speed: float = 1.0,
+    persist_to_yaml: bool = True,
+    ema_alpha: float = 0.7,
+    calibration_sets: list[str] | None = None,
+    exclude_ir_sensors: list["IRSensor"] | None = None,
+):
     """
     Run a unified distance and IR sensor calibration.
 
@@ -115,4 +122,4 @@ def calibrate(distance_cm: float = 30.0, speed: float = 1.0, persist_to_yaml: bo
     return b
 
 
-__all__ = ['CalibrateBuilder', 'calibrate']
+__all__ = ["CalibrateBuilder", "calibrate"]
