@@ -14,7 +14,6 @@ from .timeout import Timeout
 
 from . import Step
 
-
 class TimeoutBuilder(StepBuilder):
     """Builder for Timeout. Auto-generated — do not edit."""
 
@@ -85,4 +84,4 @@ def timeout(step: Step = _UNSET, seconds: float | int = _UNSET):
     return b
 
 
-__all__ = ["TimeoutBuilder", "timeout"]
+__all__ = ['TimeoutBuilder', 'timeout']

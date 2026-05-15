@@ -73,9 +73,9 @@ def _apply_motor_calibrations(motors, cfg) -> None:
 def _build_robot(cfg):
     """Build a HAL robot matching the given SimRobotConfig."""
     from raccoon.drive import ChassisVelocityControlConfig, Drive
-    from raccoon.hal import IMU, Motor, OdometryBridge
+    from raccoon.hal import IMU, Motor
+    from raccoon.hal import platform as _platform
     from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
-    from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 
     imu = IMU()
 
@@ -109,8 +109,7 @@ def _build_robot(cfg):
         refs = (left, right, imu)
 
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
-    bridge = OdometryBridge()
-    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
+    odom = _platform.Platform.create_odometry(kin)
 
     # Start with conservative defaults — auto-tune will improve them.
     pid_cfg = UnifiedMotionPidConfig()
@@ -128,7 +127,7 @@ def _build_robot(cfg):
         kinematics=kin,
         motion_pid_config=pid_cfg,
         localization=localization,
-        _refs=(*refs, bridge),
+        _refs=refs,
     )
 
 

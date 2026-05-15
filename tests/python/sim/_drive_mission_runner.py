@@ -21,18 +21,17 @@ SCENES_DIR = REPO_ROOT / "scenes"
 
 def _build_robot():
     from raccoon.drive import ChassisVelocityControlConfig, Drive
-    from raccoon.hal import IMU, Motor, OdometryBridge
+    from raccoon.hal import IMU, Motor
+    from raccoon.hal import platform as _platform
     from raccoon.kinematics_differential import DifferentialKinematics
     from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
-    from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 
     left = Motor(0, False)
     right = Motor(1, False)
     imu = IMU()
     kin = DifferentialKinematics(left, right, 0.15, 0.03)
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
-    bridge = OdometryBridge()
-    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
+    odom = _platform.Platform.create_odometry(kin)
 
     pid_cfg = UnifiedMotionPidConfig()
     pid_cfg.linear = AxisConstraints(0.8, 1.5, 1.5)
@@ -51,7 +50,7 @@ def _build_robot():
         kinematics=kin,
         motion_pid_config=pid_cfg,
         localization=localization,
-        _refs=(left, right, imu, bridge),
+        _refs=(left, right, imu),
     )
 
 

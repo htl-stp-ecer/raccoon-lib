@@ -1,7 +1,7 @@
 #pragma once
 
 #include "drive/drive.hpp"
-#include "odometry/odometry.hpp"
+#include "hal/odometry.hpp"
 #include "motion/motion_config.hpp"
 
 namespace libstp::motion

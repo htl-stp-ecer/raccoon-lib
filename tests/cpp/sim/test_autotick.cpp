@@ -3,10 +3,12 @@
 #include <gtest/gtest.h>
 
 #include "core/MockPlatform.hpp"
-#include "hal/OdometryBridge.hpp"
+#include "hal/Platform.hpp"
+#include "odometry/odometry.hpp"
 #include "libstp/sim/SimWorld.hpp"
 
 #include <cmath>
+#include <memory>
 
 using namespace libstp::sim;
 namespace mock = platform::mock::core;
@@ -37,6 +39,11 @@ namespace
         m.maxWheelVelocityRadS = 30.0f;
         m.motorTimeConstantSec = 0.001f;  // near-instant response for clean math
         return m;
+    }
+
+    std::shared_ptr<libstp::odometry::IOdometry> makeOdometry()
+    {
+        return libstp::hal::platform::Platform::createOdometry(nullptr);
     }
 }
 
@@ -75,11 +82,11 @@ TEST_F(AutoTickTest, DisabledByDefault)
     p.setMotor(1, mock::MotorDir::CW, 400);
 
     clock.now = 1.0;
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
-    // Bridge reports pose relative to last reset; configure sets origin to
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
+    // Odometry reports pose relative to last reset; configure sets origin to
     // start pose, so a fresh sim with no ticks reads (0, 0, 0).
-    EXPECT_NEAR(snap.pos_x, 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.x(), 0.0f, 1e-4f);
 }
 
 TEST_F(AutoTickTest, EnabledAdvancesOnReadOdometry)
@@ -94,11 +101,11 @@ TEST_F(AutoTickTest, EnabledAdvancesOnReadOdometry)
     // Advance the clock by 1 second, then read odometry — auto-tick should
     // integrate the motion.
     clock.now = 1.0;
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
     // Relative-to-start: 0 + ≈ 0.9 m/s × 1 s = 0.90 m (τ is ~1 ms).
-    EXPECT_GT(snap.pos_x, 0.85f);
-    EXPECT_LT(snap.pos_x, 0.95f);
+    EXPECT_GT(pose.position.x(), 0.85f);
+    EXPECT_LT(pose.position.x(), 0.95f);
 }
 
 TEST_F(AutoTickTest, CapsStepToMax)
@@ -112,10 +119,10 @@ TEST_F(AutoTickTest, CapsStepToMax)
 
     // Clock jumps by 10 s, but a single auto-tick caps at 50 ms.
     clock.now = 10.0;
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
     // 50 ms at ~0.9 m/s ≈ 0.045 m advance from origin.
-    EXPECT_NEAR(snap.pos_x, 0.045f, 0.01f);
+    EXPECT_NEAR(pose.position.x(), 0.045f, 0.01f);
 }
 
 TEST_F(AutoTickTest, AccumulatesAcrossMultipleReads)
@@ -127,18 +134,18 @@ TEST_F(AutoTickTest, AccumulatesAcrossMultipleReads)
     p.setMotor(0, mock::MotorDir::CW, 400);
     p.setMotor(1, mock::MotorDir::CW, 400);
 
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
+    auto odom = makeOdometry();
 
     // Tick the clock in 40 ms increments (under the 50 ms cap) 25 times → 1 s.
     for (int i = 0; i < 25; ++i)
     {
         clock.now += 0.04;
-        (void)bridge.readOdometry();
+        (void)odom->getPose();
     }
-    const auto snap = bridge.readOdometry();
+    const auto pose = odom->getPose();
     // Should have traveled roughly the full 0.9 m over 1 s.
-    EXPECT_GT(snap.pos_x, 0.80f);
-    EXPECT_LT(snap.pos_x, 0.95f);
+    EXPECT_GT(pose.position.x(), 0.80f);
+    EXPECT_LT(pose.position.x(), 0.95f);
 }
 
 TEST_F(AutoTickTest, FrozenClockProducesNoAdvance)
@@ -150,10 +157,10 @@ TEST_F(AutoTickTest, FrozenClockProducesNoAdvance)
     p.setMotor(1, mock::MotorDir::CW, 400);
 
     // Clock stays put — multiple reads must all report the same pose.
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto a = bridge.readOdometry();
-    const auto b = bridge.readOdometry();
-    const auto c = bridge.readOdometry();
-    EXPECT_FLOAT_EQ(a.pos_x, b.pos_x);
-    EXPECT_FLOAT_EQ(b.pos_x, c.pos_x);
+    auto odom = makeOdometry();
+    const auto a = odom->getPose();
+    const auto b = odom->getPose();
+    const auto c = odom->getPose();
+    EXPECT_FLOAT_EQ(a.position.x(), b.position.x());
+    EXPECT_FLOAT_EQ(b.position.x(), c.position.x());
 }

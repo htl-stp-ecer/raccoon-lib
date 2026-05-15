@@ -183,11 +183,11 @@ PYBIND11_MODULE(sim, m)
         py::arg("robot"), py::arg("motors"), py::arg("map"), py::arg("start_pose"),
         "Attach a fresh SimWorld to the MockPlatform singleton with the given "
         "config and scene. After this, HAL Motor::setSpeed writes drive the "
-        "sim and OdometryBridge::readOdometry reports its pose.");
+        "sim and MockOdometry reports its pose.");
 
     mockMod.def("detach",
         [] { platform::mock::core::MockPlatform::instance().detachSim(); },
-        "Detach the sim from MockPlatform. OdometryBridge goes back to "
+        "Detach the sim from MockPlatform. MockOdometry goes back to "
         "reporting zero.");
 
     mockMod.def("has_sim",
@@ -261,8 +261,7 @@ PYBIND11_MODULE(sim, m)
 
     mockMod.def("read_odometry",
         [] {
-            // Mirrors what libstp::hal::odometry_bridge::OdometryBridge::
-            // readOdometry() returns: pose is relative to the last
+            // Mirrors what MockOdometry returns: pose is relative to the last
             // resetSimOrigin() / configureSim() call, in meters and radians.
             // Yaw rate is the live ground-truth angular velocity.
             auto& p = platform::mock::core::MockPlatform::instance();

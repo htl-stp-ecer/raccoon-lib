@@ -1,6 +1,6 @@
 #include "localization/localization.hpp"
 
-#include "odometry/angle_utils.hpp"
+#include "hal/angle_utils.hpp"
 
 #include <algorithm>
 #include <chrono>

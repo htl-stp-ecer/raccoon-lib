@@ -100,4 +100,4 @@ def wait_until_degrees(degrees: float = _UNSET, origin: HeadingOrigin = HeadingO
     return b
 
 
-__all__ = ["WaitUntilDegreesBuilder", "wait_until_degrees"]
+__all__ = ['WaitUntilDegreesBuilder', 'wait_until_degrees']

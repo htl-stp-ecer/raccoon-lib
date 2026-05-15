@@ -9,9 +9,13 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace libstp::kinematics { struct IKinematics; }
+namespace libstp::odometry { struct IOdometry; }
 
 namespace libstp::hal::platform
 {
@@ -108,5 +112,19 @@ namespace libstp::hal::platform
 
         /// Reset all forced failures set by `setMockProbeFailure`.
         static void clearMockProbeFailures();
+
+        /// Construct the platform-canonical odometry implementation.
+        ///
+        /// Each platform bundle owns one odometry implementation that is the
+        /// single source of truth for pose. The wombat bundle returns an
+        /// implementation that reads STM32-computed dead-reckoning over LCM;
+        /// the mock bundle returns an in-process implementation suitable for
+        /// tests. Higher layers should not select between odometry types —
+        /// they take whatever the platform provides.
+        ///
+        /// `kinematics` is forwarded so the implementation can push the
+        /// pre-baked kinematics matrix to the coprocessor where applicable.
+        static std::shared_ptr<libstp::odometry::IOdometry> createOdometry(
+            std::shared_ptr<libstp::kinematics::IKinematics> kinematics);
     };
 }

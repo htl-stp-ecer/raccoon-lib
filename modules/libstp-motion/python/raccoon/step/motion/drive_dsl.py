@@ -49,12 +49,7 @@ class DriveForwardBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "drive"])
-def drive_forward(
-    cm: float | None = None,
-    speed: float = 1.0,
-    until: StopCondition = None,
-    heading: float | None = None,
-):
+def drive_forward(cm: float | None = None, speed: float = 1.0, until: StopCondition = None, heading: float | None = None):
     """
     Drive forward with distance or condition-based termination.
 
@@ -127,12 +122,7 @@ class DriveBackwardBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "drive"])
-def drive_backward(
-    cm: float | None = None,
-    speed: float = 1.0,
-    until: StopCondition = None,
-    heading: float | None = None,
-):
+def drive_backward(cm: float | None = None, speed: float = 1.0, until: StopCondition = None, heading: float | None = None):
     """
     Drive backward with distance or condition-based termination.
 
@@ -202,12 +192,7 @@ class StrafeLeftBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "strafe"])
-def strafe_left(
-    cm: float | None = None,
-    speed: float = 1.0,
-    until: StopCondition = None,
-    heading: float | None = None,
-):
+def strafe_left(cm: float | None = None, speed: float = 1.0, until: StopCondition = None, heading: float | None = None):
     """
     Strafe left with distance or condition-based termination.
 
@@ -276,12 +261,7 @@ class StrafeRightBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "strafe"])
-def strafe_right(
-    cm: float | None = None,
-    speed: float = 1.0,
-    until: StopCondition = None,
-    heading: float | None = None,
-):
+def strafe_right(cm: float | None = None, speed: float = 1.0, until: StopCondition = None, heading: float | None = None):
     """
     Strafe right with distance or condition-based termination.
 
@@ -314,13 +294,4 @@ def strafe_right(
     return b
 
 
-__all__ = [
-    "DriveForwardBuilder",
-    "drive_forward",
-    "DriveBackwardBuilder",
-    "drive_backward",
-    "StrafeLeftBuilder",
-    "strafe_left",
-    "StrafeRightBuilder",
-    "strafe_right",
-]
+__all__ = ['DriveForwardBuilder', 'drive_forward', 'DriveBackwardBuilder', 'drive_backward', 'StrafeLeftBuilder', 'strafe_left', 'StrafeRightBuilder', 'strafe_right']

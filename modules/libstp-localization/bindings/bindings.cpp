@@ -11,7 +11,7 @@
 #include "localization/localization.hpp"
 #include "libstp/map/Geometry.hpp"
 #include "libstp/map/WorldMap.hpp"
-#include "odometry/odometry.hpp"
+#include "hal/odometry.hpp"
 #include "foundation/types.hpp"
 
 #include <Eigen/Core>
@@ -56,7 +56,7 @@ PYBIND11_MODULE(localization, m)
     // Foundation registers Pose; odometry registers IOdometry. Both must be
     // imported before we hand instances of those types across the boundary.
     py::module_::import("raccoon.foundation");
-    py::module_::import("raccoon.odometry");
+    py::module_::import("raccoon.hal");
     py::module_::import("raccoon.map");
 
     using libstp::localization::Localization;
