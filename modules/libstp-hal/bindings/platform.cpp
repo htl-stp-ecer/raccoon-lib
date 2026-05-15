@@ -3,6 +3,8 @@
 #include <pybind11/stl.h>
 
 #include "hal/Platform.hpp"
+#include "kinematics/kinematics.hpp"
+#include "hal/odometry.hpp"
 
 namespace py = pybind11;
 
@@ -54,5 +56,15 @@ void init_platform(py::module& m)
         .def_static("require_healthy",  &Platform::requireHealthy,   py::arg("options") = ProbeOptions{})
         .def_static("set_mock_probe_failure",   &Platform::setMockProbeFailure,
                     py::arg("component"), py::arg("fail"))
-        .def_static("clear_mock_probe_failures", &Platform::clearMockProbeFailures);
+        .def_static("clear_mock_probe_failures", &Platform::clearMockProbeFailures)
+        .def_static("create_odometry",
+                    &Platform::createOdometry,
+                    py::arg("kinematics"),
+                    "Construct the platform-canonical odometry implementation.\n\n"
+                    "Each platform bundle owns one odometry implementation that is\n"
+                    "the single source of truth for pose. The wombat bundle reads\n"
+                    "STM32-computed dead-reckoning over LCM; the mock bundle reads\n"
+                    "the in-process SimWorld. ``kinematics`` is forwarded so the\n"
+                    "implementation can push pre-baked kinematics matrices to the\n"
+                    "coprocessor where applicable.");
 }

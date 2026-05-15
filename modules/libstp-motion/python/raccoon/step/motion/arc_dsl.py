@@ -289,13 +289,4 @@ def strafe_arc_right(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: 
     return b
 
 
-__all__ = [
-    "DriveArcLeftBuilder",
-    "drive_arc_left",
-    "DriveArcRightBuilder",
-    "drive_arc_right",
-    "StrafeArcLeftBuilder",
-    "strafe_arc_left",
-    "StrafeArcRightBuilder",
-    "strafe_arc_right",
-]
+__all__ = ['DriveArcLeftBuilder', 'drive_arc_left', 'DriveArcRightBuilder', 'drive_arc_right', 'StrafeArcLeftBuilder', 'strafe_arc_left', 'StrafeArcRightBuilder', 'strafe_arc_right']

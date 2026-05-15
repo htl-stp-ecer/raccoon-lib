@@ -91,9 +91,9 @@ ROBOT_PY = '''\
 from types import SimpleNamespace
 
 from raccoon.hal import IMU, Motor
+from raccoon.hal import platform as _platform
 from raccoon.kinematics_differential import DifferentialKinematics
 from raccoon.drive import Drive, ChassisVelocityControlConfig
-from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 from raccoon.motion import UnifiedMotionPidConfig, AxisConstraints
 
 
@@ -117,15 +117,8 @@ class Robot:
         imu=defs.imu,
     )
 
-    # odometry — use the stock STM32 bridge, same as real robots
-    from raccoon.hal import OdometryBridge as _OB
-    _bridge = _OB()
-    odometry = Stm32Odometry(
-        imu=defs.imu,
-        kinematics=kinematics,
-        bridge=_bridge,
-        config=Stm32OdometryConfig(),
-    )
+    # odometry — platform-owned canonical odometry.
+    odometry = _platform.Platform.create_odometry(kinematics)
 
     motion_pid_config = UnifiedMotionPidConfig()
     motion_pid_config.linear = AxisConstraints(0.8, 1.5, 1.5)

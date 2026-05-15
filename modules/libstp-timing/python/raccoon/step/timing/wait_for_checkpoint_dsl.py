@@ -76,4 +76,4 @@ def wait_for_checkpoint(checkpoint_seconds: float | int = _UNSET):
     return b
 
 
-__all__ = ["WaitForCheckpointBuilder", "wait_for_checkpoint"]
+__all__ = ['WaitForCheckpointBuilder', 'wait_for_checkpoint']

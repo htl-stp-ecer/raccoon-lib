@@ -73,7 +73,7 @@ namespace platform::mock::core
 
         // ─── Simulation integration ───
         // When a SimWorld is attached, setMotor() commands are routed into it,
-        // OdometryBridge::readOdometry() reads its pose, and gyroZ() reports
+        // MockOdometry reads its pose, and gyroZ() reports
         // its yaw rate. Call tickSim(dt) to advance it. The mock HAL remains
         // fully functional without a sim (all sim methods become no-ops).
         void configureSim(const libstp::sim::RobotConfig& robot,
@@ -100,7 +100,7 @@ namespace platform::mock::core
         void tickSim(float dtSeconds);
 
         /// Auto-tick mode: when enabled, every call into the mock HAL that
-        /// reads sim state (getAnalog, OdometryBridge::readOdometry, gyroZ)
+        /// reads sim state (getAnalog, MockOdometry queries, gyroZ)
         /// first advances the sim by the wall-clock delta since the last tick.
         /// Disabled by default so C++ tests stay deterministic with explicit
         /// tickSim() calls.

@@ -14,7 +14,6 @@ from .calibrate_wfl import CalibrateWaitForLight
 
 from raccoon.hal import AnalogSensor
 
-
 class CalibrateWaitForLightBuilder(StepBuilder):
     """Builder for CalibrateWaitForLight. Auto-generated — do not edit."""
 
@@ -64,4 +63,4 @@ def calibrate_wait_for_light(sensor: AnalogSensor = _UNSET):
     return b
 
 
-__all__ = ["CalibrateWaitForLightBuilder", "calibrate_wait_for_light"]
+__all__ = ['CalibrateWaitForLightBuilder', 'calibrate_wait_for_light']

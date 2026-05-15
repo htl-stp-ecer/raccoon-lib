@@ -6,7 +6,7 @@
 
 #include "foundation/types.hpp"
 #include "foundation/logging.hpp"
-#include "odometry/angle_utils.hpp"
+#include "hal/angle_utils.hpp"
 
 namespace
 {
