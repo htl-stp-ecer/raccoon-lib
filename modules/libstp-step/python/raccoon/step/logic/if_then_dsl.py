@@ -14,6 +14,7 @@ from .if_then import IfThen
 
 from .. import StepProtocol
 
+
 class IfThenBuilder(StepBuilder):
     """Builder for IfThen. Auto-generated — do not edit."""
 
@@ -23,7 +24,7 @@ class IfThenBuilder(StepBuilder):
         self._then_step = _UNSET
         self._else_step = None
 
-    def condition(self, value: Callable[['GenericRobot'], bool]):
+    def condition(self, value: Callable[["GenericRobot"], bool]):
         self._condition = value
         return self
 
@@ -46,7 +47,11 @@ class IfThenBuilder(StepBuilder):
 
 
 @dsl(tags=["control", "logic"])
-def if_then(condition: Callable[['GenericRobot'], bool] = _UNSET, then_step: StepProtocol = _UNSET, else_step: StepProtocol | None = None):
+def if_then(
+    condition: Callable[["GenericRobot"], bool] = _UNSET,
+    then_step: StepProtocol = _UNSET,
+    else_step: StepProtocol | None = None,
+):
     """
     Conditionally run one of two steps based on a runtime predicate.
 
@@ -88,4 +93,4 @@ def if_then(condition: Callable[['GenericRobot'], bool] = _UNSET, then_step: Ste
     return b
 
 
-__all__ = ['IfThenBuilder', 'if_then']
+__all__ = ["IfThenBuilder", "if_then"]

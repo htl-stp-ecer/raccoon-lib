@@ -56,4 +56,4 @@ def stop(hard: bool = True):
     return b
 
 
-__all__ = ['StopBuilder', 'stop']
+__all__ = ["StopBuilder", "stop"]
