@@ -149,7 +149,11 @@ namespace libstp::odometry::fused
             return origin_heading_;
         }
 
-        const double imu_heading_delta = wrapAngle(last_imu_heading_ - initial_imu_heading_);
+        // Always poll the IMU live — heading must reflect the robot's actual
+        // orientation regardless of whether update() has been called recently
+        // (e.g. during a wait_for_button between motion steps).
+        const double current_imu = imu_->getHeading();
+        const double imu_heading_delta = wrapAngle(current_imu - initial_imu_heading_);
         return wrapAngle(origin_heading_ + imu_heading_delta);
     }
 

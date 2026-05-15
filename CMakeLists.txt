@@ -207,6 +207,29 @@ file(
   "${CMAKE_SOURCE_DIR}/python/libstp_compat/libstp/*.py"
   "${CMAKE_SOURCE_DIR}/modules/*/python/raccoon/*.py")
 
+# ---------- Generated step-builder DSL wrappers ----------
+#
+# ``@dsl_step`` classes own their generated ``*_dsl.py`` companions. Those files
+# are ignored in git to keep PRs clean, so the build must regenerate them before
+# packaging or editable installs. The generator writes into the source tree, and
+# the install(DIRECTORY ... PATTERN "*.py") rules below then pick the files up
+# automatically.
+set(_RACCOON_STEP_BUILDERS_STAMP
+    "${CMAKE_BINARY_DIR}/step_builder_codegen.stamp")
+add_custom_command(
+  OUTPUT "${_RACCOON_STEP_BUILDERS_STAMP}"
+  COMMAND "${Python_EXECUTABLE}"
+          "${CMAKE_SOURCE_DIR}/tools/generate_step_builders.py"
+  COMMAND "${CMAKE_COMMAND}" -E touch "${_RACCOON_STEP_BUILDERS_STAMP}"
+  DEPENDS ${_RACCOON_PYTHON_SOURCES}
+          "${CMAKE_SOURCE_DIR}/tools/generate_step_builders.py"
+          "${CMAKE_SOURCE_DIR}/python/raccoon/codegen/step_builder_gen.py"
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  COMMENT "Generating step-builder DSL wrappers"
+  VERBATIM)
+add_custom_target(raccoon_step_builder_codegen ALL
+                  DEPENDS "${_RACCOON_STEP_BUILDERS_STAMP}")
+
 set(_RACCOON_PYTHON_SYNTAX_STAMP
     "${CMAKE_BINARY_DIR}/python_syntax_check.stamp")
 add_custom_command(
@@ -223,7 +246,7 @@ add_custom_target(raccoon_python_syntax_check ALL
                   DEPENDS "${_RACCOON_PYTHON_SYNTAX_STAMP}")
 # Tie the wheel's native module to the syntax gate so a build that produces
 # _core.so also implicitly proved the Python tree compiles.
-add_dependencies(_core raccoon_python_syntax_check)
+add_dependencies(_core raccoon_step_builder_codegen raccoon_python_syntax_check)
 
 # ---------- Ruff lint + format ----------
 #
