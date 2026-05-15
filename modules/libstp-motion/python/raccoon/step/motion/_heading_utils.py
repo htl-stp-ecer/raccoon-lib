@@ -1,64 +1,83 @@
-"""Helpers for reading the absolute world heading from localization.
+"""Helpers for reading the current heading from odometry or localization.
 
-Phase 4 of the absolute-motion plan removed every relative-heading code
-path from the C++ motion classes — every ``LinearMotion`` /
-``DiagonalMotion`` / ``SplineMotion`` config now needs an absolute
-``target_heading_rad`` set by the Python caller. The world heading lives
-in ``robot.localization.get_pose().heading`` (radians), so every motion
-step that doesn't take an explicit user heading must read it from there.
+Every ``LinearMotion`` / ``DiagonalMotion`` / ``SplineMotion`` config needs
+an absolute ``target_heading_rad``. This module provides that value with the
+following priority:
 
-This module centralises that read so the error message is consistent and
-callers don't sprinkle ``getattr(robot, "localization", None)`` checks
-across the codebase.
+1. **Localization** (``robot.localization``) — IMU-fused world pose; the
+   primary source whenever it is enabled. Tracks the robot's actual
+   orientation in space, including manual rotations between steps.
+2. **Fused odometry** (``robot.odometry``) — fallback when localization is
+   not available. May go stale when the robot is moved by hand (wheel
+   encoders see nothing), so it must not override localization.
+
+When both are present and disagree by more than 0.02 rad a warning is
+logged and localization still wins. Raises ``RuntimeError`` only when
+*neither* source is available.
 """
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import TYPE_CHECKING
+
+_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
 
 _REQUIRED_MSG = (
-    "robot.localization is required (phase 4 of the absolute-motion plan). "
-    "Enable it in your robot subclass — motion configs need an absolute "
-    "target_heading_rad and there is no fallback path any more."
+    "Neither robot.odometry nor robot.localization is available. "
+    "At least one must be enabled — motion steps need a heading source."
 )
 
 
 def get_world_heading_rad(robot: "GenericRobot") -> float:
-    """Return the current absolute world heading in radians.
+    """Return the current heading in radians.
 
-    Reads ``robot.localization.get_pose().heading``. Raises a clear
-    ``RuntimeError`` when localization is not enabled — callers cannot
-    construct a valid motion config without it.
+    Prefers ``robot.localization`` (IMU-fused world heading) so that manual
+    rotations between steps are honoured. Falls back to ``robot.odometry``
+    only when localization is unavailable.
     """
-    loc = getattr(robot, "localization", None)
-    if loc is None:
-        raise RuntimeError(_REQUIRED_MSG)
-    world_heading = float(loc.get_pose().heading)
     odom = getattr(robot, "odometry", None)
-    if odom is None:
-        return world_heading
+    loc = getattr(robot, "localization", None)
 
-    odom_heading = float(odom.get_pose().heading)
-    if abs(math.remainder(world_heading - odom_heading, 2.0 * math.pi)) > 0.02:
-        return odom_heading
+    if odom is None and loc is None:
+        raise RuntimeError(_REQUIRED_MSG)
+
+    if loc is None:
+        return float(odom.get_pose().heading)
+
+    world_heading = float(loc.get_pose().heading)
+
+    if odom is not None:
+        odom_heading = float(odom.get_pose().heading)
+        if abs(math.remainder(world_heading - odom_heading, 2.0 * math.pi)) > 0.02:
+            _log.warning(
+                "Heading sources diverge: localization=%.3f rad, odometry=%.3f rad "
+                "(using localization — odometry may be stale from manual rotation or wheel slip)",
+                world_heading,
+                odom_heading,
+            )
+
     return world_heading
 
 
 def get_world_pose(robot: "GenericRobot"):
-    """Return the current absolute world pose snapshot.
+    """Return the current pose snapshot.
 
-    Same precondition as :func:`get_world_heading_rad`; useful when
-    callers need both position and heading in the same tick.
+    Prefers ``robot.localization`` when available; falls back to
+    ``robot.odometry``. Raises ``RuntimeError`` when neither is set.
     """
     loc = getattr(robot, "localization", None)
-    if loc is None:
-        raise RuntimeError(_REQUIRED_MSG)
-    return loc.get_pose()
+    if loc is not None:
+        return loc.get_pose()
+    odom = getattr(robot, "odometry", None)
+    if odom is not None:
+        return odom.get_pose()
+    raise RuntimeError(_REQUIRED_MSG)
 
 
 __all__ = ["get_world_heading_rad", "get_world_pose"]

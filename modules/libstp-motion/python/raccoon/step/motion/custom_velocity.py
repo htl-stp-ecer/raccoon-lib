@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from raccoon.foundation import ChassisVelocity
-from raccoon.step.annotation import dsl
+from raccoon.step.annotation import dsl_step
 from raccoon.step.condition import StopCondition
 
 from .motion_step import MotionStep
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 VelocityFn = Callable[["GenericRobot", float], tuple[float, float, float]]
 
 
-@dsl(hidden=True)
+@dsl_step(tags=["motion", "velocity"])
 class CustomVelocity(MotionStep):
     """Motion step driven by a user-supplied velocity function.
 
@@ -35,6 +35,11 @@ class CustomVelocity(MotionStep):
     the drive velocity controller.  The loop runs until the optional
     ``until`` condition fires, at which point the base ``MotionStep`` calls
     ``on_stop`` and executes ``robot.drive.hard_stop()``.
+
+    Args:
+        velocity_fn: Callable receiving ``(robot, dt)`` and returning
+            ``(vx_pct, vy_pct, omega_pct)`` fractions in ``[-1.0, 1.0]``.
+        until: Optional stop condition checked before each velocity update.
     """
 
     def __init__(
