@@ -359,7 +359,7 @@ jobs:
       # fetched once and reused across runs. Keyed on CMakeLists so they
       # refresh when a dep version bumps.
       - name: Cache CMake FetchContent dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cmake-cache
           key: cmake-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'raccoon-transport/CMakeLists.txt') }}
@@ -383,7 +383,7 @@ jobs:
           print(f"Version set to: 1.0.{run_number}")
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.21
+        uses: pypa/cibuildwheel@v3.4
         env:
           CIBW_BUILD: cp311-* cp312-* cp313-*
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
@@ -430,7 +430,7 @@ jobs:
             cmake.define.LIBSTP_RUN_MYPY=OFF
 
       - name: Upload wheel artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -447,7 +447,7 @@ jobs:
 
     steps:
       - name: Download all wheel artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: wheels-*
           path: dist
