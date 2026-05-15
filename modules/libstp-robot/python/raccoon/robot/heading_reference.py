@@ -19,14 +19,19 @@ def _normalize_angle(angle: float) -> float:
 
 
 def _world_heading(robot: "GenericRobot") -> float:
-    """Read the absolute world heading from ``robot.localization``."""
+    """Read the current heading from odometry, with localization as override."""
+    odom = getattr(robot, "odometry", None)
     loc = getattr(robot, "localization", None)
-    if loc is None:
+    if odom is None and loc is None:
         msg = (
-            "HeadingReferenceService requires robot.localization "
-            "(world heading is read from localization.get_pose().heading)."
+            "HeadingReferenceService requires robot.odometry or robot.localization "
+            "(at least one heading source must be enabled)."
         )
         raise RuntimeError(msg)
+    if loc is None:
+        return float(odom.get_pose().heading)
+    if odom is None:
+        return float(loc.get_pose().heading)
     return float(loc.get_pose().heading)
 
 

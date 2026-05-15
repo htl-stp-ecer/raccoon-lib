@@ -361,7 +361,6 @@ class CalibrateDistance(UIStep):
         if not ir_sensors:
             return
 
-        [sensor.port for sensor in ir_sensors]
         samples = initial_samples
 
         if not any(samples.values()):
@@ -378,6 +377,7 @@ class CalibrateDistance(UIStep):
             sensor_data = self._collect_sensor_data(ir_sensors, samples)
 
             dashboard_result = await self.show(IRResultsDashboardScreen(sensors=sensor_data))
+            await self.close_ui()
             if dashboard_result is None:
                 self.warn("Sensor calibration dashboard dismissed; aborting")
                 return
@@ -406,14 +406,16 @@ class CalibrateDistance(UIStep):
         from raccoon.step.motion.drive import _drive_forward_uncalibrated
 
         label = set_name.upper()
+        self.info(f"[CAL-DEBUG] _drive_and_sample_for_set start, set_name={set_name!r}")
         proceed = await self.confirm(
             f"Place sensors on {label} surface, then confirm to drive.",
             title=f"Calibrate: {label}",
             yes_label="Drive",
             no_label="Skip",
         )
+        self.info(f"[CAL-DEBUG] confirm() for '{set_name}' returned proceed={proceed!r}")
         if not proceed:
-            self.debug(f"Skipping calibration set '{set_name}'")
+            self.info(f"[CAL-DEBUG] Skipping calibration set '{set_name}' (proceed was falsy)")
             return
 
         driving_screen = DistanceDrivingScreen(_SENSOR_CAL_DRIVE_CM)
@@ -631,14 +633,23 @@ class CalibrateDistance(UIStep):
                 )
 
                 if self.calibrate_light_sensors and ir_sensors:
+                    self.info(f"[CAL-DEBUG] calibration_sets={self.calibration_sets!r}")
                     # First set uses samples from the distance calibration drive
                     await self._confirm_light_sensors(
                         robot, ir_sensors, sensor_samples, self.calibration_sets[0]
                     )
+                    self.info(
+                        f"[CAL-DEBUG] finished first set '{self.calibration_sets[0]}', "
+                        f"remaining sets: {self.calibration_sets[1:]!r}"
+                    )
 
                     # Remaining sets each get their own drive-and-sample cycle
                     for cal_set in self.calibration_sets[1:]:
+                        self.info(f"[CAL-DEBUG] entering _drive_and_sample_for_set('{cal_set}')")
                         await self._drive_and_sample_for_set(robot, ir_sensors, cal_set)
+                        self.info(
+                            f"[CAL-DEBUG] returned from _drive_and_sample_for_set('{cal_set}')"
+                        )
                 return
 
             # User wants to retry - loop continues

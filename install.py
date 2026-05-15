@@ -83,21 +83,30 @@ def scp(source: str, dest: str) -> None:
         sys.exit(1)
 
 
+def _find_built_wheel(script_dir: Path, pattern: str) -> Path | None:
+    """Return the newest matching wheel from the repo root or build output."""
+    candidates = [
+        Path(match)
+        for search_dir in (script_dir, script_dir / "build-docker")
+        for match in glob.glob(str(search_dir / pattern))
+        if "stubs" not in Path(match).name
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
 def install_local() -> None:
     """Install the raccoon-lib wheel on this machine."""
     script_dir = Path(__file__).resolve().parent
 
-    # Look for raccoon_lib wheel next to this script, then in build-docker
-    wheels = glob.glob(str(script_dir / "raccoon_library-*.whl"))
-    if not wheels:
-        wheels = glob.glob(str(script_dir / "build-docker" / "raccoon_library-*.whl"))
-    if not wheels:
+    wheel_file = _find_built_wheel(script_dir, "raccoon_library-*.whl")
+    if wheel_file is None:
         print("Error: No raccoon_library-*.whl found.")
         print("  Run the build first, or download from a GitHub release.")
         sys.exit(1)
 
-    wheel_file = wheels[0]
-    print(f"▶ Installing {Path(wheel_file).name} locally")
+    print(f"▶ Installing {wheel_file.name} locally")
 
     result = subprocess.run(
         [
@@ -107,7 +116,7 @@ def install_local() -> None:
             "install",
             "--force-reinstall",
             "--break-system-packages",
-            wheel_file,
+            str(wheel_file),
         ],
         check=False,
     )
@@ -126,14 +135,12 @@ def deploy_to_pi() -> None:
     rpi_user = os.environ.get("RPI_USER", "pi")
     rpi_host = _validate_host(os.environ["RPI_HOST"])
 
-    # Find the platform wheel (not stubs)
-    wheels = [w for w in glob.glob(str(script_dir / "*.whl")) if "stubs" not in Path(w).name]
-    if not wheels:
-        print(f"Error: No .whl file found in {script_dir}")
+    wheel_file = _find_built_wheel(script_dir, "raccoon_library-*.whl")
+    if wheel_file is None:
+        print(f"Error: No raccoon_library-*.whl file found in {script_dir} or build-docker/")
         sys.exit(1)
 
-    wheel_file = wheels[0]
-    wheel_basename = Path(wheel_file).name
+    wheel_basename = wheel_file.name
     print(f"▶ Deploying {wheel_basename} to {rpi_user}@{rpi_host}")
 
     # Preflight: test SSH
@@ -145,7 +152,7 @@ def deploy_to_pi() -> None:
 
     # Copy wheel
     print("• Copying wheel...")
-    scp(wheel_file, f"{rpi_user}@{rpi_host}:/tmp/{wheel_basename}")
+    scp(str(wheel_file), f"{rpi_user}@{rpi_host}:/tmp/{wheel_basename}")
 
     # Install
     print("• Installing package...")

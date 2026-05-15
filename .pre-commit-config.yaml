@@ -65,15 +65,15 @@ repos:
     types: [file]
     files: (\.cmake|CMakeLists.txt)(.in)?$
 
-# Verify auto-generated step-builder DSL files are up to date with their
-# @dsl_step source classes. Catches drift before it lands in main and
-# avoids "works on my machine" failures from stale generated wrappers.
+# Verify step-builder codegen still succeeds for all @dsl_step sources.
+# The generated ``*_dsl.py`` files are build artifacts now, so the hook
+# checks generator health without requiring those ignored files in git.
 - repo: local
   hooks:
     - id: check-step-builders
-      name: Check step-builder DSL files are in sync
+      name: Check step-builder codegen
       language: system
-      entry: python3 tools/generate_step_builders.py --check
+      entry: python3 tools/generate_step_builders.py --dry-run
       pass_filenames: false
       files: '(^modules/.*/python/raccoon/.*\.py$|^tools/generate_step_builders\.py$|^python/raccoon/codegen/.*\.py$)'
 

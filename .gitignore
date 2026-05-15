@@ -167,3 +167,6 @@ logs/
 *.sqlite
 *.sqlite-journal
 .codex/
+
+# Auto-generated DSL builder modules
+*_dsl.py
