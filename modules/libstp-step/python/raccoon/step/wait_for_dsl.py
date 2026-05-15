@@ -64,4 +64,4 @@ def wait_for(condition: StopCondition = _UNSET):
     return b
 
 
-__all__ = ["WaitForBuilder", "wait_for"]
+__all__ = ['WaitForBuilder', 'wait_for']

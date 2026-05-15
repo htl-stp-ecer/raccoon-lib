@@ -24,18 +24,17 @@ SCENES_DIR = REPO_ROOT / "scenes"
 def _build_robot(cfg):
     """Build a HAL robot whose geometry matches the given SimRobotConfig."""
     from raccoon.drive import ChassisVelocityControlConfig, Drive
-    from raccoon.hal import IMU, Motor, OdometryBridge
+    from raccoon.hal import IMU, Motor
+    from raccoon.hal import platform as _platform
     from raccoon.kinematics_differential import DifferentialKinematics
     from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
-    from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 
     left = Motor(cfg.left_motor_port, cfg.left_motor_inverted)
     right = Motor(cfg.right_motor_port, cfg.right_motor_inverted)
     imu = IMU()
     kin = DifferentialKinematics(left, right, cfg.track_width_m, cfg.wheel_radius_m)
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
-    bridge = OdometryBridge()
-    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
+    odom = _platform.Platform.create_odometry(kin)
 
     pid_cfg = UnifiedMotionPidConfig()
     pid_cfg.linear = AxisConstraints(0.8, 1.5, 1.5)
@@ -52,7 +51,7 @@ def _build_robot(cfg):
         kinematics=kin,
         motion_pid_config=pid_cfg,
         localization=localization,
-        _refs=(left, right, imu, bridge),
+        _refs=(left, right, imu),
     )
 
 

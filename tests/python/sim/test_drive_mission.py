@@ -3,7 +3,7 @@
 This is the smallest test that proves the entire stack works as a unit:
 
 - A real ``raccoon.hal.Motor`` is constructed (which initializes MockPlatform).
-- A real ``DifferentialKinematics`` + ``Drive`` + ``Stm32Odometry`` are wired.
+- A real ``DifferentialKinematics`` + ``Drive`` + platform-owned odometry are wired.
 - The simulator is attached via ``raccoon.testing.sim.use_scene(...)``.
 - The unmodified motion steps run against this robot inside an asyncio loop.
 - The fixed-rate motion loop ticks at 100 Hz; auto-tick advances the sim with

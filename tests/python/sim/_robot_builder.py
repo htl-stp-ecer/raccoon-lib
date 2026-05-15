@@ -52,9 +52,9 @@ def build_robot(cfg, *, enable_localization: bool = True):
     explicitly checks the ``robot.localization is None`` path.
     """
     from raccoon.drive import ChassisVelocityControlConfig, Drive
-    from raccoon.hal import IMU, Motor, OdometryBridge
+    from raccoon.hal import IMU, Motor
+    from raccoon.hal import platform as _platform
     from raccoon.motion import AxisConstraints, UnifiedMotionPidConfig
-    from raccoon.odometry_stm32 import Stm32Odometry, Stm32OdometryConfig
 
     imu = IMU()
 
@@ -88,8 +88,7 @@ def build_robot(cfg, *, enable_localization: bool = True):
         refs = (left, right, imu)
 
     drive_obj = Drive(kin, ChassisVelocityControlConfig(), imu)
-    bridge = OdometryBridge()
-    odom = Stm32Odometry(imu=imu, kinematics=kin, bridge=bridge, config=Stm32OdometryConfig())
+    odom = _platform.Platform.create_odometry(kin)
 
     pid_cfg = UnifiedMotionPidConfig()
     pid_cfg.linear = AxisConstraints(0.8, 1.5, 1.5)
@@ -110,5 +109,5 @@ def build_robot(cfg, *, enable_localization: bool = True):
         kinematics=kin,
         motion_pid_config=pid_cfg,
         localization=localization,
-        _refs=(*refs, bridge),
+        _refs=refs,
     )

@@ -10,19 +10,9 @@ _UNSET = object()
 from raccoon.step.step_builder import StepBuilder
 from raccoon.step.condition import StopCondition
 from raccoon.step.annotation import dsl
-from .steps import (
-    SetMotorPower,
-    SetMotorVelocity,
-    SetMotorDps,
-    MoveMotorTo,
-    MoveMotorRelative,
-    MotorOff,
-    MotorPassiveBrake,
-    MotorBrake,
-)
+from .steps import SetMotorPower, SetMotorVelocity, SetMotorDps, MoveMotorTo, MoveMotorRelative, MotorOff, MotorPassiveBrake, MotorBrake
 
 from raccoon.hal import IMotor
-
 
 class SetMotorPowerBuilder(StepBuilder):
     """Builder for SetMotorPower. Auto-generated — do not edit."""
@@ -252,12 +242,7 @@ class MoveMotorToBuilder(StepBuilder):
 
 
 @dsl(tags=["motor", "actuator"])
-def move_motor_to(
-    motor: IMotor = _UNSET,
-    position: int = _UNSET,
-    velocity: int = 1000,
-    timeout: float | None = None,
-):
+def move_motor_to(motor: IMotor = _UNSET, position: int = _UNSET, velocity: int = 1000, timeout: float | None = None):
     """
     Move a motor to an absolute encoder position and wait for completion.
 
@@ -330,9 +315,7 @@ class MoveMotorRelativeBuilder(StepBuilder):
 
 
 @dsl(tags=["motor", "actuator"])
-def move_motor_relative(
-    motor: IMotor = _UNSET, delta: int = _UNSET, velocity: int = 1000, timeout: float | None = None
-):
+def move_motor_relative(motor: IMotor = _UNSET, delta: int = _UNSET, velocity: int = 1000, timeout: float | None = None):
     """
     Move a motor by a relative encoder delta and wait for completion.
 
@@ -523,21 +506,4 @@ def motor_brake(motor: IMotor = _UNSET):
     return b
 
 
-__all__ = [
-    "SetMotorPowerBuilder",
-    "set_motor_power",
-    "SetMotorVelocityBuilder",
-    "set_motor_velocity",
-    "SetMotorDpsBuilder",
-    "set_motor_dps",
-    "MoveMotorToBuilder",
-    "move_motor_to",
-    "MoveMotorRelativeBuilder",
-    "move_motor_relative",
-    "MotorOffBuilder",
-    "motor_off",
-    "MotorPassiveBrakeBuilder",
-    "motor_passive_brake",
-    "MotorBrakeBuilder",
-    "motor_brake",
-]
+__all__ = ['SetMotorPowerBuilder', 'set_motor_power', 'SetMotorVelocityBuilder', 'set_motor_velocity', 'SetMotorDpsBuilder', 'set_motor_dps', 'MoveMotorToBuilder', 'move_motor_to', 'MoveMotorRelativeBuilder', 'move_motor_relative', 'MotorOffBuilder', 'motor_off', 'MotorPassiveBrakeBuilder', 'motor_passive_brake', 'MotorBrakeBuilder', 'motor_brake']

@@ -1,7 +1,7 @@
 // Integration tests proving the chain:
 //   HAL Motor::setSpeed → MockPlatform::setMotor → SimWorld::setMotorCommand
 //     → SimWorld::tick (via MockPlatform::tickSim)
-//     → MockPlatform::simPose → OdometryBridge::readOdometry
+//     → MockPlatform::simPose → MockOdometry (via Platform::createOdometry)
 //
 // Only built when DRIVER_BUNDLE=mock (the platform_core singleton and the
 // real HAL driver wiring both live in the mock bundle).
@@ -10,10 +10,12 @@
 
 #include "core/MockPlatform.hpp"
 #include "hal/Motor.hpp"
-#include "hal/OdometryBridge.hpp"
+#include "hal/Platform.hpp"
+#include "odometry/odometry.hpp"
 #include "libstp/sim/SimWorld.hpp"
 
 #include <cmath>
+#include <memory>
 
 using namespace libstp::sim;
 namespace mock = platform::mock::core;
@@ -55,6 +57,11 @@ namespace
         const int steps = static_cast<int>(std::round(seconds / dt));
         for (int i = 0; i < steps; ++i) mock::MockPlatform::instance().tickSim(dt);
     }
+
+    std::shared_ptr<libstp::odometry::IOdometry> makeOdometry()
+    {
+        return libstp::hal::platform::Platform::createOdometry(nullptr);
+    }
 }
 
 class MockSimIntegrationTest : public ::testing::Test
@@ -66,25 +73,25 @@ protected:
 TEST_F(MockSimIntegrationTest, OdometryIsZeroWhenSimDetached)
 {
     mock::MockPlatform::instance().detachSim();
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
-    EXPECT_FLOAT_EQ(snap.pos_x, 0.0f);
-    EXPECT_FLOAT_EQ(snap.pos_y, 0.0f);
-    EXPECT_FLOAT_EQ(snap.heading, 0.0f);
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
+    EXPECT_FLOAT_EQ(pose.position.x(), 0.0f);
+    EXPECT_FLOAT_EQ(pose.position.y(), 0.0f);
+    EXPECT_FLOAT_EQ(pose.heading, 0.0f);
     EXPECT_FALSE(mock::MockPlatform::instance().hasSim());
 }
 
-TEST_F(MockSimIntegrationTest, ConfigureSimExposesStartPoseThroughBridge)
+TEST_F(MockSimIntegrationTest, ConfigureSimExposesStartPoseThroughOdometry)
 {
     configureOpenTable({50.0f, 30.0f, kPi / 4.0f});
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
-    // The bridge reports pose RELATIVE to the last reset, mirroring real
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
+    // Odometry reports pose RELATIVE to the last reset, mirroring real
     // STM32 coprocessor behavior. configureSim() sets the initial origin to
     // the start pose, so a fresh sim reads (0, 0, 0) before any motion.
-    EXPECT_NEAR(snap.pos_x, 0.0f, 1e-4f);
-    EXPECT_NEAR(snap.pos_y, 0.0f, 1e-4f);
-    EXPECT_NEAR(snap.heading, 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.x(), 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 1e-4f);
+    EXPECT_NEAR(pose.heading, 0.0f, 1e-4f);
 
     // Ground-truth absolute pose still available via simPose().
     const auto abs_pose = mock::MockPlatform::instance().simPose();
@@ -105,14 +112,14 @@ TEST_F(MockSimIntegrationTest, HalMotorDrivesSimForward)
 
     run(1.0f);
 
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
-    // Bridge reports relative-to-start pose. Drive forward 1 s at ~0.9 m/s
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
+    // Odometry reports relative-to-start pose. Drive forward 1 s at ~0.9 m/s
     // → ~0.9 m, minus the brief motor ramp.
-    EXPECT_GT(snap.pos_x, 0.80f);
-    EXPECT_LT(snap.pos_x, 0.95f);
-    EXPECT_NEAR(snap.pos_y, 0.0f, 5e-3f);
-    EXPECT_NEAR(snap.heading, 0.0f, 5e-3f);
+    EXPECT_GT(pose.position.x(), 0.80f);
+    EXPECT_LT(pose.position.x(), 0.95f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 5e-3f);
+    EXPECT_NEAR(pose.heading, 0.0f, 5e-3f);
 }
 
 TEST_F(MockSimIntegrationTest, HalMotorTurnsSimInPlace)
@@ -126,15 +133,15 @@ TEST_F(MockSimIntegrationTest, HalMotorTurnsSimInPlace)
 
     run(0.2f);
 
-    libstp::hal::odometry_bridge::OdometryBridge bridge;
-    const auto snap = bridge.readOdometry();
-    // Bridge reports relative-to-start pose. In-place spin → pos stays at 0.
-    EXPECT_NEAR(snap.pos_x, 0.0f, 5e-3f);
-    EXPECT_NEAR(snap.pos_y, 0.0f, 5e-3f);
+    auto odom = makeOdometry();
+    const auto pose = odom->getPose();
+    // Odometry reports relative-to-start pose. In-place spin → pos stays at 0.
+    EXPECT_NEAR(pose.position.x(), 0.0f, 5e-3f);
+    EXPECT_NEAR(pose.position.y(), 0.0f, 5e-3f);
     // Yaw rate = (r/W)·(ω_R − ω_L) = 0.2·(−60) ≈ −12 rad/s steady state.
     // Over 0.2 s (minus ramp), integrated heading ≈ −2.4 rad.
-    EXPECT_LT(snap.heading, -1.5f);
-    EXPECT_GT(snap.heading, -3.0f);
+    EXPECT_LT(pose.heading, -1.5f);
+    EXPECT_GT(pose.heading, -3.0f);
 }
 
 TEST_F(MockSimIntegrationTest, HalMotorInvertedFlipsSimDirection)

@@ -85,6 +85,8 @@ from .line_follow import (
     DirectionalFollowLine,
     StrafeFollowLine,
     StrafeFollowLineSingle,
+    LateralFollowLine,
+    LateralFollowLineSingle,
     DirectionalFollowLineSingle,
 )
 from .line_follow_dsl import (
@@ -93,6 +95,8 @@ from .line_follow_dsl import (
     directional_follow_line,
     strafe_follow_line,
     strafe_follow_line_single,
+    lateral_follow_line,
+    lateral_follow_line_single,
     directional_follow_line_single,
 )
 from .resync import (
@@ -193,6 +197,8 @@ __all__ = [
     "directional_follow_line",
     "strafe_follow_line",
     "strafe_follow_line_single",
+    "lateral_follow_line",
+    "lateral_follow_line_single",
     "directional_follow_line_single",
     # Localization resync
     "align_to_wall_resync",

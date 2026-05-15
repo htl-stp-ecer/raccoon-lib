@@ -61,14 +61,7 @@ class CharacterizeDriveBuilder(StepBuilder):
 
 
 @dsl(tags=["motion", "calibration", "characterize"])
-def characterize_drive(
-    axes: list[str] | None = None,
-    trials: int = 3,
-    power_percent: int = 100,
-    accel_timeout: float = 3.0,
-    decel_timeout: float = 3.0,
-    persist: bool = True,
-):
+def characterize_drive(axes: list[str] | None = None, trials: int = 3, power_percent: int = 100, accel_timeout: float = 3.0, decel_timeout: float = 3.0, persist: bool = True):
     """
     Characterize the robot's physical drive limits at full motor power.
 
@@ -138,4 +131,4 @@ def characterize_drive(
     return b
 
 
-__all__ = ["CharacterizeDriveBuilder", "characterize_drive"]
+__all__ = ['CharacterizeDriveBuilder', 'characterize_drive']

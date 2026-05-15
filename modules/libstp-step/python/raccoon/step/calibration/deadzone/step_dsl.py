@@ -49,12 +49,7 @@ class CalibrateDeadzoneBuilder(StepBuilder):
 
 
 @dsl(tags=["calibration", "motor", "deadzone"])
-def calibrate_deadzone(
-    motor_ports: list[int] | None = None,
-    start_percent: int = 1,
-    max_percent: int = 30,
-    settle_time: float = 0.3,
-):
+def calibrate_deadzone(motor_ports: list[int] | None = None, start_percent: int = 1, max_percent: int = 30, settle_time: float = 0.3):
     """
     Calibrate motor deadzone via UI-based human observation.
 
@@ -92,4 +87,4 @@ def calibrate_deadzone(
     return b
 
 
-__all__ = ["CalibrateDeadzoneBuilder", "calibrate_deadzone"]
+__all__ = ['CalibrateDeadzoneBuilder', 'calibrate_deadzone']

@@ -1,1 +1,1 @@
-register_libstp_module(motion "FALSE" "foundation;drive;odometry")
+register_libstp_module(motion "FALSE" "foundation;drive;hal")

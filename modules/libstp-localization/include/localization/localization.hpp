@@ -3,7 +3,7 @@
 #include "foundation/types.hpp"
 #include "libstp/map/Geometry.hpp"
 #include "libstp/map/WorldMap.hpp"
-#include "odometry/odometry.hpp"
+#include "hal/odometry.hpp"
 
 #include <Eigen/Core>
 #include <atomic>

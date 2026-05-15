@@ -39,7 +39,7 @@ class DoUntilCheckpointBuilder(StepBuilder):
 
 
 @dsl(tags=["timing", "sync"])
-def do_until_checkpoint(checkpoint: float = _UNSET, step=_UNSET):
+def do_until_checkpoint(checkpoint: float = _UNSET, step = _UNSET):
     """
     Run a step until a mission-relative time checkpoint, then cancel it.
 
@@ -89,4 +89,4 @@ def do_until_checkpoint(checkpoint: float = _UNSET, step=_UNSET):
     return b
 
 
-__all__ = ["DoUntilCheckpointBuilder", "do_until_checkpoint"]
+__all__ = ['DoUntilCheckpointBuilder', 'do_until_checkpoint']

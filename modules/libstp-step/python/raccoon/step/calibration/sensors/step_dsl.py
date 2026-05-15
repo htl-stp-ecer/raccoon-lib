@@ -43,11 +43,7 @@ class CalibrateSensorsBuilder(StepBuilder):
 
 
 @dsl(tags=["calibration", "sensor"])
-def calibrate_sensors(
-    calibration_time: float = 5.0,
-    allow_use_existing: bool = True,
-    calibration_sets: list[str] | None = None,
-):
+def calibrate_sensors(calibration_time: float = 5.0, allow_use_existing: bool = True, calibration_sets: list[str] | None = None):
     """
     Calibrate IR sensors by sampling black and white surface readings.
 
@@ -85,4 +81,4 @@ def calibrate_sensors(
     return b
 
 
-__all__ = ["CalibrateSensorsBuilder", "calibrate_sensors"]
+__all__ = ['CalibrateSensorsBuilder', 'calibrate_sensors']

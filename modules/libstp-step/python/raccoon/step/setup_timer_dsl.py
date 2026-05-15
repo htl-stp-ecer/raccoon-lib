@@ -132,11 +132,4 @@ def resume_setup_timer():
     return b
 
 
-__all__ = [
-    "PauseSetupTimerBuilder",
-    "pause_setup_timer",
-    "StartSetupTimerBuilder",
-    "start_setup_timer",
-    "ResumeSetupTimerBuilder",
-    "resume_setup_timer",
-]
+__all__ = ['PauseSetupTimerBuilder', 'pause_setup_timer', 'StartSetupTimerBuilder', 'start_setup_timer', 'ResumeSetupTimerBuilder', 'resume_setup_timer']

@@ -23,10 +23,10 @@ _S = TypeVar("_S", bound=RobotService)
 
 if TYPE_CHECKING:
     from raccoon.drive import Drive
+    from raccoon.hal import IOdometry as Odometry
     from raccoon.localization import Localization
     from raccoon.map import WorldMap as TableMap
     from raccoon.mission.api import MissionProtocol, SetupMission
-    from raccoon.odometry import Odometry
 
 
 @runtime_checkable
@@ -58,7 +58,9 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     Subclasses must implement:
         - defs: Hardware definitions (motors, servos, etc.)
         - drive: Drive system for chassis control
-        - odometry: Odometry system for position tracking
+
+    The ``odometry`` property is concrete and lazily built from the platform
+    factory; subclasses may override it but don't have to.
 
     Optional attributes:
         - missions: List of missions to execute
@@ -79,10 +81,19 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         ...
 
     @property
-    @abstractmethod
     def odometry(self) -> "Odometry":
-        """Odometry system for position tracking."""
-        ...
+        """Odometry system for position tracking.
+
+        Lazily constructed on first access via the platform factory
+        ``Platform.create_odometry(kinematics)``, which returns the
+        platform-canonical ``IOdometry`` implementation. Subclasses may
+        override this property (e.g. for tests) but no longer have to.
+        """
+        if not hasattr(self, "_odometry"):
+            from raccoon.hal import platform as _platform
+
+            self._odometry = _platform.Platform.create_odometry(self.kinematics)
+        return self._odometry
 
     @property
     @abstractmethod

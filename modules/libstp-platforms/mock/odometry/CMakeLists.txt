@@ -1,0 +1,3 @@
+register_driver(odometry_driver)
+
+target_link_libraries(odometry_driver PUBLIC hal kinematics platform_core)
