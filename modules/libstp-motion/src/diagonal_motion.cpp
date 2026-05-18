@@ -1,6 +1,7 @@
 #include "motion/diagonal_motion.hpp"
 #include "motion/motion_config.hpp"
 #include "motion/motion_pid.hpp"
+#include "foundation/speed_mode_context.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -49,6 +50,10 @@ namespace libstp::motion
     void DiagonalMotion::start()
     {
         if (started_) return;
+        if (cfg_.has_distance_target)
+        {
+            foundation::SpeedModeContext::instance().assertBemfAvailable("DiagonalMotion with distance target");
+        }
         started_ = true;
         finished_ = false;
         speed_scale_ = 1.0;
@@ -134,8 +139,11 @@ namespace libstp::motion
         LIBSTP_LOG_TRACE("DiagonalMotion update: primary={:.3f} m, target={:.3f} m, error={:.3f} m, cross_track={:.3f} m, heading={:.3f} rad, yaw_error={:.3f} rad, filt_vel={:.3f} m/s",
                     primary_position, cfg_.distance_m, distance_error, cross_track_position, current_heading, yaw_error, filtered_velocity_);
 
-        // Check if we've reached the final target distance AND are nearly stopped
-        if (std::abs(actual_error) <= ctx_.pid_config.distance_tolerance_m &&
+        // Check if we've reached the final target distance AND are nearly stopped.
+        // Only valid when a distance target was set — otherwise an until-only
+        // strafe (distance_m defaults to 0) terminates on cycle 0.
+        if (cfg_.has_distance_target &&
+            std::abs(actual_error) <= ctx_.pid_config.distance_tolerance_m &&
             std::abs(filtered_velocity_) < kSettlingVelocity)
         {
             LIBSTP_LOG_TRACE("DiagonalMotion completed: primary={:.3f} m, error={:.4f} m, filt_vel={:.4f} m/s",

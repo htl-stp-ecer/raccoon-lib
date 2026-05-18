@@ -1,4 +1,5 @@
 #include "motion/turn_motion.hpp"
+#include "foundation/speed_mode_context.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -48,6 +49,10 @@ namespace libstp::motion
     void TurnMotion::start()
     {
         if (started_) return;
+        if (cfg_.has_angle_target)
+        {
+            foundation::SpeedModeContext::instance().assertBemfAvailable("TurnMotion with angle target");
+        }
         started_ = true;
         finished_ = false;
         heading_offset_rad_ = 0.0;
@@ -75,6 +80,10 @@ namespace libstp::motion
 
     void TurnMotion::startWarm(double heading_offset_rad, double initial_angular_velocity)
     {
+        if (cfg_.has_angle_target)
+        {
+            foundation::SpeedModeContext::instance().assertBemfAvailable("TurnMotion warm-start with angle target");
+        }
         started_ = true;
         finished_ = false;
         heading_offset_rad_ = heading_offset_rad;
@@ -133,8 +142,12 @@ namespace libstp::motion
         // Drive feedback: measured angular velocity from gyro (via drive's velocity PID)
         const auto drive_state = drive().estimateState();
 
-        // Settling: within tolerance AND nearly stopped
-        if (std::abs(error) <= ctx_.pid_config.angle_tolerance_rad &&
+        // Settling: within tolerance AND nearly stopped.
+        // Only valid when an angle target was set — an until-only turn (with
+        // target_angle_rad defaulting to 0) would otherwise terminate on
+        // cycle 0 since |0 - 0| <= tolerance trivially holds.
+        if (cfg_.has_angle_target &&
+            std::abs(error) <= ctx_.pid_config.angle_tolerance_rad &&
             std::abs(filtered_velocity_) < kSettlingVelocity)
         {
             complete();
@@ -226,6 +239,7 @@ namespace libstp::motion
 
     bool TurnMotion::hasReachedAngle() const
     {
+        foundation::SpeedModeContext::instance().assertBemfAvailable("TurnMotion::hasReachedAngle");
         if (finished_) return true;
         if (!started_) return false;
         const double error = cfg_.target_angle_rad - accumulated_heading_;

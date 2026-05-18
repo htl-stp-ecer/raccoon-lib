@@ -13,6 +13,7 @@
 #include "core/LcmWriter.hpp"
 #include "foundation/config.hpp"
 #include "foundation/logging.hpp"
+#include "foundation/speed_mode_context.hpp"
 #include "hal/IIMU.hpp"
 #include "hal/IMU.hpp"
 #include "hal/Platform.hpp"
@@ -73,6 +74,7 @@ namespace
 
         [[nodiscard]] libstp::foundation::Pose getPose() const override
         {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPose");
             const auto snap = ::platform::wombat::core::LcmReader::instance().readOdometry();
             libstp::foundation::Pose pose;
             pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
@@ -82,6 +84,7 @@ namespace
 
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override
         {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getDistanceFromOrigin");
             const auto snap = ::platform::wombat::core::LcmReader::instance().readOdometry();
             const Eigen::Vector3f pos(snap.pos_x, snap.pos_y, 0.0f);
 
@@ -110,6 +113,7 @@ namespace
 
         [[nodiscard]] double getPathLength() const override
         {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPathLength");
             return path_length_;
         }
 

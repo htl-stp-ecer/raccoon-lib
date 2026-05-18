@@ -10,7 +10,164 @@ _UNSET = object()
 from raccoon.step.step_builder import StepBuilder
 from raccoon.step.condition import StopCondition
 from raccoon.step.annotation import dsl
-from .auto_tune import AutoTuneVelocity, AutoTuneMotion, AutoTune
+from .auto_tune import (
+    AutoTuneVelLpf,
+    AutoTuneStaticFriction,
+    AutoTuneFirmwarePid,
+    AutoTuneVelocity,
+    AutoTuneMotion,
+    AutoTune,
+)
+
+
+class AutoTuneVelLpfBuilder(StepBuilder):
+    """Builder for AutoTuneVelLpf. Auto-generated — do not edit."""
+
+    def __init__(self):
+        super().__init__()
+        self._persist = True
+
+    def persist(self, value: bool):
+        self._persist = value
+        return self
+
+    def _build(self):
+        kwargs = {}
+        kwargs["persist"] = self._persist
+        return AutoTuneVelLpf(**kwargs)
+
+
+@dsl(tags=["motion", "calibration", "auto-tune"])
+def auto_tune_vel_lpf(persist: bool = True):
+    """
+    Tune the IIR velocity-filter alpha per motor (Phase 1).
+
+    Collects raw BEMF samples at a steady velocity, replays them through IIR
+    low-pass filters with varying alpha, and applies the alpha that minimises
+    a weighted noise+lag score. Runs first in the full pipeline because every
+    downstream phase relies on the same velocity-feedback filter.
+
+    Args:
+        persist: Write tuned ``vel_lpf_alpha`` values to ``raccoon.project.yml``. Default ``True``.
+
+    Returns:
+        A AutoTuneVelLpfBuilder (chainable via ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
+
+    Example::
+
+        from raccoon.step.motion import auto_tune_vel_lpf
+
+        auto_tune_vel_lpf()
+    """
+    b = AutoTuneVelLpfBuilder()
+    b._persist = persist
+    return b
+
+
+class AutoTuneStaticFrictionBuilder(StepBuilder):
+    """Builder for AutoTuneStaticFriction. Auto-generated — do not edit."""
+
+    def __init__(self):
+        super().__init__()
+        self._persist = True
+
+    def persist(self, value: bool):
+        self._persist = value
+        return self
+
+    def _build(self):
+        kwargs = {}
+        kwargs["persist"] = self._persist
+        return AutoTuneStaticFriction(**kwargs)
+
+
+@dsl(tags=["calibration", "auto-tune"])
+def auto_tune_static_friction(persist: bool = True):
+    """
+    Measure per-motor static-friction threshold kS in PWM percent (Phase 2).
+
+    For each drive motor the PWM is swept from a low starting percentage upward
+    in both directions. The first PWM level where the median BEMF exceeds a
+    motion threshold is recorded as kS.
+
+    Args:
+        persist: Reserved for future YAML persistence. Currently logs only.
+
+    Returns:
+        A AutoTuneStaticFrictionBuilder (chainable via ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
+
+    Example::
+
+        from raccoon.step.motion import auto_tune_static_friction
+
+        auto_tune_static_friction()
+    """
+    b = AutoTuneStaticFrictionBuilder()
+    b._persist = persist
+    return b
+
+
+class AutoTuneFirmwarePidBuilder(StepBuilder):
+    """Builder for AutoTuneFirmwarePid. Auto-generated — do not edit."""
+
+    def __init__(self):
+        super().__init__()
+        self._persist = True
+        self._max_bemf_speeds = None
+        self._csv_dir = "/tmp/auto_tune"
+
+    def persist(self, value: bool):
+        self._persist = value
+        return self
+
+    def max_bemf_speeds(self, value: dict[int, int] | None):
+        self._max_bemf_speeds = value
+        return self
+
+    def csv_dir(self, value: str | None):
+        self._csv_dir = value
+        return self
+
+    def _build(self):
+        kwargs = {}
+        kwargs["persist"] = self._persist
+        kwargs["max_bemf_speeds"] = self._max_bemf_speeds
+        kwargs["csv_dir"] = self._csv_dir
+        return AutoTuneFirmwarePid(**kwargs)
+
+
+@dsl(tags=["calibration", "auto-tune"])
+def auto_tune_firmware_pid(
+    persist: bool = True,
+    max_bemf_speeds: dict[int, int] | None = None,
+    csv_dir: str | None = "/tmp/auto_tune",
+):
+    """
+    Tune per-motor STM32 MAV-mode velocity PID via BEMF step response (Phase 3).
+
+    For each drive motor: record a BEMF step response, fit a FOPDT plant,
+    derive CHR PID gains, push them to the firmware. Gains are accepted only
+    when the tuned ISE is strictly smaller than the baseline ISE.
+
+    Args:
+        persist: Unused — gains are applied directly to firmware state.
+        max_bemf_speeds: Optional ``{port: max_bemf_speed}`` map. If unset, the C++ side runs a brief power sweep to estimate it.
+        csv_dir: When set, every step-response sample is dumped to a CSV under this directory (one per motor + phase) plus a summary CSV with the plant fit and gains. Default ``"/tmp/auto_tune"``.
+
+    Returns:
+        A AutoTuneFirmwarePidBuilder (chainable via ``.persist()``, ``.max_bemf_speeds()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
+
+    Example::
+
+        from raccoon.step.motion import auto_tune_firmware_pid
+
+        auto_tune_firmware_pid()
+    """
+    b = AutoTuneFirmwarePidBuilder()
+    b._persist = persist
+    b._max_bemf_speeds = max_bemf_speeds
+    b._csv_dir = csv_dir
+    return b
 
 
 class AutoTuneVelocityBuilder(StepBuilder):
@@ -20,7 +177,6 @@ class AutoTuneVelocityBuilder(StepBuilder):
         super().__init__()
         self._axes = None
         self._persist = True
-        self._csv_dir = "/tmp/auto_tune"
 
     def axes(self, value: list[str] | None):
         self._axes = value
@@ -30,78 +186,44 @@ class AutoTuneVelocityBuilder(StepBuilder):
         self._persist = value
         return self
 
-    def csv_dir(self, value: str | None):
-        self._csv_dir = value
-        return self
-
     def _build(self):
         kwargs = {}
         kwargs["axes"] = self._axes
         kwargs["persist"] = self._persist
-        kwargs["csv_dir"] = self._csv_dir
         return AutoTuneVelocity(**kwargs)
 
 
 @dsl(tags=["motion", "calibration", "auto-tune"])
-def auto_tune_velocity(
-    axes: list[str] | None = None, persist: bool = True, csv_dir: str | None = "/tmp/auto_tune"
-):
+def auto_tune_velocity(axes: list[str] | None = None, persist: bool = True):
     """
-    Tune velocity controllers via step-response system identification.
+    Tune velocity controllers via step-response system identification (Phase 6).
 
-    This is Phase 2 of the full auto-tune pipeline, usable standalone when
-    drive characterization has already been performed (or when the hardware
-    limits are already configured in ``raccoon.project.yml``).
+    Records a baseline step response, fits a FOPDT plant model, derives CHR
+    PID gains, applies them, then re-runs the step response to validate via
+    ISE. The accepted gains are pushed to ``drive.set_velocity_control_config``
+    immediately by the C++ tuner.
 
-    For each velocity axis the process is:
-
-    1. **Baseline recording** -- command a step velocity at 50% of the
-       characterized max and record the response at 100 Hz.
-    2. **Plant identification** -- extract gain (Ks), dead time (Tu), and
-       time constant (Tg) using the inflection tangent method (local
-       quadratic regression to find the inflection point, then tangent-line
-       intersections). Falls back to 10%/63% rise-time estimation if the
-       inflection method fails.
-    3. **Gain computation** -- compute PID gains via CHR set-point-follow
-       formulas, scaled down because a kV=1.0 feedforward handles
-       steady-state.
-    4. **Validation** -- apply the new gains and re-run the step response.
-       If the integral of squared error (ISE) improves, the gains are
-       accepted; otherwise the baseline gains are restored.
-
-    Accepted gains are applied in-memory to the drive's velocity control
-    config and optionally persisted to ``raccoon.project.yml`` under
-    ``robot.drive.vel_config``.
-
-    Prerequisites: Drive characterization should have been run first so that
-    max velocity values are available for computing the step command
-    magnitude.
+    Prerequisites: Phase 5 (drive characterization) should have run first so
+    a max-velocity-per-axis is known. Phase 3 (firmware PID) should also have
+    run so the inner loop is stable.
 
     Args:
-        axes: Velocity axes to tune. Each entry is a velocity component name: ``"vx"`` (forward), ``"vy"`` (lateral/strafe), or ``"wz"`` (angular). Default ``["vx", "vy", "wz"]``.
-        persist: If ``True``, write accepted gains to ``raccoon.project.yml``. Default ``True``.
-        csv_dir: Directory for step-response CSV files (baseline and tuned recordings per axis). Default ``"/tmp/auto_tune"``.
+        axes: Velocity axes to tune (``"vx"``, ``"vy"``, ``"wz"``). Default auto-detects from kinematics.
+        persist: Write accepted gains to ``raccoon.project.yml``. Default ``True``.
 
     Returns:
-        A AutoTuneVelocityBuilder (chainable via ``.axes()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A AutoTuneVelocityBuilder (chainable via ``.axes()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from raccoon.step.motion import auto_tune_velocity
 
-        # Tune both velocity axes with defaults
         auto_tune_velocity()
-
-        # Tune only the forward axis, save CSVs for plotting
-        auto_tune_velocity(
-            axes=["vx"],
-            csv_dir="/tmp/vel_tune_plots",
-        )
+        auto_tune_velocity(axes=["vx"])
     """
     b = AutoTuneVelocityBuilder()
     b._axes = axes
     b._persist = persist
-    b._csv_dir = csv_dir
     return b
 
 
@@ -112,7 +234,6 @@ class AutoTuneMotionBuilder(StepBuilder):
         super().__init__()
         self._axes = None
         self._persist = True
-        self._csv_dir = "/tmp/auto_tune"
 
     def axes(self, value: list[str] | None):
         self._axes = value
@@ -122,79 +243,41 @@ class AutoTuneMotionBuilder(StepBuilder):
         self._persist = value
         return self
 
-    def csv_dir(self, value: str | None):
-        self._csv_dir = value
-        return self
-
     def _build(self):
         kwargs = {}
         kwargs["axes"] = self._axes
         kwargs["persist"] = self._persist
-        kwargs["csv_dir"] = self._csv_dir
         return AutoTuneMotion(**kwargs)
 
 
 @dsl(tags=["motion", "calibration", "auto-tune"])
-def auto_tune_motion(
-    axes: list[str] | None = None, persist: bool = True, csv_dir: str | None = "/tmp/auto_tune"
-):
+def auto_tune_motion(axes: list[str] | None = None, persist: bool = True):
     """
-    Tune motion PID controllers via iterative real-world optimization.
+    Tune motion PID controllers via iterative real-world optimization (Phase 7).
 
-    This is Phase 3 of the full auto-tune pipeline, usable standalone when
-    velocity controllers are already tuned and drive limits are characterized.
+    Uses Hooke-Jeeves coordinate descent on the distance/heading PID kp & kd
+    via real LinearMotion and TurnMotion trials with constraint-aware scoring.
 
-    Uses Hooke-Jeeves coordinate descent to optimize the high-level distance
-    and/or heading PID controllers (kp and kd). The process for each
-    parameter set is:
-
-    1. **Initial evaluation** -- run a test motion (0.5 m drive for distance,
-       90-degree turn for heading) with the current gains and compute a
-       weighted score from settling time, overshoot, and final error.
-    2. **Coordinate descent** -- try perturbing kp up/down by a delta, keep
-       the direction that improves the score. Then do the same for kd.
-       Repeat for up to 10 iterations. When neither direction improves,
-       halve the deltas. Stop when deltas fall below a minimum threshold.
-    3. **Constraint-aware scoring** -- the optimizer prioritizes fast
-       completion but heavily penalizes candidates that exceed soft limits
-       on overshoot (10 mm / 3 degrees) or final error (10 mm / 2 degrees),
-       preventing "fast but sloppy" solutions.
-    4. **Secondary speed checks** -- after optimization at full speed, the
-       final gains are tested at lower speeds (50%, 30%) for monitoring
-       purposes (these do not affect the optimization).
-
-    Trials alternate between forward/backward (or CW/CCW) to reduce
-    directional bias.
-
-    Prerequisites: Velocity controllers should be tuned first (Phase 2) and
-    drive limits characterized (Phase 1) for best results. The robot needs
-    enough space for 0.5 m drives and 90-degree turns.
+    Prerequisites: velocity controllers tuned (Phase 6) and drive limits
+    characterized (Phase 5).
 
     Args:
-        axes: Motion parameters to optimize. Options are ``"distance"`` (forward drive kp/kd), ``"lateral"`` (strafe kp/kd — shares the distance PID but optimizes with lateral trials), and ``"heading"`` (turn kp/kd). Default ``["distance", "lateral", "heading"]``.
-        persist: If ``True``, write final gains to ``raccoon.project.yml`` under ``robot.motion_pid``. Default ``True``.
-        csv_dir: Directory for diagnostic CSV output. Default ``"/tmp/auto_tune"``.
+        axes: Motion parameters to tune (``"distance"``, ``"lateral"``, ``"heading"``). Default auto-detects from kinematics.
+        persist: Write final gains to ``raccoon.project.yml``. Default ``True``.
 
     Returns:
-        A AutoTuneMotionBuilder (chainable via ``.axes()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A AutoTuneMotionBuilder (chainable via ``.axes()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from raccoon.step.motion import auto_tune_motion
 
-        # Tune both distance and heading controllers
         auto_tune_motion()
-
-        # Tune only the heading controller
         auto_tune_motion(axes=["heading"])
-
-        # Tune without persisting (for experimentation)
-        auto_tune_motion(persist=False)
     """
     b = AutoTuneMotionBuilder()
     b._axes = axes
     b._persist = persist
-    b._csv_dir = csv_dir
     return b
 
 
@@ -206,13 +289,18 @@ class AutoTuneBuilder(StepBuilder):
         self._vel_axes = None
         self._characterize_axes = None
         self._motion_axes = None
+        self._tune_vel_lpf = True
+        self._tune_static_friction = True
+        self._tune_firmware_pid = False
+        self._tune_encoder_cal = True
         self._tune_characterize = True
         self._tune_velocity = True
         self._tune_motion = True
+        self._tune_tolerances = True
         self._characterize_trials = 3
         self._characterize_power_percent = 100
         self._persist = True
-        self._csv_dir = "/tmp/auto_tune"
+        self._step_confirm = True
 
     def vel_axes(self, value: list[str] | None):
         self._vel_axes = value
@@ -224,6 +312,22 @@ class AutoTuneBuilder(StepBuilder):
 
     def motion_axes(self, value: list[str] | None):
         self._motion_axes = value
+        return self
+
+    def tune_vel_lpf(self, value: bool):
+        self._tune_vel_lpf = value
+        return self
+
+    def tune_static_friction(self, value: bool):
+        self._tune_static_friction = value
+        return self
+
+    def tune_firmware_pid(self, value: bool):
+        self._tune_firmware_pid = value
+        return self
+
+    def tune_encoder_cal(self, value: bool):
+        self._tune_encoder_cal = value
         return self
 
     def tune_characterize(self, value: bool):
@@ -238,6 +342,10 @@ class AutoTuneBuilder(StepBuilder):
         self._tune_motion = value
         return self
 
+    def tune_tolerances(self, value: bool):
+        self._tune_tolerances = value
+        return self
+
     def characterize_trials(self, value: int):
         self._characterize_trials = value
         return self
@@ -250,8 +358,8 @@ class AutoTuneBuilder(StepBuilder):
         self._persist = value
         return self
 
-    def csv_dir(self, value: str | None):
-        self._csv_dir = value
+    def step_confirm(self, value: bool):
+        self._step_confirm = value
         return self
 
     def _build(self):
@@ -259,13 +367,18 @@ class AutoTuneBuilder(StepBuilder):
         kwargs["vel_axes"] = self._vel_axes
         kwargs["characterize_axes"] = self._characterize_axes
         kwargs["motion_axes"] = self._motion_axes
+        kwargs["tune_vel_lpf"] = self._tune_vel_lpf
+        kwargs["tune_static_friction"] = self._tune_static_friction
+        kwargs["tune_firmware_pid"] = self._tune_firmware_pid
+        kwargs["tune_encoder_cal"] = self._tune_encoder_cal
         kwargs["tune_characterize"] = self._tune_characterize
         kwargs["tune_velocity"] = self._tune_velocity
         kwargs["tune_motion"] = self._tune_motion
+        kwargs["tune_tolerances"] = self._tune_tolerances
         kwargs["characterize_trials"] = self._characterize_trials
         kwargs["characterize_power_percent"] = self._characterize_power_percent
         kwargs["persist"] = self._persist
-        kwargs["csv_dir"] = self._csv_dir
+        kwargs["step_confirm"] = self._step_confirm
         return AutoTune(**kwargs)
 
 
@@ -274,98 +387,90 @@ def auto_tune(
     vel_axes: list[str] | None = None,
     characterize_axes: list[str] | None = None,
     motion_axes: list[str] | None = None,
+    tune_vel_lpf: bool = True,
+    tune_static_friction: bool = True,
+    tune_firmware_pid: bool = False,
+    tune_encoder_cal: bool = True,
     tune_characterize: bool = True,
     tune_velocity: bool = True,
     tune_motion: bool = True,
+    tune_tolerances: bool = True,
     characterize_trials: int = 3,
     characterize_power_percent: int = 100,
     persist: bool = True,
-    csv_dir: str | None = "/tmp/auto_tune",
+    step_confirm: bool = True,
 ):
     """
-    Auto-tune the full drive system: characterize, velocity PID, motion PID.
+    Run the full auto-tune pipeline.
 
-    Runs a three-phase sequential pipeline that takes the robot from unknown
-    hardware limits to fully tuned PID controllers. Each phase builds on the
-    results of the previous one:
+    Drives the C++ ``AutoTuner`` one phase at a time so UI confirmations can
+    pause between phases. Each phase reads its inputs from the live drive /
+    motors / motion-config objects and writes back to those same objects, so
+    state stays coherent without Python having to shuttle calibration values.
 
-    **Phase 1 -- Drive characterization.** Commands raw velocities to measure
-    max velocity, acceleration, and deceleration for each axis. Multiple
-    trials are run and the median is taken. Results are stored so that
-    subsequent phases have accurate physical constraints for profile
-    generation.
+    Phase order (each depends on the previous):
 
-    **Phase 2 -- Velocity controller tuning.** For each velocity axis (e.g.,
-    ``vx``, ``vy``, ``wz``), a step-response is recorded at 100 Hz, plant parameters
-    (gain Ks, dead time Tu, time constant Tg) are identified via the
-    inflection tangent method, and PID gains are computed using CHR
-    set-point-follow formulas. A validation step-response is run with the
-    new gains; if the integral of squared error (ISE) improves, the gains
-    are accepted, otherwise the baseline is kept.
-
-    **Phase 3 -- Motion controller tuning.** Uses Hooke-Jeeves coordinate
-    descent to optimize the high-level distance, lateral, and heading PID
-    controllers. Real test drives, strafes, and turns are executed, scored
-    on a weighted combination of settling time, overshoot, and final error.
-    The optimizer adjusts kp/kd iteratively, halving the search delta when
-    no improvement is found.
-
-    All results are applied in-memory immediately and, if ``persist`` is
-    enabled, written to ``raccoon.project.yml`` so they survive restarts.
-
-    This step requires significant clear space and takes several minutes to
-    complete. It is intended for initial robot setup, not competition runs.
+    1. vel_lpf — per-motor IIR alpha for velocity feedback
+    2. static_friction — kS per motor
+    3. firmware_pid — STM32 MAV-mode inner loop
+    4. encoder_cal — ticks_to_rad scaling via IMU ground truth
+    5. characterize — physical drive limits
+    6. velocity — chassis-axis velocity PID
+    7. motion — distance / heading PID
+    8. tolerances — derived from motion-trial residuals
 
     Args:
-        vel_axes: Velocity axes to tune in Phase 2. Each entry is a velocity component name (``"vx"`` for forward, ``"vy"`` for lateral/strafe, ``"wz"`` for angular). Default ``["vx", "vy", "wz"]``.
-        characterize_axes: Axes to characterize in Phase 1. Options are ``"forward"``, ``"lateral"``, ``"angular"``. Default ``["forward", "lateral", "angular"]``.
-        motion_axes: Motion parameters to optimize in Phase 3. Options are ``"distance"``, ``"lateral"`` (shares the distance PID but optimizes with lateral trials), and ``"heading"``. Default ``["distance", "lateral", "heading"]``.
-        tune_characterize: Whether to run Phase 1. Set to ``False`` if the robot's limits are already known. Default ``True``.
-        tune_velocity: Whether to run Phase 2. Default ``True``.
-        tune_motion: Whether to run Phase 3. Default ``True``.
-        characterize_trials: Number of trials per axis in Phase 1. More trials improve robustness but take longer. Default 3.
-        characterize_power_percent: Motor power percentage (1--100) for Phase 1 drive characterization. Default 100.
-        persist: If ``True``, write all results to ``raccoon.project.yml``. Default ``True``.
-        csv_dir: Directory for diagnostic CSV output (step-response recordings, etc.). Default ``"/tmp/auto_tune"``.
+        vel_axes: Override the auto-detected velocity axis list for Phase 6.
+        characterize_axes: Override the auto-detected axis list for Phase 5.
+        motion_axes: Override the auto-detected motion-parameter list for Phase 7.
+        tune_vel_lpf: Enable Phase 1 (vel LPF alpha). Default ``True``.
+        tune_static_friction: Enable Phase 2 (static friction). Default ``True``.
+        tune_firmware_pid: Enable Phase 3 (firmware PID). Default ``False``.
+        tune_encoder_cal: Enable Phase 4 (encoder calibration). Default ``True``.
+        tune_characterize: Enable Phase 5 (drive characterization). Default ``True``.
+        tune_velocity: Enable Phase 6 (velocity PID). Default ``True``.
+        tune_motion: Enable Phase 7 (motion PID). Default ``True``.
+        tune_tolerances: Enable Phase 8 (tolerance derivation). Default ``True``.
+        characterize_trials: Number of Phase 5 trials per axis. Default ``3``.
+        characterize_power_percent: Raw PWM for Phase 5 trials (1–100). Default ``100``.
+        persist: Write phase results to ``raccoon.project.yml``. Default ``True``.
+        step_confirm: Pause for a button press before every phase. Default ``True``.
 
     Returns:
-        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.characterize_trials()``, ``.characterize_power_percent()``, ``.persist()``, ``.csv_dir()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_vel_lpf()``, ``.tune_static_friction()``, ``.tune_firmware_pid()``, ``.tune_encoder_cal()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.tune_tolerances()``, ``.characterize_trials()``, ``.characterize_power_percent()``, ``.persist()``, ``.step_confirm()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
         from raccoon.step.motion import auto_tune
 
-        # Full auto-tune with defaults
         auto_tune()
-
-        # Skip characterization (already done), tune only velocity + motion
-        auto_tune(tune_characterize=False)
-
-        # Tune only the forward velocity axis and distance controller
-        auto_tune(
-            vel_axes=["vx"],
-            motion_axes=["distance"],
-            characterize_axes=["forward"],
-        )
-
-        # Dry run without persisting to YAML
-        auto_tune(persist=False, csv_dir="/tmp/auto_tune_test")
     """
     b = AutoTuneBuilder()
     b._vel_axes = vel_axes
     b._characterize_axes = characterize_axes
     b._motion_axes = motion_axes
+    b._tune_vel_lpf = tune_vel_lpf
+    b._tune_static_friction = tune_static_friction
+    b._tune_firmware_pid = tune_firmware_pid
+    b._tune_encoder_cal = tune_encoder_cal
     b._tune_characterize = tune_characterize
     b._tune_velocity = tune_velocity
     b._tune_motion = tune_motion
+    b._tune_tolerances = tune_tolerances
     b._characterize_trials = characterize_trials
     b._characterize_power_percent = characterize_power_percent
     b._persist = persist
-    b._csv_dir = csv_dir
+    b._step_confirm = step_confirm
     return b
 
 
 __all__ = [
+    "AutoTuneVelLpfBuilder",
+    "auto_tune_vel_lpf",
+    "AutoTuneStaticFrictionBuilder",
+    "auto_tune_static_friction",
+    "AutoTuneFirmwarePidBuilder",
+    "auto_tune_firmware_pid",
     "AutoTuneVelocityBuilder",
     "auto_tune_velocity",
     "AutoTuneMotionBuilder",

@@ -113,6 +113,7 @@ endfunction()
 
 add_subdirectory(libstp-foundation)
 add_subdirectory(libstp-hal)
+add_subdirectory(libstp-odometry)
 add_subdirectory(libstp-platforms)
 add_subdirectory(libstp-async)
 add_subdirectory(libstp-kinematics)

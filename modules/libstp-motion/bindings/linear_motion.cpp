@@ -19,7 +19,11 @@ void init_linear_motion(py::module_& m)
         .def_readwrite("axis", &LinearMotionConfig::axis)
         .def_readwrite("distance_m", &LinearMotionConfig::distance_m)
         .def_readwrite("speed_scale", &LinearMotionConfig::speed_scale)
-        .def_readwrite("target_heading_rad", &LinearMotionConfig::target_heading_rad);
+        .def_readwrite("target_heading_rad", &LinearMotionConfig::target_heading_rad)
+        .def_readwrite("has_distance_target", &LinearMotionConfig::has_distance_target,
+            "True when distance_m is a real positional goal. Set False when "
+            "the motion is terminated by an external until-condition (required "
+            "for SpeedMode, where BEMF-based distance is unavailable).");
 
     py::class_<LinearMotionTelemetry>(m, "LinearMotionTelemetry")
         .def_readonly("time_s", &LinearMotionTelemetry::time_s)

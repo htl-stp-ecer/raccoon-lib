@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <limits>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -25,10 +28,6 @@ static constexpr double kStoppedThreshMps     = 0.005;
 static constexpr double kRampLowFrac          = 0.10;
 static constexpr double kRampHighFrac         = 0.90;
 
-// Pause before the decel ramp (seconds).
-static constexpr double kInterPhausePauseMs   = 300;   // 0.3 s expressed in ms
-// Duration to ramp up to full speed before cutting power for decel test.
-static constexpr double kDecelRampDurationMs  = 1500;  // 1.5 s
 // Initial odometry settle after reset (ms).
 static constexpr int    kOdometrySettleMs     = 50;
 
@@ -159,30 +158,42 @@ static double fallbackMaxVelocity(const std::vector<Sample>& samples)
     return medianOfSorted(top);
 }
 
-/// Acceleration from 10%→90% crossing times.
+/// Acceleration during ramp-up.
+///
+/// Least-squares linear fit of |v(t)| over the 10%–90% window of the measured
+/// peak. Same approach as analyzeDecel for consistency and noise robustness.
 static double analyzeAccel(const std::vector<Sample>& samples, double max_vel)
 {
-    double low  = max_vel * kRampLowFrac;
-    double high = max_vel * kRampHighFrac;
+    if (max_vel < kStoppedThreshMps)
+        return 0.0;
 
-    double t_low  = -1.0;
-    double t_high = -1.0;
+    const double low  = max_vel * kRampLowFrac;
+    const double high = max_vel * kRampHighFrac;
 
+    // Take samples in the rising window — only up to the first peak crossing
+    // to avoid including the plateau or any post-peak dip.
+    std::vector<double> ts;
+    std::vector<double> vs;
+    ts.reserve(samples.size());
+    vs.reserve(samples.size());
+    bool reached_high = false;
     for (const auto& s : samples)
     {
-        double v = std::abs(s.velocity);
-        if (t_low < 0.0 && v >= low)
-            t_low = s.time_s;
-        if (t_low >= 0.0 && t_high < 0.0 && v >= high)
-        {
-            t_high = s.time_s;
+        const double v = std::abs(s.velocity);
+        if (v >= high)
+            reached_high = true;
+        if (reached_high)
             break;
+        if (v >= low)
+        {
+            ts.push_back(s.time_s);
+            vs.push_back(v);
         }
     }
 
-    if (t_low < 0.0 || t_high < 0.0 || t_high <= t_low)
+    if (ts.size() < 3)
     {
-        // Fallback: max_vel / time_to_peak
+        // Fallback: max_vel / time_to_peak.
         double peak_time = 0.0;
         double peak_vel  = 0.0;
         for (const auto& s : samples)
@@ -193,50 +204,83 @@ static double analyzeAccel(const std::vector<Sample>& samples, double max_vel)
                 peak_time = s.time_s;
             }
         }
-        if (peak_time <= 1e-6 || max_vel <= 0.0)
+        if (peak_time <= 1e-6)
             return 0.0;
         return max_vel / peak_time;
     }
 
-    return (high - low) / (t_high - t_low);
+    const double n = static_cast<double>(ts.size());
+    double sum_t = 0.0, sum_v = 0.0;
+    for (std::size_t i = 0; i < ts.size(); ++i) { sum_t += ts[i]; sum_v += vs[i]; }
+    const double mean_t = sum_t / n;
+    const double mean_v = sum_v / n;
+    double cov = 0.0, var = 0.0;
+    for (std::size_t i = 0; i < ts.size(); ++i)
+    {
+        const double dt = ts[i] - mean_t;
+        cov += dt * (vs[i] - mean_v);
+        var += dt * dt;
+    }
+    if (var <= 1e-12)
+        return 0.0;
+    return cov / var; // positive (accelerating)
 }
 
-/// Deceleration from 90%→10% crossing times during coast-down.
-static double analyzeDecel(const std::vector<Sample>& samples)
+/// Deceleration during coast-down.
+///
+/// Uses a least-squares linear fit of |v(t)| over the 10%–90% window of the
+/// known peak velocity (from the accel phase). The slope of that fit is the
+/// average deceleration. A linear fit is robust to sample noise compared to
+/// picking two crossing points, and matches what motion planners actually
+/// want (a single effective deceleration rate).
+static double analyzeDecel(const std::vector<Sample>& samples, double known_peak)
 {
-    if (samples.size() < 3)
+    if (samples.size() < 3 || known_peak < kStoppedThreshMps)
         return 0.0;
 
-    double peak = 0.0;
-    for (const auto& s : samples)
-        peak = std::max(peak, std::abs(s.velocity));
+    const double high = known_peak * kRampHighFrac;
+    const double low  = known_peak * kRampLowFrac;
 
-    if (peak < kStoppedThreshMps)
-        return 0.0;
-
-    double high = peak * kRampHighFrac;
-    double low  = peak * kRampLowFrac;
-
-    double t_high = -1.0;
-    double t_low  = -1.0;
+    std::vector<double> ts;
+    std::vector<double> vs;
+    ts.reserve(samples.size());
+    vs.reserve(samples.size());
 
     for (const auto& s : samples)
     {
         double v = std::abs(s.velocity);
-        // During coast-down velocity drops: first crossing below 90%, then below 10%.
-        if (t_high < 0.0 && v <= high)
-            t_high = s.time_s;
-        if (t_high >= 0.0 && t_low < 0.0 && v <= low)
+        if (v <= high && v >= low)
         {
-            t_low = s.time_s;
-            break;
+            ts.push_back(s.time_s);
+            vs.push_back(v);
         }
     }
 
-    if (t_high < 0.0 || t_low < 0.0 || t_low <= t_high)
+    if (ts.size() < 3)
+    {
+        LIBSTP_LOG_WARN(
+            "    Decel: only {} samples in [10%,90%] window (peak={:.4f}); "
+            "cannot fit", ts.size(), known_peak);
         return 0.0;
+    }
 
-    return (high - low) / (t_low - t_high);
+    // Least-squares slope of v vs t: slope = cov(t,v) / var(t).
+    const double n = static_cast<double>(ts.size());
+    double sum_t = 0.0, sum_v = 0.0;
+    for (std::size_t i = 0; i < ts.size(); ++i) { sum_t += ts[i]; sum_v += vs[i]; }
+    const double mean_t = sum_t / n;
+    const double mean_v = sum_v / n;
+    double cov = 0.0, var = 0.0;
+    for (std::size_t i = 0; i < ts.size(); ++i)
+    {
+        const double dt = ts[i] - mean_t;
+        cov += dt * (vs[i] - mean_v);
+        var += dt * dt;
+    }
+    if (var <= 1e-12)
+        return 0.0;
+    const double slope = cov / var; // dv/dt (negative — decelerating)
+    return -slope;                  // return positive deceleration magnitude
 }
 
 // ============================================================================
@@ -273,9 +317,18 @@ static std::vector<Sample> recordSamples(
     samples.reserve(static_cast<std::size_t>(timeout_s * sample_hz * 1.1));
 
     // Live EMA state for early-exit plateau detection.
-    double prev_vel   = 0.0;
-    int    hold       = 0;
-    bool   seeded     = false;
+    //
+    // Plateau heuristic: track the running max of filtered |v|. As long as |v|
+    // keeps growing (within tolerance), reset the "stable" timer. Once it
+    // stops growing for kPlateauHoldSeconds AND we're above a minimum speed
+    // (so we don't trigger on the initial stationary samples or after a wall
+    // collision), declare the plateau reached.
+    double prev_vel       = 0.0;
+    double max_filtered   = 0.0;
+    double last_growth_t  = 0.0;
+    bool   seeded         = false;
+    constexpr double kPlateauHoldSeconds = 0.10; // 100 ms of stable max
+    constexpr double kPlateauGrowthFrac  = 1.01; // count as "growing" if > 1% above max
 
     while (true)
     {
@@ -287,7 +340,6 @@ static std::vector<Sample> recordSamples(
         double pos = getPos();
         samples.push_back({elapsed, pos, 0.0});
 
-        // Live EMA velocity for early exit (accel phase only).
         if (early_exit && samples.size() >= 2)
         {
             std::size_t n  = samples.size();
@@ -298,31 +350,31 @@ static std::vector<Sample> recordSamples(
 
             if (!seeded)
             {
-                // Seed from first finite difference rather than zero.
-                // This gives faster EMA convergence than Python's live loop
-                // (which seeds at zero). The offline computeVelocities() pass
-                // overwrites the velocity field anyway, so this only affects
-                // the early-exit plateau timing, not the final analysis.
-                prev_vel = raw_vel;
-                seeded   = true;
+                prev_vel       = raw_vel;
+                max_filtered   = std::abs(raw_vel);
+                last_growth_t  = elapsed;
+                seeded         = true;
             }
 
             double filtered = kVelEmaAlpha * raw_vel + (1.0 - kVelEmaAlpha) * prev_vel;
             samples.back().velocity = filtered;
+            const double absv = std::abs(filtered);
 
-            if (samples.size() >= 3)
+            if (absv > max_filtered * kPlateauGrowthFrac)
             {
-                double deriv = (dt > 1e-6)
-                               ? std::abs(filtered - samples[n - 2].velocity) / dt
-                               : 0.0;
-                if (deriv < kPlateauDerivThresh)
-                    ++hold;
-                else
-                    hold = 0;
-
-                if (hold >= kPlateauHoldCycles)
-                    break;
+                max_filtered  = absv;
+                last_growth_t = elapsed;
             }
+
+            // Plateau iff we've been at >70% of max for kPlateauHoldSeconds
+            // without further growth. This catches both real plateaus and
+            // wall-collision plateaus (which we want to stop on too — the
+            // recorded data still has the valid peak in the middle).
+            const bool above_min = absv >= max_filtered * 0.70;
+            const bool stable    = (elapsed - last_growth_t) >= kPlateauHoldSeconds;
+            if (above_min && stable && max_filtered > kStoppedThreshMps)
+                break;
+
             prev_vel = filtered;
         }
 
@@ -362,9 +414,23 @@ static AxisResult runSingleTrial(
 
     drive.applyPowerCommand(dir, cfg.power_percent);
 
+    // Angular axis: getHeading() returns a wrapped value in [-π, π], which
+    // produces spurious ±2π velocity spikes when the robot crosses ±π. Track
+    // the accumulated (unwrapped) heading so velocity = Δpos/Δt stays valid
+    // across multiple rotations.
+    double angular_unwrapped = 0.0;
+    double angular_prev_raw  = odometry.getHeading();
     auto getPos = [&]() -> double {
         if (axis == "angular")
-            return odometry.getHeading();
+        {
+            const double raw = odometry.getHeading();
+            double delta = raw - angular_prev_raw;
+            if (delta > 3.14159265358979) delta -= 2.0 * 3.14159265358979;
+            else if (delta < -3.14159265358979) delta += 2.0 * 3.14159265358979;
+            angular_unwrapped += delta;
+            angular_prev_raw   = raw;
+            return angular_unwrapped;
+        }
         auto d = odometry.getDistanceFromOrigin();
         return (axis == "forward") ? d.forward : d.lateral;
     };
@@ -372,9 +438,15 @@ static AxisResult runSingleTrial(
     auto accel_samples = recordSamples(getPos, cfg.accel_timeout, cfg.sample_hz,
                                        /*early_exit=*/true);
 
-    // Brake all motors.
+    // Immediately brake and record the coast-down in the same pass. This
+    // avoids a second ramp (which would crash the robot into the table wall
+    // for the forward axis) and gives a guaranteed-valid coast-down
+    // measurement, since the wheels are at the just-measured peak velocity.
     for (auto* m : drive.getMotors())
         m->brake();
+
+    auto decel_samples = recordSamples(getPos, cfg.decel_timeout, cfg.sample_hz,
+                                       /*early_exit=*/false);
 
     // Re-compute velocities from scratch for accurate analysis.
     computeVelocities(accel_samples);
@@ -411,28 +483,32 @@ static AxisResult runSingleTrial(
 
     result.acceleration = analyzeAccel(accel_samples, result.max_velocity);
 
-    // ---- Brief pause --------------------------------------------------------
-    std::this_thread::sleep_for(std::chrono::milliseconds(
-        static_cast<long long>(kInterPhausePauseMs)));
-
-    // ---- Decel phase setup: reset odometry ----------------------------------
-    odometry.reset();
-    std::this_thread::sleep_for(std::chrono::milliseconds(kOdometrySettleMs));
-
-    // Ramp up to full speed for 1.5 s then cut.
-    drive.applyPowerCommand(dir, cfg.power_percent);
-    std::this_thread::sleep_for(std::chrono::milliseconds(
-        static_cast<long long>(kDecelRampDurationMs)));
-
-    // Brake — record coast-down.
-    for (auto* m : drive.getMotors())
-        m->brake();
-
-    auto decel_samples = recordSamples(getPos, cfg.decel_timeout, cfg.sample_hz,
-                                       /*early_exit=*/false);
-
+    // decel_samples were already recorded right after brake (above).
     computeVelocities(decel_samples);
-    result.deceleration = analyzeDecel(decel_samples);
+    result.deceleration = analyzeDecel(decel_samples, result.max_velocity);
+
+    // CSV dump for diagnosis (enabled via env var LIBSTP_AUTOTUNE_CSV).
+    if (const char* dir = std::getenv("LIBSTP_AUTOTUNE_CSV"))
+    {
+        std::string path = std::string(dir) + "/decel_" + axis + ".csv";
+        std::ofstream f(path);
+        if (f)
+        {
+            f << "t,pos,vel\n";
+            for (const auto& s : decel_samples)
+                f << s.time_s << "," << s.position << "," << s.velocity << "\n";
+            LIBSTP_LOG_INFO("    Decel CSV written: {} ({} samples)", path, decel_samples.size());
+        }
+
+        std::string accel_path = std::string(dir) + "/accel_" + axis + ".csv";
+        std::ofstream af(accel_path);
+        if (af)
+        {
+            af << "t,pos,vel\n";
+            for (const auto& s : accel_samples)
+                af << s.time_s << "," << s.position << "," << s.velocity << "\n";
+        }
+    }
 
     return result;
 }

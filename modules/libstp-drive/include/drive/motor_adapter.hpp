@@ -33,10 +33,10 @@ namespace libstp::drive
         void brake();
 
         /**
-         * @brief Reset encoder position tracking to prevent stale deltas
+         * @brief Reset encoder position tracking to prevent stale deltas.
          *
-         * Call this when resetting odometry to invalidate the previous encoder position.
-         * This prevents incorrect velocity calculations on the next update.
+         * Call this after resetting odometry or position counters so the next
+         * update doesn't compute a velocity from a pre-reset baseline.
          */
         void resetEncoderTracking();
 

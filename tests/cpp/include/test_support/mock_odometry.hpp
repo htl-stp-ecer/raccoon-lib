@@ -1,7 +1,7 @@
 #pragma once
 
 #include <gmock/gmock.h>
-#include "odometry/odometry.hpp"
+#include "hal/odometry.hpp"
 #include <cmath>
 
 namespace libstp::test

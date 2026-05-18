@@ -120,11 +120,17 @@ from .auto_tune import (
     AutoTune,
     AutoTuneVelocity,
     AutoTuneMotion,
+    AutoTuneFirmwarePid,
+    AutoTuneStaticFriction,
+    AutoTuneVelLpf,
 )
 from .auto_tune_dsl import (
     auto_tune,
     auto_tune_velocity,
     auto_tune_motion,
+    auto_tune_firmware_pid,
+    auto_tune_static_friction,
+    auto_tune_vel_lpf,
 )
 from .sensor_group import SensorGroup
 from .drive_to_analog_target import DriveToAnalogTarget
@@ -133,6 +139,8 @@ from .custom_velocity import CustomVelocity
 from .custom_velocity_dsl import CustomVelocityBuilder, custom_velocity
 from .smooth_path import SmoothPath, smooth_path
 from .spline_path import SplinePath, spline
+from .set_speed_mode import SetSpeedMode
+from .set_speed_mode_dsl import set_speed_mode
 
 # Public API: only factories, plus enums / config dataclasses that users
 # legitimately need to construct (LineFollowConfig, SurfaceColor, etc.) and
@@ -217,6 +225,9 @@ __all__ = [
     "auto_tune",
     "auto_tune_velocity",
     "auto_tune_motion",
+    "auto_tune_firmware_pid",
+    "auto_tune_static_friction",
+    "auto_tune_vel_lpf",
     # Sensor group
     "SensorGroup",
     # Analog sensor target drive
@@ -228,4 +239,6 @@ __all__ = [
     "smooth_path",
     # Spline path
     "spline",
+    # SpeedMode (BEMF on/off)
+    "set_speed_mode",
 ]

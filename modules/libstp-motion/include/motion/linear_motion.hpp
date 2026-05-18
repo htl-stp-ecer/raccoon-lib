@@ -34,6 +34,16 @@ namespace libstp::motion
         /// the motion. Required — the path executor sets this per segment.
         /// Heading PID error is computed against `getAbsoluteHeading()`.
         double target_heading_rad{0.0};
+
+        /// True (default) when `distance_m` is a real positional target that
+        /// drives motion completion. Set to false when callers use the
+        /// controller in "until" mode — `distance_m` is then a sentinel
+        /// upper bound and the motion terminates via an external condition.
+        ///
+        /// SpeedMode (BEMF disabled) makes distance-based termination
+        /// unreliable; `start()` raises `std::logic_error` if this flag is
+        /// true while SpeedMode is active.
+        bool has_distance_target{true};
     };
 
     /** Per-cycle diagnostics captured while a `LinearMotion` instance runs. */

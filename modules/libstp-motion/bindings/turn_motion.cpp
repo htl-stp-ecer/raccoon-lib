@@ -13,7 +13,11 @@ void init_turn(py::module_& m)
         .def(py::init<>())
         .def_readwrite("target_angle_rad", &TurnConfig::target_angle_rad)
         .def_readwrite("speed_scale", &TurnConfig::speed_scale)
-        .def_readwrite("kS", &TurnConfig::kS);
+        .def_readwrite("kS", &TurnConfig::kS)
+        .def_readwrite("has_angle_target", &TurnConfig::has_angle_target,
+            "True when target_angle_rad is a real angular goal. Set False when "
+            "the turn is terminated by an external until-condition (required for "
+            "SpeedMode, where BEMF-based heading integration is unavailable).");
 
     py::class_<TurnMotion, Motion, std::shared_ptr<TurnMotion>>(m, "TurnMotion")
         .def(py::init([](libstp::drive::Drive& drive,

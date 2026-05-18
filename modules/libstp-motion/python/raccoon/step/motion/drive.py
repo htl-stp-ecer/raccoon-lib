@@ -81,6 +81,13 @@ class _ConditionalDrive(MotionStep):
             if self._cm is not None
             else self._sign * self._SENTINEL_DISTANCE_M
         )
+        # When `cm` is None the motion runs purely as a "drive until …"
+        # — the sentinel distance is only an upper bound the until-clause
+        # is expected to fire well before. Mark the config so the C++
+        # controller knows there is no real positional goal, which also
+        # makes the motion compatible with SpeedMode (where BEMF-based
+        # distance termination is unavailable).
+        config.has_distance_target = self._cm is not None
         config.speed_scale = self._speed
 
         # Phase 4: target_heading_rad is mandatory. When the user pinned an

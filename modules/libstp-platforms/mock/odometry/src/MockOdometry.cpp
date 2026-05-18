@@ -13,6 +13,7 @@
 #include "core/MockPlatform.hpp"
 #include "foundation/config.hpp"
 #include "foundation/logging.hpp"
+#include "foundation/speed_mode_context.hpp"
 #include "hal/Platform.hpp"
 #include "kinematics/kinematics.hpp"
 #include "hal/angle_utils.hpp"
@@ -69,6 +70,7 @@ namespace
 
         [[nodiscard]] libstp::foundation::Pose getPose() const override
         {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPose");
             auto& platform = ::platform::mock::core::MockPlatform::instance();
             libstp::foundation::Pose pose;
             if (!platform.hasSim())
@@ -86,6 +88,7 @@ namespace
 
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override
         {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getDistanceFromOrigin");
             const auto pose = getPose();
             const Eigen::Vector3f& pos = pose.position;
 
@@ -125,6 +128,7 @@ namespace
 
         [[nodiscard]] double getPathLength() const override
         {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPathLength");
             return path_length_;
         }
 

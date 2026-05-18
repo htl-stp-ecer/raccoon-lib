@@ -1,6 +1,8 @@
 #include "kinematics/mecanum/mecanum.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
+#include "foundation/speed_mode_context.hpp"
+#include <algorithm>
 #include <stdexcept>
 #include <cmath>
 
@@ -77,6 +79,38 @@ namespace libstp::kinematics::mecanum
             "MecanumKinematics wheel speeds fl={} fr={} bl={} br={}{}",
             w_fl, w_fr, w_bl, w_br,
             saturated ? " [desaturated]" : "");
+
+        if (libstp::foundation::SpeedModeContext::instance().isSpeedModeEnabled())
+        {
+            // SpeedMode: BEMF off. Scale the wheel commands so the dominant
+            // wheel hits 100 % PWM; the others get a proportional share.
+            // Heading PIDs still work because the ratio between wheels —
+            // not the absolute rad/s — drives chassis behaviour.
+            const double sm_max_abs = std::max({std::abs(w_fl), std::abs(w_fr),
+                                                std::abs(w_bl), std::abs(w_br)});
+            int pct_fl = 0, pct_fr = 0, pct_bl = 0, pct_br = 0;
+            if (sm_max_abs >= 1e-9)
+            {
+                const double scale = 100.0 / sm_max_abs;
+                pct_fl = static_cast<int>(std::lround(std::clamp(w_fl * scale, -100.0, 100.0)));
+                pct_fr = static_cast<int>(std::lround(std::clamp(w_fr * scale, -100.0, 100.0)));
+                pct_bl = static_cast<int>(std::lround(std::clamp(w_bl * scale, -100.0, 100.0)));
+                pct_br = static_cast<int>(std::lround(std::clamp(w_br * scale, -100.0, 100.0)));
+            }
+            front_left_motor_.motor().setSpeed(pct_fl);
+            front_right_motor_.motor().setSpeed(pct_fr);
+            back_left_motor_.motor().setSpeed(pct_bl);
+            back_right_motor_.motor().setSpeed(pct_br);
+
+            LIBSTP_LOG_TRACE(
+                "MecanumKinematics[SpeedMode] pct fl={} fr={} bl={} br={}",
+                pct_fl, pct_fr, pct_bl, pct_br);
+
+            MotorCommands sm_result;
+            sm_result.wheel_velocities = {w_fl, w_fr, w_bl, w_br};
+            sm_result.saturated_any = false;
+            return sm_result;
+        }
 
         front_left_motor_.setVelocity(w_fl, dt);
         front_right_motor_.setVelocity(w_fr, dt);
