@@ -16,6 +16,7 @@ thread-sleep loop, completely bypassing asyncio and GIL overhead.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, ClassVar
 
 from raccoon.project_yaml import find_project_root, update_project_value
@@ -69,6 +70,13 @@ class CharacterizeDrive(Step):
             (coast-down) phase. Default 3.0.
         sample_hz: Position sampling rate in Hz for the C++ measurement loop.
             Default 500. Higher values give better accel/decel resolution.
+        operating_velocity_frac: Fraction of the measured peak velocity that
+            is written back as ``max_velocity`` (and applied to the in-memory
+            motion config). The peak measured at 100 %% PWM is the hardware
+            ceiling, not a sensible operating speed — running the motion
+            controllers at the ceiling means saturated wheels, no headroom
+            for closed-loop correction, and unstable behaviour. Default
+            ``0.6`` (≈30 cm/s for a robot that peaks at 50 cm/s).
         persist: If ``True``, write the measured limits to
             ``raccoon.project.yml`` under ``robot.motion_pid``. Default
             ``True``.
@@ -110,6 +118,7 @@ class CharacterizeDrive(Step):
         accel_timeout: float = 3.0,
         decel_timeout: float = 3.0,
         sample_hz: int = 500,
+        operating_velocity_frac: float = 0.6,
         persist: bool = True,
     ):
         super().__init__()
@@ -121,6 +130,7 @@ class CharacterizeDrive(Step):
         self.accel_timeout = accel_timeout
         self.decel_timeout = decel_timeout
         self.sample_hz = sample_hz
+        self.operating_velocity_frac = max(0.1, min(1.0, operating_velocity_frac))
         self.persist = persist
 
     def _generate_signature(self) -> str:
@@ -152,9 +162,8 @@ class CharacterizeDrive(Step):
                 )
                 updated = True
             if result.max_velocity > 0:
-                update_project_value(
-                    project_root, [*base, "max_velocity"], round(result.max_velocity, 4)
-                )
+                operating_vel = result.max_velocity * self.operating_velocity_frac
+                update_project_value(project_root, [*base, "max_velocity"], round(operating_vel, 4))
                 updated = True
 
         return updated
@@ -171,7 +180,7 @@ class CharacterizeDrive(Step):
             if result.deceleration > 0:
                 axis_constraints.deceleration = result.deceleration
             if result.max_velocity > 0:
-                axis_constraints.max_velocity = result.max_velocity
+                axis_constraints.max_velocity = result.max_velocity * self.operating_velocity_frac
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.no_calibrate import is_no_calibrate
@@ -192,15 +201,15 @@ class CharacterizeDrive(Step):
         char = DriveCharacterizer(robot.drive, robot.odometry)
 
         # Runs in C++ at sample_hz, GIL released for the full sampling loop.
-        results = await asyncio.get_event_loop().run_in_executor(
+        self.results = await asyncio.get_event_loop().run_in_executor(
             None, lambda: char.characterize(self.axes, cfg)
         )
 
-        self._apply_to_config(robot, results)
+        self._apply_to_config(robot, self.results)
         self.info("  Applied to in-memory motion config")
 
         if self.persist:
-            if self._persist_to_yaml(results):
+            if self._persist_to_yaml(self.results):
                 self.info("  Saved to raccoon.project.yml (robot.motion_pid)")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")

@@ -39,5 +39,35 @@ namespace libstp::hal::motor
         virtual void setCalibration(const foundation::MotorCalibration& calibration) = 0;
         [[nodiscard]] virtual int getPort() const = 0;
         [[nodiscard]] virtual bool isInverted() const = 0;
+
+        /**
+         * @brief Push per-motor firmware-side velocity PID gains to the driver.
+         *
+         * Default no-op so platforms that don't expose a per-motor firmware PID
+         * channel keep compiling unchanged. The wombat platform forwards to
+         * LcmDataWriter::setMotorPid(); the mock platform stores the gains for
+         * test introspection.
+         */
+        virtual void setFirmwarePidGains(float kp, float ki, float kd)
+        {
+            (void)kp;
+            (void)ki;
+            (void)kd;
+        }
+
+        /**
+         * @brief Read back the gains last passed to setFirmwarePidGains().
+         *
+         * Default no-op (returns zeros) so platforms that don't store the
+         * gains keep compiling unchanged. Override in concrete platforms
+         * (wombat, mock) to expose the cached value — primarily useful in
+         * tuner/test code that needs to revert to a previous gain set.
+         */
+        virtual void getLastFirmwarePidGains(float& kp, float& ki, float& kd) const
+        {
+            kp = 0.0f;
+            ki = 0.0f;
+            kd = 0.0f;
+        }
     };
 }

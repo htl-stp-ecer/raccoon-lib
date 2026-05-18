@@ -135,6 +135,10 @@ class LineFollow(MotionStep):
             motion_config.distance_m = cfg.distance_cm / 100.0
         else:
             motion_config.distance_m = _SENTINEL_DISTANCE_M
+        # Without an explicit distance the motion runs until an external
+        # condition fires (sensor seeing the stop line, until=...). Tell
+        # the C++ controller so it skips the SpeedMode distance check.
+        motion_config.has_distance_target = cfg.distance_cm is not None
         motion_config.speed_scale = cfg.speed_scale
         # PID overrides omega each tick, but the underlying LinearMotion still
         # needs a valid absolute heading for its profile reference.
@@ -250,6 +254,10 @@ class SingleSensorLineFollow(MotionStep):
             motion_config.distance_m = cfg.distance_cm / 100.0
         else:
             motion_config.distance_m = _SENTINEL_DISTANCE_M
+        # Without an explicit distance the motion runs until an external
+        # condition fires (sensor seeing the stop line, until=...). Tell
+        # the C++ controller so it skips the SpeedMode distance check.
+        motion_config.has_distance_target = cfg.distance_cm is not None
         motion_config.speed_scale = cfg.speed_scale
         motion_config.target_heading_rad = get_world_heading_rad(robot)
 

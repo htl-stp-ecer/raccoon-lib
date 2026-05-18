@@ -157,6 +157,10 @@ def _create_linear_motion(
         config.distance_m = actual + math.copysign(OVERSHOOT_M, actual)
     else:
         config.distance_m = actual
+    # Path segments with a real `distance_m` are positional goals; ones
+    # backed by the sentinel are condition-driven. Flag accordingly so
+    # the motion can still run while SpeedMode is on.
+    config.has_distance_target = seg.distance_m is not None
     config.speed_scale = seg.speed_scale
 
     # Heading: phase 4 made target_heading_rad mandatory. Priority is
@@ -220,6 +224,11 @@ def _create_turn_motion(
         config.target_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)
     else:
         config.target_angle_rad = actual
+    # If the segment encodes an explicit angle (or an absolute target
+    # heading) it is a real angular goal; the sentinel branch is the
+    # condition-driven case which has no measurable end-state and must
+    # therefore be tolerant of SpeedMode.
+    config.has_angle_target = (seg.angle_rad is not None) or (seg.target_heading_rad is not None)
     config.speed_scale = seg.speed_scale
 
     motion = TurnMotion(

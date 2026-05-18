@@ -27,6 +27,12 @@ namespace libstp::motion
         /// Absolute world-frame heading (radians) the controller holds during
         /// the motion. Required — path executor sets this per segment.
         double target_heading_rad{0.0};
+
+        /// True (default) when `distance_m` is a real positional target.
+        /// Set false when callers use the motion in "until" mode — see
+        /// `LinearMotionConfig::has_distance_target`. With SpeedMode
+        /// active and this flag true, `start()` raises `std::logic_error`.
+        bool has_distance_target{true};
     };
 
     /** Per-cycle diagnostics captured while a `DiagonalMotion` instance runs. */

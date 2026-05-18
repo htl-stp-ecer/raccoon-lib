@@ -26,6 +26,14 @@ namespace libstp::test
         [[nodiscard]] int getPort() const override { return port_; }
         [[nodiscard]] bool isInverted() const override { return inverted_; }
 
+        // Real (non-mock) overrides — store gains so tuner tests can introspect.
+        void setFirmwarePidGains(float kp, float ki, float kd) override {
+            last_kp_ = kp; last_ki_ = ki; last_kd_ = kd;
+        }
+        void getLastFirmwarePidGains(float& kp, float& ki, float& kd) const override {
+            kp = last_kp_; ki = last_ki_; kd = last_kd_;
+        }
+
         // Simulation helpers
         void simulatePosition(int pos) {
             current_position_ = pos;
@@ -47,5 +55,6 @@ namespace libstp::test
         bool inverted_;
         int current_position_{0};
         foundation::MotorCalibration calibration_{};
+        float last_kp_{0.0f}, last_ki_{0.0f}, last_kd_{0.0f};
     };
 }

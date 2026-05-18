@@ -1,6 +1,8 @@
 #include "kinematics/differential/differential.hpp"
 #include "foundation/types.hpp"
 #include "foundation/config.hpp"
+#include "foundation/speed_mode_context.hpp"
+#include <algorithm>
 #include <stdexcept>
 #include <cmath>
 
@@ -60,6 +62,37 @@ namespace libstp::kinematics::differential
             v_left,
             v_right,
             saturated ? " [desaturated]" : "");
+
+        if (libstp::foundation::SpeedModeContext::instance().isSpeedModeEnabled())
+        {
+            // SpeedMode: BEMF is off, so rad/s targets cannot be honoured.
+            // Scale the wheel commands so the dominant wheel hits 100 % PWM
+            // and the others get a proportional share — this preserves the
+            // wheel-velocity ratio coming out of the inverse kinematics, so
+            // heading PIDs that nudge one wheel up / the other down keep
+            // working (the dominant wheel stays at ≤ 100 %, the other gets
+            // throttled down).
+            const double sm_max_abs = std::max(std::abs(v_left), std::abs(v_right));
+            int pct_left  = 0;
+            int pct_right = 0;
+            if (sm_max_abs >= 1e-9)
+            {
+                const double scale = 100.0 / sm_max_abs;
+                pct_left  = static_cast<int>(std::lround(std::clamp(v_left  * scale, -100.0, 100.0)));
+                pct_right = static_cast<int>(std::lround(std::clamp(v_right * scale, -100.0, 100.0)));
+            }
+            left_motor_.motor().setSpeed(pct_left);
+            right_motor_.motor().setSpeed(pct_right);
+
+            LIBSTP_LOG_TRACE(
+                "DifferentialKinematics[SpeedMode] pct left={} right={} (v_left={} v_right={})",
+                pct_left, pct_right, v_left, v_right);
+
+            MotorCommands sm_result;
+            sm_result.wheel_velocities = {v_left, v_right};
+            sm_result.saturated_any = false;
+            return sm_result;
+        }
 
         left_motor_.setVelocity(v_left, dt);
         right_motor_.setVelocity(v_right, dt);

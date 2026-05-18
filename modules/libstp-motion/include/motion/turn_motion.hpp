@@ -11,6 +11,13 @@ namespace libstp::motion
         double target_angle_rad{0.0};        // Target turn angle (positive = CCW, negative = CW)
         double speed_scale{1.0};             // 0-1 fraction of AxisConstraints.angular.max_velocity
         double kS{0.0};                      // Static friction compensation (rad/s)
+
+        /// True (default) when `target_angle_rad` is a real angular goal.
+        /// Set to false when the caller drives the turn purely via an
+        /// external `until`-condition (sensor / timeout) so SpeedMode is
+        /// still admissible. With SpeedMode active and this flag true,
+        /// `start()` raises `std::logic_error`.
+        bool has_angle_target{true};
     };
 
     /**

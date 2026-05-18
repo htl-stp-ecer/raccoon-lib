@@ -130,6 +130,41 @@ Relevant tests live in:
 
 The C++ tests cover controller behavior and profile math. The Python tests cover binding visibility and step-level integration.
 
+## Speed Mode
+
+Speed Mode disables the firmware's BEMF closed-loop control. The robot
+gains roughly 10% additional top speed at the cost of cm-accurate
+distance and angle termination — the firmware no longer integrates
+encoder ticks while BEMF sampling is off.
+
+Activate it via `set_speed_mode(True)` (class: `SetSpeedMode`).
+The step publishes `raccoon/cmd/feature/bemf_enabled = 0` on LCM, waits
+for the firmware ACK on `raccoon/feature/bemf_enabled`, and only then
+flips the library's `SpeedModeContext` flag. It raises `RuntimeError` if
+no ACK arrives within the timeout (default 500 ms), keeping the library
+state in sync with the firmware.
+
+While Speed Mode is active, motion primitives with a distance- or
+angle-based goal raise `std::logic_error` from `start()`, `startWarm()`,
+`hasReachedDistance()`, and `hasReachedAngle()`. Use `until`-conditions
+(sensors, timeouts, light gates) to terminate motions instead. The
+Python `drive_*`, `drive_angle*`, and `turn_*` factories accept either
+`cm` / `degrees` (which require BEMF) or an `until=` clause (compatible
+with Speed Mode); pick the until-form whenever Speed Mode is on.
+
+In Speed Mode the kinematics scales the inverse-kinematics wheel
+velocities so the dominant wheel hits 100 % PWM; the remaining wheels
+are commanded proportionally below 100 % to preserve the wheel-ratio
+that the IK produced. Heading correction from the IMU keeps working
+because PID nudges change the ratio between wheels (not their
+absolute value), so the dominant motor stays at ≤ 100 % while the
+others throttle down. Consequence: `speed_scale` in motion configs no
+longer affects how fast the robot drives in Speed Mode (it always
+drives as fast as the dominant motor allows), but direction and
+heading logic remain intact.
+
+Return to normal mode with `set_speed_mode(False)`.
+
 ## Known Constraints
 
 - Motion controllers assume they own the drive command for the duration of the step.

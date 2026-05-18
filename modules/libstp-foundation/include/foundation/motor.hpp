@@ -2,7 +2,9 @@
 
 #include <cmath>
 #include <numbers>
+#include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace libstp::foundation
 {
@@ -30,6 +32,18 @@ namespace libstp::foundation
     {
         double ticks_to_rad{2.0 * std::numbers::pi / kDefaultEncoderTicksPerRev};
         double vel_lpf_alpha{0.5};
+        std::optional<PidGains> pid{};
+
+        MotorCalibration() = default;
+
+        MotorCalibration(double ticks_to_rad,
+                         double vel_lpf_alpha,
+                         std::optional<PidGains> pid = std::nullopt)
+            : ticks_to_rad(ticks_to_rad),
+              vel_lpf_alpha(vel_lpf_alpha),
+              pid(std::move(pid))
+        {
+        }
 
         /// Throws std::invalid_argument if the calibration would silently
         /// corrupt odometry. ticks_to_rad must be strictly positive (zero
@@ -41,6 +55,8 @@ namespace libstp::foundation
                 throw std::invalid_argument("MotorCalibration: ticks_to_rad must be > 0");
             if (!(vel_lpf_alpha >= 0.0 && vel_lpf_alpha <= 1.0))
                 throw std::invalid_argument("MotorCalibration: vel_lpf_alpha must be in [0, 1]");
+            if (pid && (!std::isfinite(pid->kp) || !std::isfinite(pid->ki) || !std::isfinite(pid->kd)))
+                throw std::invalid_argument("MotorCalibration: pid gains must be finite");
         }
     };
 
