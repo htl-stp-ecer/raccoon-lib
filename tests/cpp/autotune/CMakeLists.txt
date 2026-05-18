@@ -1,0 +1,15 @@
+register_libstp_test(
+  test_autotune
+  SOURCES
+  test_firmware_pid_tuner.cpp
+  test_static_friction.cpp
+  test_vel_lpf_tuner.cpp
+  test_tolerance_deriver.cpp
+  test_encoder_calibrator.cpp
+  LIBS
+  autotune
+  motion
+  drive
+  kinematics
+  hal
+  foundation)

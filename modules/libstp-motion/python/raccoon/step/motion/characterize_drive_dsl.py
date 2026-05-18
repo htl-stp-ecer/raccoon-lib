@@ -24,6 +24,7 @@ class CharacterizeDriveBuilder(StepBuilder):
         self._accel_timeout = 3.0
         self._decel_timeout = 3.0
         self._sample_hz = 500
+        self._operating_velocity_frac = 0.6
         self._persist = True
 
     def axes(self, value: list[str] | None):
@@ -50,6 +51,10 @@ class CharacterizeDriveBuilder(StepBuilder):
         self._sample_hz = value
         return self
 
+    def operating_velocity_frac(self, value: float):
+        self._operating_velocity_frac = value
+        return self
+
     def persist(self, value: bool):
         self._persist = value
         return self
@@ -62,6 +67,7 @@ class CharacterizeDriveBuilder(StepBuilder):
         kwargs["accel_timeout"] = self._accel_timeout
         kwargs["decel_timeout"] = self._decel_timeout
         kwargs["sample_hz"] = self._sample_hz
+        kwargs["operating_velocity_frac"] = self._operating_velocity_frac
         kwargs["persist"] = self._persist
         return CharacterizeDrive(**kwargs)
 
@@ -74,6 +80,7 @@ def characterize_drive(
     accel_timeout: float = 3.0,
     decel_timeout: float = 3.0,
     sample_hz: int = 500,
+    operating_velocity_frac: float = 0.6,
     persist: bool = True,
 ):
     """
@@ -111,10 +118,11 @@ def characterize_drive(
         accel_timeout: Maximum time in seconds to wait for the acceleration phase before giving up. Default 3.0.
         decel_timeout: Maximum time in seconds to record the deceleration (coast-down) phase. Default 3.0.
         sample_hz: Position sampling rate in Hz for the C++ measurement loop. Default 500. Higher values give better accel/decel resolution.
+        operating_velocity_frac: Fraction of the measured peak velocity that is written back as ``max_velocity`` (and applied to the in-memory motion config). The peak measured at 100 %% PWM is the hardware ceiling, not a sensible operating speed — running the motion controllers at the ceiling means saturated wheels, no headroom for closed-loop correction, and unstable behaviour. Default ``0.6`` (≈30 cm/s for a robot that peaks at 50 cm/s).
         persist: If ``True``, write the measured limits to ``raccoon.project.yml`` under ``robot.motion_pid``. Default ``True``.
 
     Returns:
-        A CharacterizeDriveBuilder (chainable via ``.axes()``, ``.trials()``, ``.power_percent()``, ``.accel_timeout()``, ``.decel_timeout()``, ``.sample_hz()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A CharacterizeDriveBuilder (chainable via ``.axes()``, ``.trials()``, ``.power_percent()``, ``.accel_timeout()``, ``.decel_timeout()``, ``.sample_hz()``, ``.operating_velocity_frac()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -143,6 +151,7 @@ def characterize_drive(
     b._accel_timeout = accel_timeout
     b._decel_timeout = decel_timeout
     b._sample_hz = sample_hz
+    b._operating_velocity_frac = operating_velocity_frac
     b._persist = persist
     return b
 

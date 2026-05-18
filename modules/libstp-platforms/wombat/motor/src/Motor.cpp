@@ -1,5 +1,6 @@
 #include "hal/Motor.hpp"
 #include "foundation/config.hpp"
+#include "foundation/speed_mode_context.hpp"
 
 #include <stdexcept>
 #include <chrono>
@@ -27,6 +28,12 @@ libstp::hal::motor::Motor::Motor(const int port, const bool inverted, const foun
         "Wombat Motor ctor port={} inverted={}",
         port_,
         inverted_);
+    if (calibration_.pid)
+    {
+        setFirmwarePidGains(static_cast<float>(calibration_.pid->kp),
+                            static_cast<float>(calibration_.pid->ki),
+                            static_cast<float>(calibration_.pid->kd));
+    }
 }
 
 void libstp::hal::motor::Motor::setSpeed(const int percent)
@@ -34,12 +41,6 @@ void libstp::hal::motor::Motor::setSpeed(const int percent)
 #ifdef SAFETY_CHECKS_ENABLED
     if (percent < MIN_SPEED || percent > MAX_SPEED) throw std::out_of_range("speed -100 - 100");
 #endif
-
-    const auto ts = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    LIBSTP_LOG_INFO(
-        "[TIMING] setSpeed port={} percent={} epoch_us={}",
-        port_, percent, ts);
 
     const int directionPercent = inverted_ ? -percent : percent;
     platform::wombat::core::LcmDataWriter::instance().setMotor(port_, directionPercent);
@@ -70,6 +71,7 @@ void libstp::hal::motor::Motor::moveRelative(const int velocity, const int delta
 
 int libstp::hal::motor::Motor::getPosition() const
 {
+    foundation::SpeedModeContext::instance().assertBemfAvailable("Motor::getPosition");
     const auto reading = platform::wombat::core::LcmReader::instance().readMotorPosition(port_);
 
     // Apply inversion to position reading to match command convention
@@ -148,5 +150,42 @@ void libstp::hal::motor::Motor::setCalibration(const foundation::MotorCalibratio
 {
     calibration.validate();
     calibration_ = calibration;
+    if (calibration_.pid)
+    {
+        setFirmwarePidGains(static_cast<float>(calibration_.pid->kp),
+                            static_cast<float>(calibration_.pid->ki),
+                            static_cast<float>(calibration_.pid->kd));
+    }
     LIBSTP_LOG_DEBUG("Wombat Motor port={} setCalibration ticks_to_rad={}", port_, calibration_.ticks_to_rad);
+}
+
+void libstp::hal::motor::Motor::setFirmwarePidGains(float kp, float ki, float kd)
+{
+    last_fw_kp_ = kp;
+    last_fw_ki_ = ki;
+    last_fw_kd_ = kd;
+    LIBSTP_LOG_INFO("Wombat Motor port={} setFirmwarePidGains kp={} ki={} kd={}",
+                    port_, kp, ki, kd);
+    platform::wombat::core::LcmDataWriter::instance().setMotorPid(
+        static_cast<uint8_t>(port_), kp, ki, kd);
+}
+
+void libstp::hal::motor::Motor::setSimulatedBemfResponse(int /*steady_state_bemf*/,
+                                                         double /*time_constant_s*/)
+{
+    // No-op on wombat — real hardware always reports real BEMF.
+    LIBSTP_LOG_DEBUG("Wombat Motor port={} setSimulatedBemfResponse ignored", port_);
+}
+
+void libstp::hal::motor::Motor::clearSimulatedBemfResponse()
+{
+    // No-op on wombat.
+    LIBSTP_LOG_DEBUG("Wombat Motor port={} clearSimulatedBemfResponse ignored", port_);
+}
+
+void libstp::hal::motor::Motor::getLastFirmwarePidGains(float& kp, float& ki, float& kd) const
+{
+    kp = last_fw_kp_;
+    ki = last_fw_ki_;
+    kd = last_fw_kd_;
 }

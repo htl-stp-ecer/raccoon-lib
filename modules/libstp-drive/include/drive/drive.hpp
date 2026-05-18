@@ -79,6 +79,11 @@ namespace libstp::drive
         /** Convenience wrapper around `IKinematics::getMotors()`. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() { return kinematics_->getMotors(); }
 
+        /** Access the IMU passed in at construction. Used by tuners that
+         *  need raw IMU telemetry (gyro, accel) for offline analysis. */
+        [[nodiscard]] hal::imu::IIMU& getImu() { return imu_; }
+        [[nodiscard]] const hal::imu::IIMU& getImu() const { return imu_; }
+
         /** Convenience wrapper around `IKinematics::applyPowerCommand()`. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction, int power_percent)
         { kinematics_->applyPowerCommand(direction, power_percent); }

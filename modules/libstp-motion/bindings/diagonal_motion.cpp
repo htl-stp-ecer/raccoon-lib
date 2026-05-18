@@ -15,7 +15,11 @@ void init_diagonal_motion(py::module_& m)
         .def_readwrite("angle_rad", &DiagonalMotionConfig::angle_rad)
         .def_readwrite("distance_m", &DiagonalMotionConfig::distance_m)
         .def_readwrite("speed_scale", &DiagonalMotionConfig::speed_scale)
-        .def_readwrite("target_heading_rad", &DiagonalMotionConfig::target_heading_rad);
+        .def_readwrite("target_heading_rad", &DiagonalMotionConfig::target_heading_rad)
+        .def_readwrite("has_distance_target", &DiagonalMotionConfig::has_distance_target,
+            "True when distance_m is a real positional goal. Set False when the "
+            "motion is terminated by an external until-condition (required for "
+            "SpeedMode, where BEMF-based distance is unavailable).");
 
     py::class_<DiagonalMotionTelemetry>(m, "DiagonalMotionTelemetry")
         .def_readonly("time_s", &DiagonalMotionTelemetry::time_s)

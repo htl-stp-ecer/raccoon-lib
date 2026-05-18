@@ -136,6 +136,11 @@ class DriveToAnalogTarget(MotionStep):
         config = LinearMotionConfig()
         config.axis = LinearAxis.Forward
         config.distance_m = sign * distance_m
+        # Sensor-driven step: timeout_cm (when set) is only a fail-safe
+        # backstop, not the primary termination criterion. Always run
+        # the underlying motion in "no real distance goal" mode so the
+        # step works under SpeedMode too.
+        config.has_distance_target = False
         config.speed_scale = self._speed
         config.target_heading_rad = get_world_heading_rad(robot)
         self._motion = LinearMotion(robot.drive, robot.odometry, robot.motion_pid_config, config)
