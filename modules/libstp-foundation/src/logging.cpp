@@ -80,7 +80,9 @@ namespace logging {
 
             current = current.lexically_normal();
             for (auto dir = current; !dir.empty(); dir = dir.parent_path()) {
-                if (fs::exists(dir / ".git", ec)) {
+                if (fs::exists(dir / ".git", ec)
+                    || fs::exists(dir / "raccoon.project.yml", ec)
+                    || fs::exists(dir / ".raccoon", ec)) {
                     return normalize_separators(dir.string());
                 }
                 if (dir == dir.root_path()) {
@@ -88,7 +90,10 @@ namespace logging {
                 }
             }
 
-            return std::nullopt;
+            // Fallback: use the current working directory itself so paths
+            // outside any detected repo are still shortened to something
+            // meaningful instead of being abbreviated from filesystem root.
+            return normalize_separators(current.string());
         }
 
         static std::string repo_relative_path(const char* path) {
@@ -305,9 +310,12 @@ namespace logging {
         if (logger_shutdown.load(std::memory_order_relaxed)) {
             return false;
         }
-        // Auto-initialize if not done yet
+        // Logging must be explicitly initialized (via initialize_logging() /
+        // GenericRobot). Importing the library alone must not spawn log dirs,
+        // sinks, or flush threads — that would also re-init spdlog during
+        // C++ static teardown when atexit-driven motor disarms fire.
         if (!logger_initialized) {
-            init();
+            return false;
         }
         auto logger = spdlog::default_logger_raw();
         if (!logger) {
@@ -320,9 +328,8 @@ namespace logging {
         if (logger_shutdown.load(std::memory_order_relaxed)) {
             return false;
         }
-        // Auto-initialize if not done yet
         if (!logger_initialized) {
-            init();
+            return false;
         }
 
         auto logger = spdlog::default_logger_raw();
@@ -408,9 +415,8 @@ namespace logging {
         if (logger_shutdown.load(std::memory_order_relaxed)) {
             return;
         }
-        // Auto-initialize if not done yet
         if (!logger_initialized) {
-            init();
+            return;
         }
         auto logger = spdlog::default_logger_raw();
         if (!logger) {
@@ -424,7 +430,7 @@ namespace logging {
             return;
         }
         if (!logger_initialized) {
-            init();
+            return;
         }
         auto logger = spdlog::default_logger_raw();
         if (!logger) {
