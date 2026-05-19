@@ -21,6 +21,9 @@ namespace libstp::test
                     (const foundation::ChassisVelocity&, int), (override));
         MOCK_METHOD(StmOdometryConfig, getStmOdometryConfig, (), (override));
 
+        MOCK_METHOD(Eigen::Vector3f, getLinearVelocity, (), (const));
+        MOCK_METHOD(Eigen::Vector3f, getAngularVelocity, (), (const));
+
         // Configurable behavior helpers
         void setSupportsLateral(bool supports) {
             ON_CALL(*this, supportsLateralMotion()).WillByDefault(testing::Return(supports));
@@ -38,22 +41,32 @@ namespace libstp::test
             ON_CALL(*this, getWheelRadius()).WillByDefault(testing::Return(radius));
         }
 
-        // Default setup for differential drive
+        void setLinearVelocity(const Eigen::Vector3f& vel) {
+            ON_CALL(*this, getLinearVelocity()).WillByDefault(testing::Return(vel));
+        }
+
+        void setAngularVelocity(const Eigen::Vector3f& vel) {
+            ON_CALL(*this, getAngularVelocity()).WillByDefault(testing::Return(vel));
+        }
+
         void setupAsDifferential() {
             setWheelCount(2);
             setSupportsLateral(false);
-            setWheelRadius(0.05); // 50mm default wheel radius
+            setWheelRadius(0.05);
             setEstimatedState(foundation::ChassisVelocity{0.0, 0.0, 0.0});
+            setLinearVelocity(Eigen::Vector3f::Zero());
+            setAngularVelocity(Eigen::Vector3f::Zero());
             ON_CALL(*this, applyCommand(testing::_, testing::_))
                 .WillByDefault(testing::Return(kinematics::MotorCommands{}));
         }
 
-        // Default setup for mecanum drive
         void setupAsMecanum() {
             setWheelCount(4);
             setSupportsLateral(true);
-            setWheelRadius(0.05); // 50mm default wheel radius
+            setWheelRadius(0.05);
             setEstimatedState(foundation::ChassisVelocity{0.0, 0.0, 0.0});
+            setLinearVelocity(Eigen::Vector3f::Zero());
+            setAngularVelocity(Eigen::Vector3f::Zero());
             ON_CALL(*this, applyCommand(testing::_, testing::_))
                 .WillByDefault(testing::Return(kinematics::MotorCommands{}));
         }
