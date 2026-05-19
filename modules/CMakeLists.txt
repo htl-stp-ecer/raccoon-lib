@@ -112,6 +112,7 @@ function(register_libstp_module module_name is_interface additional_libraries)
 endfunction()
 
 add_subdirectory(libstp-foundation)
+add_subdirectory(libstp-threading)
 add_subdirectory(libstp-hal)
 add_subdirectory(libstp-odometry)
 add_subdirectory(libstp-platforms)
