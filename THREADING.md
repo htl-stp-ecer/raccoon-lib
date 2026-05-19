@@ -26,6 +26,15 @@ unless documented otherwise.
 A handful of C++ subsystems run their own threads and call back into
 shared state:
 
+- **STM32 heartbeat daemon** (libstp-hal/bindings/heartbeat.cpp) — single
+  std::jthread registered with `libstp::threading::ThreadManager` from a
+  static initializer when the `raccoon.hal` extension module is imported.
+  Publishes `HEARTBEAT_CMD` every 100 ms via
+  `LcmDataWriter::sendHeartbeat()` so the STM32 watchdog stays armed. On
+  mock builds the publish is compiled out (no-op loop). The ThreadManager
+  singleton's destructor requests stop and joins on library unload /
+  process exit, so the daemon never outlives the loaded .so.
+
 - **`hal::motor::MotorFailSafe` watchdog** (Motor.cpp) — single std::thread
   spawned at process start. Polls a `volatile sig_atomic_t` flag set by
   the SIGINT/SIGTERM signal handler and calls `Motor::disableAll()`
