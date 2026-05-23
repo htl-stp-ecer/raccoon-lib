@@ -476,6 +476,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0   # full history so the previous tag is reachable
+          submodules: recursive   # raccoon-transport needed to import raccoon
 
       - name: Download all wheel artifacts
         uses: actions/download-artifact@v8
@@ -484,8 +485,49 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Show wheels to be published
-        run: ls -la dist/
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Generate .pyi stubs once (using the Linux wheel since the runner is
+      # ubuntu) and inject them into every platform wheel. The stubs are
+      # platform-independent — the C++ API is identical across wheels — but
+      # IDEs / codegen tools only pick them up if they sit next to the .so
+      # inside the package, so each wheel needs its own copy.
+      - name: Generate Python type stubs from built wheel
+        run: |
+          set -euxo pipefail
+          python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel
+          python -m pip install --quiet ./raccoon-transport/python
+          # Pick the cp312 Linux wheel as the import source.
+          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp312-cp312-manylinux*.whl | head -1)
+          python -m pip install --quiet "${LINUX_WHEEL}"
+          STAGING="${RUNNER_TEMP}/stubs-staging" \
+          SKIP_WHEEL=1 \
+          PYTHON=python \
+          bash scripts/build-stubs.sh dev
+          echo "STUBS_STAGING=${RUNNER_TEMP}/stubs-staging" >> "$GITHUB_ENV"
+
+      - name: Patch each platform wheel with stubs
+        run: |
+          set -euxo pipefail
+          mkdir -p dist-patched
+          for whl in dist/*.whl; do
+            UNPACK_DIR="${RUNNER_TEMP}/unpack-$(basename "$whl" .whl)"
+            rm -rf "$UNPACK_DIR"
+            python -m wheel unpack -d "$UNPACK_DIR" "$whl"
+            INNER=$(find "$UNPACK_DIR" -maxdepth 1 -mindepth 1 -type d | head -1)
+            # Merge stubs into the raccoon/ package inside the wheel.
+            cp -R "${STUBS_STAGING}/raccoon/." "${INNER}/raccoon/"
+            # py.typed marker tells type checkers the package ships stubs.
+            touch "${INNER}/raccoon/py.typed"
+            python -m wheel pack "$INNER" -d dist-patched
+          done
+          rm -rf dist
+          mv dist-patched dist
+          echo "=== Patched wheels ==="
+          ls -la dist/
 
       - name: Publish to PyPI (OIDC trusted publisher)
         uses: pypa/gh-action-pypi-publish@release/v1
