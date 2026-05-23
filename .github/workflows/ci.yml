@@ -365,6 +365,12 @@ jobs:
           key: cmake-deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'raccoon-transport/CMakeLists.txt') }}
           restore-keys: cmake-deps-${{ runner.os }}-${{ runner.arch }}-
 
+      # Compiler cache: compiled objects are reused across runs so only changed
+      # translation units are rebuilt. sccache uses the GHA cache API as its
+      # backend; the action handles auth and cache save/restore automatically.
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
       - name: Set wheel version
         shell: python
         run: |
@@ -397,9 +403,24 @@ jobs:
           # Install it from the checked-out submodule before each wheel build.
           CIBW_BEFORE_BUILD: pip install {project}/raccoon-transport/python
 
-          # std::jthread (C++20) requires libc++ 16+ which ships with macOS 14+.
-          # Deployment target 14.0 is the minimum for jthread availability.
-          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.0
+          # Install sccache inside the manylinux_2_28 container (AlmaLinux 8).
+          # The static musl binary works on any glibc version without extra deps.
+          CIBW_BEFORE_ALL_LINUX: >-
+            curl -fsSL
+            https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz
+            | tar xz --strip-components=1 -C /usr/local/bin
+            sccache-v0.8.2-x86_64-unknown-linux-musl/sccache
+
+          # Pass GHA cache auth tokens into the manylinux container so sccache
+          # can reach the GitHub Actions cache API from inside Docker.
+          CIBW_ENVIRONMENT_PASS_LINUX: ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN SCCACHE_GHA_ENABLED
+
+          # Enable the GHA cache backend for sccache on all platforms.
+          CIBW_ENVIRONMENT: SCCACHE_GHA_ENABLED=true
+
+          # std::jthread was introduced in Apple libc++ with Xcode 15.3 / macOS 14.4.
+          # Deployment target 14.4 is the minimum for jthread and stop_token.
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.4
 
           # ── Wheel repair: bundle wheel-internal shared libs ───────────────
           # libfoundation and libbutton are SHARED so all pybind11 extension
@@ -423,10 +444,14 @@ jobs:
           # ── CMake config settings per platform ────────────────────────────
           # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
+          # CMAKE_*_COMPILER_LAUNCHER=sccache — route all compilations through
+          # sccache so object files are reused on subsequent runs.
           CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
             cmake.define.LIBSTP_RUN_MYPY=OFF
+            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache
+            cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v7
