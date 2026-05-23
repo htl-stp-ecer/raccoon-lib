@@ -457,6 +457,7 @@ jobs:
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
           # CMAKE_*_COMPILER_LAUNCHER=sccache — route compilations through
           # sccache so object files are reused on subsequent runs.
+          # PCH is disabled in CMakeLists for Apple so sccache works there too.
           CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
@@ -464,21 +465,13 @@ jobs:
             cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache
             cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache
 
-          # macOS universal2 uses PCH with -Xarch_<arch> -include flags that
-          # sccache mishandles, so skip the launcher on macOS. Compilation
-          # there still benefits from the cached FetchContent build tree.
-          CIBW_CONFIG_SETTINGS_MACOS: >-
-            cmake.define.DRIVER_BUNDLE=mock
-            cmake.define.LIBSTP_RUN_RUFF=OFF
-            cmake.define.LIBSTP_RUN_MYPY=OFF
-
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
 
-  # ─── Publish all platform wheels to PyPI ──────────────────────────────────
+  # ─── Publish all platform wheels to PyPI + GitHub Release ─────────────────
   publish-pypi:
     name: Publish raccoon-library to PyPI
     runs-on: ubuntu-latest
@@ -486,9 +479,15 @@ jobs:
     # Run only when every matrix variant of build-wheels succeeded.
     if: always() && needs.build-wheels.result == 'success'
     permissions:
-      id-token: write
+      id-token: write   # PyPI OIDC trusted-publisher
+      contents: write   # Create GitHub Release + tag
 
     steps:
+      - name: Checkout for release notes
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # full history so the previous tag is reachable
+
       - name: Download all wheel artifacts
         uses: actions/download-artifact@v8
         with:
@@ -503,3 +502,23 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+
+      - name: Create GitHub Release with wheels
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: raccoon-library 1.0.${{ github.run_number }}
+          generate_release_notes: true
+          body: |
+            Automated release from commit ${{ github.sha }}.
+
+            **Install via PyPI (recommended):**
+            ```bash
+            pip install raccoon-library==1.0.${{ github.run_number }}
+            ```
+
+            **Install from a wheel attached below:**
+            ```bash
+            pip install raccoon_library-1.0.${{ github.run_number }}-*.whl
+            ```
+          files: dist/*.whl
