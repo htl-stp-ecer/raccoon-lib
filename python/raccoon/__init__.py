@@ -45,17 +45,7 @@ from raccoon.robot import *
 from raccoon.mission.api import Mission, MissionProtocol, SetupMission
 from raccoon.timing import StepTimingTracker
 
-try:
-    from raccoon.transport import get_transport, shutdown_transport
-except ModuleNotFoundError:
-    _TRANSPORT_UNAVAILABLE_MESSAGE = "raccoon transport is not available in this build"
-
-    # Mock builds intentionally do not include LCM/native transport.
-    def get_transport():
-        raise RuntimeError(_TRANSPORT_UNAVAILABLE_MESSAGE)
-
-    def shutdown_transport() -> None:
-        return None
+from raccoon.foundation import get_transport, shutdown_transport
 
 
 with contextlib.suppress(RuntimeError):
