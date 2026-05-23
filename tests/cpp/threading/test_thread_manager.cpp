@@ -46,7 +46,7 @@ TEST(ThreadManager, ScopedDaemonRunsAndStopsOnHandleDrop) {
     std::atomic<bool> exited{false};
     {
         auto handle = ThreadManager::instance().add_daemon(
-            "test-scoped-runs", [&](std::stop_token stop) {
+            "test-scoped-runs", [&](libstp::threading::stop_token stop) {
                 while (!stop.stop_requested()) {
                     ++ticks;
                     std::this_thread::sleep_for(milliseconds(2));
@@ -63,7 +63,7 @@ TEST(ThreadManager, ScopedDaemonRunsAndStopsOnHandleDrop) {
 TEST(ThreadManager, ExplicitStopIsIdempotent) {
     std::atomic<bool> exited{false};
     auto handle = ThreadManager::instance().add_daemon(
-        "test-stop-idempotent", [&](std::stop_token stop) {
+        "test-stop-idempotent", [&](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::this_thread::sleep_for(milliseconds(2));
             }
@@ -89,7 +89,7 @@ TEST(ThreadManager, DefaultHandleDestroysCleanly) {
 TEST(ThreadManager, MoveTransfersOwnership) {
     std::atomic<bool> exited{false};
     auto src = ThreadManager::instance().add_daemon(
-        "test-move", [&](std::stop_token stop) {
+        "test-move", [&](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::this_thread::sleep_for(milliseconds(2));
             }
@@ -110,14 +110,14 @@ TEST(ThreadManager, MoveAssignStopsTarget) {
     std::atomic<bool> second_exited{false};
 
     auto first = ThreadManager::instance().add_daemon(
-        "test-move-assign-first", [&](std::stop_token stop) {
+        "test-move-assign-first", [&](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::this_thread::sleep_for(milliseconds(2));
             }
             first_exited.store(true);
         });
     auto second = ThreadManager::instance().add_daemon(
-        "test-move-assign-second", [&](std::stop_token stop) {
+        "test-move-assign-second", [&](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::this_thread::sleep_for(milliseconds(2));
             }
@@ -138,14 +138,14 @@ TEST(ThreadManager, IndependentDaemonsRunInParallel) {
     std::atomic<int> b_ticks{0};
 
     auto a = ThreadManager::instance().add_daemon(
-        "test-parallel-a", [&](std::stop_token stop) {
+        "test-parallel-a", [&](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 ++a_ticks;
                 std::this_thread::sleep_for(milliseconds(2));
             }
         });
     auto b = ThreadManager::instance().add_daemon(
-        "test-parallel-b", [&](std::stop_token stop) {
+        "test-parallel-b", [&](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 ++b_ticks;
                 std::this_thread::sleep_for(milliseconds(2));
@@ -168,13 +168,13 @@ TEST(ThreadManager, DaemonCountReflectsScopedRegistrations) {
     const std::size_t before = ThreadManager::instance().daemon_count();
 
     auto h1 = ThreadManager::instance().add_daemon(
-        "test-count-1", [](std::stop_token stop) {
+        "test-count-1", [](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::this_thread::sleep_for(milliseconds(2));
             }
         });
     auto h2 = ThreadManager::instance().add_daemon(
-        "test-count-2", [](std::stop_token stop) {
+        "test-count-2", [](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::this_thread::sleep_for(milliseconds(2));
             }
@@ -196,7 +196,7 @@ TEST(ThreadManager, ManyHandlesCanBeCreatedAndDropped) {
     for (int i = 0; i < 50; ++i) {
         std::atomic<bool> ran{false};
         auto h = ThreadManager::instance().add_daemon(
-            "test-stress", [&](std::stop_token stop) {
+            "test-stress", [&](libstp::threading::stop_token stop) {
                 ran.store(true);
                 while (!stop.stop_requested()) {
                     std::this_thread::sleep_for(milliseconds(1));

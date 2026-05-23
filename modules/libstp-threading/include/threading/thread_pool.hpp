@@ -1,5 +1,7 @@
 #pragma once
 
+#include "threading/jthread_compat.hpp"
+
 #include <condition_variable>
 #include <cstddef>
 #include <functional>
@@ -7,8 +9,6 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <stop_token>
-#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -18,7 +18,8 @@ namespace libstp::threading
 {
     /// Fixed-size worker pool for short-lived tasks.
     ///
-    /// Workers are std::jthreads; the destructor requests stop, drains the
+    /// Workers are jthreads (jthread on platforms that ship it, a minimal
+    /// compat fallback otherwise); the destructor requests stop, drains the
     /// queue, and joins. Submitted tasks return a std::future so callers can
     /// await results or exceptions.
     ///
@@ -62,7 +63,7 @@ namespace libstp::threading
 
     private:
         void enqueue(std::function<void()> job);
-        void worker_loop(std::stop_token stop);
+        void worker_loop(stop_token stop);
 
         mutable std::mutex                 mu_;
         std::condition_variable_any        work_cv_;
@@ -70,6 +71,6 @@ namespace libstp::threading
         std::queue<std::function<void()>>  queue_;
         std::size_t                        in_flight_ = 0;
         bool                               stopping_  = false;
-        std::vector<std::jthread>          workers_;
+        std::vector<jthread>          workers_;
     };
 }

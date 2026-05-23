@@ -35,7 +35,7 @@ namespace
             std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
-    void heartbeat_loop(std::stop_token stop)
+    void heartbeat_loop(libstp::threading::stop_token stop)
     {
         LIBSTP_LOG_DEBUG("Heartbeat daemon started (cadence={}ms)",
                          kHeartbeatInterval.count());

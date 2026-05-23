@@ -95,7 +95,7 @@ HeartbeatProbe spawnHeartbeatProbe(const char* name) {
     HeartbeatProbe probe;
     auto ticks = probe.ticks;
     probe.handle = ThreadManager::instance().add_daemon(
-        name, [ticks](std::stop_token stop) {
+        name, [ticks](libstp::threading::stop_token stop) {
             while (!stop.stop_requested()) {
                 ticks->fetch_add(1, std::memory_order_relaxed);
                 std::this_thread::sleep_for(kHeartbeatInterval);

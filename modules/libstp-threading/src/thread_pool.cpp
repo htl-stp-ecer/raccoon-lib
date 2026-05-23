@@ -17,7 +17,7 @@ namespace libstp::threading
         for (std::size_t i = 0; i < worker_count; ++i)
         {
             workers_.emplace_back(
-                [this](std::stop_token stop) { worker_loop(stop); });
+                [this](stop_token stop) { worker_loop(stop); });
         }
         LIBSTP_LOG_DEBUG("ThreadPool: started with {} workers", worker_count);
     }
@@ -38,15 +38,22 @@ namespace libstp::threading
         work_cv_.notify_one();
     }
 
-    void ThreadPool::worker_loop(std::stop_token stop)
+    void ThreadPool::worker_loop(stop_token stop)
     {
         while (true)
         {
             std::function<void()> job;
             {
                 std::unique_lock lk(mu_);
-                work_cv_.wait(lk, stop, [this] { return !queue_.empty() || stopping_; });
-                if (stop.stop_requested() && queue_.empty()) return;
+                // Avoid std::condition_variable_any's C++20 stop_token-aware
+                // wait overload (it is gated behind __cpp_lib_jthread, which
+                // Apple's libc++ doesn't define). shutdown() always notifies
+                // after flipping stopping_/calling request_stop(), so a
+                // regular predicate wait is race-free.
+                work_cv_.wait(lk, [this, &stop] {
+                    return !queue_.empty() || stopping_ || stop.stop_requested();
+                });
+                if ((stop.stop_requested() || stopping_) && queue_.empty()) return;
                 if (queue_.empty()) continue;
                 job = std::move(queue_.front());
                 queue_.pop();

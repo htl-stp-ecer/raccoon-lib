@@ -27,7 +27,7 @@ namespace libstp::threading
         daemons_.emplace_back(Daemon{
             id,
             std::move(name),
-            std::jthread(std::move(fn)),
+            jthread(std::move(fn)),
         });
         return DaemonHandle{this, id};
     }
@@ -45,7 +45,7 @@ namespace libstp::threading
         daemons_.emplace_back(Daemon{
             0,  // id=0 marks "not individually stoppable".
             std::move(name),
-            std::jthread(std::move(fn)),
+            jthread(std::move(fn)),
         });
     }
 

@@ -12,7 +12,6 @@
 #include <mutex>
 #include <optional>
 #include <random>
-#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -111,7 +110,7 @@ private:
     void normalizeWeightsLocked();
     void resampleLocked();
     void updateEstimateLocked();
-    void tickLoop(std::stop_token stop);
+    void tickLoop(libstp::threading::stop_token stop);
 
     std::shared_ptr<libstp::odometry::IOdometry> m_odometry;
     LocalizationConfig m_config;
@@ -125,7 +124,7 @@ private:
     std::optional<libstp::map::WorldMap> m_tableMap;
 
     // Background worker routed through ThreadManager: dropping this handle
-    // requests stop on the std::jthread and joins it. The destructor relies
+    // requests stop on the libstp::threading::jthread and joins it. The destructor relies
     // on that RAII contract; ``stop()`` calls it explicitly to keep the
     // start()/stop() API idempotent.
     libstp::threading::ThreadManager::DaemonHandle m_daemon;

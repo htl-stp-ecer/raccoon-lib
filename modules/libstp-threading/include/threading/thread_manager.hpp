@@ -1,17 +1,17 @@
 #pragma once
 
+#include "threading/jthread_compat.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <mutex>
-#include <stop_token>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace libstp::threading
 {
-    using DaemonFn = std::function<void(std::stop_token)>;
+    using DaemonFn = std::function<void(stop_token)>;
 
     /// Process-wide registry for background threads.
     ///
@@ -75,7 +75,7 @@ namespace libstp::threading
         {
             std::uint64_t id;     ///< 0 means "persistent, not individually stoppable".
             std::string   name;
-            std::jthread  thread;
+            jthread       thread;
         };
 
         mutable std::mutex  mu_;
@@ -85,9 +85,9 @@ namespace libstp::threading
     };
 
     /// Move-only RAII token returned by ``ThreadManager::add_daemon``. On
-    /// destruction, requests stop on the underlying ``std::jthread`` and joins
-    /// it, then removes it from the registry. A default-constructed handle
-    /// owns nothing and is safe to destroy.
+    /// destruction, requests stop on the underlying ``jthread`` and joins it,
+    /// then removes it from the registry. A default-constructed handle owns
+    /// nothing and is safe to destroy.
     class ThreadManager::DaemonHandle
     {
     public:

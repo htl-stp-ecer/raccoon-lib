@@ -80,7 +80,7 @@ void Localization::start() {
         return;  // already running
     }
     m_daemon = libstp::threading::ThreadManager::instance().add_daemon(
-        "localization", [this](std::stop_token stop) { tickLoop(stop); });
+        "localization", [this](libstp::threading::stop_token stop) { tickLoop(stop); });
 }
 
 void Localization::stop() {
@@ -345,7 +345,7 @@ void Localization::updateEstimateLocked() {
     m_worldPose.heading = wrapAnglef(static_cast<float>(std::atan2(meanSin, meanCos)));
 }
 
-void Localization::tickLoop(std::stop_token stop) {
+void Localization::tickLoop(libstp::threading::stop_token stop) {
     using clock = std::chrono::steady_clock;
     auto next = clock::now();
     const auto period = std::chrono::milliseconds(m_config.tick_period_ms);
