@@ -97,16 +97,8 @@ def test_observation_surface_measurements_round_trip() -> None:
     assert measurement.sigma_cm == pytest.approx(0.6)
 
 
-def test_generic_robot_localization_default_none() -> None:
-    """``GenericRobot.localization`` is opt-in — defaults to None.
-
-    Subclasses set ``self._localization`` in their ``__init__`` once Phase-3
-    wires the service up. Until then the property must read None without
-    requiring the subclass to declare anything.
-    """
-    # Property is defined on the class, returns None when ``_localization``
-    # is missing on the instance. We can read it off a fresh class without
-    # constructing a full robot subclass.
+def test_generic_robot_localization_returns_cached_instance() -> None:
+    """Explicit ``self._localization`` wins over auto-wiring."""
     descriptor = GenericRobot.__dict__["localization"]
     assert isinstance(descriptor, property)
 
@@ -114,7 +106,41 @@ def test_generic_robot_localization_default_none() -> None:
         pass
 
     stub = _Stub()
-    assert descriptor.fget(stub) is None  # type: ignore[misc]
+    sentinel = object()
+    stub._localization = sentinel  # type: ignore[attr-defined]
+    assert descriptor.fget(stub) is sentinel  # type: ignore[misc]
 
-    stub._localization = "sentinel"  # type: ignore[attr-defined]
-    assert descriptor.fget(stub) == "sentinel"  # type: ignore[misc]
+
+def test_generic_robot_localization_explicit_none_raises() -> None:
+    """Setting ``_localization`` to None is a wiring error, not a silent skip."""
+    from raccoon.robot.api import LocalizationNotWiredError
+
+    descriptor = GenericRobot.__dict__["localization"]
+
+    class _Stub:
+        pass
+
+    stub = _Stub()
+    stub._localization = None  # type: ignore[attr-defined]
+    with pytest.raises(LocalizationNotWiredError, match="explicitly None"):
+        descriptor.fget(stub)  # type: ignore[misc]
+
+
+def test_generic_robot_localization_propagates_odometry_failure() -> None:
+    """If ``self.odometry`` raises, wrap as LocalizationNotWiredError."""
+    from raccoon.robot.api import LocalizationNotWiredError
+
+    builder = GenericRobot._build_localization
+
+    class _Stub:
+        @property
+        def odometry(self):
+            msg = "platform unavailable"
+            raise RuntimeError(msg)
+
+        table_map = None
+        _build_localization = builder
+
+    stub = _Stub()
+    with pytest.raises(LocalizationNotWiredError, match="robot.odometry raised"):
+        stub._build_localization()

@@ -21,6 +21,7 @@ from raccoon.sensor_ir import IRSensor
 from raccoon.step import Sequential, defer, seq
 
 from ... import SimulationStep, SimulationStepDelta, dsl
+from .._odometry_snapshot import PoseSnapshot
 from ..motion_step import MotionStep
 from ..turn_dsl import turn_left, turn_right
 
@@ -84,6 +85,7 @@ class SingleSensorCrossing(MotionStep):
         self._trailing_edge_pos = 0.0
         self.apparent_width_m = 0.0
         self.crossing_angle_rad = 0.0
+        self._start_pose: PoseSnapshot | None = None
 
     def _generate_signature(self) -> str:
         direction = "forward" if self.config.forward_speed > 0 else "backward"
@@ -104,14 +106,15 @@ class SingleSensorCrossing(MotionStep):
         self._phase = 0
         self._leading_edge_pos = 0.0
         self._trailing_edge_pos = 0.0
-        robot.odometry.reset()
+        self._start_pose = PoseSnapshot.capture(robot)
         robot.drive.set_velocity(ChassisVelocity(self.config.forward_speed, 0.0, 0.0))
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
         robot.odometry.update(dt)
         robot.drive.update(dt)
 
-        current = robot.odometry.get_distance_from_origin().forward
+        assert self._start_pose is not None
+        current, _lateral, _straight = self._start_pose.project(robot)
         confidence = self.config.sensor.probabilityOfBlack()
 
         if self._phase == 0 and confidence >= self.config.entry_threshold:

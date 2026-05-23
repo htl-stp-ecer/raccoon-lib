@@ -4,17 +4,16 @@
 #include "libstp/map/Geometry.hpp"
 #include "libstp/map/WorldMap.hpp"
 #include "hal/odometry.hpp"
+#include "threading/thread_manager.hpp"
 
 #include <Eigen/Core>
-#include <atomic>
-#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <random>
+#include <stop_token>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace libstp::localization {
@@ -112,7 +111,7 @@ private:
     void normalizeWeightsLocked();
     void resampleLocked();
     void updateEstimateLocked();
-    void tickLoop();
+    void tickLoop(std::stop_token stop);
 
     std::shared_ptr<libstp::odometry::IOdometry> m_odometry;
     LocalizationConfig m_config;
@@ -125,8 +124,11 @@ private:
     std::mt19937 m_rng;
     std::optional<libstp::map::WorldMap> m_tableMap;
 
-    std::atomic<bool> m_running{false};
-    std::thread m_thread;
+    // Background worker routed through ThreadManager: dropping this handle
+    // requests stop on the std::jthread and joins it. The destructor relies
+    // on that RAII contract; ``stop()`` calls it explicitly to keep the
+    // start()/stop() API idempotent.
+    libstp::threading::ThreadManager::DaemonHandle m_daemon;
 };
 
 }  // namespace libstp::localization

@@ -14,11 +14,11 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "exlcm/scalar_i32_t.hpp"
-#include "exlcm/scalar_i8_t.hpp"
-#include "exlcm/scalar_f_t.hpp"
-#include "exlcm/vector3f_t.hpp"
-#include "exlcm/quaternion_t.hpp"
+#include "raccoon/scalar_i32_t.hpp"
+#include "raccoon/scalar_i8_t.hpp"
+#include "raccoon/scalar_f_t.hpp"
+#include "raccoon/vector3f_t.hpp"
+#include "raccoon/quaternion_t.hpp"
 
 class LcmWriterContractTest : public ::testing::Test {
 protected:
@@ -59,31 +59,31 @@ protected:
             listener_thread.join();
     }
 
-    void handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         motor_values_[port] = msg->value;
     }
 
-    void handleMotorStop(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleMotorStop(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         motor_stops_[port] = msg->value;
     }
 
-    void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         servo_values_[port] = msg->value;
     }
 
-    void handleBemfReset(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleBemfReset(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         bemf_reset_[port] = msg->value;
     }
 
-    void handleDumpRequest(const lcm::ReceiveBuffer*, const std::string&, const exlcm::scalar_i32_t* msg) {
+    void handleDumpRequest(const lcm::ReceiveBuffer*, const std::string&, const raccoon::scalar_i32_t* msg) {
         std::lock_guard<std::mutex> lock(mutex_);
         dump_request_ = msg->value;
     }
@@ -102,7 +102,7 @@ protected:
 
 
 TEST_F(LcmWriterContractTest, MotorPowerCommand) {
-    exlcm::scalar_i32_t msg{}; msg.value = 77;
+    raccoon::scalar_i32_t msg{}; msg.value = 77;
     lcm.publish("libstp/motor/1/power_cmd", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -111,7 +111,7 @@ TEST_F(LcmWriterContractTest, MotorPowerCommand) {
 }
 
 TEST_F(LcmWriterContractTest, MotorStopCommand) {
-    exlcm::scalar_i32_t msg{}; msg.value = 88;
+    raccoon::scalar_i32_t msg{}; msg.value = 88;
     lcm.publish("libstp/motor/2/stop_cmd", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -120,7 +120,7 @@ TEST_F(LcmWriterContractTest, MotorStopCommand) {
 }
 
 TEST_F(LcmWriterContractTest, ServoPositionCommand) {
-    exlcm::scalar_i32_t msg{}; msg.value = 512;
+    raccoon::scalar_i32_t msg{}; msg.value = 512;
     lcm.publish("libstp/servo/0/position_cmd", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -129,7 +129,7 @@ TEST_F(LcmWriterContractTest, ServoPositionCommand) {
 }
 
 TEST_F(LcmWriterContractTest, BemfResetCommand) {
-    exlcm::scalar_i32_t msg{}; msg.value = 1;
+    raccoon::scalar_i32_t msg{}; msg.value = 1;
     lcm.publish("libstp/bemf/3/reset_cmd", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -138,7 +138,7 @@ TEST_F(LcmWriterContractTest, BemfResetCommand) {
 }
 
 TEST_F(LcmWriterContractTest, DataDumpRequest) {
-    exlcm::scalar_i32_t msg{}; msg.value = 1;
+    raccoon::scalar_i32_t msg{}; msg.value = 1;
     lcm.publish("libstp/system/dump_request", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 

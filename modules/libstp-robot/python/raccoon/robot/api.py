@@ -21,6 +21,22 @@ from .service import RobotService
 
 _S = TypeVar("_S", bound=RobotService)
 
+# Sentinel distinct from None so the localization property can tell apart
+# "never touched" (auto-wire on access) from "explicitly set to None"
+# (treated as a wiring error so silent-None can't sneak past callers).
+_AUTO_WIRE_LOCALIZATION = object()
+
+
+class LocalizationNotWiredError(RuntimeError):
+    """Raised when ``robot.localization`` cannot be auto-wired.
+
+    The underlying cause (ImportError, odometry build failure, Localization
+    constructor exception, ...) is chained via ``__cause__``. Catch this in
+    robot subclasses that legitimately have no localization (mock/headless
+    setups) and override the property.
+    """
+
+
 if TYPE_CHECKING:
     from raccoon.drive import Drive
     from raccoon.hal import IOdometry as Odometry
@@ -107,15 +123,84 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         return None
 
     @property
-    def localization(self) -> "Localization | None":
-        """Optional world-pose localization service.
+    def localization(self) -> "Localization":
+        """World-pose localization service. Always wired, never ``None``.
 
-        Phase-2 contract: ``GenericRobot`` does not instantiate the service —
-        robot subclasses opt in by setting ``self._localization`` (typically
-        in ``__init__``) to a ``raccoon.localization.Localization`` wrapping
-        their odometry. Defaults to ``None``; motions ignore it for now.
+        Lazily constructed on first access by wrapping ``self.odometry`` (and
+        ``self.table_map`` if available). The instance is cached in
+        ``self._localization``; a subclass that already populated that field
+        wins, so manual wiring still works.
+
+        Raises:
+            LocalizationNotWiredError: When auto-wiring cannot proceed —
+                the ``raccoon.localization`` extension is missing, the
+                odometry property failed to build, or the ``Localization``
+                constructor itself threw. The original exception is chained
+                via ``__cause__``.
+
+        To disable in a subclass (e.g. headless tests), override this
+        property to raise. Setting ``self._localization = None`` explicitly
+        is treated as a wiring error so silent-None can't sneak past
+        callers.
         """
-        return getattr(self, "_localization", None)
+        cached = getattr(self, "_localization", _AUTO_WIRE_LOCALIZATION)
+        if cached is _AUTO_WIRE_LOCALIZATION:
+            self._localization = self._build_localization()
+            return self._localization
+        if cached is None:
+            msg = (
+                "robot._localization is explicitly None. localization is a "
+                "hard requirement — to disable, override the localization "
+                "property instead of zeroing the cache field."
+            )
+            raise LocalizationNotWiredError(msg)
+        return cached
+
+    def _build_localization(self) -> "Localization":
+        """Build the platform-default Localization wrapping ``self.odometry``."""
+        try:
+            from raccoon.localization import Localization, LocalizationConfig
+        except ImportError as exc:
+            msg = (
+                "raccoon.localization is not importable — the particle-filter "
+                "C++ extension is missing from this build. Rebuild the wheel "
+                "(deploy.sh / build.sh) or override the localization property."
+            )
+            raise LocalizationNotWiredError(msg) from exc
+
+        try:
+            odom = self.odometry
+        except Exception as exc:
+            msg = (
+                "Cannot auto-wire robot.localization: robot.odometry raised "
+                "during construction. Fix the odometry path or override the "
+                "localization property to supply a service manually."
+            )
+            raise LocalizationNotWiredError(msg) from exc
+        if odom is None:
+            msg = (
+                "Cannot auto-wire robot.localization: robot.odometry returned "
+                "None. Localization needs a live IOdometry source."
+            )
+            raise LocalizationNotWiredError(msg)
+
+        try:
+            table_map = self.table_map
+        except Exception as exc:
+            msg = (
+                "Cannot auto-wire robot.localization: robot.table_map raised. "
+                "Surface-measurement likelihoods need a valid map (or None)."
+            )
+            raise LocalizationNotWiredError(msg) from exc
+
+        try:
+            return Localization(odom, LocalizationConfig(), table_map=table_map)
+        except Exception as exc:
+            msg = (
+                f"Localization() constructor failed: {exc!r}. Check the "
+                f"odometry instance type and the table_map (if set)."
+            )
+            raise LocalizationNotWiredError(msg) from exc
 
     @property
     def motion_pid_config(self) -> UnifiedMotionPidConfig:

@@ -8,6 +8,7 @@ void init_motor(const py::module& m);
 void init_servo(const py::module& m);
 void init_odometry(py::module& m);
 void init_platform(py::module& m);
+void init_heartbeat(py::module& m);
 
 PYBIND11_MODULE(hal, m) {
     m.doc() = "Python bindings for libstp-hal";
@@ -21,4 +22,5 @@ PYBIND11_MODULE(hal, m) {
     init_servo(m);
     init_odometry(m);
     init_platform(m);
+    init_heartbeat(m);
 }

@@ -5,11 +5,11 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "exlcm/scalar_i32_t.hpp"
-#include "exlcm/scalar_i8_t.hpp"
-#include "exlcm/scalar_f_t.hpp"
-#include "exlcm/vector3f_t.hpp"
-#include "exlcm/quaternion_t.hpp"
+#include "raccoon/scalar_i32_t.hpp"
+#include "raccoon/scalar_i8_t.hpp"
+#include "raccoon/scalar_f_t.hpp"
+#include "raccoon/vector3f_t.hpp"
+#include "raccoon/quaternion_t.hpp"
 
 class LcmContractTest : public ::testing::Test {
 protected:
@@ -66,69 +66,69 @@ protected:
             listener_thread.join();
     }
 
-    void handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleMotorValue(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         motor_values_[port] = msg->value;
     }
 
-    void handleMotorDir(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
+    void handleMotorDir(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i8_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         motor_dirs_[port] = msg->dir;
     }
 
-    void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleServoValue(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         servo_values_[port] = msg->value;
     }
 
-    void handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i8_t* msg) {
+    void handleServoMode(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i8_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         servo_modes_[port] = msg->dir;
     }
 
-    void handleGyro(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+    void handleGyro(const lcm::ReceiveBuffer*, const std::string&, const raccoon::vector3f_t* msg) {
         std::lock_guard<std::mutex> lock(mutex_);
         gyro_ = *msg;
     }
 
-    void handleAccel(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+    void handleAccel(const lcm::ReceiveBuffer*, const std::string&, const raccoon::vector3f_t* msg) {
         std::lock_guard<std::mutex> lock(mutex_);
         accel_ = *msg;
     }
 
-    void handleMag(const lcm::ReceiveBuffer*, const std::string&, const exlcm::vector3f_t* msg) {
+    void handleMag(const lcm::ReceiveBuffer*, const std::string&, const raccoon::vector3f_t* msg) {
         std::lock_guard<std::mutex> lock(mutex_);
         mag_ = *msg;
     }
 
-    void handleQuaternion(const lcm::ReceiveBuffer*, const std::string&, const exlcm::quaternion_t* msg) {
+    void handleQuaternion(const lcm::ReceiveBuffer*, const std::string&, const raccoon::quaternion_t* msg) {
         std::lock_guard<std::mutex> lock(mutex_);
         quat_ = *msg;
     }
 
-    void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleBemf(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int idx = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         bemf_[idx] = msg->value;
     }
 
-    void handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleAnalog(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         analog_[port] = msg->value;
     }
 
-    void handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const exlcm::scalar_i32_t* msg) {
+    void handleDigital(const lcm::ReceiveBuffer*, const std::string& channel, const raccoon::scalar_i32_t* msg) {
         int port = std::stoi(channel.substr(channel.find_last_of('/') - 1, 1));
         std::lock_guard<std::mutex> lock(mutex_);
         digital_[port] = msg->value;
     }
 
-    void handleTemp(const lcm::ReceiveBuffer*, const std::string&, const exlcm::scalar_f_t* msg) {
+    void handleTemp(const lcm::ReceiveBuffer*, const std::string&, const raccoon::scalar_f_t* msg) {
         std::lock_guard<std::mutex> lock(mutex_);
         temp_ = *msg;
     }
@@ -146,15 +146,15 @@ protected:
     std::unordered_map<int,int> analog_;
     std::unordered_map<int,int> digital_;
 
-    exlcm::vector3f_t gyro_;
-    exlcm::vector3f_t accel_;
-    exlcm::vector3f_t mag_;
-    exlcm::quaternion_t quat_;
-    exlcm::scalar_f_t temp_;
+    raccoon::vector3f_t gyro_;
+    raccoon::vector3f_t accel_;
+    raccoon::vector3f_t mag_;
+    raccoon::quaternion_t quat_;
+    raccoon::scalar_f_t temp_;
 };
 
 TEST_F(LcmContractTest, MotorValueRoundtrip) {
-    exlcm::scalar_i32_t msg{}; msg.value = 42;
+    raccoon::scalar_i32_t msg{}; msg.value = 42;
     lcm.publish("libstp/motor/1/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -163,7 +163,7 @@ TEST_F(LcmContractTest, MotorValueRoundtrip) {
 }
 
 TEST_F(LcmContractTest, MotorDirRoundtrip) {
-    exlcm::scalar_i8_t msg{}; msg.dir = 1;
+    raccoon::scalar_i8_t msg{}; msg.dir = 1;
     lcm.publish("libstp/motor/2/direction", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -172,7 +172,7 @@ TEST_F(LcmContractTest, MotorDirRoundtrip) {
 }
 
 TEST_F(LcmContractTest, ServoValueRoundtrip) {
-    exlcm::scalar_i32_t msg{}; msg.value = 512;
+    raccoon::scalar_i32_t msg{}; msg.value = 512;
     lcm.publish("libstp/servo/0/position", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -181,7 +181,7 @@ TEST_F(LcmContractTest, ServoValueRoundtrip) {
 }
 
 TEST_F(LcmContractTest, ServoModeRoundtrip) {
-    exlcm::scalar_i8_t msg{}; msg.dir = 2;
+    raccoon::scalar_i8_t msg{}; msg.dir = 2;
     lcm.publish("libstp/servo/1/mode", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -190,7 +190,7 @@ TEST_F(LcmContractTest, ServoModeRoundtrip) {
 }
 
 TEST_F(LcmContractTest, GyroRoundtrip) {
-    exlcm::vector3f_t msg{}; msg.x=1; msg.y=2; msg.z=3;
+    raccoon::vector3f_t msg{}; msg.x=1; msg.y=2; msg.z=3;
     lcm.publish("libstp/gyro/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -201,7 +201,7 @@ TEST_F(LcmContractTest, GyroRoundtrip) {
 }
 
 TEST_F(LcmContractTest, AccelRoundtrip) {
-    exlcm::vector3f_t msg{}; msg.x=4; msg.y=5; msg.z=6;
+    raccoon::vector3f_t msg{}; msg.x=4; msg.y=5; msg.z=6;
     lcm.publish("libstp/accel/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -212,7 +212,7 @@ TEST_F(LcmContractTest, AccelRoundtrip) {
 }
 
 TEST_F(LcmContractTest, MagRoundtrip) {
-    exlcm::vector3f_t msg{}; msg.x=7; msg.y=8; msg.z=9;
+    raccoon::vector3f_t msg{}; msg.x=7; msg.y=8; msg.z=9;
     lcm.publish("libstp/mag/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -223,7 +223,7 @@ TEST_F(LcmContractTest, MagRoundtrip) {
 }
 
 TEST_F(LcmContractTest, QuaternionRoundtrip) {
-    exlcm::quaternion_t msg{}; msg.w=1; msg.x=0; msg.y=0; msg.z=0;
+    raccoon::quaternion_t msg{}; msg.w=1; msg.x=0; msg.y=0; msg.z=0;
     lcm.publish("libstp/imu/quaternion", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -235,7 +235,7 @@ TEST_F(LcmContractTest, QuaternionRoundtrip) {
 }
 
 TEST_F(LcmContractTest, BemfRoundtrip) {
-    exlcm::scalar_i32_t msg{}; msg.value=55;
+    raccoon::scalar_i32_t msg{}; msg.value=55;
     lcm.publish("libstp/bemf/2/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -244,7 +244,7 @@ TEST_F(LcmContractTest, BemfRoundtrip) {
 }
 
 TEST_F(LcmContractTest, AnalogRoundtrip) {
-    exlcm::scalar_i32_t msg{}; msg.value=1234;
+    raccoon::scalar_i32_t msg{}; msg.value=1234;
     lcm.publish("libstp/analog/3/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -253,7 +253,7 @@ TEST_F(LcmContractTest, AnalogRoundtrip) {
 }
 
 TEST_F(LcmContractTest, DigitalRoundtrip) {
-    exlcm::scalar_i32_t msg{}; msg.value=1;
+    raccoon::scalar_i32_t msg{}; msg.value=1;
     lcm.publish("libstp/digital/7/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
@@ -262,7 +262,7 @@ TEST_F(LcmContractTest, DigitalRoundtrip) {
 }
 
 TEST_F(LcmContractTest, TempRoundtrip) {
-    exlcm::scalar_f_t msg{}; msg.value=36.6f;
+    raccoon::scalar_f_t msg{}; msg.value=36.6f;
     lcm.publish("libstp/temp/value", &msg);
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 

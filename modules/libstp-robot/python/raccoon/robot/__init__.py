@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from .api import GenericRobot, RobotDefinitionsProtocol
+from .api import GenericRobot, LocalizationNotWiredError, RobotDefinitionsProtocol
 from .geometry import RobotGeometry, SensorPosition, WheelPosition
 from .service import RobotService
 from raccoon.map import WorldMap as TableMap, MapSegment
 
 __all__ = [
     "GenericRobot",
+    "LocalizationNotWiredError",
     "RobotService",
     "RobotDefinitionsProtocol",
     "RobotGeometry",

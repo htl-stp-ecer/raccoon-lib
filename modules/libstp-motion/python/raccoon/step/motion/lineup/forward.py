@@ -18,6 +18,7 @@ from raccoon.step import Run, Sequential, defer, seq
 from raccoon.step.condition import on_black, on_white
 
 from ... import dsl
+from .._odometry_snapshot import PoseSnapshot
 from ..drive_dsl import drive_backward, drive_forward
 from ..motion_step import MotionStep
 from ..turn_dsl import turn_left, turn_right
@@ -79,6 +80,7 @@ class TimingBasedLineUp(MotionStep):
         self._t_first: float | None = None
         self._first_sensor: str | None = None
         self._first_hit_distance: float = 0.0
+        self._start_pose: PoseSnapshot | None = None
 
     def _get_confidences(self):
         if self.target == SurfaceColor.BLACK:
@@ -91,7 +93,7 @@ class TimingBasedLineUp(MotionStep):
         self._t_first = None
         self._first_sensor = None
         self._first_hit_distance = 0.0
-        robot.odometry.reset()
+        self._start_pose = PoseSnapshot.capture(robot)
         robot.drive.set_velocity(ChassisVelocity(self.forward_speed, 0.0, 0.0))
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
@@ -101,10 +103,11 @@ class TimingBasedLineUp(MotionStep):
         left_conf, right_conf = self._get_confidences()
         now = time.monotonic()
 
-        distance_info = robot.odometry.get_distance_from_origin()
-        current_distance = distance_info.forward
+        assert self._start_pose is not None
+        forward, _lateral, _straight = self._start_pose.project(robot)
+        current_distance = forward
         self.trace(
-            f"Left conf: {left_conf:.3f}, Right conf: {right_conf:.3f}, Distance: {robot.odometry.get_distance_from_origin()}"
+            f"Left conf: {left_conf:.3f}, Right conf: {right_conf:.3f}, Forward: {forward * 100:.2f}cm"
         )
 
         if not self._left_triggered and left_conf >= self.threshold:

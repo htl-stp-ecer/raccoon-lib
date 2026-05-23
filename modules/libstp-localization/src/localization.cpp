@@ -76,21 +76,18 @@ void Localization::observe(const Observation& obs) {
 }
 
 void Localization::start() {
-    bool expected = false;
-    if (!m_running.compare_exchange_strong(expected, true)) {
+    if (m_daemon.owns_thread()) {
         return;  // already running
     }
-    m_thread = std::thread([this] { tickLoop(); });
+    m_daemon = libstp::threading::ThreadManager::instance().add_daemon(
+        "localization", [this](std::stop_token stop) { tickLoop(stop); });
 }
 
 void Localization::stop() {
-    bool expected = true;
-    if (!m_running.compare_exchange_strong(expected, false)) {
-        return;  // already stopped
-    }
-    if (m_thread.joinable()) {
-        m_thread.join();
-    }
+    // DaemonHandle::stop() requests stop on the jthread, joins it, and
+    // removes the entry from the ThreadManager registry. Idempotent — safe
+    // to call from both the destructor and from tests.
+    m_daemon.stop();
 }
 
 void Localization::initializeLocked(const libstp::foundation::Pose& anchorPose) {
@@ -348,12 +345,12 @@ void Localization::updateEstimateLocked() {
     m_worldPose.heading = wrapAnglef(static_cast<float>(std::atan2(meanSin, meanCos)));
 }
 
-void Localization::tickLoop() {
+void Localization::tickLoop(std::stop_token stop) {
     using clock = std::chrono::steady_clock;
     auto next = clock::now();
     const auto period = std::chrono::milliseconds(m_config.tick_period_ms);
 
-    while (m_running.load(std::memory_order_acquire)) {
+    while (!stop.stop_requested()) {
         if (m_odometry) {
             const auto cur = m_odometry->getPose();
             std::lock_guard<std::mutex> lk(m_mutex);
