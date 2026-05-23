@@ -27,8 +27,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from raccoon.foundation import set_speed_mode_enabled
-from raccoon.transport import get_transport
+from raccoon.foundation import get_transport, set_speed_mode_enabled
 from raccoon_transport.types.raccoon import scalar_i32_t
 
 from .. import Step
