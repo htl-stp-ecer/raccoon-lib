@@ -397,10 +397,9 @@ jobs:
           # Install it from the checked-out submodule before each wheel build.
           CIBW_BEFORE_BUILD: pip install {project}/raccoon-transport/python
 
-          # universal2 requires macOS 11.0+ (ARM64 minimum); std::filesystem
-          # also requires 10.15+. Set the deployment target explicitly so
-          # clang doesn't fall back to an older SDK default.
-          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=11.0
+          # std::jthread (C++20) requires libc++ 16+ which ships with macOS 14+.
+          # Deployment target 14.0 is the minimum for jthread availability.
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.0
 
           # ── Wheel repair: bundle wheel-internal shared libs ───────────────
           # libfoundation and libbutton are SHARED so all pybind11 extension

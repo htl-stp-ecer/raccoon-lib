@@ -672,10 +672,11 @@ def _format_with_ruff(source: str) -> str:
             input=source,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
             cwd=repo_root,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, UnicodeEncodeError):
         return source
     return result.stdout
 
