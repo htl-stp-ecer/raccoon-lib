@@ -1,9 +1,12 @@
 #include <pybind11/pybind11.h>
 
-#include "transport_core/shared_transport.hpp"
-
+#include <cstdint>
 #include <string>
 #include <utility>
+
+#ifdef LIBSTP_HAS_TRANSPORT
+#include "transport_core/shared_transport.hpp"
+#endif
 
 namespace py = pybind11;
 
@@ -14,27 +17,28 @@ namespace
         std::uint64_t id{};
     };
 
+#ifdef LIBSTP_HAS_TRANSPORT
     py::bytes encode_message(py::object message)
     {
         return py::reinterpret_borrow<py::bytes>(message.attr("encode")());
     }
+#endif
 }
 
-PYBIND11_MODULE(transport, m)
+void init_transport(py::module_& m)
 {
-    m.doc() = "Native shared raccoon transport backed by ThreadManager";
-
     py::class_<PySubscription>(m, "Subscription")
-        .def_property_readonly("subscription_id", [](const PySubscription& sub) { return sub.id; });
+        .def_property_readonly(
+            "subscription_id", [](const PySubscription& sub) { return sub.id; });
 
-    py::class_<
-        libstp::transport_core::SharedTransport,
-        std::unique_ptr<libstp::transport_core::SharedTransport, py::nodelete>>(
-        m,
-        "SharedTransport")
+#ifdef LIBSTP_HAS_TRANSPORT
+    using libstp::transport_core::SharedTransport;
+
+    py::class_<SharedTransport, std::unique_ptr<SharedTransport, py::nodelete>>(
+        m, "SharedTransport")
         .def(
             "publish",
-            [](libstp::transport_core::SharedTransport& self,
+            [](SharedTransport& self,
                const std::string& channel,
                py::object message,
                bool reliable,
@@ -81,7 +85,7 @@ PYBIND11_MODULE(transport, m)
             py::arg("max_retries") = 10)
         .def(
             "subscribe",
-            [](libstp::transport_core::SharedTransport& self,
+            [](SharedTransport& self,
                const std::string& channel,
                py::function handler,
                bool reliable,
@@ -108,25 +112,28 @@ PYBIND11_MODULE(transport, m)
             py::arg("request_retained") = false)
         .def(
             "unsubscribe",
-            [](libstp::transport_core::SharedTransport& self, const PySubscription& sub)
-            {
-                self.unsubscribe(sub.id);
-            },
+            [](SharedTransport& self, const PySubscription& sub) { self.unsubscribe(sub.id); },
             py::arg("subscription"))
-        .def("shutdown", &libstp::transport_core::SharedTransport::shutdown);
+        .def("shutdown", &SharedTransport::shutdown);
 
     m.def(
         "get_transport",
-        []() -> libstp::transport_core::SharedTransport&
-        {
-            return libstp::transport_core::SharedTransport::instance();
-        },
+        []() -> SharedTransport& { return SharedTransport::instance(); },
         py::return_value_policy::reference);
 
+    m.def("shutdown_transport", []() { SharedTransport::instance().shutdown(); });
+#else
+    // Mock builds: keep the symbols importable so that downstream modules
+    // (e.g. raccoon.ui.step) can `from raccoon.foundation import get_transport`
+    // without ImportError. Calling get_transport() then raises so the caller
+    // can choose how to degrade.
     m.def(
-        "shutdown_transport",
-        []()
+        "get_transport",
+        []() -> py::object
         {
-            libstp::transport_core::SharedTransport::instance().shutdown();
+            throw std::runtime_error(
+                "raccoon transport is not available in this build (mock driver bundle)");
         });
+    m.def("shutdown_transport", []() {});
+#endif
 }
