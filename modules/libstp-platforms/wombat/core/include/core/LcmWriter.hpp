@@ -1,6 +1,7 @@
 #pragma once
 
-#include <raccoon/Transport.h>
+#include "transport_core/shared_transport.hpp"
+
 #include <raccoon/Channels.h>
 #include <raccoon/vector3f_t.hpp>
 #include <raccoon/scalar_i8_t.hpp>
@@ -69,6 +70,6 @@ namespace platform::wombat::core
         explicit LcmDataWriter();
         ~LcmDataWriter() = default;
 
-        raccoon::Transport transport_;
+        libstp::transport_core::SharedTransport& transport_;
     };
 }

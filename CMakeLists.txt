@@ -257,11 +257,11 @@ add_dependencies(_core raccoon_step_builder_codegen raccoon_python_syntax_check)
 
 # ---------- Ruff lint + format ----------
 #
-# Run ruff against every Python source the wheel will ship. Two stamps so the
-# faster lint pass and the slower format-check can fail independently and so
-# CMake can re-run only what changed. Both opt-out via -DLIBSTP_RUN_RUFF=OFF for
-# the rare case where a contributor wants to bypass (e.g. exploring a
-# half-broken refactor); the pre-push hook still gates the eventual push.
+# Run ruff against every Python source the wheel will ship. Formatting is
+# applied in-place before linting so local/device builds fix trivial style drift
+# instead of failing late. Both opt-out via -DLIBSTP_RUN_RUFF=OFF for the rare
+# case where a contributor wants to bypass (e.g. exploring a half-broken
+# refactor); the pre-push hook still gates the eventual push.
 option(LIBSTP_RUN_RUFF "Run ruff lint + format checks during the build" ON)
 
 if(LIBSTP_RUN_RUFF)
@@ -296,17 +296,18 @@ if(LIBSTP_RUN_RUFF)
   add_custom_command(
     OUTPUT "${_RACCOON_RUFF_FORMAT_STAMP}"
     COMMAND
-      bash "${_RACCOON_RUFF_WRAPPER}" format --check --config
+      bash "${_RACCOON_RUFF_WRAPPER}" format --config
       "${CMAKE_SOURCE_DIR}/pyproject.toml" --force-exclude
       ${_RACCOON_PYTHON_SOURCES}
     COMMAND "${CMAKE_COMMAND}" -E touch "${_RACCOON_RUFF_FORMAT_STAMP}"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     DEPENDS ${_RACCOON_PYTHON_SOURCES} "${CMAKE_SOURCE_DIR}/pyproject.toml"
             "${_RACCOON_RUFF_WRAPPER}"
-    COMMENT "Checking Python formatting with ruff"
+    COMMENT "Formatting Python sources with ruff"
     VERBATIM)
   add_custom_target(raccoon_python_ruff_format ALL
                     DEPENDS "${_RACCOON_RUFF_FORMAT_STAMP}")
+  add_dependencies(raccoon_python_ruff_lint raccoon_python_ruff_format)
 
   add_dependencies(_core raccoon_python_ruff_lint raccoon_python_ruff_format)
 endif()

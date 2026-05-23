@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
 import signal
 from types import FrameType
 
@@ -43,6 +44,24 @@ from raccoon.robot import __all__ as _robot_all
 from raccoon.robot import *
 from raccoon.mission.api import Mission, MissionProtocol, SetupMission
 from raccoon.timing import StepTimingTracker
+
+try:
+    from raccoon.transport import get_transport, shutdown_transport
+except ModuleNotFoundError:
+    _TRANSPORT_UNAVAILABLE_MESSAGE = "raccoon transport is not available in this build"
+
+    # Mock builds intentionally do not include LCM/native transport.
+    def get_transport():
+        raise RuntimeError(_TRANSPORT_UNAVAILABLE_MESSAGE)
+
+    def shutdown_transport() -> None:
+        return None
+
+
+with contextlib.suppress(RuntimeError):
+    get_transport()
+atexit.register(shutdown_transport)
+
 
 # UI library (replaces legacy RenderScreen)
 from raccoon.ui import *
@@ -99,6 +118,8 @@ __all__ = [
     "ETSensor",
     # Timing
     "StepTimingTracker",
+    "get_transport",
+    "shutdown_transport",
     # UI
     "UIStep",
     "UIScreen",

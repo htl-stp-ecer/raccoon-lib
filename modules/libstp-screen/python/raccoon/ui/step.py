@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from raccoon.button import is_pressed
 from raccoon.step.base import Step
-from raccoon_transport import Transport
+from raccoon.transport import Subscription, get_transport
 
 from .raccoon.screen_render_answer_t import screen_render_answer_t
 from .raccoon.screen_render_t import screen_render_t
@@ -139,12 +139,12 @@ class UIStep(Step, ABC):
         super().__init__()
         self._robot: GenericRobot | None = None
         self._current_screen: UIScreen | None = None
-        self._transport = Transport()
+        self._transport = get_transport()
         self._lcm_pump_task: asyncio.Task | None = None
         self._ui_active: bool = False  # Track if any UI has been shown
         # Persistent subscription state for non-blocking display/pump_events
         self._pump_queue: asyncio.Queue | None = None
-        self._pump_sub = None
+        self._pump_sub: Subscription | None = None
 
     async def show(self, screen: UIScreen[T]) -> T:
         """
@@ -226,9 +226,6 @@ class UIStep(Step, ABC):
 
         try:
             while not screen._closed:
-                # Handle LCM messages (includes reliable ACK handling)
-                self._transport.spin_once(timeout_ms=0)
-
                 # Process events from queue
                 try:
                     event = event_queue.get_nowait()
@@ -241,7 +238,7 @@ class UIStep(Step, ABC):
             button_task.cancel()
             with suppress(asyncio.CancelledError):
                 await button_task
-            self._transport._lcm.unsubscribe(sub)
+            self._transport.unsubscribe(sub)
 
     async def _button_listener(self, queue: asyncio.Queue) -> None:
         """Listen for physical button presses."""
@@ -347,7 +344,7 @@ class UIStep(Step, ABC):
     def _teardown_pump_sub(self) -> None:
         """Unsubscribe the persistent pump subscription if active."""
         if self._pump_sub is not None:
-            self._transport._lcm.unsubscribe(self._pump_sub)
+            self._transport.unsubscribe(self._pump_sub)
             self._pump_sub = None
         self._pump_queue = None
 
@@ -369,9 +366,9 @@ class UIStep(Step, ABC):
 
         screen = self._current_screen
 
-        # Deliver any pending LCM messages into the queue
-        self._transport.spin_once(timeout_ms=int(timeout * 1000))
-        # Yield so that call_soon_threadsafe callbacks run
+        if timeout > 0:
+            await asyncio.sleep(timeout)
+        # Yield so that call_soon_threadsafe callbacks from the LCM thread run.
         await asyncio.sleep(0)
 
         while True:

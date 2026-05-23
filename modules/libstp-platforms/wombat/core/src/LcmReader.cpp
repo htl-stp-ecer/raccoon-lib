@@ -3,14 +3,13 @@
 #include <chrono>
 #include <cmath>
 #include <thread>
-#include <unistd.h>
 #include "foundation/logging.hpp"
 
 using namespace platform::wombat::core;
 namespace Channels = raccoon::Channels;
 
 LcmReader::LcmReader()
-    : transport_(raccoon::Transport::create())
+    : transport_(libstp::transport_core::SharedTransport::instance())
 {
     using raccoon::SubscribeOptions;
 
@@ -209,58 +208,9 @@ LcmReader::LcmReader()
         digital_cache_[port] = 0;
     }
 
-    // Start background listening thread
-    running_ = true;
-    listener_thread_ = std::thread(&LcmReader::listenLoop, this);
 }
 
 LcmReader::~LcmReader() {
-    running_ = false;
-    transport_.stop();
-    if (listener_thread_.joinable()) {
-        listener_thread_.join();
-    }
-}
-
-void LcmReader::listenLoop() {
-    LIBSTP_LOG_DEBUG("[LcmReader] Listen loop started");
-    auto stats_start = std::chrono::steady_clock::now();
-
-    while (running_) {
-        // Non-blocking poll for messages
-        int result = transport_.spinOnce(0);
-        if (result < 0) {
-            LIBSTP_LOG_ERROR("[LcmReader] Error in transport spinOnce");
-            continue;
-        }
-        if (result > 0) {
-            // Drain all pending messages without blocking
-            while (running_ && transport_.spinOnce(0) > 0) {}
-        } else {
-            // No messages available — brief sleep to avoid busy-spinning
-            usleep(100);
-        }
-
-        // Log transport analytics every 5 seconds
-        auto now = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - stats_start).count();
-        if (elapsed >= 5000) {
-            auto stats = transport_.getAndResetStats();
-            auto& lat = stats.latency;
-            if (lat.count > 0) {
-                LIBSTP_LOG_DEBUG("[LcmReader] {} msgs in {:.1f}s ({:.0f}/s) | "
-                    "latency avg={:.1f}ms min={:.1f}ms max={:.1f}ms",
-                    lat.count, elapsed / 1000.0,
-                    lat.count * 1000.0 / elapsed,
-                    lat.avgUs / 1000.0, lat.minUs / 1000.0, lat.maxUs / 1000.0);
-            }
-            if (stats.publishesDeduplicated > 0) {
-                LIBSTP_LOG_DEBUG("[LcmReader] {} publishes deduplicated", stats.publishesDeduplicated);
-            }
-            stats_start = now;
-        }
-    }
-    LIBSTP_LOG_DEBUG("[LcmReader] Listen loop exiting");
 }
 
 // Read methods - return cached values
