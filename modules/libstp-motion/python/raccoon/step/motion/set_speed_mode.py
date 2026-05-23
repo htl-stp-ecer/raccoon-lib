@@ -28,7 +28,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from raccoon.foundation import set_speed_mode_enabled
-from raccoon_transport import Transport
+from raccoon.transport import get_transport
 from raccoon_transport.types.raccoon import scalar_i32_t
 
 from .. import Step
@@ -113,7 +113,7 @@ class SetSpeedMode(Step):
         target_value = 0 if self._enabled else 1
         loop = asyncio.get_running_loop()
         ack_future: asyncio.Future[int] = loop.create_future()
-        transport = Transport()
+        transport = get_transport()
 
         def _on_ack(_channel: str, data: bytes) -> None:
             try:
@@ -136,14 +136,8 @@ class SetSpeedMode(Step):
             cmd.value = target_value
             transport.publish(_CMD_CHANNEL, cmd, reliable=True)
 
-            # Pump LCM events while we wait for the ACK. The transport
-            # spin runs in this coroutine because the rest of the
-            # raccoon Python stack drives LCM the same way (see
-            # libstp-screen/.../ui/step.py); creating a background
-            # thread here would race with other steps that also pump.
             deadline = loop.time() + self._timeout_s
             while not ack_future.done():
-                transport.spin_once(timeout_ms=0)
                 if loop.time() >= deadline:
                     break
                 await asyncio.sleep(0.01)
@@ -158,7 +152,7 @@ class SetSpeedMode(Step):
 
             acked_value = ack_future.result()
         finally:
-            transport._lcm.unsubscribe(sub)
+            transport.unsubscribe(sub)
 
         # Reconcile to the firmware's reported state. Speed mode is
         # "BEMF disabled", so the library flag is the inverse of the

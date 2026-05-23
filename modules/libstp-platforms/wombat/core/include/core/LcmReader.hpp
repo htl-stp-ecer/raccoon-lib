@@ -1,6 +1,7 @@
 #pragma once
 
-#include <raccoon/Transport.h>
+#include "transport_core/shared_transport.hpp"
+
 #include <raccoon/Channels.h>
 #include <raccoon/Options.h>
 #include <raccoon/vector3f_t.hpp>
@@ -10,18 +11,16 @@
 #include <string>
 #include <unordered_map>
 #include <mutex>
-#include <optional>
-#include <thread>
 #include <atomic>
 #include <functional>
 #include <condition_variable>
 
 namespace platform::wombat::core {
     /**
-     * Cached raccoon transport reader for the wombat bundle.
+     * Cached shared-transport reader for the wombat bundle.
      *
-     * The reader owns a background listener thread that keeps the latest values
-     * for sensors and device status so HAL wrappers can expose synchronous APIs.
+     * SharedTransport owns the single LCM spin daemon. This reader only
+     * subscribes and caches latest values for synchronous HAL APIs.
      */
     class LcmReader {
     public:
@@ -88,11 +87,7 @@ namespace platform::wombat::core {
         void setLinearAccelCallback(std::function<void(float, float, float)> /*callback*/) {}
 
     private:
-        raccoon::Transport transport_;
-
-        // Background thread for listening.
-        std::thread listener_thread_;
-        std::atomic<bool> running_{false};
+        libstp::transport_core::SharedTransport& transport_;
 
         // Cached copies of the most recent transport data.
         std::mutex cache_mutex_;
@@ -123,8 +118,6 @@ namespace platform::wombat::core {
         // Track whether real BEMF telemetry has been received from the STM32.
         std::atomic<bool> bemf_received_{false};
 
-        // Background listening function.
-        void listenLoop();
     };
 
     enum class MotorDir : uint8_t { Off = 0b00, CCW = 0b01, CW = 0b10, ServoLike = 0b11 };

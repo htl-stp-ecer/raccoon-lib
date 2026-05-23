@@ -159,11 +159,11 @@ functional; only the debug recording is lost.
 Toolchain CLI writes to:
 
 ```
-<project_root>/.runs/<UTC-ISO-timestamp>/localization.jsonl
+<project_root>/.raccoon/runs/<UTC-ISO-timestamp>/localization.jsonl
 ```
 
 `UTC-ISO-timestamp` format: `20260523T143012Z` (no separators). The IDE
-backend lists `.runs/*/localization.jsonl` and exposes each as a run.
+backend lists `.raccoon/runs/*/localization.jsonl` and exposes each as a run.
 
 For remote (Pi) runs the CLI pulls this file back over SFTP after the run
 finishes.

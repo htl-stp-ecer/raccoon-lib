@@ -145,6 +145,6 @@ void LcmDataWriter::sendHeartbeat()
 }
 
 LcmDataWriter::LcmDataWriter()
-    : transport_(raccoon::Transport::create())
+    : transport_(libstp::transport_core::SharedTransport::instance())
 {
 }
