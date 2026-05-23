@@ -26,6 +26,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Apple's libc++ guards std::jthread and std::stop_token behind availability
+# attributes that reject them even when the deployment target supports them. The
+# types are header-only, so disabling the guard is safe.
+if(APPLE)
+  add_compile_definitions(_LIBCPP_DISABLE_AVAILABILITY)
+endif()
+
 # Include FetchContent module
 include(FetchContent)
 

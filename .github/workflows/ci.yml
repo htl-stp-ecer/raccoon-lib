@@ -366,10 +366,19 @@ jobs:
           restore-keys: cmake-deps-${{ runner.os }}-${{ runner.arch }}-
 
       # Compiler cache: compiled objects are reused across runs so only changed
-      # translation units are rebuilt. sccache uses the GHA cache API as its
-      # backend; the action handles auth and cache save/restore automatically.
+      # translation units are rebuilt. sccache uses the GHA cache API on host
+      # runners (macOS/Windows). For Linux we use a local directory cache
+      # because GHA auth tokens don't propagate into the manylinux container.
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Cache sccache local directory (Linux container)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v5
+        with:
+          path: .sccache
+          key: sccache-linux-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: sccache-linux-${{ runner.arch }}-
 
       - name: Set wheel version
         shell: python
@@ -411,16 +420,18 @@ jobs:
             | tar xz --strip-components=1 -C /usr/local/bin
             sccache-v0.8.2-x86_64-unknown-linux-musl/sccache
 
-          # Pass GHA cache auth tokens into the manylinux container so sccache
-          # can reach the GitHub Actions cache API from inside Docker.
-          CIBW_ENVIRONMENT_PASS_LINUX: ACTIONS_CACHE_URL ACTIONS_RUNTIME_TOKEN SCCACHE_GHA_ENABLED
-
-          # Enable the GHA cache backend for sccache on all platforms.
+          # macOS/Windows: sccache uses the GHA cache backend (set up by
+          # sccache-action). Linux: GHA backend unavailable inside the manylinux
+          # container, so we point sccache at a local dir under /project that
+          # is cached separately by actions/cache (see step above).
           CIBW_ENVIRONMENT: SCCACHE_GHA_ENABLED=true
+          CIBW_ENVIRONMENT_LINUX: SCCACHE_DIR=/project/.sccache SCCACHE_GHA_ENABLED=false
 
           # std::jthread was introduced in Apple libc++ with Xcode 15.3 / macOS 14.4.
           # Deployment target 14.4 is the minimum for jthread and stop_token.
-          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.4
+          # SCCACHE_CACHE_MULTIARCH=1 lets sccache cache the universal2 build
+          # (which compiles each TU twice with -arch arm64 -arch x86_64).
+          CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.4 SCCACHE_CACHE_MULTIARCH=1
 
           # ── Wheel repair: bundle wheel-internal shared libs ───────────────
           # libfoundation and libbutton are SHARED so all pybind11 extension
