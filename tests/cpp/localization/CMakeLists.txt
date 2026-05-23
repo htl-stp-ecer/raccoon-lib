@@ -25,3 +25,6 @@ register_libstp_test(
   threading
   odometry
   foundation)
+
+register_libstp_test(test_recorder SOURCES test_recorder.cpp LIBS localization
+                     foundation)

@@ -17,6 +17,9 @@
 
 namespace libstp::localization {
 
+class LocalizationRecorder;
+struct RecorderConfig;
+
 /**
  * @brief Sigma-weighted pose observation pushed by Resync-Steps.
  *
@@ -94,6 +97,12 @@ public:
     /// Idempotent. Joins the worker thread. The destructor calls this.
     void stop();
 
+    /// Enable post-run JSONL recording. Constructs the recorder and starts
+    /// its writer thread; opening failures leave Localization fully
+    /// functional but cause this method to return false. Idempotent: a
+    /// second call replaces the previous recorder. Thread-safe.
+    bool enableRecording(RecorderConfig cfg);
+
 private:
     struct Particle {
         libstp::foundation::Pose pose{};
@@ -122,6 +131,20 @@ private:
     bool m_initialized{false};
     std::mt19937 m_rng;
     std::optional<libstp::map::WorldMap> m_tableMap;
+
+    // Post-run debug recorder. nullptr unless enableRecording() was called.
+    // Snapshots are produced under m_mutex from tickLoop; the recorder's
+    // own writer thread does the I/O.
+    std::unique_ptr<LocalizationRecorder> m_recorder;
+    // Pending observation snapshot for the next recorded frame. observe()
+    // appends, tickLoop drains. Mirrors the brief's contract: resync points
+    // are never lost to downsampling.
+    std::vector<Observation::SurfaceMeasurement> m_pendingObservations;
+    std::optional<libstp::foundation::Pose> m_pendingObservationPose;
+    std::optional<Eigen::Vector3d> m_pendingObservationSigma;
+    bool m_pendingObservationArrived{false};
+    bool m_pendingResampled{false};
+    std::optional<libstp::foundation::Pose> m_lastOdomDelta;
 
     // Background worker routed through ThreadManager: dropping this handle
     // requests stop on the libstp::threading::jthread and joins it. The destructor relies

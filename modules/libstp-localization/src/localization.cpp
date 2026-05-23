@@ -1,6 +1,7 @@
 #include "localization/localization.hpp"
 
 #include "hal/angle_utils.hpp"
+#include "localization/recorder.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -51,6 +52,29 @@ Localization::Localization(std::shared_ptr<libstp::odometry::IOdometry> odometry
 
 Localization::~Localization() {
     stop();
+    // The daemon is joined by stop() above; tickLoop can no longer touch
+    // m_recorder. Flush + close the writer before particles unwind.
+    if (m_recorder) {
+        m_recorder->stop();
+        m_recorder.reset();
+    }
+}
+
+bool Localization::enableRecording(RecorderConfig cfg) {
+    auto recorder = std::make_unique<LocalizationRecorder>(std::move(cfg));
+    const bool opened = recorder->ok();
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        // Replace any previous recorder. The old one is destroyed outside
+        // the lock to keep its writer-thread join off the filter critical
+        // section.
+        std::swap(m_recorder, recorder);
+    }
+    if (recorder) {
+        recorder->stop();
+        recorder.reset();
+    }
+    return opened;
 }
 
 libstp::foundation::Pose Localization::getPose() const {
@@ -64,6 +88,14 @@ void Localization::observe(const Observation& obs) {
     if (!m_initialized) {
         initializeLocked(obs.pose);
     }
+    // Capture the observation for the next recorded frame *before*
+    // integration, so the snapshot reflects what the filter received.
+    for (const auto& sm : obs.surface_measurements) {
+        m_pendingObservations.push_back(sm);
+    }
+    m_pendingObservationPose = obs.pose;
+    m_pendingObservationSigma = obs.sigma;
+    m_pendingObservationArrived = true;
     integrateObservationLocked(obs);
 
     // Rebase the odom reference so the next tick measures delta from "now",
@@ -119,6 +151,7 @@ void Localization::initializeParticlesLocked(const libstp::foundation::Pose& anc
 }
 
 void Localization::predictLocked(const libstp::foundation::Pose& odomDelta) {
+    m_lastOdomDelta = odomDelta;
     if (m_particles.empty()) {
         initializeLocked(m_worldPose);
     }
@@ -315,6 +348,7 @@ void Localization::resampleLocked() {
     }
 
     m_particles = std::move(resampled);
+    m_pendingResampled = true;
 }
 
 void Localization::updateEstimateLocked() {
@@ -407,6 +441,66 @@ void Localization::tickLoop(libstp::threading::stop_token stop) {
 
                     m_lastOdom = cur;
                 }
+            }
+
+            // Snapshot for the optional recorder. Still under m_mutex: we
+            // copy a frame struct cheaply (≤ particle_count × 32 B); the
+            // recorder defers all I/O to its writer thread.
+            if (m_recorder && m_recorder->ok()) {
+                LocalizationRecorder::FrameInput frame;
+                frame.estimate_pose = m_worldPose;
+
+                // Weighted per-axis stddev around the mean (linear for heading
+                // — adequate for viewer purposes in the small-sigma regime).
+                double totalW = 0.0;
+                double varX = 0.0, varY = 0.0, varH = 0.0;
+                for (const auto& p : m_particles) {
+                    totalW += p.weight;
+                }
+                if (totalW > 0.0) {
+                    const double mx = static_cast<double>(m_worldPose.position.x());
+                    const double my = static_cast<double>(m_worldPose.position.y());
+                    const double mh = static_cast<double>(m_worldPose.heading);
+                    for (const auto& p : m_particles) {
+                        const double dx = static_cast<double>(p.pose.position.x()) - mx;
+                        const double dy = static_cast<double>(p.pose.position.y()) - my;
+                        const double dh = wrapAngled(static_cast<double>(p.pose.heading) - mh);
+                        varX += p.weight * dx * dx;
+                        varY += p.weight * dy * dy;
+                        varH += p.weight * dh * dh;
+                    }
+                    varX /= totalW;
+                    varY /= totalW;
+                    varH /= totalW;
+                }
+                frame.estimate_sigma = Eigen::Vector3d{
+                    std::sqrt(std::max(varX, 0.0)),
+                    std::sqrt(std::max(varY, 0.0)),
+                    std::sqrt(std::max(varH, 0.0)),
+                };
+
+                frame.odom_delta = m_lastOdomDelta;
+                frame.particles.reserve(m_particles.size());
+                for (const auto& p : m_particles) {
+                    frame.particles.emplace_back(p.pose, p.weight);
+                }
+
+                const bool obsArrived = m_pendingObservationArrived;
+                frame.observations = std::move(m_pendingObservations);
+                m_pendingObservations.clear();
+                frame.observation_pose = m_pendingObservationPose;
+                frame.observation_sigma = m_pendingObservationSigma;
+                m_pendingObservationPose.reset();
+                m_pendingObservationSigma.reset();
+                m_pendingObservationArrived = false;
+                frame.resampled = m_pendingResampled;
+                m_pendingResampled = false;
+
+                // Force-record any tick that carried a resync (surface obs,
+                // pose-only obs, or a resample fire). The viewer needs every
+                // resync point — downsampling must not drop them.
+                const bool force = obsArrived || frame.resampled;
+                m_recorder->recordFrame(std::move(frame), force);
             }
         }
 

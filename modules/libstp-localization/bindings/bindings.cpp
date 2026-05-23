@@ -9,6 +9,7 @@
 #include <pybind11/stl.h>
 
 #include "localization/localization.hpp"
+#include "localization/recorder.hpp"
 #include "libstp/map/Geometry.hpp"
 #include "libstp/map/WorldMap.hpp"
 #include "hal/odometry.hpp"
@@ -16,8 +17,12 @@
 
 #include <Eigen/Core>
 #include <array>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 #include <limits>
 #include <memory>
+#include <string>
 
 namespace py = pybind11;
 
@@ -241,5 +246,91 @@ PYBIND11_MODULE(localization, m)
              // Python threads) can make progress while we wait.
              py::call_guard<py::gil_scoped_release>(),
              "Idempotent. Joins the worker thread. The destructor also calls "
-             "this.");
+             "this.")
+        .def("enable_recording",
+             [](Localization& self,
+                const std::string& path,
+                double record_hz,
+                const std::string& robot_json,
+                const std::string& sensors_json,
+                const std::string& table_map_json,
+                const std::string& notes,
+                int particle_count_hint,
+                double tick_hz) {
+                 libstp::localization::RecorderConfig cfg;
+                 cfg.path = path;
+                 cfg.record_hz = record_hz;
+                 cfg.tick_hz = tick_hz;
+                 cfg.particle_count_hint = particle_count_hint;
+                 cfg.robot_json = robot_json;
+                 cfg.sensors_json = sensors_json;
+                 cfg.table_map_json = table_map_json;
+                 cfg.notes = notes;
+                 return self.enableRecording(std::move(cfg));
+             },
+             py::arg("path"),
+             py::arg("record_hz") = 20.0,
+             py::arg("robot_json") = std::string{"null"},
+             py::arg("sensors_json") = std::string{"[]"},
+             py::arg("table_map_json") = std::string{"null"},
+             py::arg("notes") = std::string{},
+             py::arg("particle_count_hint") = 128,
+             py::arg("tick_hz") = 100.0,
+             py::call_guard<py::gil_scoped_release>(),
+             "Enable post-run JSONL recording of localization state. Returns "
+             "True if the file was opened successfully. On failure (e.g. "
+             "unwritable path) returns False and localization continues "
+             "without recording — never raises.");
+
+    // Auto-wire helper invoked from Python (api.py::_build_localization).
+    // Reads LIBSTP_RECORD_LOCALIZATION / LIBSTP_RECORDING_PATH /
+    // LIBSTP_RECORDING_HZ and calls enable_recording. Keeps the
+    // env-var-parsing policy in C++ so the spec lives next to the recorder.
+    m.def("_auto_enable_recording",
+          [](Localization& loc,
+             const std::string& robot_json,
+             const std::string& sensors_json,
+             const std::string& table_map_json,
+             int particle_count_hint,
+             double tick_hz) {
+              const char* flag = std::getenv("LIBSTP_RECORD_LOCALIZATION");
+              if (flag == nullptr || std::strlen(flag) == 0 ||
+                  std::strcmp(flag, "0") == 0 || std::strcmp(flag, "false") == 0 ||
+                  std::strcmp(flag, "FALSE") == 0) {
+                  return false;
+              }
+              const char* path = std::getenv("LIBSTP_RECORDING_PATH");
+              if (path == nullptr || std::strlen(path) == 0) {
+                  std::cerr << "[localization::Recorder] LIBSTP_RECORD_LOCALIZATION is set "
+                               "but LIBSTP_RECORDING_PATH is empty — disabled.\n";
+                  return false;
+              }
+              double hz = 20.0;
+              if (const char* hz_env = std::getenv("LIBSTP_RECORDING_HZ");
+                  hz_env != nullptr && std::strlen(hz_env) > 0) {
+                  try {
+                      hz = std::stod(hz_env);
+                  } catch (...) {
+                      // keep default
+                  }
+              }
+              libstp::localization::RecorderConfig cfg;
+              cfg.path = path;
+              cfg.record_hz = hz;
+              cfg.tick_hz = tick_hz;
+              cfg.particle_count_hint = particle_count_hint;
+              cfg.robot_json = robot_json;
+              cfg.sensors_json = sensors_json;
+              cfg.table_map_json = table_map_json;
+              return loc.enableRecording(std::move(cfg));
+          },
+          py::arg("localization"),
+          py::arg("robot_json") = std::string{"null"},
+          py::arg("sensors_json") = std::string{"[]"},
+          py::arg("table_map_json") = std::string{"null"},
+          py::arg("particle_count_hint") = 128,
+          py::arg("tick_hz") = 100.0,
+          py::call_guard<py::gil_scoped_release>(),
+          "Internal: enable LocalizationRecorder iff LIBSTP_RECORD_LOCALIZATION "
+          "is truthy. Returns True if recording started.");
 }

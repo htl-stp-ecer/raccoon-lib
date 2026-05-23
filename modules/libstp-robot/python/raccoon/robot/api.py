@@ -194,13 +194,71 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             raise LocalizationNotWiredError(msg) from exc
 
         try:
-            return Localization(odom, LocalizationConfig(), table_map=table_map)
+            cfg = LocalizationConfig()
+            loc = Localization(odom, cfg, table_map=table_map)
         except Exception as exc:
             msg = (
                 f"Localization() constructor failed: {exc!r}. Check the "
                 f"odometry instance type and the table_map (if set)."
             )
             raise LocalizationNotWiredError(msg) from exc
+
+        # Best-effort wiring of the post-run recorder. The env-var policy
+        # lives in C++ (raccoon.localization._auto_enable_recording); we
+        # just hand it a robot/sensor snapshot for the JSON header. Any
+        # failure here is a debug-feature loss, not a runtime fault.
+        try:
+            self._wire_localization_recording(loc, cfg)
+        except Exception as exc:  # pragma: no cover - defensive
+            import logging
+
+            logging.getLogger(__name__).warning("Failed to wire localization recorder: %r", exc)
+        return loc
+
+    def _wire_localization_recording(self, loc: "Localization", cfg) -> None:
+        """Auto-enable the post-run recorder when env vars are set.
+
+        Builds a small JSON snapshot of robot dimensions + sensor offsets so
+        the Web-IDE replay panel can render the chassis without needing a
+        live robot definition. Failures are non-fatal — recording is a debug
+        feature, never required for robot operation.
+        """
+        import json
+
+        try:
+            from raccoon.localization import _auto_enable_recording
+        except ImportError:
+            return  # older C++ binding without the helper
+
+        width_cm = float(getattr(self, "width_cm", 0.0) or 0.0)
+        length_cm = float(getattr(self, "length_cm", 0.0) or 0.0)
+        sensor_entries: list[dict] = []
+        try:
+            all_sensors = self.all_sensors() if callable(getattr(self, "all_sensors", None)) else {}
+        except Exception:
+            all_sensors = {}
+        for sensor, pos in all_sensors.items():
+            name = getattr(sensor, "name", None) or type(sensor).__name__
+            sensor_entries.append(
+                {
+                    "name": str(name),
+                    "kind": "sensor",
+                    "forward_cm": float(getattr(pos, "forward_cm", 0.0)),
+                    "strafe_cm": float(getattr(pos, "strafe_cm", 0.0)),
+                }
+            )
+        robot_json = json.dumps({"width_cm": width_cm, "length_cm": length_cm})
+        sensors_json = json.dumps(sensor_entries)
+        tick_hz = 1000.0 / max(int(getattr(cfg, "tick_period_ms", 10) or 10), 1)
+        particle_count_hint = int(getattr(cfg, "particle_count", 128) or 128)
+        _auto_enable_recording(
+            loc,
+            robot_json=robot_json,
+            sensors_json=sensors_json,
+            table_map_json="null",
+            particle_count_hint=particle_count_hint,
+            tick_hz=tick_hz,
+        )
 
     @property
     def motion_pid_config(self) -> UnifiedMotionPidConfig:
