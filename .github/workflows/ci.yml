@@ -338,16 +338,25 @@ jobs:
             .gha-cache/buildx
           key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
-  # ─── Multi-platform wheels for PyPI (Win / Linux x86_64 / macOS) ──────────
+  # ─── Multi-platform wheels for PyPI (Win / Linux x86_64+aarch64 / macOS) ──
   build-wheels:
-    name: Wheels • ${{ matrix.os }}
+    name: Wheels • ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [changes]
     if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
+        include:
+          - os: ubuntu-latest
+            name: linux-x86_64
+          - os: ubuntu-latest
+            name: linux-aarch64
+            arch: aarch64
+          - os: macos-15
+            name: macos
+          - os: windows-latest
+            name: windows
 
     steps:
       - uses: actions/checkout@v6
@@ -363,8 +372,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cmake-cache
-          key: cmake-deps-${{ runner.os }}-${{ runner.arch }}-v3
-          restore-keys: cmake-deps-${{ runner.os }}-${{ runner.arch }}-
+          key: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v3
+          restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-
 
       # Compiler cache for the host-runner builds (macOS, Windows). On Linux
       # the manylinux container can't reach the GHA cache API and its bind
@@ -373,6 +382,13 @@ jobs:
       - name: Set up sccache
         if: runner.os != 'Linux'
         uses: mozilla-actions/sccache-action@v0.0.9
+
+      # QEMU is only needed for the aarch64 cross-build.
+      - name: Set up QEMU
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
       - name: Set wheel version
         shell: python
@@ -394,17 +410,15 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.4
         env:
-          # cp312 (current widely-deployed default) + cp313 (latest stable).
-          # Each extra Python version roughly doubles the build because
-          # Python_INCLUDE_DIRS leak into pybind11 consumers' compile lines,
-          # busting sccache between versions. cp311 dropped — add back if a
-          # user reports needing it.
-          CIBW_BUILD: cp312-* cp313-*
+          CIBW_BUILD: cp313-*
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
           # macOS: build a single universal2 wheel (arm64 + x86_64 merged by lipo)
           CIBW_ARCHS_MACOS: universal2
+          # Linux: use matrix.arch if set (aarch64), otherwise default (x86_64)
+          CIBW_ARCHS_LINUX: ${{ matrix.arch || 'x86_64' }}
           # manylinux_2_28 = AlmaLinux 8, supports C++20 and glibc 2.28+
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_BUILD_VERBOSITY: 1
 
           # raccoon-transport is a pure-Python runtime dep (LCM message types).
@@ -457,7 +471,7 @@ jobs:
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.name }}
           path: ./wheelhouse/*.whl
 
   # ─── Publish all platform wheels to PyPI + GitHub Release ─────────────────
@@ -485,23 +499,19 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
-      # Generate .pyi stubs once (using the Linux wheel since the runner is
-      # ubuntu) and inject them into every platform wheel. The stubs are
-      # platform-independent — the C++ API is identical across wheels — but
-      # IDEs / codegen tools only pick them up if they sit next to the .so
-      # inside the package, so each wheel needs its own copy.
+      # Generate .pyi stubs from the Linux wheel and inject them into it.
       - name: Generate Python type stubs from built wheel
         run: |
           set -euxo pipefail
           python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel
           python -m pip install --quiet ./raccoon-transport/python
-          # Pick the cp312 Linux wheel as the import source.
-          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp312-cp312-manylinux*.whl | head -1)
+          # Pick the cp313 Linux wheel as the import source.
+          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp313-cp313-manylinux*.whl | head -1)
           python -m pip install --quiet "${LINUX_WHEEL}"
           STAGING="${RUNNER_TEMP}/stubs-staging" \
           SKIP_WHEEL=1 \
