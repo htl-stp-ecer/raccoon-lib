@@ -376,12 +376,19 @@ jobs:
           restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-
 
       # Compiler cache for the host-runner builds (macOS, Windows). On Linux
-      # the manylinux container can't reach the GHA cache API and its bind
-      # mounts get cleaned up before actions/cache picks them up, so we don't
-      # try to wire sccache through cibuildwheel there.
+      # the manylinux container can't reach the GHA cache API directly, so we
+      # use ccache with the project dir as the cache root (mounted as /project).
       - name: Set up sccache
         if: runner.os != 'Linux'
         uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Cache ccache (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v5
+        with:
+          path: .gha-cache/ccache
+          key: ccache-${{ matrix.name }}-${{ github.run_id }}
+          restore-keys: ccache-${{ matrix.name }}-
 
       # QEMU is only needed for the aarch64 cross-build.
       - name: Set up QEMU
@@ -425,8 +432,20 @@ jobs:
           # Install it from the checked-out submodule before each wheel build.
           CIBW_BEFORE_BUILD: pip install {project}/raccoon-transport/python
 
+          # Install ccache inside the manylinux container before each Linux build.
+          CIBW_BEFORE_ALL_LINUX: yum install -y ccache
+
           # sccache GHA backend (host runners only — see Set up sccache step).
           CIBW_ENVIRONMENT: SCCACHE_GHA_ENABLED=true
+
+          # ccache for Linux: /project is the bind-mounted project dir inside
+          # the manylinux container, so .gha-cache/ccache is accessible there.
+          CIBW_ENVIRONMENT_LINUX: >-
+            CCACHE_DIR=/project/.gha-cache/ccache
+            CCACHE_MAXSIZE=3G
+            CCACHE_COMPRESS=1
+            CCACHE_BASEDIR=/project
+            CCACHE_NOHASHDIR=1
 
           # std::jthread was introduced in Apple libc++ with Xcode 15.3 / macOS 14.4.
           CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.4
@@ -454,13 +473,18 @@ jobs:
           # ── CMake config settings per platform ────────────────────────────
           # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
-          # CMAKE_*_COMPILER_LAUNCHER=sccache routes compilations through
-          # sccache on Windows. macOS skips it (universal2 PCH conflict).
-          # Linux skips it (no sccache binary in the manylinux container).
           CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
             cmake.define.LIBSTP_RUN_MYPY=OFF
+          # Linux: route compilations through ccache (installed via BEFORE_ALL).
+          CIBW_CONFIG_SETTINGS_LINUX: >-
+            cmake.define.DRIVER_BUNDLE=mock
+            cmake.define.LIBSTP_RUN_RUFF=OFF
+            cmake.define.LIBSTP_RUN_MYPY=OFF
+            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache
+            cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
+          # Windows: route compilations through sccache.
           CIBW_CONFIG_SETTINGS_WINDOWS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
