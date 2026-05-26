@@ -514,8 +514,8 @@ jobs:
           set -euxo pipefail
           python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel
           python -m pip install --quiet ./raccoon-transport/python
-          # Pick the cp313 Linux wheel as the import source.
-          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp313-cp313-manylinux*.whl | head -1)
+          # Pick the cp313 Linux x86_64 wheel as the import source.
+          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp313-cp313-manylinux*x86_64*.whl | head -1)
           python -m pip install --quiet "${LINUX_WHEEL}"
           STAGING="${RUNNER_TEMP}/stubs-staging" \
           SKIP_WHEEL=1 \
