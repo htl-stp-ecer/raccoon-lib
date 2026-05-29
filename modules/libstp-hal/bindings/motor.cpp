@@ -1,14 +1,12 @@
 #define PYBIND11_DETAILED_ERROR_MESSAGES
 #include <pybind11/pybind11.h>
 
+#include "foundation/logging.hpp"
 #include "foundation/types.hpp"
 #include "hal/IMotor.hpp"
 #include "hal/Motor.hpp"
 
-#if __has_include("core/LcmWriter.hpp")
-#include "core/LcmWriter.hpp"
-#define LIBSTP_HAS_WOMBAT_LCM_WRITER 1
-#endif
+#include <atomic>
 
 namespace py = pybind11;
 
@@ -16,9 +14,12 @@ namespace
 {
     void sendHeartbeat()
     {
-#if LIBSTP_HAS_WOMBAT_LCM_WRITER
-        platform::wombat::core::LcmDataWriter::instance().sendHeartbeat();
-#endif
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true, std::memory_order_relaxed))
+        {
+            LIBSTP_LOG_WARN(
+                "Motor.send_heartbeat() is ignored; heartbeat ownership is handled by the shared daemon");
+        }
     }
 } // namespace
 

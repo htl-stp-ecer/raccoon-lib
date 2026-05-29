@@ -1,11 +1,16 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/eval.h>  // py::exec — used for the atexit-registration snippet
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
+#include <unistd.h>  // _exit()
 #include <utility>
 
 #ifdef LIBSTP_HAS_TRANSPORT
 #include "transport_core/shared_transport.hpp"
+#include "transport_core/iox2_log_bridge.hpp"
+#include "raccoon/Transport.h"
 #endif
 
 namespace py = pybind11;
@@ -22,6 +27,63 @@ namespace
     {
         return py::reinterpret_borrow<py::bytes>(message.attr("encode")());
     }
+
+    py::dict latency_to_dict(const raccoon::TransportStats::Latency& latency)
+    {
+        py::dict d;
+        d["min_us"] = latency.minUs;
+        d["max_us"] = latency.maxUs;
+        d["avg_us"] = latency.avgUs;
+        d["p99_us"] = latency.p99Us;
+        d["count"] = latency.count;
+        return d;
+    }
+
+    py::dict callback_to_dict(const raccoon::TransportStats::Callback& callback)
+    {
+        py::dict d;
+        d["min_us"] = callback.minUs;
+        d["max_us"] = callback.maxUs;
+        d["avg_us"] = callback.avgUs;
+        d["total_us"] = callback.totalUs;
+        d["count"] = callback.count;
+        return d;
+    }
+
+    py::dict spin_to_dict(const raccoon::TransportStats::Spin& spin)
+    {
+        py::dict d;
+        d["min_us"] = spin.minUs;
+        d["max_us"] = spin.maxUs;
+        d["avg_us"] = spin.avgUs;
+        d["count"] = spin.count;
+        d["active_count"] = spin.activeCount;
+        d["idle_count"] = spin.idleCount;
+        return d;
+    }
+
+    py::dict stats_to_dict(const raccoon::TransportStats& stats, std::size_t active_subscriptions)
+    {
+        py::dict d;
+        d["latency"] = latency_to_dict(stats.latency);
+        d["callback"] = callback_to_dict(stats.callback);
+        d["spin"] = spin_to_dict(stats.spin);
+        d["publishes_deduplicated"] = stats.publishesDeduplicated;
+        d["active_subscriptions"] = active_subscriptions;
+
+        py::list channels;
+        for (const auto& channel : stats.channels)
+        {
+            py::dict entry;
+            entry["name"] = channel.name;
+            entry["deliveries"] = channel.deliveries;
+            entry["latency"] = latency_to_dict(channel.latency);
+            entry["callback"] = callback_to_dict(channel.callback);
+            channels.append(std::move(entry));
+        }
+        d["channels"] = std::move(channels);
+        return d;
+    }
 #endif
 }
 
@@ -32,7 +94,27 @@ void init_transport(py::module_& m)
             "subscription_id", [](const PySubscription& sub) { return sub.id; });
 
 #ifdef LIBSTP_HAS_TRANSPORT
+    // Route iceoryx2's own log output (cleanup-on-startup, Config defaults,
+    // shutdown deregister races) through our spdlog logger and clamp the
+    // iox2 global level to Warn. Must run before the first iceoryx2 type is
+    // touched anywhere in the process, so we do it at module-import time —
+    // before SharedTransport, before NodeBuilder, before get_transport().
+    // The call is idempotent and honours IOX2_LOG_LEVEL if the env var is
+    // set (overrides our Warn default).
+    libstp::transport_core::install_iox2_log_bridge();
+
     using libstp::transport_core::SharedTransport;
+
+    // Emit a Python DeprecationWarning the first time a caller passes
+    // reliable=True. Keep it once-per-channel-or-call by leaving stacklevel=2
+    // so the warning points at the user's publish()/subscribe() call.
+    static const auto warn_reliable_deprecated = [](const char* api) {
+        PyErr_WarnEx(PyExc_DeprecationWarning,
+                     "reliable=True is a no-op on the iceoryx2 transport — "
+                     "drop the kwarg; the SHM backend doesn't lose packets.",
+                     /*stacklevel=*/2);
+        (void)api;
+    };
 
     py::class_<SharedTransport, std::unique_ptr<SharedTransport, py::nodelete>>(
         m, "SharedTransport")
@@ -46,6 +128,7 @@ void init_transport(py::module_& m)
                int retry_interval_ms,
                std::uint32_t max_retries)
             {
+                if (reliable) warn_reliable_deprecated("publish");
                 try
                 {
                     if (py::hasattr(message, "timestamp")
@@ -91,6 +174,7 @@ void init_transport(py::module_& m)
                bool reliable,
                bool request_retained)
             {
+                if (reliable) warn_reliable_deprecated("subscribe");
                 auto id = self.subscribe_raw(
                     channel,
                     [channel, handler = std::move(handler)](const void* data, int data_len)
@@ -114,6 +198,16 @@ void init_transport(py::module_& m)
             "unsubscribe",
             [](SharedTransport& self, const PySubscription& sub) { self.unsubscribe(sub.id); },
             py::arg("subscription"))
+        .def(
+            "get_and_reset_stats",
+            [](SharedTransport& self)
+            {
+                py::gil_scoped_release release;
+                const auto active_subscriptions = self.active_subscription_count();
+                auto stats = self.get_and_reset_stats();
+                py::gil_scoped_acquire acquire;
+                return stats_to_dict(stats, active_subscriptions);
+            })
         .def("shutdown", &SharedTransport::shutdown);
 
     m.def(
@@ -122,6 +216,41 @@ void init_transport(py::module_& m)
         py::return_value_policy::reference);
 
     m.def("shutdown_transport", []() { SharedTransport::instance().shutdown(); });
+
+    // Install a Python-level atexit hook that performs an orderly
+    // shutdown and then short-circuits the rest of process exit via
+    // os._exit(0). We register it from Python (via py::exec) rather
+    // than as a `py::cpp_function` because the pybind11 callable path
+    // didn't fire reliably during interpreter teardown on Pi 3B (the
+    // lambda was effectively dropped — the hook never ran, the
+    // segfault still happened). A plain Python lambda invoked through
+    // the atexit registry works.
+    //
+    // Why both shutdown_transport() and _exit(0):
+    //   1) shutdown_transport() stops the spin daemon and destroys the
+    //      iceoryx2 Node while iceoryx2's own globals are still alive.
+    //   2) _exit(0) skips Python interpreter teardown and the C++
+    //      static-destructor phase that follows. iceoryx2 0.9.999-dev's
+    //      static destruction (LoggerManager / ConfigManager) still
+    //      SIGSEGVs at the very end of a normal exit even after our
+    //      Node is gone — bypassing makes the exit code clean.
+    {
+        py::dict scope;
+        // Pass the just-registered shutdown_transport callable explicitly so
+        // we don't trigger a re-import of the module while it's mid-init.
+        scope["_shutdown"] = m.attr("shutdown_transport");
+        py::exec(R"(
+import atexit as _atexit
+import os as _os
+def _raccoon_finalize():
+    try:
+        _shutdown()
+    except Exception:
+        pass
+    _os._exit(0)
+_atexit.register(_raccoon_finalize)
+)", scope);
+    }
 #else
     // Mock builds: keep the symbols importable so that downstream modules
     // (e.g. raccoon.ui.step) can `from raccoon.foundation import get_transport`

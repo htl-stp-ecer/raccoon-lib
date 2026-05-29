@@ -192,7 +192,12 @@ docker_exec "pip install --disable-pip-version-check -U 'scikit-build-core>=0.10
 # Uses separate directory since scikit-build manages its own cmake build internally
 if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
   echo "• Running unit tests..."
-  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DLIBSTP_RUN_MYPY=OFF -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache"
+  # Share FETCHCONTENT_BASE_DIR with the wheel phase below: the FetchContent
+  # cache holds iceoryx2's full Rust+C++ build (~600 MB / ~30 min on Pi-arm64
+  # via QEMU). Two separate caches doubled the first-build cost for nothing —
+  # both phases use the same toolchain, so the iceoryx2 build artifacts are
+  # interchangeable.
+  docker_exec "cmake -B /src/build-test -G Ninja -DLIBSTP_BUILD_TESTS=ON -DLIBSTP_RUN_MYPY=OFF -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DFETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache"
   docker_exec "ninja -C /src/build-test -j$BUILD_JOBS"
   docker_exec "ctest --test-dir /src/build-test --output-on-failure"
   echo "✓ All tests passed"
