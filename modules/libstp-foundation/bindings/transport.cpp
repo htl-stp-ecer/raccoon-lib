@@ -9,7 +9,6 @@
 
 #ifdef LIBSTP_HAS_TRANSPORT
 #include "transport_core/shared_transport.hpp"
-#include "transport_core/iox2_log_bridge.hpp"
 #include "raccoon/Transport.h"
 #endif
 
@@ -94,15 +93,6 @@ void init_transport(py::module_& m)
             "subscription_id", [](const PySubscription& sub) { return sub.id; });
 
 #ifdef LIBSTP_HAS_TRANSPORT
-    // Route iceoryx2's own log output (cleanup-on-startup, Config defaults,
-    // shutdown deregister races) through our spdlog logger and clamp the
-    // iox2 global level to Warn. Must run before the first iceoryx2 type is
-    // touched anywhere in the process, so we do it at module-import time —
-    // before SharedTransport, before NodeBuilder, before get_transport().
-    // The call is idempotent and honours IOX2_LOG_LEVEL if the env var is
-    // set (overrides our Warn default).
-    libstp::transport_core::install_iox2_log_bridge();
-
     using libstp::transport_core::SharedTransport;
 
     // Emit a Python DeprecationWarning the first time a caller passes

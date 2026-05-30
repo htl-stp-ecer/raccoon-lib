@@ -2,7 +2,6 @@
 
 #include "foundation/logging.hpp"
 #include "raccoon/Channels.h"
-#include "raccoon/string_t.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -49,12 +48,16 @@ namespace
     SharedTransport::SharedTransport()
         : transport_(raccoon::Transport::create())
     {
-        transport_.subscribe<raccoon::string_t>(
-            raccoon::Channels::ERROR_MESSAGES,
-            [](const raccoon::string_t& msg)
-            {
-                LIBSTP_LOG_ERROR("[LCM ERROR] {}", msg.value);
-            });
+        // Intentionally no ERROR_MESSAGES auto-subscribe here.
+        // Why: every process loading libstp creates this singleton, so
+        // an unconditional subscribe meant cli + main.py + vision all
+        // opened `raccoon/errors` as subscribers while *nothing* on the
+        // host ever published to it. iox2 v0.9.999-dev marks zero-
+        // publisher services for destruction on close, and the next
+        // process to open hits OpenIsMarkedForDestruction — the exact
+        // wedge that defeated nuke+retry self-heal on every restart.
+        // Consumers that actually want LCM error broadcasts can call
+        // SharedTransport::instance().subscribe_raw(...) themselves.
         ensure_started();
     }
 
