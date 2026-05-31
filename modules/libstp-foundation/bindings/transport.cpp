@@ -100,8 +100,8 @@ void init_transport(py::module_& m)
     // so the warning points at the user's publish()/subscribe() call.
     static const auto warn_reliable_deprecated = [](const char* api) {
         PyErr_WarnEx(PyExc_DeprecationWarning,
-                     "reliable=True is a no-op on the iceoryx2 transport — "
-                     "drop the kwarg; the SHM backend doesn't lose packets.",
+                     "reliable=True is a no-op on the raccoon-transport backend — "
+                     "drop the kwarg; the shared-memory backend doesn't lose packets.",
                      /*stacklevel=*/2);
         (void)api;
     };
@@ -218,12 +218,11 @@ void init_transport(py::module_& m)
     //
     // Why both shutdown_transport() and _exit(0):
     //   1) shutdown_transport() stops the spin daemon and destroys the
-    //      iceoryx2 Node while iceoryx2's own globals are still alive.
+    //      raccoon-transport backend handle while the surrounding process
+    //      state is still alive.
     //   2) _exit(0) skips Python interpreter teardown and the C++
-    //      static-destructor phase that follows. iceoryx2 0.9.999-dev's
-    //      static destruction (LoggerManager / ConfigManager) still
-    //      SIGSEGVs at the very end of a normal exit even after our
-    //      Node is gone — bypassing makes the exit code clean.
+    //      static-destructor phase that follows. Bypassing that tail-end
+    //      teardown keeps process exit on the controlled shutdown path.
     {
         py::dict scope;
         // Pass the just-registered shutdown_transport callable explicitly so

@@ -20,7 +20,7 @@ Supporting layers:
 - `widgets.py` for the serializable widget tree
 - `events.py` for event-binding decorators
 - `screens/` for reusable screen implementations
-- `raccoon/` for the generated LCM message classes used on the wire
+- `raccoon_transport.types.raccoon` for the canonical generated LCM message classes used on the wire
 
 ## Architecture
 
@@ -34,8 +34,8 @@ The split of responsibility is important:
 
 This module currently publishes dynamic UI payloads on:
 
-- `libstp/screen_render`
-- `libstp/screen_render/answer`
+- `raccoon/screen_render`
+- `raccoon/screen_render/answer`
 
 `UIScreen._to_dict()` is the stable internal format for widget serialization in this module. If contributors change that structure, they must update the corresponding renderer at the same time.
 

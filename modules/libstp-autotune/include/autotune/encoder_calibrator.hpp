@@ -21,7 +21,7 @@ namespace libstp::autotune
      * kinematics model and is out of scope here.
      *
      * @note The caller is responsible for re-publishing the kinematics config
-     *       to the STM32 (`LcmDataWriter::sendKinematicsConfig`) after a
+     *       to the STM32 (`TransportWriter::sendKinematicsConfig`) after a
      *       successful calibration — the calibrator only mutates the in-process
      *       `MotorCalibration` instances.
      */

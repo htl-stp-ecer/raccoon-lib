@@ -9,9 +9,9 @@
 
 // SharedTransport forwards the legacy `reliable` flag (and its retry/timeout
 // siblings) into raccoon::PublishOptions for backwards compatibility with
-// existing call sites. The iceoryx2 backend silently ignores them. The
-// deprecation attribute on those fields is for *external* callers; suppress
-// it on our own pass-through reads.
+// existing call sites. The raccoon-transport backend silently ignores them.
+// The deprecation attribute on those fields is for *external* callers;
+// suppress it on our own pass-through reads.
 #if defined(__GNUC__) || defined(__clang__)
 #  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
@@ -38,8 +38,8 @@ namespace
         {
             // Spin slice = max wall-clock that spinOnce can sleep when idle.
             // 1 ms gives sub-millisecond p50 dispatch latency on the rrb
-            // backend (the iceoryx2 backend it replaced used 10 ms because
-            // the underlying state machine was expensive to wake; rrb's
+            // backend (previously, when iox2 was the backend, this was 10 ms
+            // because the underlying state machine was expensive to wake; rrb's
             // poll is a single atomic load so 1 ms is essentially free —
             // 0.1 % of one core at 0 % message rate).
             constexpr int kSharedTransportSpinSliceMs = 1;
@@ -54,15 +54,11 @@ namespace
     SharedTransport::SharedTransport()
         : transport_(raccoon::Transport::create())
     {
-        // Intentionally no ERROR_MESSAGES auto-subscribe here.
-        // Why: every process loading libstp creates this singleton, so
-        // an unconditional subscribe meant cli + main.py + vision all
-        // opened `raccoon/errors` as subscribers while *nothing* on the
-        // host ever published to it. iox2 v0.9.999-dev marks zero-
-        // publisher services for destruction on close, and the next
-        // process to open hits OpenIsMarkedForDestruction — the exact
-        // wedge that defeated nuke+retry self-heal on every restart.
-        // Consumers that actually want LCM error broadcasts can call
+        // Intentionally no ERROR_MESSAGES auto-subscribe: every libstp-loading
+        // process creates this singleton, so an unconditional subscribe would
+        // open subscribers on a channel nothing publishes to. Lazy-open is the
+        // rule for shared ctors regardless of backend. Consumers that actually
+        // want error broadcasts can call
         // SharedTransport::instance().subscribe_raw(...) themselves.
         ensure_started();
     }
@@ -74,10 +70,10 @@ namespace
 
     void SharedTransport::ensure_started()
     {
-        // shutdown() destroys the inner Transport's iceoryx2 Node so the
-        // singleton can hand it back to a controlled exit path (or to a
-        // test that wants a clean slate). Re-create it lazily when the
-        // next caller actually wants to use the transport again.
+        // shutdown() destroys the inner raccoon-transport backend handle so
+        // the singleton can hand it back to a controlled exit path (or to a
+        // test that wants a clean slate). Re-create it lazily when the next
+        // caller actually wants to use the transport again.
         if (!transport_.is_alive())
         {
             transport_ = raccoon::Transport::create();
@@ -93,7 +89,7 @@ namespace
                 {
                     while (!stop.stop_requested())
                     {
-                        // Keep the LCM API mutex hold time aligned with raccoon::Transport::spin().
+                        // Keep the transport API mutex hold time aligned with raccoon::Transport::spin().
                         // Longer slices can starve concurrent publishers such as the 100 ms watchdog
                         // heartbeat and make messages arrive already stale.
                         transport_.spinOnce(kSharedTransportSpinSliceMs);
@@ -185,7 +181,13 @@ namespace
                 return 0;
             }
         }
-        else if (request_retained)
+
+        // Always fire the RETAIN_REQUEST when the caller asked for retained
+        // delivery, including for the very first subscription on a channel.
+        // Relying solely on SubscribeOptions.requestRetained leaves first-time
+        // subscribers waiting for the next live publish, which on slow channels
+        // (e.g. HEADING at ~3.7 s cadence) blows past the platform probe budget.
+        if (request_retained)
         {
             const auto retain_request = encode_retain_request(channel);
             transport_.publishRaw(
@@ -235,11 +237,11 @@ namespace
         // Order matters:
         //   1. Stop+JOIN the spin daemon. Once `spin_daemon_.stop()`
         //      returns, no thread is inside `transport_.spinOnce()`.
-        //   2. Call `transport_.shutdown()` to tear down the iceoryx2 Node
-        //      and ports HERE — while the calling context (typically a
-        //      Python atexit hook) still has iceoryx2's globals alive.
-        //      The default ~Transport() would have run during static
-        //      teardown and could race iceoryx2's own destructors.
+        //   2. Call `transport_.shutdown()` to tear down raccoon-transport
+        //      state and ports HERE — while the calling context (typically a
+        //      Python atexit hook) still has the surrounding process state
+        //      alive. The default ~Transport() would have run during static
+        //      teardown and could race later global teardown.
         //   3. Clear our routing tables.
         spin_daemon_.stop();
         transport_.shutdown();

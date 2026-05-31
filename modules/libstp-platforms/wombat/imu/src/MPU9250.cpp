@@ -1,7 +1,7 @@
 #include "foundation/logging.hpp"
 #include <cmath>
 
-#include "core/LcmReader.hpp"
+#include "core/TransportReader.hpp"
 #include "hal/IMU.hpp"
 
 #ifdef SAFETY_CHECKS_ENABLED
@@ -37,9 +37,9 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
     // ToDo: Check if buffers are large enough
 #endif
 
-    const raccoon::vector3f_t accelValue = platform::wombat::core::LcmReader::instance().readAccel();
-    const raccoon::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
-    const raccoon::vector3f_t magValue = platform::wombat::core::LcmReader::instance().readMag();
+    const raccoon::vector3f_t accelValue = platform::wombat::core::TransportReader::instance().readAccel();
+    const raccoon::vector3f_t gyroValue = platform::wombat::core::TransportReader::instance().readGyro();
+    const raccoon::vector3f_t magValue = platform::wombat::core::TransportReader::instance().readMag();
 
     accel[0] = accelValue.x;
     accel[1] = accelValue.y;
@@ -62,7 +62,7 @@ void libstp::hal::imu::IMU::getAngularVelocity(float* gyro)
 #endif
 
     constexpr float deg_to_rad = static_cast<float>(M_PI / 180.0);
-    const raccoon::vector3f_t gyroValue = platform::wombat::core::LcmReader::instance().readGyro();
+    const raccoon::vector3f_t gyroValue = platform::wombat::core::TransportReader::instance().readGyro();
     gyro[0] = gyroValue.x * deg_to_rad;
     gyro[1] = gyroValue.y * deg_to_rad;
     gyro[2] = gyroValue.z * deg_to_rad;
@@ -72,12 +72,12 @@ float libstp::hal::imu::IMU::getHeading()
 {
     constexpr float deg_to_rad = static_cast<float>(M_PI / 180.0);
     // Negate: firmware heading uses CW-positive, we use CCW-positive (ENU)
-    return -platform::wombat::core::LcmReader::instance().readHeading().value * deg_to_rad;
+    return -platform::wombat::core::TransportReader::instance().readHeading().value * deg_to_rad;
 }
 
 bool libstp::hal::imu::IMU::waitForReady(int timeout_ms)
 {
-    return platform::wombat::core::LcmReader::instance().waitForImuReady(timeout_ms);
+    return platform::wombat::core::TransportReader::instance().waitForImuReady(timeout_ms);
 }
 
 void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
@@ -89,7 +89,7 @@ void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
     }
 #endif
 
-    const raccoon::vector3f_t linearAccelValue = platform::wombat::core::LcmReader::instance().readLinearAccel();
+    const raccoon::vector3f_t linearAccelValue = platform::wombat::core::TransportReader::instance().readLinearAccel();
     linear_accel[0] = linearAccelValue.x;
     linear_accel[1] = linearAccelValue.y;
     linear_accel[2] = linearAccelValue.z;
@@ -104,7 +104,7 @@ void libstp::hal::imu::IMU::getIntegratedVelocity(float* vel)
     }
 #endif
 
-    auto v = platform::wombat::core::LcmReader::instance().readAccelVelocity();
+    auto v = platform::wombat::core::TransportReader::instance().readAccelVelocity();
     vel[0] = v.x;
     vel[1] = v.y;
     vel[2] = v.z;
@@ -112,7 +112,7 @@ void libstp::hal::imu::IMU::getIntegratedVelocity(float* vel)
 
 void libstp::hal::imu::IMU::resetIntegratedVelocity()
 {
-    platform::wombat::core::LcmReader::instance().resetAccelVelocity();
+    platform::wombat::core::TransportReader::instance().resetAccelVelocity();
 }
 
 void libstp::hal::imu::IMU::calibrate()

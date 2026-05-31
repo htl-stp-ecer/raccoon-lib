@@ -18,9 +18,9 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from raccoon.button import is_pressed
 from raccoon.foundation import Subscription, get_transport
 from raccoon.step.base import Step
+from raccoon_transport.types.raccoon.screen_render_answer_t import screen_render_answer_t
+from raccoon_transport.types.raccoon.screen_render_t import screen_render_t
 
-from .raccoon.screen_render_answer_t import screen_render_answer_t
-from .raccoon.screen_render_t import screen_render_t
 from .screen import UIScreen
 from .widgets import Button, Center, Column, Row, Spacer, Text
 

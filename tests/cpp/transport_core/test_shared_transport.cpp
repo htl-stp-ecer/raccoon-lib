@@ -79,7 +79,7 @@ TEST(SharedTransportTest, RepeatedSubscribeUnsubscribeDoesNotMultiplyUnderlyingD
     EXPECT_EQ(transport.active_subscription_count(), 0U);
 }
 
-// shutdown() must leave the singleton usable: the iceoryx2 backend tears
+// shutdown() must leave the singleton usable: the raccoon-transport backend tears
 // down its Node deterministically, and the very next subscribe / publish
 // has to re-create it transparently. Regression for the migration period
 // where `Transport::shutdown()` (destroys impl_) blocked every subsequent
@@ -117,7 +117,7 @@ TEST(SharedTransportTest, ShutdownIsReversibleViaLazyReinit)
     EXPECT_EQ(transport.active_subscription_count(), 0U);
 }
 
-// The iceoryx2 backend uses a dynamic-slice payload type, so payloads
+// The raccoon-transport backend uses a dynamic payload type, so payloads
 // well above the old 4 KB WireFrame ceiling must round-trip intact.
 // 256 KB matches the camera-frame magnitude that motivated the
 // migration to bb::Slice<uint8_t>.
@@ -166,7 +166,7 @@ TEST(SharedTransportTest, LargePayloadRoundtripsIntact)
     EXPECT_EQ(rx_len.load(), static_cast<int>(kSize))
         << "subscriber callback received wrong payload length";
     EXPECT_TRUE(got_ok.load())
-        << "payload bytes did not round-trip intact through the iceoryx2 slice";
+        << "payload bytes did not round-trip intact through the raccoon-transport payload";
 
     transport.unsubscribe(sub);
 }

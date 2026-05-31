@@ -1,0 +1,2 @@
+register_libstp_test(test_transport_reader SOURCES test_transport_reader.cpp)
+register_libstp_test(test_transport_writer SOURCES test_transport_writer.cpp)

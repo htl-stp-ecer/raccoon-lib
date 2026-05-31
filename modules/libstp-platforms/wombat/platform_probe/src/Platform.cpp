@@ -1,12 +1,12 @@
 //
 // Wombat-bundle implementation of `libstp::hal::platform::Platform::probe()`.
 //
-// The probe relies on the LCM message stream that `stm32-data-reader`
+// The probe relies on the raccoon transport message stream that `stm32-data-reader`
 // publishes: heading data confirms the bridge AND the IMU; BEMF data confirms
 // motor telemetry. The mock-only test hooks compile to no-ops here so that
 // production code paths can never accidentally force a failure.
 //
-#include "core/LcmReader.hpp"
+#include "core/TransportReader.hpp"
 #include "foundation/logging.hpp"
 #include "hal/Platform.hpp"
 
@@ -20,7 +20,7 @@ namespace libstp::hal::platform
         ProbeResult result;
         result.components.reserve(3);
 
-        auto& reader = ::platform::wombat::core::LcmReader::instance();
+        auto& reader = ::platform::wombat::core::TransportReader::instance();
 
         // Stm32Bridge — proven by reception of *any* STM32-published message.
         // Heading is the most reliable since it is published continuously and

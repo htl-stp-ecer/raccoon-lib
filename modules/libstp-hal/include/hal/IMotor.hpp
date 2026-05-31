@@ -45,7 +45,7 @@ namespace libstp::hal::motor
          *
          * Default no-op so platforms that don't expose a per-motor firmware PID
          * channel keep compiling unchanged. The wombat platform forwards to
-         * LcmDataWriter::setMotorPid(); the mock platform stores the gains for
+         * TransportWriter::setMotorPid(); the mock platform stores the gains for
          * test introspection.
          */
         virtual void setFirmwarePidGains(float kp, float ki, float kd)

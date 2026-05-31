@@ -59,8 +59,8 @@ That keeps HAL headers stable while allowing each bundle to depend on very diffe
 These are the main extension points inside this module:
 
 - `mock/core/include/core/MockPlatform.hpp`: the fake backend used by the mock bundle.
-- `wombat/core/include/core/LcmReader.hpp`: cached sensor reader backed by raccoon transport subscriptions.
-- `wombat/core/include/core/LcmWriter.hpp`: command publisher for motors, servos, and shutdown control.
+- `wombat/core/include/core/TransportReader.hpp`: cached sensor reader backed by raccoon transport subscriptions.
+- `wombat/core/include/core/TransportWriter.hpp`: command publisher for motors, servos, and shutdown control.
 
 The actual device classes (`libstp::hal::motor::Motor`, `libstp::hal::imu::IMU`, and so on) remain declared in `libstp-hal`; this module only provides their implementations.
 
