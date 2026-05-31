@@ -22,12 +22,12 @@ namespace platform::wombat::core
      * HAL motor and servo wrappers delegate writes here so transport details stay
      * out of the public HAL classes.
      */
-    class LcmDataWriter
+    class TransportWriter
     {
     public:
-        static LcmDataWriter& instance()
+        static TransportWriter& instance()
         {
-            static LcmDataWriter writer;
+            static TransportWriter writer;
             return writer;
         }
 
@@ -67,8 +67,8 @@ namespace platform::wombat::core
         /// Request STM32 to reset its integrated odometry pose.
         void resetOdometry();
     private:
-        explicit LcmDataWriter();
-        ~LcmDataWriter() = default;
+        explicit TransportWriter();
+        ~TransportWriter() = default;
 
         libstp::transport_core::SharedTransport& transport_;
     };

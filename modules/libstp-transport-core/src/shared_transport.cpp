@@ -181,14 +181,13 @@ namespace
                 return 0;
             }
         }
-
-        // Always fire the RETAIN_REQUEST when the caller asked for retained
-        // delivery, including for the very first subscription on a channel.
-        // Relying solely on SubscribeOptions.requestRetained leaves first-time
-        // subscribers waiting for the next live publish, which on slow channels
-        // (e.g. HEADING at ~3.7 s cadence) blows past the platform probe budget.
-        if (request_retained)
+        else if (request_retained)
         {
+            // Channel already had an underlying subscriber from another
+            // call; raccoon-transport's first-subscribe path delivered the
+            // retained replay to the original subscriber but not to this
+            // one. Re-fire RETAIN_REQUEST explicitly so the new caller's
+            // handler also sees the cached value.
             const auto retain_request = encode_retain_request(channel);
             transport_.publishRaw(
                 raccoon::Channels::Protocol::RETAIN_REQUEST,

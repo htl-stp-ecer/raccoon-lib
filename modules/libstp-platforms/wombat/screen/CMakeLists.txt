@@ -1,9 +1,7 @@
 register_driver(screen_driver)
 
-target_link_libraries(screen_driver
-        PUBLIC
-        raccoon::transport
-        foundation
-)
+target_link_libraries(screen_driver PUBLIC raccoon::transport foundation)
 
 target_include_directories(screen_driver PUBLIC include)
+target_include_directories(
+  screen_driver PUBLIC "${CMAKE_SOURCE_DIR}/modules/libstp-screen/include")

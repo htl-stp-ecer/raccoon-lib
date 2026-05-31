@@ -19,17 +19,17 @@ namespace platform::wombat::core {
     /**
      * Cached shared-transport reader for the wombat bundle.
      *
-     * SharedTransport owns the single LCM spin daemon. This reader only
+     * SharedTransport owns the single raccoon transport daemon. This reader only
      * subscribes and caches latest values for synchronous HAL APIs.
      */
-    class LcmReader {
+    class TransportReader {
     public:
-        explicit LcmReader();
-        ~LcmReader();
+        explicit TransportReader();
+        ~TransportReader();
 
-        static LcmReader& instance()
+        static TransportReader& instance()
         {
-            static LcmReader impl;
+            static TransportReader impl;
             return impl;
         }
 

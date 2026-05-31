@@ -157,6 +157,38 @@ void init_transport(py::module_& m)
             py::arg("retry_interval_ms") = 100,
             py::arg("max_retries") = 10)
         .def(
+            "publish_raw",
+            [](SharedTransport& self,
+               const std::string& channel,
+               py::bytes payload,
+               bool reliable,
+               bool retained,
+               int retry_interval_ms,
+               std::uint32_t max_retries)
+            {
+                if (reliable) warn_reliable_deprecated("publish_raw");
+                const std::string data = payload;
+                py::gil_scoped_release release;
+                const bool ok = self.publish_raw(
+                    channel,
+                    data.data(),
+                    static_cast<int>(data.size()),
+                    reliable,
+                    retained,
+                    retry_interval_ms,
+                    max_retries);
+                if (!ok)
+                {
+                    throw std::runtime_error("failed to publish raw payload on channel " + channel);
+                }
+            },
+            py::arg("channel"),
+            py::arg("payload"),
+            py::arg("reliable") = false,
+            py::arg("retained") = false,
+            py::arg("retry_interval_ms") = 100,
+            py::arg("max_retries") = 10)
+        .def(
             "subscribe",
             [](SharedTransport& self,
                const std::string& channel,
