@@ -74,7 +74,10 @@ void LcmDataWriter::setServoMode(uint8_t port, uint8_t mode)
     raccoon::scalar_i8_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.dir = static_cast<int8_t>(mode);
-    transport_.publish(Channels::servoMode(port), msg, reliableOpts);
+    // Publish on the dedicated COMMAND channel so the reader doesn't
+    // ping-pong with its own state publish on the formerly-shared
+    // `servoMode` channel. State lives on `servoMode`; commands here.
+    transport_.publish(Channels::servoModeCommand(port), msg, reliableOpts);
 }
 
 void LcmDataWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
