@@ -30,7 +30,7 @@ namespace libstp::transport_core
             int retry_interval_ms,
             std::uint32_t max_retries);
 
-        template <raccoon::LcmMessage T>
+        template <raccoon::TransportMessage T>
         bool publish(
             const std::string& channel,
             const T& message,
@@ -46,7 +46,7 @@ namespace libstp::transport_core
             bool reliable,
             bool request_retained);
 
-        template <raccoon::LcmMessage T>
+        template <raccoon::TransportMessage T>
         std::uint64_t subscribe(
             const std::string& channel,
             std::function<void(const T&)> handler,
@@ -70,7 +70,7 @@ namespace libstp::transport_core
                 [handler = std::move(handler)](const void* data, int data_len)
                 {
                     T msg;
-                    if (msg.decode(data, 0, data_len) >= 0)
+                    if (msg.decode(static_cast<const uint8_t*>(data), data_len) >= 0)
                     {
                         handler(msg);
                     }
