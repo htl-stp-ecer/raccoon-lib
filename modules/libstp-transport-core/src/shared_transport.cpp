@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <stop_token>
 #include <vector>
 
 // SharedTransport forwards the legacy `reliable` flag (and its retry/timeout
@@ -36,13 +37,16 @@ namespace
     {
         namespace
         {
-            // Spin slice = max wall-clock that spinOnce can sleep when idle.
-            // 1 ms gives sub-millisecond p50 dispatch latency on the rrb
-            // backend (previously, when iox2 was the backend, this was 10 ms
-            // because the underlying state machine was expensive to wake; rrb's
-            // poll is a single atomic load so 1 ms is essentially free —
-            // 0.1 % of one core at 0 % message rate).
-            constexpr int kSharedTransportSpinSliceMs = 1;
+            // Watchdog ceiling for futex_waitv inside spinOnce. The spin
+            // thread is FULLY event-driven now — it wakes immediately on
+            // any channel publish or on a `transport_.wakeControl()` call
+            // from subscribe / shutdown / stop_callback. The watchdog
+            // exists only as a paranoia upper bound in case anything ever
+            // forgets to wake us (e.g. a future code path adds a
+            // subscriber without going through Transport::subscribeRaw).
+            // 1 second is comfortable for shutdown latency and means
+            // truly zero CPU at idle.
+            constexpr int kSharedTransportSpinWatchdogMs = 1000;
         }
 
         SharedTransport& SharedTransport::instance()
@@ -87,12 +91,20 @@ namespace
                 "raccoon-transport",
                 [this](libstp::threading::stop_token stop)
                 {
+                    // Stop_callback fires synchronously inside the
+                    // request_stop() call from spin_daemon_.stop(),
+                    // BEFORE that call returns. It nudges the spin
+                    // thread out of its futex_waitv park so the
+                    // stop_requested() check below sees the flag and
+                    // the loop exits immediately — instead of having
+                    // to wait the watchdog timeout.
+                    std::stop_callback wake_on_stop(stop, [this]
+                    {
+                        transport_.wakeControl();
+                    });
                     while (!stop.stop_requested())
                     {
-                        // Keep the transport API mutex hold time aligned with raccoon::Transport::spin().
-                        // Longer slices can starve concurrent publishers such as the 100 ms watchdog
-                        // heartbeat and make messages arrive already stale.
-                        transport_.spinOnce(kSharedTransportSpinSliceMs);
+                        transport_.spinOnce(kSharedTransportSpinWatchdogMs);
                     }
                 });
         }
