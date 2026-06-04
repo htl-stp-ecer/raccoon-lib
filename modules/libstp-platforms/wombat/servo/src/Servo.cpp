@@ -36,7 +36,6 @@ float libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
 void libstp::hal::servo::Servo::enable() const
 {
     platform::wombat::core::TransportWriter::instance().setServoMode(port, 2); // Enabled
-    platform::wombat::core::TransportWriter::instance().setServo(port, storedPosition);
 }
 
 void libstp::hal::servo::Servo::disable() const

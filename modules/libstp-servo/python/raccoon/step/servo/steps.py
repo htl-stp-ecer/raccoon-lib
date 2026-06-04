@@ -120,8 +120,6 @@ class SetServoPosition(Step):
         return f"SetServoPosition(servo={servo_label},angle={self._target_angle},duration={self._duration})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        self._servo_ref.enable()
-
         duration = self._duration
         if duration is None:
             current_angle = self._servo_ref.get_position()
@@ -214,8 +212,6 @@ class ShakeServo(Step):
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        self._servo_ref.enable()
-
         if self._angle_a == self._angle_b or self._duration == 0:
             self._servo_ref.set_position(self._angle_a)
             if self._duration > 0:
@@ -318,8 +314,6 @@ class SlowServo(Step):
         return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed},easing={easing_name})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
-        self._servo_ref.enable()
-
         start_angle = self._servo_ref.get_position()
         delta = self._target_angle - start_angle
 
