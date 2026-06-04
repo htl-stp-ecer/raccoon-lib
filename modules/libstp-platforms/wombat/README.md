@@ -15,14 +15,12 @@ The `wombat` bundle connects the HAL wrappers to the Wombat transport and firmwa
 
 `platform_core` for this bundle consists of:
 
-- `LcmReader`: subscribes to raccoon channels, caches the latest sensor and status data, and exposes synchronous reads to HAL drivers.
-- `LcmDataWriter`: publishes motor, servo, PID, reset, and shutdown commands.
+- `TransportReader`: subscribes to raccoon channels through `SharedTransport`, caches the latest sensor and status data, and exposes synchronous reads to HAL drivers.
+- `TransportWriter`: publishes motor, servo, PID, reset, and shutdown commands through the shared raccoon transport.
 
 ## Transport model
 
-The bundle uses `raccoon::Transport::create()` in both reader and writer helpers.
-
-- `LcmReader` starts a background listener thread on construction.
+- `TransportReader` and `TransportWriter` both use `libstp::transport_core::SharedTransport`.
 - High-rate sensor topics such as gyro, accel, and magnetometer are cached as messages arrive.
 - Several control/status topics use retained subscriptions so newly started processes can read the latest known state.
 - HAL drivers stay synchronous because they only talk to the reader/writer caches.
@@ -66,7 +64,7 @@ For logic-only changes, validate against the `mock` bundle first and then rebuil
 
 1. Confirm the public HAL declaration exists in `libstp-hal`.
 2. Decide whether the new behavior is command-oriented, read-oriented, or both.
-3. Put shared transport/channel logic into `core/LcmReader.*` or `core/LcmWriter.*`.
+3. Put shared transport/channel logic into `core/TransportReader.*` or `core/TransportWriter.*`.
 4. Implement the device-facing HAL methods in a new or existing driver directory.
 5. Register the driver target from the new directory's `CMakeLists.txt`.
 

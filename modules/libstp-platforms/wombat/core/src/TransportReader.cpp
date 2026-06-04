@@ -1,5 +1,4 @@
-#include "core/LcmReader.hpp"
-#include "core/LcmWriter.hpp"
+#include "core/TransportReader.hpp"
 #include <chrono>
 #include <cmath>
 #include <thread>
@@ -8,7 +7,7 @@
 using namespace platform::wombat::core;
 namespace Channels = raccoon::Channels;
 
-LcmReader::LcmReader()
+TransportReader::TransportReader()
     : transport_(libstp::transport_core::SharedTransport::instance())
 {
     using raccoon::SubscribeOptions;
@@ -210,11 +209,11 @@ LcmReader::LcmReader()
 
 }
 
-LcmReader::~LcmReader() {
+TransportReader::~TransportReader() {
 }
 
 // Read methods - return cached values
-raccoon::scalar_i8_t LcmReader::readServoMode(const int port) {
+raccoon::scalar_i8_t TransportReader::readServoMode(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     raccoon::scalar_i8_t result;
     auto it = servo_mode_cache_.find(port);
@@ -222,7 +221,7 @@ raccoon::scalar_i8_t LcmReader::readServoMode(const int port) {
     return result;
 }
 
-raccoon::scalar_f_t LcmReader::readServoValue(const int port) {
+raccoon::scalar_f_t TransportReader::readServoValue(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     raccoon::scalar_f_t result;
     auto it = servo_value_cache_.find(port);
@@ -230,32 +229,32 @@ raccoon::scalar_f_t LcmReader::readServoValue(const int port) {
     return result;
 }
 
-raccoon::vector3f_t LcmReader::readGyro() {
+raccoon::vector3f_t TransportReader::readGyro() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return gyro_cache_;
 }
 
-raccoon::vector3f_t LcmReader::readAccel() {
+raccoon::vector3f_t TransportReader::readAccel() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return accel_cache_;
 }
 
-raccoon::vector3f_t LcmReader::readLinearAccel() {
+raccoon::vector3f_t TransportReader::readLinearAccel() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return linear_accel_cache_;
 }
 
-raccoon::vector3f_t LcmReader::readMag() {
+raccoon::vector3f_t TransportReader::readMag() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return mag_cache_;
 }
 
-raccoon::scalar_f_t LcmReader::readHeading() {
+raccoon::scalar_f_t TransportReader::readHeading() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return heading_cache_;
 }
 
-raccoon::scalar_i32_t LcmReader::readBemf(const int idx) {
+raccoon::scalar_i32_t TransportReader::readBemf(const int idx) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     raccoon::scalar_i32_t result;
     auto it = bemf_cache_.find(idx);
@@ -263,19 +262,19 @@ raccoon::scalar_i32_t LcmReader::readBemf(const int idx) {
     return result;
 }
 
-int32_t LcmReader::readMotorPosition(const int port) {
+int32_t TransportReader::readMotorPosition(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto it = motor_position_cache_.find(port);
     return (it != motor_position_cache_.end()) ? it->second : 0;
 }
 
-bool LcmReader::readMotorDone(const int port) {
+bool TransportReader::readMotorDone(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto it = motor_done_cache_.find(port);
     return (it != motor_done_cache_.end()) ? it->second != 0 : false;
 }
 
-raccoon::scalar_i32_t LcmReader::readAnalog(const int port) {
+raccoon::scalar_i32_t TransportReader::readAnalog(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     raccoon::scalar_i32_t result;
     auto it = analog_cache_.find(port);
@@ -283,7 +282,7 @@ raccoon::scalar_i32_t LcmReader::readAnalog(const int port) {
     return result;
 }
 
-raccoon::scalar_i32_t LcmReader::readDigital(const int port) {
+raccoon::scalar_i32_t TransportReader::readDigital(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     raccoon::scalar_i32_t result;
     auto it = digital_cache_.find(port);
@@ -291,12 +290,12 @@ raccoon::scalar_i32_t LcmReader::readDigital(const int port) {
     return result;
 }
 
-raccoon::scalar_f_t LcmReader::readTemp() {
+raccoon::scalar_f_t TransportReader::readTemp() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return temp_cache_;
 }
 
-raccoon::vector3f_t LcmReader::readAccelVelocity() {
+raccoon::vector3f_t TransportReader::readAccelVelocity() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     raccoon::vector3f_t result;
     result.x = accel_velocity_cache_.x - accel_velocity_offset_.x;
@@ -305,22 +304,22 @@ raccoon::vector3f_t LcmReader::readAccelVelocity() {
     return result;
 }
 
-void LcmReader::resetAccelVelocity() {
+void TransportReader::resetAccelVelocity() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     accel_velocity_offset_ = accel_velocity_cache_;
 }
 
-LcmReader::OdometrySnapshot LcmReader::readOdometry() {
+TransportReader::OdometrySnapshot TransportReader::readOdometry() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return odom_cache_;
 }
 
-void LcmReader::resetOdometry() {
+void TransportReader::resetOdometry() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     odom_cache_ = OdometrySnapshot{};
 }
 
-bool LcmReader::waitForOdometryReset(int timeout_ms) {
+bool TransportReader::waitForOdometryReset(int timeout_ms) {
     constexpr float kThreshold = 0.002f;
     auto deadline = std::chrono::steady_clock::now()
                   + std::chrono::milliseconds(timeout_ms);
@@ -332,24 +331,24 @@ bool LcmReader::waitForOdometryReset(int timeout_ms) {
     });
 }
 
-bool LcmReader::waitForImuReady(int timeout_ms) {
+bool TransportReader::waitForImuReady(int timeout_ms) {
     const auto start = std::chrono::steady_clock::now();
     const auto timeout = std::chrono::milliseconds(timeout_ms);
 
     while (!imu_heading_received_) {
         const auto elapsed = std::chrono::steady_clock::now() - start;
         if (elapsed >= timeout) {
-            LIBSTP_LOG_ERROR("[LcmReader] Timeout waiting for IMU heading data");
+            LIBSTP_LOG_ERROR("[TransportReader] Timeout waiting for IMU heading data");
             return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    LIBSTP_LOG_TRACE("[LcmReader] IMU heading data received");
+    LIBSTP_LOG_TRACE("[TransportReader] IMU heading data received");
     return true;
 }
 
-bool LcmReader::waitForBemfData(int timeout_ms) {
+bool TransportReader::waitForBemfData(int timeout_ms) {
     const auto start = std::chrono::steady_clock::now();
     const auto timeout = std::chrono::milliseconds(timeout_ms);
 

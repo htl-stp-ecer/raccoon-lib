@@ -1,4 +1,4 @@
-#include "core/LcmWriter.hpp"
+#include "core/TransportWriter.hpp"
 
 #include <raccoon/Options.h>
 #include <chrono>
@@ -14,7 +14,7 @@ static int64_t currentTimestampUsec()
         std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-void LcmDataWriter::setMotor(uint8_t port, int valueData)
+void TransportWriter::setMotor(uint8_t port, int valueData)
 {
     raccoon::scalar_i32_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
@@ -22,7 +22,7 @@ void LcmDataWriter::setMotor(uint8_t port, int valueData)
     transport_.publish(Channels::motorPowerCommand(port), publishedValue);
 }
 
-void LcmDataWriter::setMotorVelocity(uint8_t port, int32_t velocity)
+void TransportWriter::setMotorVelocity(uint8_t port, int32_t velocity)
 {
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -30,7 +30,7 @@ void LcmDataWriter::setMotorVelocity(uint8_t port, int32_t velocity)
     transport_.publish(Channels::motorVelocityCommand(port), msg);
 }
 
-void LcmDataWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition)
+void TransportWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition)
 {
     raccoon::vector3f_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -40,7 +40,7 @@ void LcmDataWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goa
     transport_.publish(Channels::motorPositionCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition)
+void TransportWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition)
 {
     raccoon::vector3f_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -50,7 +50,7 @@ void LcmDataWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t del
     transport_.publish(Channels::motorRelativeCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setServo(uint8_t port, float degrees)
+void TransportWriter::setServo(uint8_t port, float degrees)
 {
     raccoon::scalar_f_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
@@ -58,8 +58,8 @@ void LcmDataWriter::setServo(uint8_t port, float degrees)
     transport_.publish(Channels::servoPositionCommand(port), publishedValue, reliableOpts);
 }
 
-void LcmDataWriter::setSmoothServo(const uint8_t port, const float targetDeg, const float speedDegPerSec,
-                                   const int easing)
+void TransportWriter::setSmoothServo(const uint8_t port, const float targetDeg,
+                                     const float speedDegPerSec, const int easing)
 {
     raccoon::vector3f_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -69,15 +69,18 @@ void LcmDataWriter::setSmoothServo(const uint8_t port, const float targetDeg, co
     transport_.publish(Channels::servoSmoothPositionCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setServoMode(uint8_t port, uint8_t mode)
+void TransportWriter::setServoMode(uint8_t port, uint8_t mode)
 {
     raccoon::scalar_i8_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.dir = static_cast<int8_t>(mode);
-    transport_.publish(Channels::servoMode(port), msg, reliableOpts);
+    // Publish on the dedicated COMMAND channel so the reader doesn't
+    // ping-pong with its own state publish on the formerly-shared
+    // `servoMode` channel. State lives on `servoMode`; commands here.
+    transport_.publish(Channels::servoModeCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
+void TransportWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
 {
     raccoon::vector3f_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -87,7 +90,7 @@ void LcmDataWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
     transport_.publish(Channels::motorPidCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::resetMotorPosition(uint8_t port)
+void TransportWriter::resetMotorPosition(uint8_t port)
 {
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -95,7 +98,7 @@ void LcmDataWriter::resetMotorPosition(uint8_t port)
     transport_.publish(Channels::motorPositionResetCommand(port), msg, reliableOpts);
 }
 
-void LcmDataWriter::setMotorMode(uint8_t port, int mode)
+void TransportWriter::setMotorMode(uint8_t port, int mode)
 {
     raccoon::scalar_i32_t modeCmd{};
     modeCmd.timestamp = currentTimestampUsec();
@@ -103,7 +106,7 @@ void LcmDataWriter::setMotorMode(uint8_t port, int mode)
     transport_.publish(Channels::motorModeCommand(port), modeCmd, reliableOpts);
 }
 
-void LcmDataWriter::setShutdown(bool enabled)
+void TransportWriter::setShutdown(bool enabled)
 {
     raccoon::scalar_i32_t shutdownCmd{};
     shutdownCmd.timestamp = currentTimestampUsec();
@@ -111,9 +114,9 @@ void LcmDataWriter::setShutdown(bool enabled)
     transport_.publish(Channels::SHUTDOWN_CMD, shutdownCmd, reliableOpts);
 }
 
-void LcmDataWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
-                                          const std::array<float, 4>& ticks_to_rad,
-                                          const std::array<std::array<float, 3>, 4>& fwd_matrix)
+void TransportWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
+                                           const std::array<float, 4>& ticks_to_rad,
+                                           const std::array<std::array<float, 3>, 4>& fwd_matrix)
 {
     raccoon::kinematics_config_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -128,7 +131,7 @@ void LcmDataWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 
     transport_.publish(Channels::KINEMATICS_CONFIG_CMD, msg, reliableOpts);
 }
 
-void LcmDataWriter::resetOdometry()
+void TransportWriter::resetOdometry()
 {
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -136,7 +139,7 @@ void LcmDataWriter::resetOdometry()
     transport_.publish(Channels::ODOM_RESET_CMD, msg, reliableOpts);
 }
 
-void LcmDataWriter::sendHeartbeat()
+void TransportWriter::sendHeartbeat()
 {
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -144,7 +147,7 @@ void LcmDataWriter::sendHeartbeat()
     transport_.publish(Channels::HEARTBEAT_CMD, msg);
 }
 
-LcmDataWriter::LcmDataWriter()
+TransportWriter::TransportWriter()
     : transport_(libstp::transport_core::SharedTransport::instance())
 {
 }

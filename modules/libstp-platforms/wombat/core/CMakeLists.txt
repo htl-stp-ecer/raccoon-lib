@@ -1,4 +1,5 @@
-add_library(platform_core STATIC src/LcmReader.cpp src/LcmWriter.cpp)
+add_library(platform_core STATIC src/TransportReader.cpp
+                                 src/TransportWriter.cpp)
 
 target_link_libraries(platform_core PUBLIC transport_core foundation)
 

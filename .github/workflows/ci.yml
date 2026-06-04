@@ -376,17 +376,24 @@ jobs:
           restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-
 
       # Compiler cache for the host-runner builds (macOS, Windows). On Linux
-      # the manylinux container can't reach the GHA cache API and its bind
-      # mounts get cleaned up before actions/cache picks them up, so we don't
-      # try to wire sccache through cibuildwheel there.
+      # the manylinux container can't reach the GHA cache API directly, so we
+      # use ccache with the project dir as the cache root (mounted as /project).
       - name: Set up sccache
         if: runner.os != 'Linux'
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@v0.0.10
+
+      - name: Cache ccache (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v5
+        with:
+          path: .gha-cache/ccache
+          key: ccache-${{ matrix.name }}-${{ github.run_id }}
+          restore-keys: ccache-${{ matrix.name }}-
 
       # QEMU is only needed for the aarch64 cross-build.
       - name: Set up QEMU
         if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
@@ -425,8 +432,20 @@ jobs:
           # Install it from the checked-out submodule before each wheel build.
           CIBW_BEFORE_BUILD: pip install {project}/raccoon-transport/python
 
+          # Install ccache inside the manylinux container before each Linux build.
+          CIBW_BEFORE_ALL_LINUX: yum install -y ccache
+
           # sccache GHA backend (host runners only — see Set up sccache step).
           CIBW_ENVIRONMENT: SCCACHE_GHA_ENABLED=true
+
+          # ccache for Linux: /project is the bind-mounted project dir inside
+          # the manylinux container, so .gha-cache/ccache is accessible there.
+          CIBW_ENVIRONMENT_LINUX: >-
+            CCACHE_DIR=/project/.gha-cache/ccache
+            CCACHE_MAXSIZE=3G
+            CCACHE_COMPRESS=1
+            CCACHE_BASEDIR=/project
+            CCACHE_NOHASHDIR=1
 
           # std::jthread was introduced in Apple libc++ with Xcode 15.3 / macOS 14.4.
           CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=14.4
@@ -454,13 +473,18 @@ jobs:
           # ── CMake config settings per platform ────────────────────────────
           # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
-          # CMAKE_*_COMPILER_LAUNCHER=sccache routes compilations through
-          # sccache on Windows. macOS skips it (universal2 PCH conflict).
-          # Linux skips it (no sccache binary in the manylinux container).
           CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
             cmake.define.LIBSTP_RUN_MYPY=OFF
+          # Linux: route compilations through ccache (installed via BEFORE_ALL).
+          CIBW_CONFIG_SETTINGS_LINUX: >-
+            cmake.define.DRIVER_BUNDLE=mock
+            cmake.define.LIBSTP_RUN_RUFF=OFF
+            cmake.define.LIBSTP_RUN_MYPY=OFF
+            cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache
+            cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
+          # Windows: route compilations through sccache.
           CIBW_CONFIG_SETTINGS_WINDOWS: >-
             cmake.define.DRIVER_BUNDLE=mock
             cmake.define.LIBSTP_RUN_RUFF=OFF
@@ -500,18 +524,22 @@ jobs:
           merge-multiple: true
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
-      # Generate .pyi stubs from the Linux wheel and inject them into it.
+      # Generate .pyi stubs once (using the Linux wheel since the runner is
+      # ubuntu) and inject them into every platform wheel. The stubs are
+      # platform-independent — the C++ API is identical across wheels — but
+      # IDEs / codegen tools only pick them up if they sit next to the .so
+      # inside the package, so each wheel needs its own copy.
       - name: Generate Python type stubs from built wheel
         run: |
           set -euxo pipefail
           python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel
           python -m pip install --quiet ./raccoon-transport/python
-          # Pick the cp313 Linux wheel as the import source.
-          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp313-cp313-manylinux*.whl | head -1)
+          # Pick the cp313 Linux x86_64 wheel as the import source.
+          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp313-cp313-manylinux*x86_64*.whl | head -1)
           python -m pip install --quiet "${LINUX_WHEEL}"
           STAGING="${RUNNER_TEMP}/stubs-staging" \
           SKIP_WHEEL=1 \

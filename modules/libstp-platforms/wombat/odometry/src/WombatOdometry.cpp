@@ -1,7 +1,7 @@
 //
 // Wombat-platform odometry — single source of truth for pose on real hardware.
 //
-// Reads STM32-computed dead-reckoning state directly over LCM (no bridge
+// Reads STM32-computed dead-reckoning state directly over transport (no bridge
 // indirection). Pushes the kinematics matrix to the coprocessor at construction
 // so the STM32 can integrate at full BEMF sample rate.
 //
@@ -9,8 +9,8 @@
 // instance via `libstp::hal::platform::Platform::createOdometry()`.
 //
 
-#include "core/LcmReader.hpp"
-#include "core/LcmWriter.hpp"
+#include "core/TransportReader.hpp"
+#include "core/TransportWriter.hpp"
 #include "foundation/config.hpp"
 #include "foundation/logging.hpp"
 #include "foundation/speed_mode_context.hpp"
@@ -60,7 +60,7 @@ namespace
 
         void update(double /*dt*/) override
         {
-            const auto snap = ::platform::wombat::core::LcmReader::instance().readOdometry();
+            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
             if (path_initialized_)
             {
                 const float dx = snap.pos_x - last_pos_x_;
@@ -75,7 +75,7 @@ namespace
         [[nodiscard]] libstp::foundation::Pose getPose() const override
         {
             libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPose");
-            const auto snap = ::platform::wombat::core::LcmReader::instance().readOdometry();
+            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
             libstp::foundation::Pose pose;
             pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
             pose.heading = snap.heading;
@@ -85,7 +85,7 @@ namespace
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override
         {
             libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getDistanceFromOrigin");
-            const auto snap = ::platform::wombat::core::LcmReader::instance().readOdometry();
+            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
             const Eigen::Vector3f pos(snap.pos_x, snap.pos_y, 0.0f);
 
             const auto cos_o = static_cast<float>(std::cos(origin_heading_));
@@ -102,7 +102,7 @@ namespace
 
         [[nodiscard]] double getHeading() const override
         {
-            const auto snap = ::platform::wombat::core::LcmReader::instance().readOdometry();
+            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
             return wrapAngle(static_cast<double>(snap.heading));
         }
 
@@ -132,15 +132,15 @@ namespace
 
             origin_heading_ = 0.0;
 
-            ::platform::wombat::core::LcmDataWriter::instance().resetOdometry();
+            ::platform::wombat::core::TransportWriter::instance().resetOdometry();
             sendKinematicsConfig();
 
-            if (!::platform::wombat::core::LcmReader::instance().waitForOdometryReset(
+            if (!::platform::wombat::core::TransportReader::instance().waitForOdometryReset(
                     kStm32ResetTimeoutMs))
             {
                 LIBSTP_LOG_WARN("WombatOdometry::reset timed out waiting for STM32 confirmation");
             }
-            ::platform::wombat::core::LcmReader::instance().resetOdometry();
+            ::platform::wombat::core::TransportReader::instance().resetOdometry();
 
             LIBSTP_LOG_WARN("WombatOdometry::reset complete");
         }
@@ -149,7 +149,7 @@ namespace
         void sendKinematicsConfig()
         {
             const auto cfg = kinematics_->getStmOdometryConfig();
-            ::platform::wombat::core::LcmDataWriter::instance().sendKinematicsConfig(
+            ::platform::wombat::core::TransportWriter::instance().sendKinematicsConfig(
                 cfg.inv_matrix, cfg.ticks_to_rad, cfg.fwd_matrix);
         }
 

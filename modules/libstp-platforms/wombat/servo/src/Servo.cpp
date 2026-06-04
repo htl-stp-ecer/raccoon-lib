@@ -1,7 +1,7 @@
 #include "hal/Servo.hpp"
 
-#include "core/LcmReader.hpp"
-#include "core/LcmWriter.hpp"
+#include "core/TransportReader.hpp"
+#include "core/TransportWriter.hpp"
 
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 4;
@@ -28,33 +28,33 @@ libstp::hal::servo::Servo::~Servo()
 void libstp::hal::servo::Servo::setPosition(const float position)
 {
     storedPosition = position;
-    platform::wombat::core::LcmDataWriter::instance().setServo(port, position);
+    platform::wombat::core::TransportWriter::instance().setServo(port, position);
 }
 
 float libstp::hal::servo::Servo::getPosition() const { return storedPosition; }
 
 void libstp::hal::servo::Servo::enable() const
 {
-    platform::wombat::core::LcmDataWriter::instance().setServoMode(port, 2); // Enabled
-    platform::wombat::core::LcmDataWriter::instance().setServo(port, storedPosition);
+    platform::wombat::core::TransportWriter::instance().setServoMode(port, 2); // Enabled
+    platform::wombat::core::TransportWriter::instance().setServo(port, storedPosition);
 }
 
 void libstp::hal::servo::Servo::disable() const
 {
-    platform::wombat::core::LcmDataWriter::instance().setServoMode(port, 1); // Disabled
+    platform::wombat::core::TransportWriter::instance().setServoMode(port, 1); // Disabled
 }
 
 void libstp::hal::servo::Servo::setSmoothPosition(const float targetDeg, const float speedDegPerSec,
                                                   const int easing)
 {
     storedPosition = targetDeg;
-    platform::wombat::core::LcmDataWriter::instance().setSmoothServo(port, targetDeg, speedDegPerSec, easing);
+    platform::wombat::core::TransportWriter::instance().setSmoothServo(port, targetDeg, speedDegPerSec, easing);
 }
 
 void libstp::hal::servo::Servo::fullyDisableAll()
 {
     for (uint8_t p = MIN_PORT; p < MAX_PORT; ++p)
-        platform::wombat::core::LcmDataWriter::instance().setServoMode(p, 0); // FullyDisabled
+        platform::wombat::core::TransportWriter::instance().setServoMode(p, 0); // FullyDisabled
 }
 
 /*

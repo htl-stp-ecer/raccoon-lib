@@ -166,7 +166,7 @@ class UIScreen(ABC, Generic[T], ClassNameLogger):
     # --- Internal Methods ---
 
     def _to_dict(self, setup_timer: dict | None = None) -> dict:
-        """Serialize screen to JSON for LCM.
+        """Serialize screen to the renderer JSON payload.
 
         Args:
             setup_timer: Pre-built ``{"seconds": N, "paused": bool}`` dict

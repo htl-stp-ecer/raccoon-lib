@@ -47,7 +47,6 @@ from raccoon.timing import StepTimingTracker
 
 from raccoon.foundation import get_transport, shutdown_transport
 
-
 with contextlib.suppress(RuntimeError):
     get_transport()
 atexit.register(shutdown_transport)

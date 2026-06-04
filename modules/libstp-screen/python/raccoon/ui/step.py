@@ -19,8 +19,7 @@ from raccoon.button import is_pressed
 from raccoon.foundation import Subscription, get_transport
 from raccoon.step.base import Step
 
-from .raccoon.screen_render_answer_t import screen_render_answer_t
-from .raccoon.screen_render_t import screen_render_t
+from .messages import ScreenRender, ScreenRenderAnswer
 from .screen import UIScreen
 from .widgets import Button, Center, Column, Row, Spacer, Text
 
@@ -30,7 +29,7 @@ class _SetupTimerState:
 
     Stored in a ContextVar so that every UIStep rendered during a
     SetupMission (including the WFL gate) can read the true remaining
-    time without requiring per-second LCM messages.
+    time without requiring per-second transport messages.
 
     Pausing shifts ``start_monotonic`` forward on resume so elapsed time
     genuinely freezes during the pause rather than merely hiding it in
@@ -132,7 +131,7 @@ class UIStep(Step, ABC):
                 self.result = result
     """
 
-    # LCM channel name for dynamic UI
+    # Logical screen identifier inside the screen-render payload.
     _SCREEN_NAME = "dynamic_ui"
 
     def __init__(self):
@@ -140,7 +139,7 @@ class UIStep(Step, ABC):
         self._robot: GenericRobot | None = None
         self._current_screen: UIScreen | None = None
         self._transport = get_transport()
-        self._lcm_pump_task: asyncio.Task | None = None
+        self._pump_task: asyncio.Task | None = None
         self._ui_active: bool = False  # Track if any UI has been shown
         # Persistent subscription state for non-blocking display/pump_events
         self._pump_queue: asyncio.Queue | None = None
@@ -179,10 +178,12 @@ class UIStep(Step, ABC):
         return screen._result
 
     async def _render_screen(self, screen: UIScreen) -> None:
-        """Send screen to Flutter via LCM."""
-        msg = screen_render_t()
-        msg.timestamp = int(time.time() * 1_000_000)
-        msg.screen_name = self._SCREEN_NAME
+        """Send screen to the external renderer."""
+        msg = ScreenRender(
+            timestamp=int(time.time() * 1_000_000),
+            screen_name=self._SCREEN_NAME,
+            entries="",
+        )
 
         timer_state = _active_setup_timer.get()
         if timer_state is not None and timer_state.duration > 0:
@@ -191,8 +192,8 @@ class UIStep(Step, ABC):
             setup_timer = None
 
         msg.entries = json.dumps(screen._to_dict(setup_timer=setup_timer))
-        self.debug(f"[LCM TX] screen_render -> {screen.__class__.__name__}: {screen.title}")
-        self._transport.publish("raccoon/screen_render", msg)
+        self.debug(f"[UI TX] screen_render -> {screen.__class__.__name__}: {screen.title}")
+        self._transport.publish_raw("raccoon/screen_render", msg.encode())
         self._ui_active = True
 
     async def _run_screen_events(self, screen: UIScreen) -> None:
@@ -200,9 +201,9 @@ class UIStep(Step, ABC):
         loop = asyncio.get_event_loop()
         event_queue: asyncio.Queue = asyncio.Queue()
 
-        # LCM message handler — receives unwrapped payload from reliable envelope
-        def lcm_handler(_channel, data):
-            msg = screen_render_answer_t.decode(data)
+        # Transport message handler receives raw payload bytes.
+        def on_answer(_channel, data):
+            msg = ScreenRenderAnswer.decode(data)
             if msg.screen_name == self._SCREEN_NAME:
                 try:
                     event = json.loads(msg.reason) if msg.reason else {}
@@ -210,14 +211,13 @@ class UIStep(Step, ABC):
                     event = {}
                 event["_action"] = msg.value
                 self.debug(
-                    f"[LCM RX] screen_answer <- action={msg.value}, data={msg.reason[:100] if msg.reason else 'none'}..."
+                    f"[UI RX] screen_answer <- action={msg.value}, data={msg.reason[:100] if msg.reason else 'none'}..."
                 )
                 loop.call_soon_threadsafe(event_queue.put_nowait, event)
 
-        # Subscribe with reliable=True to receive Flutter's reliable-published answers
         sub = self._transport.subscribe(
             "raccoon/screen_render/answer",
-            lcm_handler,
+            on_answer,
             reliable=True,
         )
 
@@ -259,12 +259,13 @@ class UIStep(Step, ABC):
         if not self._ui_active:
             return
         self._teardown_pump_sub()
-        msg = screen_render_t()
-        msg.timestamp = int(time.time() * 1_000_000)
-        msg.screen_name = self._SCREEN_NAME
-        msg.entries = json.dumps({"screen": "close"})
-        self.debug("[LCM TX] screen_render -> close")
-        self._transport.publish("raccoon/screen_render", msg)
+        msg = ScreenRender(
+            timestamp=int(time.time() * 1_000_000),
+            screen_name=self._SCREEN_NAME,
+            entries=json.dumps({"screen": "close"}),
+        )
+        self.debug("[UI TX] screen_render -> close")
+        self._transport.publish_raw("raccoon/screen_render", msg.encode())
         self._current_screen = None
         self._ui_active = False
 
@@ -318,26 +319,26 @@ class UIStep(Step, ABC):
         self.debug(f"Displaying screen (non-blocking): {screen.__class__.__name__}")
         await self._render_screen(screen)
 
-        # Set up persistent LCM subscription so events are buffered between
+        # Set up a persistent subscription so events are buffered between
         # pump_events() calls instead of being silently dropped.
         loop = asyncio.get_event_loop()
         self._pump_queue = asyncio.Queue()
         queue = self._pump_queue  # capture for closure
 
-        def lcm_handler(_channel, data):
-            msg = screen_render_answer_t.decode(data)
+        def on_answer(_channel, data):
+            msg = ScreenRenderAnswer.decode(data)
             if msg.screen_name == self._SCREEN_NAME:
                 try:
                     event = json.loads(msg.reason) if msg.reason else {}
                 except json.JSONDecodeError:
                     event = {}
                 event["_action"] = msg.value
-                self.debug(f"[LCM RX] pump <- action={msg.value}")
+                self.debug(f"[UI RX] pump <- action={msg.value}")
                 loop.call_soon_threadsafe(queue.put_nowait, event)
 
         self._pump_sub = self._transport.subscribe(
             "raccoon/screen_render/answer",
-            lcm_handler,
+            on_answer,
             reliable=True,
         )
 
@@ -368,7 +369,7 @@ class UIStep(Step, ABC):
 
         if timeout > 0:
             await asyncio.sleep(timeout)
-        # Yield so that call_soon_threadsafe callbacks from the LCM thread run.
+        # Yield so that call_soon_threadsafe callbacks from the transport thread run.
         await asyncio.sleep(0)
 
         while True:

@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-#include "core/LcmReader.hpp"
+#include "core/TransportReader.hpp"
 constexpr int MIN_PORT = 0;
 constexpr int MAX_PORT = 5;
 
@@ -28,5 +28,5 @@ libstp::hal::analog::AnalogSensor::~AnalogSensor()
 
 int libstp::hal::analog::AnalogSensor::read() const
 {
-    return platform::wombat::core::LcmReader::instance().readAnalog(port).value;
+    return platform::wombat::core::TransportReader::instance().readAnalog(port).value;
 }

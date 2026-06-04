@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace libstp::transport_core
 {
@@ -29,7 +30,7 @@ namespace libstp::transport_core
             int retry_interval_ms,
             std::uint32_t max_retries);
 
-        template <raccoon::LcmMessage T>
+        template <raccoon::TransportMessage T>
         bool publish(
             const std::string& channel,
             const T& message,
@@ -45,27 +46,42 @@ namespace libstp::transport_core
             bool reliable,
             bool request_retained);
 
-        template <raccoon::LcmMessage T>
+        template <raccoon::TransportMessage T>
         std::uint64_t subscribe(
             const std::string& channel,
             std::function<void(const T&)> handler,
             const raccoon::SubscribeOptions& options = {})
         {
+            // We forward `options.reliable` as a no-op (kept for binary
+            // compatibility with the LCM-era callers). Silence the
+            // template-instantiation cascade of deprecation warnings; the
+            // attribute still fires for user code that writes
+            // `opts.reliable = true` outside this header.
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+            const bool reliable_passthrough = options.reliable;
+#if defined(__GNUC__) || defined(__clang__)
+#  pragma GCC diagnostic pop
+#endif
             return subscribe_raw(
                 channel,
                 [handler = std::move(handler)](const void* data, int data_len)
                 {
                     T msg;
-                    if (msg.decode(data, 0, data_len) >= 0)
+                    if (msg.decode(static_cast<const uint8_t*>(data), data_len) >= 0)
                     {
                         handler(msg);
                     }
                 },
-                options.reliable,
+                reliable_passthrough,
                 options.requestRetained);
         }
 
         void unsubscribe(std::uint64_t subscription_id);
+        [[nodiscard]] raccoon::TransportStats get_and_reset_stats();
+        [[nodiscard]] std::size_t active_subscription_count() const;
         void shutdown();
 
         SharedTransport(const SharedTransport&) = delete;
@@ -78,9 +94,10 @@ namespace libstp::transport_core
         void ensure_started();
 
         raccoon::Transport transport_;
-        std::mutex mu_;
-        std::unordered_set<std::uint64_t> active_subscriptions_;
-        std::unordered_map<std::uint64_t, RawHandler> handlers_;
+        mutable std::mutex mu_;
+        std::unordered_map<std::string, std::unordered_map<std::uint64_t, RawHandler>> channel_handlers_;
+        std::unordered_map<std::uint64_t, std::string> subscription_channels_;
+        std::unordered_set<std::string> subscribed_channels_;
         std::atomic<std::uint64_t> next_subscription_id_{1};
         libstp::threading::ThreadManager::DaemonHandle spin_daemon_;
     };
