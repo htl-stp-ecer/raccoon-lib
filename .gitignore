@@ -170,3 +170,4 @@ logs/
 
 # Auto-generated DSL builder modules
 *_dsl.py
+.raccoon
