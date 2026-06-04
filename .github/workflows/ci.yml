@@ -172,11 +172,12 @@ jobs:
           key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   # ─── ARM64 release wheel (for Raspberry Pi / Wombat) ──────────────────────
+  # Temporarily disabled — GitHub Release + docs rebuild will be wired to
+  # the cibuildwheel publish-pypi job once that pipeline is stable.
   build:
     runs-on: [self-hosted, Linux, X64]
     needs: [changes]
-    # Only release on push to main, and only when non-doc files changed.
-    if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
+    if: false
     permissions:
       contents: write
     env:
