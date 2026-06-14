@@ -62,10 +62,15 @@ namespace platform::wombat::core
         /// Send kinematics config to STM32 for on-board odometry.
         void sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
                                   const std::array<float, 4>& ticks_to_rad,
-                                  const std::array<std::array<float, 3>, 4>& fwd_matrix);
+                                  const std::array<std::array<float, 3>, 4>& fwd_matrix,
+                                  const std::array<float, 4>& bemf_offset);
 
         /// Request STM32 to reset its integrated odometry pose.
         void resetOdometry();
+
+        /// Request the external calibration board to zero its fused odometry
+        /// pose. No-op on the wire if no bridge/board is listening.
+        void resetCalibOdometry();
     private:
         explicit TransportWriter();
         ~TransportWriter() = default;

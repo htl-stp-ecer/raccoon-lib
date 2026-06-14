@@ -22,6 +22,7 @@
 #include "hal/odometry.hpp"
 
 #include <Eigen/Core>
+#include <atomic>
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -31,6 +32,7 @@ namespace
 {
     using libstp::odometry::DistanceFromOrigin;
     using libstp::odometry::IOdometry;
+    using libstp::odometry::OdometrySource;
     using libstp::odometry::wrapAngle;
     using libstp::odometry::angularError;
 
@@ -60,50 +62,54 @@ namespace
 
         void update(double /*dt*/) override
         {
-            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
-            if (path_initialized_)
+            // Accumulate path length from whichever source currently drives the
+            // primary pose. On a source switch the baseline is dropped so the
+            // discontinuity between the two coordinate frames is not counted as
+            // travelled distance. Read the raw caches directly (no BEMF
+            // assertion) so path tracking never throws from the update loop.
+            const OdometrySource source = resolveSource();
+            float x;
+            float y;
+            if (source == OdometrySource::CalibrationBoard)
             {
-                const float dx = snap.pos_x - last_pos_x_;
-                const float dy = snap.pos_y - last_pos_y_;
+                const auto snap =
+                    ::platform::wombat::core::TransportReader::instance().readCalibOdometry();
+                x = snap.pos_x;
+                y = snap.pos_y;
+            }
+            else
+            {
+                const auto snap =
+                    ::platform::wombat::core::TransportReader::instance().readOdometry();
+                x = snap.pos_x;
+                y = snap.pos_y;
+            }
+
+            if (path_initialized_ && source == path_source_)
+            {
+                const float dx = x - last_pos_x_;
+                const float dy = y - last_pos_y_;
                 path_length_ += std::sqrt(dx * dx + dy * dy);
             }
-            last_pos_x_ = snap.pos_x;
-            last_pos_y_ = snap.pos_y;
+            last_pos_x_ = x;
+            last_pos_y_ = y;
+            path_source_ = source;
             path_initialized_ = true;
         }
 
         [[nodiscard]] libstp::foundation::Pose getPose() const override
         {
-            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPose");
-            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
-            libstp::foundation::Pose pose;
-            pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
-            pose.heading = snap.heading;
-            return pose;
+            return poseFor(resolveSource());
         }
 
         [[nodiscard]] DistanceFromOrigin getDistanceFromOrigin() const override
         {
-            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getDistanceFromOrigin");
-            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
-            const Eigen::Vector3f pos(snap.pos_x, snap.pos_y, 0.0f);
-
-            const auto cos_o = static_cast<float>(std::cos(origin_heading_));
-            const auto sin_o = static_cast<float>(std::sin(origin_heading_));
-            const Eigen::Vector3f forward_at_origin(cos_o, sin_o, 0.0f);
-            const Eigen::Vector3f right_at_origin(-sin_o, cos_o, 0.0f);
-
-            return DistanceFromOrigin{
-                pos.dot(forward_at_origin),
-                pos.dot(right_at_origin),
-                pos.norm(),
-            };
+            return distanceFromOrigin(poseFor(resolveSource()));
         }
 
         [[nodiscard]] double getHeading() const override
         {
-            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
-            return wrapAngle(static_cast<double>(snap.heading));
+            return wrapAngle(static_cast<double>(poseFor(resolveSource()).heading));
         }
 
         [[nodiscard]] double getAbsoluteHeading() const override
@@ -122,6 +128,26 @@ namespace
             return angularError(getHeading(), target_heading_rad);
         }
 
+        [[nodiscard]] OdometrySource getActiveSource() const override
+        {
+            return resolveSource();
+        }
+
+        [[nodiscard]] libstp::foundation::Pose getInternalPose() const override
+        {
+            return internalPose();
+        }
+
+        [[nodiscard]] double getInternalHeading() const override
+        {
+            return wrapAngle(static_cast<double>(internalPose().heading));
+        }
+
+        [[nodiscard]] DistanceFromOrigin getInternalDistanceFromOrigin() const override
+        {
+            return distanceFromOrigin(internalPose());
+        }
+
         void reset() override
         {
             if (!imu_->waitForReady(kImuReadyTimeoutMs))
@@ -131,8 +157,12 @@ namespace
             }
 
             origin_heading_ = 0.0;
+            path_initialized_ = false;
 
             ::platform::wombat::core::TransportWriter::instance().resetOdometry();
+            // Keep the external reference aligned with the internal frame so the
+            // two can be compared directly while tuning.
+            ::platform::wombat::core::TransportWriter::instance().resetCalibOdometry();
             sendKinematicsConfig();
 
             if (!::platform::wombat::core::TransportReader::instance().waitForOdometryReset(
@@ -146,11 +176,84 @@ namespace
         }
 
     private:
+        /// Decide which source backs the primary pose right now, logging every
+        /// transition so it is obvious in the logs which system is in use.
+        [[nodiscard]] OdometrySource resolveSource() const
+        {
+            const bool calib =
+                ::platform::wombat::core::TransportReader::instance().isCalibBoardConnected();
+            const OdometrySource source =
+                calib ? OdometrySource::CalibrationBoard : OdometrySource::Internal;
+
+            const OdometrySource previous =
+                active_source_.exchange(source, std::memory_order_relaxed);
+            if (source != previous)
+            {
+                if (source == OdometrySource::CalibrationBoard)
+                {
+                    LIBSTP_LOG_WARN(
+                        "[Odometry] source -> CALIBRATION_BOARD (external optical-flow + IMU)");
+                }
+                else
+                {
+                    LIBSTP_LOG_WARN(
+                        "[Odometry] source -> INTERNAL (STM32 wheel dead reckoning)");
+                }
+            }
+            return source;
+        }
+
+        /// Pose from the requested source, in meters / radians.
+        [[nodiscard]] libstp::foundation::Pose poseFor(OdometrySource source) const
+        {
+            return source == OdometrySource::CalibrationBoard ? calibPose() : internalPose();
+        }
+
+        /// Cheap STM32 dead-reckoning pose. Requires BEMF telemetry.
+        [[nodiscard]] libstp::foundation::Pose internalPose() const
+        {
+            libstp::foundation::SpeedModeContext::instance().assertBemfAvailable("IOdometry::getPose");
+            const auto snap = ::platform::wombat::core::TransportReader::instance().readOdometry();
+            libstp::foundation::Pose pose;
+            pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
+            pose.heading = snap.heading;
+            return pose;
+        }
+
+        /// External calibration-board pose (already converted to m / rad).
+        /// Independent of BEMF, so no speed-mode assertion is needed.
+        [[nodiscard]] libstp::foundation::Pose calibPose() const
+        {
+            const auto snap = ::platform::wombat::core::TransportReader::instance().readCalibOdometry();
+            libstp::foundation::Pose pose;
+            pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
+            pose.heading = snap.heading;
+            return pose;
+        }
+
+        /// Project a pose onto the origin frame fixed by the last reset().
+        [[nodiscard]] DistanceFromOrigin distanceFromOrigin(
+            const libstp::foundation::Pose& pose) const
+        {
+            const Eigen::Vector3f& pos = pose.position;
+
+            const auto cos_o = static_cast<float>(std::cos(origin_heading_));
+            const auto sin_o = static_cast<float>(std::sin(origin_heading_));
+            const Eigen::Vector3f forward_at_origin(cos_o, sin_o, 0.0f);
+            const Eigen::Vector3f right_at_origin(-sin_o, cos_o, 0.0f);
+
+            return DistanceFromOrigin{
+                pos.dot(forward_at_origin),
+                pos.dot(right_at_origin),
+                pos.norm(),
+            };
+        }
+
         void sendKinematicsConfig()
         {
             const auto cfg = kinematics_->getStmOdometryConfig();
             ::platform::wombat::core::TransportWriter::instance().sendKinematicsConfig(
-                cfg.inv_matrix, cfg.ticks_to_rad, cfg.fwd_matrix);
+                cfg.inv_matrix, cfg.ticks_to_rad, cfg.fwd_matrix, cfg.bemf_offset);
         }
 
         std::shared_ptr<libstp::hal::imu::IIMU> imu_;
@@ -161,6 +264,10 @@ namespace
         float last_pos_x_{0.0f};
         float last_pos_y_{0.0f};
         bool path_initialized_{false};
+        OdometrySource path_source_{OdometrySource::Internal};
+
+        // Tracks the last resolved source purely for transition logging.
+        mutable std::atomic<OdometrySource> active_source_{OdometrySource::Internal};
     };
 }
 

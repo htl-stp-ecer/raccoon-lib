@@ -15,6 +15,11 @@
 #include <utility>
 #include <vector>
 
+#include "autotune/control/control_elements.hpp"
+#include "autotune/control/control_loop.hpp"
+#include "autotune/control/control_path.hpp"
+#include "autotune/control/control_path_param_estimation.hpp"
+#include "autotune/control/controller_optimization.hpp"
 #include "foundation/logging.hpp"
 
 namespace libstp::autotune
@@ -391,6 +396,103 @@ double averageIse(const std::vector<StepResponseData>& trials)
     for (const auto& trial : trials)
         sum += computeIse(trial);
     return sum / static_cast<double>(trials.size());
+}
+
+// ----------------------------------------------------------------------------
+// ControlTheory differential-evolution gain computation.
+//
+// (1) Fit a PT1 plant (K, T) to the raw-PWM step response via DE system
+//     identification, then (2) DE-optimize physical firmware kp/ki/kd against
+//     the simulated closed loop using the dt-EXPLICIT ControlElementPID. The
+//     simulated PID matches the firmware pid.c form exactly so the optimized
+//     gains transfer directly.
+// ----------------------------------------------------------------------------
+struct CtPidResult
+{
+    bool   ok{false};
+    double kp{0};
+    double ki{0};
+    double kd{0};
+    double plantK{0};
+    double plantT{0};
+};
+
+CtPidResult optimizePidControlTheory(const StepResponseData&  raw_avg,
+                                     double                   command,
+                                     double                   stepHeight,
+                                     const FirmwarePidConfig& cfg)
+{
+    using namespace libstp::autotune::control;
+
+    CtPidResult out;
+
+    const std::size_t n = raw_avg.times.size();
+    if (n < 10 || raw_avg.measured.size() != n)
+        return out;
+
+    std::vector<std::pair<double, double>> meas;
+    meas.reserve(n);
+    for (std::size_t i = 0; i < n; ++i)
+        meas.emplace_back(raw_avg.times[i], raw_avg.measured[i]);
+
+    // ---- Plant fit (PT1) ----
+    // K0 = steady-state output / command, estimated from the last 10% tail.
+    if (!(command > 0.0))
+        return out;
+    const std::size_t tail_start = static_cast<std::size_t>(
+        static_cast<double>(n) * 0.9);
+    double tail_sum = 0.0;
+    std::size_t tail_count = n - tail_start;
+    for (std::size_t i = tail_start; i < n; ++i)
+        tail_sum += raw_avg.measured[i];
+    const double tail_mean = tail_sum / static_cast<double>(std::max<std::size_t>(1, tail_count));
+    const double K0 = tail_mean / command;
+    if (!(K0 > 0.0))
+        return out;
+    const double T0 = 0.1;
+
+    ControlPath plant;
+    plant.add(std::make_unique<ControlElementPT1>(K0, T0));
+    ControlPathParamEstimation est(plant, meas);
+    auto p = est.optimize(cfg.de_plant_min, cfg.de_plant_max, true,
+                          cfg.de_plant_steps, command, 0.0, cfg.de_seed);
+    if (p.size() < 2)
+        return out;
+    const double plantK = p[0];
+    const double plantT = p[1];
+    if (!std::isfinite(plantK) || !std::isfinite(plantT) || plantK <= 0.0 || plantT <= 0.0)
+        return out;
+
+    // ---- PID optimize against the closed loop ----
+    ControlPath loopPlant;
+    loopPlant.add(std::make_unique<ControlElementPT1>(plantK, plantT));
+    // Clamp the simulated PID output + integral term to the firmware actuator
+    // limit (MOTOR_MAX_DUTYCYCLE) so DE optimizes against the real saturating
+    // loop. An unbounded sim produces fictional overshoot and DE then picks
+    // uselessly small gains that are far too slow on hardware.
+    ControlElementPID pid(0, 0, 0, cfg.de_output_max, cfg.de_output_max);
+    ControlLoop       loop(pid, loopPlant);
+    ControllerOptimizationDifferentialEvolution opt(loop, pid);
+
+    const double endTime = cfg.de_sim_horizon_s;  // sim dt = endTime / 5000.
+    auto g = opt.optimize(0.0, cfg.de_gain_max, true, cfg.de_pid_steps,
+                          stepHeight, 0.0, endTime, cfg.de_max_overshoot,
+                          cfg.de_weight_ctrl, cfg.de_weight_overshoot, cfg.de_seed);
+    if (g.size() < 3)
+        return out;
+    const double kp = g[0];
+    const double ki = g[1];
+    const double kd = g[2];
+    if (!std::isfinite(kp) || !std::isfinite(ki) || !std::isfinite(kd) || kp <= 0.0)
+        return out;
+
+    out.ok     = true;
+    out.kp     = kp;
+    out.ki     = ki;
+    out.kd     = kd;
+    out.plantK = plantK;
+    out.plantT = plantT;
+    return out;
 }
 
 } // namespace
@@ -950,22 +1052,64 @@ std::map<int, FirmwarePidResult> FirmwarePidTuner::tune(
             continue;
         }
 
-        const foundation::PidGains gains = computeChrGains(result.plant, cfg);
-        if (gains.kp <= 0.0)
+        // Validation target (BEMF setpoint for the MAV step) is needed both as
+        // the DE step height and for the downstream baseline/tuned responses.
+        // Compute it FIRST so the DE optimizer can target it.
+        const int validation_target = static_cast<int>(
+            std::lround(std::abs(tail) * cfg.step_fraction));
+
+        bool have_gains = false;
+
+        if (cfg.use_control_theory)
         {
-            LIBSTP_LOG_WARN("[FirmwarePidTuner] port={} CHR kp<=0 — rejecting",
-                            port);
-            continue;
+            const CtPidResult ct = optimizePidControlTheory(
+                raw_avg, command, static_cast<double>(validation_target), cfg);
+            if (ct.ok)
+            {
+                result.kp         = static_cast<float>(ct.kp);
+                result.ki         = static_cast<float>(ct.ki);
+                result.kd         = static_cast<float>(ct.kd);
+                result.pid_method = "control_theory_de";
+                result.plant_K    = ct.plantK;
+                result.plant_T    = ct.plantT;
+                have_gains        = true;
+                LIBSTP_LOG_INFO(
+                    "[FirmwarePidTuner] port={} ControlTheory DE gains: "
+                    "kp={:.4f}, ki={:.4f}, kd={:.4f} (plant_K={:.4f}, plant_T={:.4f}s)",
+                    port, result.kp, result.ki, result.kd,
+                    result.plant_K, result.plant_T);
+            }
+            else
+            {
+                LIBSTP_LOG_WARN(
+                    "[FirmwarePidTuner] port={} ControlTheory DE failed — "
+                    "falling back to CHR heuristic",
+                    port);
+            }
         }
 
-        result.kp = static_cast<float>(gains.kp);
-        result.ki = static_cast<float>(gains.ki);
-        result.kd = static_cast<float>(gains.kd);
+        if (!have_gains)
+        {
+            const foundation::PidGains gains = computeChrGains(result.plant, cfg);
+            if (gains.kp <= 0.0)
+            {
+                LIBSTP_LOG_WARN("[FirmwarePidTuner] port={} CHR kp<=0 — rejecting",
+                                port);
+                continue;
+            }
+            result.kp         = static_cast<float>(gains.kp);
+            result.ki         = static_cast<float>(gains.ki);
+            result.kd         = static_cast<float>(gains.kd);
+            result.pid_method = "chr_fallback";
+            LIBSTP_LOG_INFO(
+                "[FirmwarePidTuner] port={} CHR fallback gains: "
+                "kp={:.4f}, ki={:.4f}, kd={:.4f}",
+                port, result.kp, result.ki, result.kd);
+        }
+
         candidate_gains[i] = {result.kp, result.ki, result.kd};
         has_candidate[i] = true;
 
-        const int validation_target = static_cast<int>(
-            std::lround(std::abs(tail) * cfg.step_fraction));
         if (validation_target > 0)
         {
             bemf_targets[i] = validation_target;
@@ -973,9 +1117,10 @@ std::map<int, FirmwarePidResult> FirmwarePidTuner::tune(
         }
 
         LIBSTP_LOG_INFO(
-            "[FirmwarePidTuner] port={} ControlTheory CHR_PID gains: "
+            "[FirmwarePidTuner] port={} candidate gains ({}): "
             "kp={:.4f}, ki={:.4f}, kd={:.4f}, validation_target={}",
-            port, result.kp, result.ki, result.kd, bemf_targets[i]);
+            port, result.pid_method, result.kp, result.ki, result.kd,
+            bemf_targets[i]);
     }
 
     const int val_trials = trialCount(cfg.validation_trials);
@@ -1109,13 +1254,16 @@ std::map<int, FirmwarePidResult> FirmwarePidTuner::tune(
         std::ofstream out(summary_path);
         if (out.is_open())
         {
-            out << "port,accepted,plant_method,Ks,Tu,Tg,kp,ki,kd,"
-                   "baseline_ise,tuned_ise\n";
+            out << "port,accepted,plant_method,pid_method,plant_K,plant_T,"
+                   "Ks,Tu,Tg,kp,ki,kd,baseline_ise,tuned_ise\n";
             for (const auto& [port, r] : results)
             {
                 out << port
                     << "," << (r.accepted ? 1 : 0)
                     << "," << r.plant.method
+                    << "," << r.pid_method
+                    << "," << r.plant_K
+                    << "," << r.plant_T
                     << "," << r.plant.Ks
                     << "," << r.plant.Tu
                     << "," << r.plant.Tg

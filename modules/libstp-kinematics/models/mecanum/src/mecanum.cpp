@@ -229,6 +229,11 @@ namespace libstp::kinematics::mecanum
             // the sign convention matches the kinematics matrix.
             if (motors[slot]->isInverted()) t2r = -t2r;
             cfg.ticks_to_rad[port] = static_cast<float>(t2r);
+
+            // BEMF offset is a magnitude; the STM32 applies it toward zero via
+            // copysign(reading), so it needs no inversion sign.
+            cfg.bemf_offset[port] =
+                static_cast<float>(motors[slot]->getCalibration().bemf_offset);
         }
 
         return cfg;

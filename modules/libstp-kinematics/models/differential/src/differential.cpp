@@ -192,6 +192,9 @@ namespace libstp::kinematics::differential
             // the sign convention matches the kinematics matrix.
             if (motors[slot]->isInverted()) t2r = -t2r;
             cfg.ticks_to_rad[port] = static_cast<float>(t2r);
+
+            cfg.bemf_offset[port] =
+                static_cast<float>(motors[slot]->getCalibration().bemf_offset);
         }
 
         return cfg;

@@ -32,6 +32,23 @@ namespace libstp::odometry
         double straight_line;
     };
 
+    /**
+     * @brief Which sensor source currently backs the primary pose estimate.
+     *
+     * The wombat platform automatically switches to the external calibration
+     * board when it is detected, because its optical-flow + IMU fusion is far
+     * more accurate than the cheap on-board dead reckoning. The internal
+     * estimate stays available through the `getInternal*()` accessors so it can
+     * be tuned against the external reference.
+     */
+    enum class OdometrySource
+    {
+        /// Cheap on-board dead reckoning (STM32 wheel odometry / sim).
+        Internal,
+        /// External calibration board (optical-flow + IMU fusion).
+        CalibrationBoard,
+    };
+
     struct IOdometry
     {
         virtual ~IOdometry() = default;
@@ -99,5 +116,56 @@ namespace libstp::odometry
          * Reset the odometry to origin (zero position, identity orientation)
          */
         virtual void reset() = 0;
+
+        /**
+         * Which source currently backs getPose()/getHeading()/etc.
+         *
+         * Implementations that have no external reference (mock, sim) always
+         * report ::Internal. The wombat implementation reports
+         * ::CalibrationBoard while the calibration board is detected.
+         *
+         * @return Active odometry source.
+         */
+        [[nodiscard]] virtual OdometrySource getActiveSource() const
+        {
+            return OdometrySource::Internal;
+        }
+
+        /**
+         * Get the internal (on-board dead-reckoning) pose, regardless of which
+         * source is currently active.
+         *
+         * When no external source exists this is identical to getPose(). On the
+         * wombat platform this always returns the cheap STM32 estimate even when
+         * the accurate calibration board is driving getPose() — letting callers
+         * read both side by side to tune the internal model against the
+         * external reference.
+         *
+         * @return Internal planar pose in world coordinates (meters / radians).
+         */
+        [[nodiscard]] virtual foundation::Pose getInternalPose() const
+        {
+            return getPose();
+        }
+
+        /**
+         * Get the internal (on-board dead-reckoning) heading in radians,
+         * regardless of which source is currently active.
+         * @return Internal heading in radians, range [-π, π].
+         */
+        [[nodiscard]] virtual double getInternalHeading() const
+        {
+            return getHeading();
+        }
+
+        /**
+         * Get distance-from-origin computed from the internal pose, regardless
+         * of which source is currently active.
+         * @return Forward, lateral, and straight-line distances from origin (m).
+         */
+        [[nodiscard]] virtual DistanceFromOrigin getInternalDistanceFromOrigin() const
+        {
+            return getDistanceFromOrigin();
+        }
     };
 }

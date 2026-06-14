@@ -116,7 +116,8 @@ void TransportWriter::setShutdown(bool enabled)
 
 void TransportWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
                                            const std::array<float, 4>& ticks_to_rad,
-                                           const std::array<std::array<float, 3>, 4>& fwd_matrix)
+                                           const std::array<std::array<float, 3>, 4>& fwd_matrix,
+                                           const std::array<float, 4>& bemf_offset)
 {
     raccoon::kinematics_config_t msg{};
     msg.timestamp = currentTimestampUsec();
@@ -128,6 +129,8 @@ void TransportWriter::sendKinematicsConfig(const std::array<std::array<float, 4>
     for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 3; ++c)
             msg.fwd_matrix[r * 3 + c] = fwd_matrix[r][c];
+    for (int i = 0; i < 4; ++i)
+        msg.bemf_offset[i] = bemf_offset[i];
     transport_.publish(Channels::KINEMATICS_CONFIG_CMD, msg, reliableOpts);
 }
 
@@ -137,6 +140,16 @@ void TransportWriter::resetOdometry()
     msg.timestamp = currentTimestampUsec();
     msg.value = 1;
     transport_.publish(Channels::ODOM_RESET_CMD, msg, reliableOpts);
+}
+
+void TransportWriter::resetCalibOdometry()
+{
+    // Channel lives outside raccoon::Channels (calibration-board bridge).
+    static constexpr auto kCalibOdomResetCmd = "raccoon/calib_board/cmd/odom/reset";
+    raccoon::scalar_i32_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.value = 1;
+    transport_.publish(kCalibOdomResetCmd, msg, reliableOpts);
 }
 
 void TransportWriter::sendHeartbeat()

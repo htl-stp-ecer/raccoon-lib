@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -83,6 +84,11 @@ namespace libstp::autotune
         double baseline_ise{0.0};
         double tuned_ise{0.0};
         bool accepted{false};
+        /// Raw baseline step-response recording (commanded vs measured), for
+        /// offline plotting of the open-loop fit.
+        StepResponseData baseline_response{};
+        /// Raw tuned step-response recording (empty when CHR was skipped).
+        StepResponseData tuned_response{};
     };
 
     /**
@@ -216,6 +222,43 @@ namespace libstp::autotune
         /// you replay the raw data offline to iterate on the identification
         /// algorithm without re-running on hardware.
         std::string csv_dir{};
+
+        // --------------------------------------------------------------------
+        // ControlTheory differential-evolution gain computation.
+        //
+        // When use_control_theory is true the per-motor candidate gains are
+        // computed by (1) fitting a PT1 plant to the raw-PWM step response via
+        // DE system-identification, then (2) DE-optimizing physical firmware
+        // kp/ki/kd against the simulated closed loop using the dt-EXPLICIT
+        // ControlElementPID (which mirrors STM32 pid.c). The CHR heuristic is
+        // kept only as a fallback when the DE fit fails.
+        //
+        // Scales:
+        //  * plant K is BEMF-units-per-%PWM (tens-to-hundreds for the wombat
+        //    motors at ~70% PWM), hence the large de_plant_max default.
+        //  * gains are physical firmware kp/ki/kd (per-second for ki/kd).
+        //  * de_max_overshoot is in output BEMF units.
+        //  * de_sim_horizon_s sets the internal sim dt = horizon / 5000
+        //    (default 5 s -> 1 ms). With the dt-explicit PID the optimized
+        //    gains are physical, so the sim dt need not equal the firmware
+        //    rate; the horizon only needs to cover settling.
+        // --------------------------------------------------------------------
+        bool          use_control_theory{true};
+        int           de_plant_steps{80};
+        double        de_plant_min{0.0001};
+        double        de_plant_max{5000.0};
+        int           de_pid_steps{60};
+        double        de_gain_max{10.0};
+        double        de_sim_horizon_s{5.0};
+        double        de_max_overshoot{50.0};
+        double        de_weight_ctrl{0.0};
+        double        de_weight_overshoot{1.0};
+        // Actuator saturation modeled in the closed-loop sim: the simulated PID
+        // output and integral term are clamped to +/-de_output_max, matching the
+        // firmware MOTOR_MAX_DUTYCYCLE (399). Without this the unbounded sim
+        // output produces fictional overshoot and DE picks uselessly small gains.
+        double        de_output_max{399.0};
+        std::uint32_t de_seed{0xC0FFEEu};
     };
 
     /**
@@ -231,6 +274,13 @@ namespace libstp::autotune
         double      baseline_ise{0.0};
         double      tuned_ise{0.0};
         bool        accepted{false};
+        /// Gain-computation method: "control_theory_de", "chr_fallback", or
+        /// "chr" (legacy default before any computation runs).
+        std::string pid_method{"chr"};
+        /// PT1 plant gain from the DE fit (BEMF units per %PWM). 0 if unused.
+        double      plant_K{0.0};
+        /// PT1 plant time constant from the DE fit (s). 0 if unused.
+        double      plant_T{0.0};
     };
 
     // ========================================================================
@@ -251,6 +301,15 @@ namespace libstp::autotune
     };
 
     /**
+     * @brief One PWM-vs-BEMF sample taken during a static-friction sweep.
+     */
+    struct StaticFrictionSample
+    {
+        int pwm_pct{0};      ///< Signed PWM percent commanded (+ forward, − reverse).
+        int median_bemf{0};  ///< Median |BEMF| (ADC counts) at this step.
+    };
+
+    /**
      * @brief Per-motor static-friction measurement result (kS in PWM percent).
      */
     struct StaticFrictionResult
@@ -260,6 +319,12 @@ namespace libstp::autotune
         int  ks_negative_pct{0};
         int  ks_avg_pct{0};
         bool measured{false};
+        /// Forward sweep PWM-vs-BEMF curve (pwm_pct > 0), in sweep order.
+        std::vector<StaticFrictionSample> forward_sweep{};
+        /// Reverse sweep PWM-vs-BEMF curve (pwm_pct < 0), in sweep order.
+        std::vector<StaticFrictionSample> reverse_sweep{};
+        /// Motion threshold used (median |BEMF| above this counts as "moving").
+        int motion_threshold{0};
     };
 
     // ========================================================================
@@ -278,6 +343,24 @@ namespace libstp::autotune
         int    sample_hz{200};         ///< Sampling rate (Hz).
         double noise_weight{1.0};      ///< Weight on filtered variance in the score.
         double lag_weight{0.5};        ///< Weight on (1 / lag-change-rate) in the score.
+        /// Open-loop PWM (%) applied to spin the motors while sampling. The LPF
+        /// filters the *running* BEMF stream, so the signal must be captured in
+        /// motion — sampling at standstill yields only deadzone noise and tunes
+        /// nothing. All drive motors spin forward together (one straight run).
+        int    spin_percent{40};
+        double settle_s{0.5};          ///< Settle time after spin-up before sampling (s).
+    };
+
+    /**
+     * @brief One point of the alpha sweep: the score (and its parts) the
+     *        candidate alpha achieved on the captured raw BEMF series.
+     */
+    struct VelLpfSweepPoint
+    {
+        double alpha{0.0};
+        double variance{0.0};        ///< Variance of the filtered series.
+        double lag_change_rate{0.0}; ///< Std-dev of |Δfilt| (movement proxy).
+        double score{0.0};           ///< Combined noise+lag score (lower is better).
     };
 
     /**
@@ -290,6 +373,12 @@ namespace libstp::autotune
         double tuned_alpha{0.5};
         double min_score{0.0};
         bool   applied{false};
+        /// Raw BEMF samples captured while the motor spun at a steady open-loop
+        /// PWM (ADC counts), in acquisition order. These are replayed offline to
+        /// render the raw-vs-filtered overlay at the chosen alpha.
+        std::vector<int> raw_bemf{};
+        /// Score-vs-alpha sweep curve (one entry per evaluated alpha).
+        std::vector<VelLpfSweepPoint> sweep{};
     };
 
     // ========================================================================

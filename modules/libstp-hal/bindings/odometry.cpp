@@ -19,6 +19,10 @@ void init_odometry(py::module& m)
                 + ", straight_line=" + std::to_string(d.straight_line) + ")";
         });
 
+    py::enum_<libstp::odometry::OdometrySource>(m, "OdometrySource")
+        .value("INTERNAL", libstp::odometry::OdometrySource::Internal)
+        .value("CALIBRATION_BOARD", libstp::odometry::OdometrySource::CalibrationBoard);
+
     py::class_<libstp::odometry::IOdometry,
                 std::shared_ptr<libstp::odometry::IOdometry>>(m, "IOdometry")
         .def("update", &libstp::odometry::IOdometry::update,
@@ -30,5 +34,15 @@ void init_odometry(py::module& m)
              py::arg("target_heading_rad"))
         .def("get_absolute_heading", &libstp::odometry::IOdometry::getAbsoluteHeading)
         .def("get_path_length", &libstp::odometry::IOdometry::getPathLength)
-        .def("reset", py::overload_cast<>(&libstp::odometry::IOdometry::reset));
+        .def("reset", py::overload_cast<>(&libstp::odometry::IOdometry::reset))
+        // Source introspection + internal (cheap) estimate, exposed so the
+        // accurate external calibration board can be used to tune the internal
+        // dead reckoning. get_active_source() reports which source currently
+        // backs get_pose()/get_heading(); the get_internal_* accessors always
+        // return the on-board STM32 estimate regardless of the active source.
+        .def("get_active_source", &libstp::odometry::IOdometry::getActiveSource)
+        .def("get_internal_pose", &libstp::odometry::IOdometry::getInternalPose)
+        .def("get_internal_heading", &libstp::odometry::IOdometry::getInternalHeading)
+        .def("get_internal_distance_from_origin",
+             &libstp::odometry::IOdometry::getInternalDistanceFromOrigin);
 }

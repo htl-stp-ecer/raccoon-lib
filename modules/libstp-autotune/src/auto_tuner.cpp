@@ -304,20 +304,23 @@ AutoTuneResult AutoTuner::tuneAll(const AutoTuneConfig& cfg)
         out.static_friction_ran = true;
     }
 
-    // ---- Phase 3: firmware_pid ----
-    if (cfg.tune_firmware_pid)
-    {
-        confirm("firmware_pid");
-        out.firmware_pid = runFirmwarePidPhase(cfg.firmware_pid_cfg, cfg.max_bemf_speeds);
-        out.firmware_pid_ran = !out.firmware_pid.empty();
-    }
-
-    // ---- Phase 4: encoder_cal (ticks_to_rad) ----
+    // ---- Phase 3: encoder_cal (ticks_to_rad) ----
+    // Ticks-to-rad is calibrated BEFORE the firmware velocity PID: the firmware
+    // PID's velocity setpoints are derived through ticks_to_rad, so the scale
+    // must be correct first.
     if (cfg.tune_encoder_cal)
     {
         confirm("encoder_cal");
         out.encoder_cal = runEncoderCalibrationPhase(cfg.encoder_cal_cfg);
         out.encoder_cal_ran = true;
+    }
+
+    // ---- Phase 4: firmware_pid ----
+    if (cfg.tune_firmware_pid)
+    {
+        confirm("firmware_pid");
+        out.firmware_pid = runFirmwarePidPhase(cfg.firmware_pid_cfg, cfg.max_bemf_speeds);
+        out.firmware_pid_ran = !out.firmware_pid.empty();
     }
 
     // ---- Phase 5: characterize ----

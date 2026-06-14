@@ -29,6 +29,10 @@ classifiers = [
 
 [project.optional-dependencies]
 test = ["pytest"]
+# Plotting for auto-tune reports (e.g. auto_tune_bemf_velocity). Optional:
+# the tuner always writes raw data (CSV/JSON) + a standalone plot.py; PNG
+# plots are rendered inline only when matplotlib is importable.
+plots = ["matplotlib"]
 dev = [
     "black",
     "ruff",

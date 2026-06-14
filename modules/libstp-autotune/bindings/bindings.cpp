@@ -7,6 +7,7 @@
 #include <pybind11/stl.h>
 
 #include "autotune/auto_tuner.hpp"
+#include "autotune/bemf_velocity_tune.hpp"
 #include "autotune/characterize_drive.hpp"
 #include "autotune/encoder_calibrator.hpp"
 #include "autotune/firmware_pid_tune.hpp"
@@ -160,6 +161,10 @@ PYBIND11_MODULE(autotune, m)
                       "ISE of the tuned step response (0 if not run).")
         .def_readonly("accepted",     &VelocityTuneResult::accepted,
                       "True if the tuned gains were applied and accepted.")
+        .def_readonly("baseline_response", &VelocityTuneResult::baseline_response,
+                      "Raw baseline step response (StepResponseData).")
+        .def_readonly("tuned_response",    &VelocityTuneResult::tuned_response,
+                      "Raw tuned step response (StepResponseData; empty if skipped).")
         .def("__repr__", [](const VelocityTuneResult& r) {
             std::ostringstream oss;
             oss << "VelocityTuneResult(axis=\"" << r.axis
@@ -408,7 +413,41 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("min_response_frac",  &FirmwarePidConfig::min_response_frac,
                        "Tail/|command| threshold for accepting the recording.")
         .def_readwrite("csv_dir",            &FirmwarePidConfig::csv_dir,
-                       "Directory for per-sample CSV dump (empty = disabled).");
+                       "Directory for per-sample CSV dump (empty = disabled).")
+        .def_readwrite("use_control_theory", &FirmwarePidConfig::use_control_theory,
+                       "Use DE system-id + DE PID optimization (CHR is fallback).")
+        .def_readwrite("de_plant_steps",     &FirmwarePidConfig::de_plant_steps,
+                       "DE generations for the PT1 plant fit.")
+        .def_readwrite("de_plant_min",       &FirmwarePidConfig::de_plant_min,
+                       "Lower bound for plant-fit parameters [K, T].")
+        .def_readwrite("de_plant_max",       &FirmwarePidConfig::de_plant_max,
+                       "Upper bound for plant-fit parameters (K is BEMF/%%PWM, large).")
+        .def_readwrite("de_pid_steps",       &FirmwarePidConfig::de_pid_steps,
+                       "DE generations for the PID gain optimization.")
+        .def_readwrite("de_gain_max",        &FirmwarePidConfig::de_gain_max,
+                       "Upper bound for optimized physical kp/ki/kd.")
+        .def_readwrite("de_sim_horizon_s",   &FirmwarePidConfig::de_sim_horizon_s,
+                       "Closed-loop sim horizon (s); sim dt = horizon / 5000.")
+        .def_readwrite("de_max_overshoot",   &FirmwarePidConfig::de_max_overshoot,
+                       "Allowed plant-output overshoot (BEMF units) before penalty.")
+        .def_readwrite("de_weight_ctrl",     &FirmwarePidConfig::de_weight_ctrl,
+                       "Penalty weight on control-output overshoot.")
+        .def_readwrite("de_weight_overshoot",&FirmwarePidConfig::de_weight_overshoot,
+                       "Penalty weight on plant-output overshoot.")
+        .def_readwrite("de_output_max",      &FirmwarePidConfig::de_output_max,
+                       "Sim actuator saturation (= firmware MOTOR_MAX_DUTYCYCLE, 399).")
+        .def_readwrite("de_seed",            &FirmwarePidConfig::de_seed,
+                       "Deterministic DE seed.")
+        .def_readwrite("raw_pwm_percent",    &FirmwarePidConfig::raw_pwm_percent,
+                       "Open-loop PWM %% applied during the plant-identification step.")
+        .def_readwrite("decel_duration_s",   &FirmwarePidConfig::decel_duration_s,
+                       "Coast-down recording duration after the raw-PWM step (s).")
+        .def_readwrite("identification_trials", &FirmwarePidConfig::identification_trials,
+                       "Number of raw-PWM plant-identification trials (averaged).")
+        .def_readwrite("validation_trials",  &FirmwarePidConfig::validation_trials,
+                       "Number of MAV baseline/tuned validation trials (averaged).")
+        .def_readwrite("accept_improvement_frac", &FirmwarePidConfig::accept_improvement_frac,
+                       "Min fractional mean-ISE improvement required to accept gains.");
 
     py::class_<FirmwarePidResult>(m, "FirmwarePidResult",
                                   "Result of tuning a single motor's firmware PID.")
@@ -421,6 +460,9 @@ PYBIND11_MODULE(autotune, m)
         .def_readonly("baseline_ise", &FirmwarePidResult::baseline_ise)
         .def_readonly("tuned_ise",    &FirmwarePidResult::tuned_ise)
         .def_readonly("accepted",     &FirmwarePidResult::accepted)
+        .def_readonly("pid_method",   &FirmwarePidResult::pid_method)
+        .def_readonly("plant_K",      &FirmwarePidResult::plant_K)
+        .def_readonly("plant_T",      &FirmwarePidResult::plant_T)
         .def("__repr__", [](const FirmwarePidResult& r) {
             std::ostringstream oss;
             oss << "FirmwarePidResult(port=" << r.motor_port
@@ -473,6 +515,14 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("samples_per_step", &StaticFrictionConfig::samples_per_step)
         .def_readwrite("motion_threshold", &StaticFrictionConfig::motion_threshold);
 
+    py::class_<StaticFrictionSample>(m, "StaticFrictionSample",
+                                     "One PWM-vs-BEMF sample from a kS sweep.")
+        .def(py::init<>())
+        .def_readonly("pwm_pct",     &StaticFrictionSample::pwm_pct,
+                      "Signed PWM percent (+ forward, - reverse).")
+        .def_readonly("median_bemf", &StaticFrictionSample::median_bemf,
+                      "Median |BEMF| (ADC counts) at this step.");
+
     py::class_<StaticFrictionResult>(m, "StaticFrictionResult",
                                      "Per-motor kS measurement result.")
         .def(py::init<>())
@@ -481,6 +531,12 @@ PYBIND11_MODULE(autotune, m)
         .def_readonly("ks_negative_pct", &StaticFrictionResult::ks_negative_pct)
         .def_readonly("ks_avg_pct",      &StaticFrictionResult::ks_avg_pct)
         .def_readonly("measured",        &StaticFrictionResult::measured)
+        .def_readonly("forward_sweep",   &StaticFrictionResult::forward_sweep,
+                      "Forward sweep PWM-vs-BEMF curve (list[StaticFrictionSample]).")
+        .def_readonly("reverse_sweep",   &StaticFrictionResult::reverse_sweep,
+                      "Reverse sweep PWM-vs-BEMF curve (list[StaticFrictionSample]).")
+        .def_readonly("motion_threshold", &StaticFrictionResult::motion_threshold,
+                      "Median |BEMF| threshold above which the motor counts as moving.")
         .def("__repr__", [](const StaticFrictionResult& r) {
             std::ostringstream oss;
             oss << "StaticFrictionResult(port=" << r.motor_port
@@ -526,7 +582,20 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("measure_duration_s", &VelLpfConfig::measure_duration_s)
         .def_readwrite("sample_hz",          &VelLpfConfig::sample_hz)
         .def_readwrite("noise_weight",       &VelLpfConfig::noise_weight)
-        .def_readwrite("lag_weight",         &VelLpfConfig::lag_weight);
+        .def_readwrite("lag_weight",         &VelLpfConfig::lag_weight)
+        .def_readwrite("spin_percent",       &VelLpfConfig::spin_percent)
+        .def_readwrite("settle_s",           &VelLpfConfig::settle_s);
+
+    py::class_<VelLpfSweepPoint>(m, "VelLpfSweepPoint",
+                                 "One point of the vel_lpf alpha sweep.")
+        .def(py::init<>())
+        .def_readonly("alpha",           &VelLpfSweepPoint::alpha)
+        .def_readonly("variance",        &VelLpfSweepPoint::variance,
+                      "Variance of the filtered series at this alpha.")
+        .def_readonly("lag_change_rate", &VelLpfSweepPoint::lag_change_rate,
+                      "Std-dev of |delta filt| (movement proxy) at this alpha.")
+        .def_readonly("score",           &VelLpfSweepPoint::score,
+                      "Combined noise+lag score (lower is better).");
 
     py::class_<VelLpfResult>(m, "VelLpfResult",
                              "Per-motor vel_lpf_alpha tuning result.")
@@ -536,6 +605,10 @@ PYBIND11_MODULE(autotune, m)
         .def_readonly("tuned_alpha",   &VelLpfResult::tuned_alpha)
         .def_readonly("min_score",     &VelLpfResult::min_score)
         .def_readonly("applied",       &VelLpfResult::applied)
+        .def_readonly("raw_bemf",      &VelLpfResult::raw_bemf,
+                      "Raw BEMF samples captured while quiescent (list[int]).")
+        .def_readonly("sweep",         &VelLpfResult::sweep,
+                      "Score-vs-alpha sweep curve (list[VelLpfSweepPoint]).")
         .def("__repr__", [](const VelLpfResult& r) {
             std::ostringstream oss;
             oss << "VelLpfResult(port=" << r.motor_port
@@ -658,6 +731,98 @@ PYBIND11_MODULE(autotune, m)
              "Run the IMU-vs-odometry calibration sweep. Updates each motor's "
              "MotorCalibration in place; the caller must re-publish the "
              "kinematics config to the STM32.");
+
+    // ------------------------------------------------------------------
+    // BEMF→velocity calibration (calibration-board ground truth)
+    // ------------------------------------------------------------------
+    py::class_<BemfVelocityConfig>(m, "BemfVelocityConfig",
+        "Configuration for the calibration-board BEMF→rad calibration.")
+        .def(py::init<>())
+        .def_readwrite("pwm_levels",            &BemfVelocityConfig::pwm_levels)
+        .def_readwrite("pwm_min_percent",       &BemfVelocityConfig::pwm_min_percent)
+        .def_readwrite("pwm_max_percent",       &BemfVelocityConfig::pwm_max_percent)
+        .def_readwrite("pwm_steps",             &BemfVelocityConfig::pwm_steps)
+        .def_readwrite("sweeps",                &BemfVelocityConfig::sweeps)
+        .def_readwrite("pre_roll_distance_m",   &BemfVelocityConfig::pre_roll_distance_m)
+        .def_readwrite("measure_distance_m",    &BemfVelocityConfig::measure_distance_m)
+        .def_readwrite("segment_timeout_s",     &BemfVelocityConfig::segment_timeout_s)
+        .def_readwrite("return_pwm_percent",    &BemfVelocityConfig::return_pwm_percent)
+        .def_readwrite("return_tolerance_m",    &BemfVelocityConfig::return_tolerance_m)
+        .def_readwrite("return_timeout_s",      &BemfVelocityConfig::return_timeout_s)
+        .def_readwrite("sample_hz",             &BemfVelocityConfig::sample_hz)
+        .def_readwrite("settle_s",              &BemfVelocityConfig::settle_s)
+        .def_readwrite("min_window_distance_m", &BemfVelocityConfig::min_window_distance_m)
+        .def_readwrite("min_window_ticks",      &BemfVelocityConfig::min_window_ticks)
+        .def_readwrite("require_calib_board",   &BemfVelocityConfig::require_calib_board)
+        .def_readwrite("apply",                 &BemfVelocityConfig::apply);
+
+    py::class_<BemfVelocityPoint>(m, "BemfVelocityPoint",
+        "One measurement window at a single PWM level.")
+        .def(py::init<>())
+        .def_readonly("pwm_percent",             &BemfVelocityPoint::pwm_percent)
+        .def_readonly("ground_truth_distance_m", &BemfVelocityPoint::ground_truth_distance_m)
+        .def_readonly("window_time_s",           &BemfVelocityPoint::window_time_s)
+        .def_readonly("body_speed_mps",          &BemfVelocityPoint::body_speed_mps)
+        .def_readonly("wheel_omega_rad_s",       &BemfVelocityPoint::wheel_omega_rad_s)
+        .def_readonly("delta_ticks",             &BemfVelocityPoint::delta_ticks)
+        .def_readonly("median_bemf",             &BemfVelocityPoint::median_bemf)
+        .def_readonly("ticks_to_rad",            &BemfVelocityPoint::ticks_to_rad)
+        .def_readonly("valid",                   &BemfVelocityPoint::valid);
+
+    py::class_<BemfMotorFit>(m, "BemfMotorFit",
+        "Per-motor fit + linearity diagnostics across the speed sweep.")
+        .def(py::init<>())
+        .def_readonly("port",                 &BemfMotorFit::port)
+        .def_readonly("n_points",             &BemfMotorFit::n_points)
+        .def_readonly("ticks_to_rad_median",  &BemfMotorFit::ticks_to_rad_median)
+        .def_readonly("ticks_to_rad_mean",    &BemfMotorFit::ticks_to_rad_mean)
+        .def_readonly("ticks_to_rad_cv",      &BemfMotorFit::ticks_to_rad_cv)
+        .def_readonly("bemf_omega_slope",     &BemfMotorFit::bemf_omega_slope)
+        .def_readonly("bemf_omega_intercept", &BemfMotorFit::bemf_omega_intercept)
+        .def_readonly("bemf_omega_r2",        &BemfMotorFit::bemf_omega_r2)
+        .def_readonly("bemf_offset",          &BemfMotorFit::bemf_offset)
+        .def_readonly("linear",               &BemfMotorFit::linear);
+
+    py::class_<BemfVelocityResult>(m, "BemfVelocityResult",
+        "Result of a BEMF→velocity calibration run.")
+        .def(py::init<>())
+        .def_readonly("points",         &BemfVelocityResult::points)
+        .def_readonly("motors",         &BemfVelocityResult::motors)
+        .def_readonly("ticks_to_rad",   &BemfVelocityResult::ticks_to_rad)
+        .def_readonly("bemf_offset",    &BemfVelocityResult::bemf_offset)
+        .def_readonly("linear_overall", &BemfVelocityResult::linear_overall)
+        .def_readonly("applied",        &BemfVelocityResult::applied)
+        .def_readonly("success",        &BemfVelocityResult::success)
+        .def_readonly("failure_reason", &BemfVelocityResult::failure_reason)
+        .def("__repr__", [](const BemfVelocityResult& r) {
+            std::ostringstream oss;
+            oss << "BemfVelocityResult(success=" << (r.success ? "True" : "False")
+                << ", linear=" << (r.linear_overall ? "True" : "False")
+                << ", points=" << r.points.size();
+            if (!r.failure_reason.empty())
+                oss << ", reason=\"" << r.failure_reason << "\"";
+            oss << ")";
+            return oss.str();
+        });
+
+    py::class_<BemfVelocityTuner>(m, "BemfVelocityTuner",
+        "Calibration-board BEMF→rad calibrator (fully automatic).")
+        .def(py::init([](libstp::drive::Drive& drive,
+                          libstp::odometry::IOdometry& odometry) {
+                 return std::make_unique<BemfVelocityTuner>(drive, odometry);
+             }),
+             py::arg("drive"),
+             py::arg("odometry"),
+             py::keep_alive<1, 2>(),
+             py::keep_alive<1, 3>(),
+             "Construct a BemfVelocityTuner.")
+        .def("tune",
+             &BemfVelocityTuner::tune,
+             py::arg("cfg"),
+             py::call_guard<py::gil_scoped_release>(),
+             "Sweep PWM levels, measure ground-truth distance vs accumulated "
+             "BEMF ticks per motor, derive per-motor ticks_to_rad + a linearity "
+             "report. Applies + republishes when cfg.apply is set.");
 
     // ------------------------------------------------------------------
     // Orchestrator — AutoTuner

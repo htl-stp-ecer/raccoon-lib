@@ -141,8 +141,22 @@ docker_exec() {
     extra_env+=(-e "FORCE_RECONFIGURE=${FORCE_RECONFIGURE}")
   fi
 
+  # If raccoon-transport is a symlink to a sibling checkout (local dev
+  # workflow), the symlink dangles inside the container because only $PWD
+  # is bind-mounted. Overlay the resolved target at /src/raccoon-transport
+  # so FetchContent's SOURCE_DIR sees a real directory.
+  local symlink_mounts=()
+  if [[ -L "$PWD/raccoon-transport" ]]; then
+    local rt_real
+    rt_real="$(readlink -f "$PWD/raccoon-transport")"
+    if [[ -d "$rt_real" ]]; then
+      symlink_mounts+=(-v "$rt_real:/src/raccoon-transport")
+    fi
+  fi
+
   docker run --rm --platform="$PLATFORM" \
     -v "$PWD":/src \
+    "${symlink_mounts[@]}" \
     "${ccache_mount[@]}" \
     "${pip_mount[@]}" \
     -e CCACHE_DIR=/ccache \
