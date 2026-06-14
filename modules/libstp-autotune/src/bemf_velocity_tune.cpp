@@ -287,9 +287,15 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
         fit.bemf_omega_slope     = lf.slope;
         fit.bemf_omega_intercept = lf.intercept;
         fit.bemf_omega_r2        = lf.r2;
-        // BEMF count where the driving line hits ω=0 = the per-motor offset the
-        // STM32 should subtract (clamped >= 0; only physical for slope > 0).
-        fit.bemf_offset = (lf.slope > 1e-9) ? std::max(0.0, -lf.intercept / lf.slope) : 0.0;
+        // BEMF reading where the driving line hits ω=0 (in getBemf()'s
+        // inversion-corrected space). Keep the sign — inverted motors have a
+        // negative corrected-space offset.
+        const double b_corrected =
+            (std::abs(lf.slope) > 1e-9) ? -lf.intercept / lf.slope : 0.0;
+        // The STM32 integrates the RAW BEMF reading (getBemf() applies the
+        // inversion on top), so convert the offset back to raw space: negate it
+        // for inverted motors. The firmware then subtracts it plainly.
+        fit.bemf_offset = motors[i]->isInverted() ? -b_corrected : b_corrected;
 
         const double max_omega = *std::max_element(omega.begin(), omega.end());
         const bool small_offset = std::abs(fit.bemf_omega_intercept) <= 0.10 * std::max(1e-6, max_omega);
