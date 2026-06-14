@@ -545,7 +545,9 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("measure_duration_s", &VelLpfConfig::measure_duration_s)
         .def_readwrite("sample_hz",          &VelLpfConfig::sample_hz)
         .def_readwrite("noise_weight",       &VelLpfConfig::noise_weight)
-        .def_readwrite("lag_weight",         &VelLpfConfig::lag_weight);
+        .def_readwrite("lag_weight",         &VelLpfConfig::lag_weight)
+        .def_readwrite("spin_percent",       &VelLpfConfig::spin_percent)
+        .def_readwrite("settle_s",           &VelLpfConfig::settle_s);
 
     py::class_<VelLpfSweepPoint>(m, "VelLpfSweepPoint",
                                  "One point of the vel_lpf alpha sweep.")
