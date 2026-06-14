@@ -466,7 +466,11 @@ CtPidResult optimizePidControlTheory(const StepResponseData&  raw_avg,
     // ---- PID optimize against the closed loop ----
     ControlPath loopPlant;
     loopPlant.add(std::make_unique<ControlElementPT1>(plantK, plantT));
-    ControlElementPID pid(0, 0, 0);
+    // Clamp the simulated PID output + integral term to the firmware actuator
+    // limit (MOTOR_MAX_DUTYCYCLE) so DE optimizes against the real saturating
+    // loop. An unbounded sim produces fictional overshoot and DE then picks
+    // uselessly small gains that are far too slow on hardware.
+    ControlElementPID pid(0, 0, 0, cfg.de_output_max, cfg.de_output_max);
     ControlLoop       loop(pid, loopPlant);
     ControllerOptimizationDifferentialEvolution opt(loop, pid);
 

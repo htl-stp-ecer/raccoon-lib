@@ -253,6 +253,11 @@ namespace libstp::autotune
         double        de_max_overshoot{50.0};
         double        de_weight_ctrl{0.0};
         double        de_weight_overshoot{1.0};
+        // Actuator saturation modeled in the closed-loop sim: the simulated PID
+        // output and integral term are clamped to +/-de_output_max, matching the
+        // firmware MOTOR_MAX_DUTYCYCLE (399). Without this the unbounded sim
+        // output produces fictional overshoot and DE picks uselessly small gains.
+        double        de_output_max{399.0};
         std::uint32_t de_seed{0xC0FFEEu};
     };
 

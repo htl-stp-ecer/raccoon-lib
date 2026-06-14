@@ -145,7 +145,16 @@ private:
 class ControlElementPID final : public ControlElement
 {
 public:
-    ControlElementPID(double kp, double ki, double kd) : kp_(kp), ki_(ki), kd_(kd) {}
+    // out_max / i_max default to "unbounded" (huge) so the element is a pure
+    // parallel PID unless saturation is requested. When tuning the firmware
+    // velocity loop, set both to MOTOR_MAX_DUTYCYCLE so the simulated loop
+    // saturates exactly like the STM32 pid.c — otherwise an unbounded sim
+    // output produces fictional overshoot and DE picks uselessly small gains.
+    ControlElementPID(double kp, double ki, double kd,
+                      double out_max = 1e30, double i_max = 1e30)
+        : kp_(kp), ki_(ki), kd_(kd), out_max_(out_max), i_max_(i_max)
+    {
+    }
 
     [[nodiscard]] std::string getType() const override { return "PID"; }
     [[nodiscard]] double getLowestTimeConstant() const override { return -1; }
@@ -162,7 +171,31 @@ public:
         iErr_ += e * d;
         const double dErr = (e - prevErr_) / d;
         prevErr_          = e;
-        return kp_ * e + ki_ * iErr_ + kd_ * dErr;
+
+        // Integral anti-windup: clamp the I-term and back-calculate iErr,
+        // matching stm32 pid.c.
+        double iTerm = ki_ * iErr_;
+        if (ki_ > 0.0)
+        {
+            if (iTerm > i_max_)
+            {
+                iTerm = i_max_;
+                iErr_ = i_max_ / ki_;
+            }
+            else if (iTerm < -i_max_)
+            {
+                iTerm = -i_max_;
+                iErr_ = -i_max_ / ki_;
+            }
+        }
+
+        // Output saturation, matching stm32 pid.c clamp to +/-MOTOR_MAX_DUTYCYCLE.
+        double cmd = kp_ * e + iTerm + kd_ * dErr;
+        if (cmd > out_max_)
+            cmd = out_max_;
+        else if (cmd < -out_max_)
+            cmd = -out_max_;
+        return cmd;
     }
     [[nodiscard]] int optimizeGetNumParameters() const override { return 3; }
     void optimizeSetParameters(const std::vector<double>& params, int startIdx) override
@@ -176,6 +209,8 @@ private:
     double kp_;
     double ki_;
     double kd_;
+    double out_max_;
+    double i_max_;
     double iErr_{0};
     double prevErr_{0};
 };

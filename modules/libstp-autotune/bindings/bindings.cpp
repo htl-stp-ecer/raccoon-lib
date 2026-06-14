@@ -434,6 +434,8 @@ PYBIND11_MODULE(autotune, m)
                        "Penalty weight on control-output overshoot.")
         .def_readwrite("de_weight_overshoot",&FirmwarePidConfig::de_weight_overshoot,
                        "Penalty weight on plant-output overshoot.")
+        .def_readwrite("de_output_max",      &FirmwarePidConfig::de_output_max,
+                       "Sim actuator saturation (= firmware MOTOR_MAX_DUTYCYCLE, 399).")
         .def_readwrite("de_seed",            &FirmwarePidConfig::de_seed,
                        "Deterministic DE seed.")
         .def_readwrite("raw_pwm_percent",    &FirmwarePidConfig::raw_pwm_percent,
