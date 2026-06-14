@@ -26,7 +26,8 @@ std::string motor_calibration_to_string(const libstp::foundation::MotorCalibrati
     std::ostringstream oss;
     oss << "MotorCalibration(ticks_to_rad=" << calibration.ticks_to_rad
         << ", vel_lpf_alpha=" << calibration.vel_lpf_alpha
-        << ", bemf_offset=" << calibration.bemf_offset;
+        << ", bemf_offset=" << calibration.bemf_offset
+        << ", static_friction_pct=" << calibration.static_friction_pct;
     if (calibration.pid)
         oss << ", pid=" << pid_gains_to_string(*calibration.pid);
     else
@@ -81,9 +82,18 @@ void init_motor(const py::module_& m)
             py::arg("pid") = std::nullopt,
             py::arg("bemf_offset") = 0.0
         )
+        .def(
+            py::init<double, double, std::optional<libstp::foundation::PidGains>, double, double>(),
+            py::arg("ticks_to_rad"),
+            py::arg("vel_lpf_alpha"),
+            py::arg("pid") = std::nullopt,
+            py::arg("bemf_offset") = 0.0,
+            py::arg("static_friction_pct") = 0.0
+        )
         .def_readwrite("ticks_to_rad", &libstp::foundation::MotorCalibration::ticks_to_rad)
         .def_readwrite("vel_lpf_alpha", &libstp::foundation::MotorCalibration::vel_lpf_alpha)
         .def_readwrite("bemf_offset", &libstp::foundation::MotorCalibration::bemf_offset)
+        .def_readwrite("static_friction_pct", &libstp::foundation::MotorCalibration::static_friction_pct)
         .def_readwrite("pid", &libstp::foundation::MotorCalibration::pid)
         .def("__repr__", &motor_calibration_to_string)
         .def("__str__", &motor_calibration_to_string);
