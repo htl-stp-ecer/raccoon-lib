@@ -712,10 +712,10 @@ _CONFIRM_MESSAGES: dict[str, str] = {
     "vel_lpf": "Phase 1 – vel LPF: Motoren kurz drehen, BEMF samplen",
     # Phase 2 — static friction
     "static_friction": "Phase 2 – static friction: Motoren einzeln auf Losbrechmoment testen",
-    # Phase 3 — firmware PID
-    "firmware_pid": "Phase 3 – firmware PID: Motoren kurz drehen (BEMF step response)",
-    # Phase 4 — encoder calibration
-    "encoder_cal": "Phase 4 – encoder cal: ~720° Drehplatz freimachen (IMU als Referenz)",
+    # Phase 3 — encoder calibration
+    "encoder_cal": "Phase 3 – encoder cal: ~720° Drehplatz freimachen (IMU als Referenz)",
+    # Phase 4 — firmware PID
+    "firmware_pid": "Phase 4 – firmware PID: Motoren kurz drehen (BEMF step response)",
     # Phase 5 — Characterize
     "char_forward": "Phase 5 – forward: ~1.5 m vorwärts freimachen",
     "char_lateral": "Phase 5 – lateral: ~1.5 m seitlich rechts freimachen",
@@ -744,8 +744,8 @@ class AutoTune(UIStep):
 
     1. vel_lpf — per-motor IIR alpha for velocity feedback
     2. static_friction — kS per motor
-    3. firmware_pid — STM32 MAV-mode inner loop
-    4. encoder_cal — ticks_to_rad scaling via IMU ground truth
+    3. encoder_cal — ticks_to_rad scaling via IMU ground truth
+    4. firmware_pid — STM32 MAV-mode inner loop (setpoints derived via ticks_to_rad)
     5. characterize — physical drive limits
     6. velocity — chassis-axis velocity PID
     7. motion — distance / heading PID
@@ -757,8 +757,8 @@ class AutoTune(UIStep):
         motion_axes: Override the auto-detected motion-parameter list for Phase 7.
         tune_vel_lpf: Enable Phase 1 (vel LPF alpha). Default ``True``.
         tune_static_friction: Enable Phase 2 (static friction). Default ``True``.
-        tune_firmware_pid: Enable Phase 3 (firmware PID). Default ``False``.
-        tune_encoder_cal: Enable Phase 4 (encoder calibration). Default ``True``.
+        tune_encoder_cal: Enable Phase 3 (encoder calibration). Default ``True``.
+        tune_firmware_pid: Enable Phase 4 (firmware PID). Default ``False``.
         tune_characterize: Enable Phase 5 (drive characterization). Default ``True``.
         tune_velocity: Enable Phase 6 (velocity PID). Default ``True``.
         tune_motion: Enable Phase 7 (motion PID). Default ``True``.
@@ -907,25 +907,27 @@ class AutoTune(UIStep):
                 lambda: tuner.run_static_friction(StaticFrictionConfig()),
             )
 
-        # -------- Phase 3: firmware_pid --------
+        # -------- Phase 3: encoder_cal (ticks_to_rad) --------
+        # Runs before firmware_pid: the firmware velocity-PID setpoints are
+        # derived through ticks_to_rad, so the scale must be calibrated first.
+        if self.tune_encoder_cal:
+            await self._confirm("encoder_cal")
+            enc = await self._phase(
+                "Phase 3/8 – encoder cal\nticks_to_rad via IMU…",
+                lambda: tuner.run_encoder_calibration(EncoderCalConfig()),
+            )
+            if self.persist and getattr(enc, "success", False):
+                _persist_ticks_to_rad(enc)
+
+        # -------- Phase 4: firmware_pid --------
         if self.tune_firmware_pid:
             await self._confirm("firmware_pid")
             fw_cfg = FirmwarePidConfig()
             fw_cfg.csv_dir = "/tmp/auto_tune"
             await self._phase(
-                f"Phase 3/8 – firmware PID\nBEMF step response per Motor…\nCSV: {fw_cfg.csv_dir}",
+                f"Phase 4/8 – firmware PID\nBEMF step response per Motor…\nCSV: {fw_cfg.csv_dir}",
                 lambda: tuner.run_firmware_pid(fw_cfg, None),
             )
-
-        # -------- Phase 4: encoder_cal (ticks_to_rad) --------
-        if self.tune_encoder_cal:
-            await self._confirm("encoder_cal")
-            enc = await self._phase(
-                "Phase 4/8 – encoder cal\nticks_to_rad via IMU…",
-                lambda: tuner.run_encoder_calibration(EncoderCalConfig()),
-            )
-            if self.persist and getattr(enc, "success", False):
-                _persist_ticks_to_rad(enc)
 
         # -------- Phase 5: characterize --------
         if self.tune_characterize:

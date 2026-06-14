@@ -18,8 +18,10 @@ namespace libstp::autotune
      * @brief Aggregated configuration for the full auto-tune pipeline.
      *
      * Each `tune_*` flag toggles a phase on or off. The phases run in
-     * dependency order: vel_lpf → static_friction → optional firmware_pid →
-     * encoder_cal → characterize → velocity → motion → tolerances.
+     * dependency order: vel_lpf → static_friction → encoder_cal →
+     * optional firmware_pid → characterize → velocity → motion → tolerances.
+     * (encoder_cal/ticks_to_rad runs before firmware_pid because the firmware
+     *  velocity-PID setpoints are derived through ticks_to_rad.)
      */
     struct AutoTuneConfig
     {
