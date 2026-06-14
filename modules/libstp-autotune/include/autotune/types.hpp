@@ -298,6 +298,12 @@ namespace libstp::autotune
         int    sample_hz{200};         ///< Sampling rate (Hz).
         double noise_weight{1.0};      ///< Weight on filtered variance in the score.
         double lag_weight{0.5};        ///< Weight on (1 / lag-change-rate) in the score.
+        /// Open-loop PWM (%) applied to spin the motors while sampling. The LPF
+        /// filters the *running* BEMF stream, so the signal must be captured in
+        /// motion — sampling at standstill yields only deadzone noise and tunes
+        /// nothing. All drive motors spin forward together (one straight run).
+        int    spin_percent{40};
+        double settle_s{0.5};          ///< Settle time after spin-up before sampling (s).
     };
 
     /**
@@ -322,9 +328,9 @@ namespace libstp::autotune
         double tuned_alpha{0.5};
         double min_score{0.0};
         bool   applied{false};
-        /// Raw BEMF samples captured while the motor was quiescent (ADC counts),
-        /// in acquisition order. These are replayed offline to render the
-        /// raw-vs-filtered overlay at the chosen alpha.
+        /// Raw BEMF samples captured while the motor spun at a steady open-loop
+        /// PWM (ADC counts), in acquisition order. These are replayed offline to
+        /// render the raw-vs-filtered overlay at the chosen alpha.
         std::vector<int> raw_bemf{};
         /// Score-vs-alpha sweep curve (one entry per evaluated alpha).
         std::vector<VelLpfSweepPoint> sweep{};
