@@ -13,6 +13,8 @@ Phases covered by ``write_report(phase_name, result, log=print)``:
 - ``static_friction``  — StaticFrictionResult map {port: StaticFrictionResult}
 - ``characterize``     — reads accel_*/decel_*.csv from a dump dir (env path)
 - ``velocity``         — VelocityTuneResult map {axis: VelocityTuneResult}
+- ``firmware_pid``     — {"csv_dir": str, "results": {port: FirmwarePidResult}}
+                         (or a bare {port: FirmwarePidResult} map)
 
 Each phase is independent: a failure in one writer is logged and swallowed by
 the calling DSL step so reporting never aborts a tune.
@@ -330,6 +332,130 @@ def _write_velocity(out: "Path", results: dict) -> None:
 
 
 # ===========================================================================
+# Phase: firmware_pid (STM32 MAV-mode inner loop)
+# ===========================================================================
+
+
+def _write_firmware_pid(out: "Path", payload) -> None:
+    """payload: either a dict[port, FirmwarePidResult] map, or
+    ``{"csv_dir": str, "results": {port: FirmwarePidResult}}``.
+
+    The C++ tuner dumps per-sample CSVs (firmware_pid_port<P>_baseline.csv /
+    _tuned.csv + firmware_pid_summary.csv) into ``cfg.csv_dir``. When a
+    ``csv_dir`` is supplied here and differs from the report folder, those
+    per-sample CSVs are copied in so ``plot.py`` (which reads them directly to
+    render commanded-vs-measured baseline-vs-tuned overlays) is self-contained.
+    """
+    import shutil
+
+    if isinstance(payload, dict) and "results" in payload and "csv_dir" in payload:
+        results = payload["results"]
+        csv_dir = payload.get("csv_dir")
+    else:
+        results = payload
+        csv_dir = None
+
+    # Copy per-sample CSVs into the report folder so plot.py is self-contained.
+    if csv_dir:
+        src = Path(csv_dir)
+        if src.resolve() != out.resolve():
+            for port in results:
+                for phase in ("baseline", "tuned"):
+                    f = src / f"firmware_pid_port{int(port)}_{phase}.csv"
+                    if f.exists():
+                        shutil.copy2(f, out / f.name)
+            summary = src / "firmware_pid_summary.csv"
+            if summary.exists():
+                shutil.copy2(summary, out / summary.name)
+
+    motors = []
+    with (out / "data.csv").open("w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(
+            [
+                "port",
+                "pid_method",
+                "plant_K",
+                "plant_T",
+                "Ks",
+                "Tu",
+                "Tg",
+                "kp",
+                "ki",
+                "kd",
+                "baseline_ise",
+                "tuned_ise",
+                "accepted",
+            ]
+        )
+        for port, r in sorted(results.items()):
+            row = {
+                "port": int(port),
+                "pid_method": getattr(r, "pid_method", "chr"),
+                "plant_K": float(getattr(r, "plant_K", 0.0)),
+                "plant_T": float(getattr(r, "plant_T", 0.0)),
+                "Ks": float(r.plant.Ks),
+                "Tu": float(r.plant.Tu),
+                "Tg": float(r.plant.Tg),
+                "kp": float(r.kp),
+                "ki": float(r.ki),
+                "kd": float(r.kd),
+                "baseline_ise": float(r.baseline_ise),
+                "tuned_ise": float(r.tuned_ise),
+                "accepted": bool(r.accepted),
+            }
+            motors.append(row)
+            w.writerow(
+                [
+                    row["port"],
+                    row["pid_method"],
+                    f"{row['plant_K']:.6g}",
+                    f"{row['plant_T']:.6g}",
+                    f"{row['Ks']:.6g}",
+                    f"{row['Tu']:.6g}",
+                    f"{row['Tg']:.6g}",
+                    f"{row['kp']:.6g}",
+                    f"{row['ki']:.6g}",
+                    f"{row['kd']:.6g}",
+                    f"{row['baseline_ise']:.6g}",
+                    f"{row['tuned_ise']:.6g}",
+                    1 if row["accepted"] else 0,
+                ]
+            )
+
+    (out / "summary.json").write_text(
+        json.dumps({"phase": "firmware_pid", "motors": motors}, indent=2)
+    )
+
+    lines = [
+        "# Firmware velocity-PID tuning findings",
+        "",
+        "Per-motor STM32 MAV-mode PID. A PT1 plant is fitted to the raw-PWM step "
+        "response via differential evolution, then physical kp/ki/kd are "
+        "DE-optimized against the simulated closed loop (dt-explicit PID matching "
+        "the firmware). The on-hardware baseline vs tuned ISE is the final gate: "
+        "gains are accepted only when the tuned ISE improves.",
+        "",
+        "| port | method | plant K | plant T | kp | ki | kd | ISE base->tuned | accepted |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for m in motors:
+        lines.append(
+            f"| {m['port']} | {m['pid_method']} | {m['plant_K']:.4g} | "
+            f"{m['plant_T']:.4g} | {m['kp']:.4g} | {m['ki']:.4g} | {m['kd']:.4g} | "
+            f"{m['baseline_ise']:.4g}->{m['tuned_ise']:.4g} | "
+            f"{'yes' if m['accepted'] else 'no'} |"
+        )
+    lines += [
+        "",
+        "See `step_response_port<P>.png` (commanded vs measured, baseline & tuned). "
+        "Run `python plot.py` here if missing.",
+        "",
+    ]
+    (out / "findings.md").write_text("\n".join(lines))
+
+
+# ===========================================================================
 # Dispatch
 # ===========================================================================
 
@@ -338,6 +464,7 @@ _WRITERS = {
     "static_friction": (_write_static_friction, lambda: _STATIC_FRICTION_PLOT),
     "characterize": (_write_characterize, lambda: _CHARACTERIZE_PLOT),
     "velocity": (_write_velocity, lambda: _VELOCITY_PLOT),
+    "firmware_pid": (_write_firmware_pid, lambda: _FIRMWARE_PID_PLOT),
 }
 
 
@@ -624,6 +751,83 @@ for axis, phases in series.items():
     plt.legend()
     plt.tight_layout()
     fname = f"step_response_{axis}.png"
+    plt.savefig(HERE / fname, dpi=130)
+    plt.close()
+    made.append(fname)
+
+print("wrote:", ", ".join(made) if made else "(no data to plot)")
+'''
+
+
+_FIRMWARE_PID_PLOT = r'''#!/usr/bin/env python3
+"""Render firmware-PID step-response plots. Standalone (matplotlib only).
+
+Reads summary.json (plant fit + gains per motor) and the per-sample CSVs
+firmware_pid_port<P>_baseline.csv / _tuned.csv dumped by the C++ tuner. Each
+per-sample CSV has a leading "# ..." metadata comment line, then a CSV header
+row with columns t,target,this_motor_bemf,... — we plot target (commanded) and
+this_motor_bemf (measured) for baseline vs tuned per motor.
+"""
+import csv
+import json
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+HERE = Path(__file__).resolve().parent
+summary = json.loads((HERE / "summary.json").read_text())
+meta = {int(m["port"]): m for m in summary["motors"]}
+
+
+def read_response(path):
+    """Return (ts, commanded, measured) from a per-sample CSV, skipping the
+    leading '#' metadata comment lines."""
+    ts, cmd, meas = [], [], []
+    with open(path) as f:
+        rows = [ln for ln in f if not ln.startswith("#")]
+    reader = csv.DictReader(rows)
+    for r in reader:
+        try:
+            ts.append(float(r["t"]))
+            cmd.append(float(r["target"]))
+            meas.append(float(r["this_motor_bemf"]))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return ts, cmd, meas
+
+
+made = []
+for port in sorted(meta):
+    base = HERE / f"firmware_pid_port{port}_baseline.csv"
+    tuned = HERE / f"firmware_pid_port{port}_tuned.csv"
+    if not base.exists() and not tuned.exists():
+        continue
+    plt.figure(figsize=(9, 6))
+    if base.exists():
+        ts, cmd, meas = read_response(base)
+        if ts:
+            plt.plot(ts, cmd, "k--", linewidth=1, label="commanded")
+            plt.plot(ts, meas, linewidth=1.2, label="measured (baseline)")
+    if tuned.exists():
+        ts, _, meas = read_response(tuned)
+        if ts:
+            plt.plot(ts, meas, linewidth=1.2, label="measured (tuned)")
+    m = meta.get(port, {})
+    title = (
+        f"port {port}: {'ACCEPTED' if m.get('accepted') else 'reverted'} | "
+        f"{m.get('pid_method', '')} | "
+        f"plant_K={m.get('plant_K', 0):.3g} plant_T={m.get('plant_T', 0):.3g}s | "
+        f"kp={m.get('kp', 0):.3g} ki={m.get('ki', 0):.3g} kd={m.get('kd', 0):.3g}"
+    )
+    plt.title(title)
+    plt.xlabel("time since step (s)")
+    plt.ylabel("BEMF (firmware velocity units)")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    fname = f"step_response_port{port}.png"
     plt.savefig(HERE / fname, dpi=130)
     plt.close()
     made.append(fname)

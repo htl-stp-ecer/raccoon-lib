@@ -134,6 +134,37 @@ TEST(ControlPathParity, TwoStagePT1Step)
     expectClose(run(path, stepInput(20), kDt), golden::kPath2);
 }
 
+TEST(ControlElementPIDTest, DtExplicitFirmwareMatch)
+{
+    // kp=2, ki=0.5, kd=1, dt=0.5, e=[1,1,1,0,-1].
+    // iErr += e*dt; dErr = (e-prev)/dt; u = kp*e + ki*iErr + kd*dErr.
+    ControlElementPID pid(2.0, 0.5, 1.0);
+    const std::vector<double> errs = {1.0, 1.0, 1.0, 0.0, -1.0};
+    const std::vector<double> want = {4.25, 2.5, 2.75, -1.25, -3.5};
+
+    pid.initialize(0.5);
+    std::vector<double> got;
+    got.reserve(errs.size());
+    for (double e : errs) got.push_back(pid.calculate(e, 0.5));
+    expectClose(got, want);
+
+    // initialize() resets state — re-running reproduces the same outputs.
+    pid.initialize(0.5);
+    std::vector<double> got2;
+    got2.reserve(errs.size());
+    for (double e : errs) got2.push_back(pid.calculate(e, 0.5));
+    expectClose(got2, want);
+
+    // optimizeSetParameters loads [kp, ki, kd] in order.
+    ControlElementPID pid2(0.0, 0.0, 0.0);
+    pid2.optimizeSetParameters({2.0, 0.5, 1.0}, 0);
+    pid2.initialize(0.5);
+    std::vector<double> got3;
+    got3.reserve(errs.size());
+    for (double e : errs) got3.push_back(pid2.calculate(e, 0.5));
+    expectClose(got3, want);
+}
+
 TEST(ControlLoopParity, PControllerPT1Plant)
 {
     ControlElementP   controller(2.0);

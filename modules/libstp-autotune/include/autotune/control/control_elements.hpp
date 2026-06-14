@@ -131,6 +131,55 @@ private:
     double u_n1_{0};
 };
 
+/// Full dt-EXPLICIT PID controller.
+///
+/// Mirrors the dt-explicit STM32 firmware `pid.c`:
+///     iErr += e * dt;
+///     dErr  = (e - prevErr) / dt;
+///     u     = kP*e + kI*iErr + kD*dErr;
+/// so kI/kD are physical per-second gains and DE-optimized gains transfer
+/// directly to the firmware. This element is NOT part of Brischalle's TS
+/// toolkit — it intentionally diverges from the toolkit's separate
+/// ControlElementI/D (which use the toolkit's own discrete forms) to match the
+/// firmware exactly.
+class ControlElementPID final : public ControlElement
+{
+public:
+    ControlElementPID(double kp, double ki, double kd) : kp_(kp), ki_(ki), kd_(kd) {}
+
+    [[nodiscard]] std::string getType() const override { return "PID"; }
+    [[nodiscard]] double getLowestTimeConstant() const override { return -1; }
+    void                 initialize(double /*dt*/) override
+    {
+        iErr_    = 0;
+        prevErr_ = 0;
+    }
+    double calculate(double e, double dt) override
+    {
+        double d = dt;
+        if (d <= 0.0)
+            d = 1e-9;
+        iErr_ += e * d;
+        const double dErr = (e - prevErr_) / d;
+        prevErr_          = e;
+        return kp_ * e + ki_ * iErr_ + kd_ * dErr;
+    }
+    [[nodiscard]] int optimizeGetNumParameters() const override { return 3; }
+    void optimizeSetParameters(const std::vector<double>& params, int startIdx) override
+    {
+        kp_ = params[static_cast<std::size_t>(startIdx + 0)];
+        ki_ = params[static_cast<std::size_t>(startIdx + 1)];
+        kd_ = params[static_cast<std::size_t>(startIdx + 2)];
+    }
+
+private:
+    double kp_;
+    double ki_;
+    double kd_;
+    double iErr_{0};
+    double prevErr_{0};
+};
+
 /// Pure transport delay.  Port of ControlElementDeadTime.ts.
 class ControlElementDeadTime final : public ControlElement
 {

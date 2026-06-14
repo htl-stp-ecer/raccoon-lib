@@ -561,6 +561,13 @@ class AutoTuneFirmwarePid(Step):
                 f"ISE: {r.baseline_ise:.4f} -> {r.tuned_ise:.4f}"
             )
 
+        if results:
+            _write_phase_report(
+                "firmware_pid",
+                {"csv_dir": self.csv_dir, "results": results},
+                self,
+            )
+
 
 @dsl_step(tags=["motion", "calibration", "auto-tune"])
 class AutoTuneVelocity(Step):
@@ -944,10 +951,16 @@ class AutoTune(UIStep):
             await self._confirm("firmware_pid")
             fw_cfg = FirmwarePidConfig()
             fw_cfg.csv_dir = "/tmp/auto_tune"
-            await self._phase(
+            fw_results = await self._phase(
                 f"Phase 4/8 – firmware PID\nBEMF step response per Motor…\nCSV: {fw_cfg.csv_dir}",
                 lambda: tuner.run_firmware_pid(fw_cfg, None),
             )
+            if fw_results:
+                _write_phase_report(
+                    "firmware_pid",
+                    {"csv_dir": fw_cfg.csv_dir, "results": fw_results},
+                    self,
+                )
 
         # -------- Phase 5: characterize --------
         if self.tune_characterize:

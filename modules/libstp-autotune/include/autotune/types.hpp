@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -221,6 +222,38 @@ namespace libstp::autotune
         /// you replay the raw data offline to iterate on the identification
         /// algorithm without re-running on hardware.
         std::string csv_dir{};
+
+        // --------------------------------------------------------------------
+        // ControlTheory differential-evolution gain computation.
+        //
+        // When use_control_theory is true the per-motor candidate gains are
+        // computed by (1) fitting a PT1 plant to the raw-PWM step response via
+        // DE system-identification, then (2) DE-optimizing physical firmware
+        // kp/ki/kd against the simulated closed loop using the dt-EXPLICIT
+        // ControlElementPID (which mirrors STM32 pid.c). The CHR heuristic is
+        // kept only as a fallback when the DE fit fails.
+        //
+        // Scales:
+        //  * plant K is BEMF-units-per-%PWM (tens-to-hundreds for the wombat
+        //    motors at ~70% PWM), hence the large de_plant_max default.
+        //  * gains are physical firmware kp/ki/kd (per-second for ki/kd).
+        //  * de_max_overshoot is in output BEMF units.
+        //  * de_sim_horizon_s sets the internal sim dt = horizon / 5000
+        //    (default 5 s -> 1 ms). With the dt-explicit PID the optimized
+        //    gains are physical, so the sim dt need not equal the firmware
+        //    rate; the horizon only needs to cover settling.
+        // --------------------------------------------------------------------
+        bool          use_control_theory{true};
+        int           de_plant_steps{80};
+        double        de_plant_min{0.0001};
+        double        de_plant_max{5000.0};
+        int           de_pid_steps{60};
+        double        de_gain_max{10.0};
+        double        de_sim_horizon_s{5.0};
+        double        de_max_overshoot{50.0};
+        double        de_weight_ctrl{0.0};
+        double        de_weight_overshoot{1.0};
+        std::uint32_t de_seed{0xC0FFEEu};
     };
 
     /**
@@ -236,6 +269,13 @@ namespace libstp::autotune
         double      baseline_ise{0.0};
         double      tuned_ise{0.0};
         bool        accepted{false};
+        /// Gain-computation method: "control_theory_de", "chr_fallback", or
+        /// "chr" (legacy default before any computation runs).
+        std::string pid_method{"chr"};
+        /// PT1 plant gain from the DE fit (BEMF units per %PWM). 0 if unused.
+        double      plant_K{0.0};
+        /// PT1 plant time constant from the DE fit (s). 0 if unused.
+        double      plant_T{0.0};
     };
 
     // ========================================================================

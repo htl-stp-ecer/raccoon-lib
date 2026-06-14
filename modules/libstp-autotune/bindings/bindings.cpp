@@ -413,7 +413,29 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("min_response_frac",  &FirmwarePidConfig::min_response_frac,
                        "Tail/|command| threshold for accepting the recording.")
         .def_readwrite("csv_dir",            &FirmwarePidConfig::csv_dir,
-                       "Directory for per-sample CSV dump (empty = disabled).");
+                       "Directory for per-sample CSV dump (empty = disabled).")
+        .def_readwrite("use_control_theory", &FirmwarePidConfig::use_control_theory,
+                       "Use DE system-id + DE PID optimization (CHR is fallback).")
+        .def_readwrite("de_plant_steps",     &FirmwarePidConfig::de_plant_steps,
+                       "DE generations for the PT1 plant fit.")
+        .def_readwrite("de_plant_min",       &FirmwarePidConfig::de_plant_min,
+                       "Lower bound for plant-fit parameters [K, T].")
+        .def_readwrite("de_plant_max",       &FirmwarePidConfig::de_plant_max,
+                       "Upper bound for plant-fit parameters (K is BEMF/%%PWM, large).")
+        .def_readwrite("de_pid_steps",       &FirmwarePidConfig::de_pid_steps,
+                       "DE generations for the PID gain optimization.")
+        .def_readwrite("de_gain_max",        &FirmwarePidConfig::de_gain_max,
+                       "Upper bound for optimized physical kp/ki/kd.")
+        .def_readwrite("de_sim_horizon_s",   &FirmwarePidConfig::de_sim_horizon_s,
+                       "Closed-loop sim horizon (s); sim dt = horizon / 5000.")
+        .def_readwrite("de_max_overshoot",   &FirmwarePidConfig::de_max_overshoot,
+                       "Allowed plant-output overshoot (BEMF units) before penalty.")
+        .def_readwrite("de_weight_ctrl",     &FirmwarePidConfig::de_weight_ctrl,
+                       "Penalty weight on control-output overshoot.")
+        .def_readwrite("de_weight_overshoot",&FirmwarePidConfig::de_weight_overshoot,
+                       "Penalty weight on plant-output overshoot.")
+        .def_readwrite("de_seed",            &FirmwarePidConfig::de_seed,
+                       "Deterministic DE seed.");
 
     py::class_<FirmwarePidResult>(m, "FirmwarePidResult",
                                   "Result of tuning a single motor's firmware PID.")
@@ -426,6 +448,9 @@ PYBIND11_MODULE(autotune, m)
         .def_readonly("baseline_ise", &FirmwarePidResult::baseline_ise)
         .def_readonly("tuned_ise",    &FirmwarePidResult::tuned_ise)
         .def_readonly("accepted",     &FirmwarePidResult::accepted)
+        .def_readonly("pid_method",   &FirmwarePidResult::pid_method)
+        .def_readonly("plant_K",      &FirmwarePidResult::plant_K)
+        .def_readonly("plant_T",      &FirmwarePidResult::plant_T)
         .def("__repr__", [](const FirmwarePidResult& r) {
             std::ostringstream oss;
             oss << "FirmwarePidResult(port=" << r.motor_port
