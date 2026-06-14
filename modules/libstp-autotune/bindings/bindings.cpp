@@ -435,7 +435,17 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("de_weight_overshoot",&FirmwarePidConfig::de_weight_overshoot,
                        "Penalty weight on plant-output overshoot.")
         .def_readwrite("de_seed",            &FirmwarePidConfig::de_seed,
-                       "Deterministic DE seed.");
+                       "Deterministic DE seed.")
+        .def_readwrite("raw_pwm_percent",    &FirmwarePidConfig::raw_pwm_percent,
+                       "Open-loop PWM %% applied during the plant-identification step.")
+        .def_readwrite("decel_duration_s",   &FirmwarePidConfig::decel_duration_s,
+                       "Coast-down recording duration after the raw-PWM step (s).")
+        .def_readwrite("identification_trials", &FirmwarePidConfig::identification_trials,
+                       "Number of raw-PWM plant-identification trials (averaged).")
+        .def_readwrite("validation_trials",  &FirmwarePidConfig::validation_trials,
+                       "Number of MAV baseline/tuned validation trials (averaged).")
+        .def_readwrite("accept_improvement_frac", &FirmwarePidConfig::accept_improvement_frac,
+                       "Min fractional mean-ISE improvement required to accept gains.");
 
     py::class_<FirmwarePidResult>(m, "FirmwarePidResult",
                                   "Result of tuning a single motor's firmware PID.")
