@@ -6,6 +6,9 @@ register_libstp_test(
   test_vel_lpf_tuner.cpp
   test_tolerance_deriver.cpp
   test_encoder_calibrator.cpp
+  test_control_elements.cpp
+  test_control_optimization.cpp
+  test_control_edge_cases.cpp
   LIBS
   autotune
   motion

@@ -89,6 +89,45 @@ ScoreParts evaluateAlpha(const std::vector<int>& raw, double alpha)
     return parts;
 }
 
+/**
+ * Sample every motor's BEMF simultaneously at sample_hz for measure_duration_s.
+ * The caller is responsible for having the motors already spinning at steady
+ * state before this is called.
+ */
+std::map<int, std::vector<int>>
+sampleBemfWhileSpinning(const std::vector<hal::motor::IMotor*>& motors,
+                        const VelLpfConfig& cfg)
+{
+    using Clock  = std::chrono::steady_clock;
+    using Micros = std::chrono::microseconds;
+    const int    sample_hz = std::max(1, cfg.sample_hz);
+    const Micros period{1'000'000 / sample_hz};
+
+    std::map<int, std::vector<int>> raw;
+    const auto reserve_n =
+        static_cast<std::size_t>(cfg.measure_duration_s * sample_hz * 1.1);
+    for (auto* m : motors)
+        if (m != nullptr) raw[m->getPort()].reserve(reserve_n);
+
+    auto t0   = Clock::now();
+    auto next = t0;
+    while (true)
+    {
+        const auto now = Clock::now();
+        if (std::chrono::duration<double>(now - t0).count() >= cfg.measure_duration_s)
+            break;
+        for (auto* m : motors)
+            if (m != nullptr) raw[m->getPort()].push_back(m->getBemf());
+        next += period;
+        const auto now2 = Clock::now();
+        if (next > now2)
+            std::this_thread::sleep_until(next);
+        else
+            next = now2;
+    }
+    return raw;
+}
+
 } // namespace
 
 VelLpfTuner::VelLpfTuner(const std::vector<hal::motor::IMotor*>& motors)
@@ -96,51 +135,21 @@ VelLpfTuner::VelLpfTuner(const std::vector<hal::motor::IMotor*>& motors)
 {
 }
 
-VelLpfResult VelLpfTuner::tuneMotor(hal::motor::IMotor* motor,
-                                    const VelLpfConfig& cfg) const
+VelLpfResult VelLpfTuner::scoreFromRaw(hal::motor::IMotor* motor,
+                                       std::vector<int>    raw,
+                                       const VelLpfConfig& cfg) const
 {
     VelLpfResult result;
     if (motor == nullptr)
-    {
-        LIBSTP_LOG_WARN("[VelLpfTuner] Null motor pointer — skipping");
         return result;
-    }
+
     result.motor_port    = motor->getPort();
     result.initial_alpha = motor->getCalibration().vel_lpf_alpha;
     result.tuned_alpha   = result.initial_alpha;
 
-    LIBSTP_LOG_INFO("[VelLpfTuner] Tuning vel_lpf_alpha on motor port={} "
-                    "(initial alpha={:.3f})",
-                    result.motor_port, result.initial_alpha);
-
-    // Ensure the motor is quiescent before sampling.
-    motor->brake();
-
-    // ---- Sample raw BEMF at sample_hz for measure_duration_s -------------
-    using Clock  = std::chrono::steady_clock;
-    using Micros = std::chrono::microseconds;
-    const int sample_hz = std::max(1, cfg.sample_hz);
-    const Micros period{1'000'000 / sample_hz};
-
-    std::vector<int> raw;
-    raw.reserve(static_cast<std::size_t>(cfg.measure_duration_s * sample_hz * 1.1));
-
-    auto t0   = Clock::now();
-    auto next = t0;
-    while (true)
-    {
-        auto now = Clock::now();
-        const double elapsed = std::chrono::duration<double>(now - t0).count();
-        if (elapsed >= cfg.measure_duration_s)
-            break;
-        raw.push_back(motor->getBemf());
-        next += period;
-        auto now2 = Clock::now();
-        if (next > now2)
-            std::this_thread::sleep_until(next);
-        else
-            next = now2;
-    }
+    // Preserve the raw BEMF series for the offline report (raw-vs-filtered
+    // overlay). Stored regardless of whether the sweep finds a usable signal.
+    result.raw_bemf = raw;
 
     if (raw.size() < 2)
     {
@@ -162,6 +171,9 @@ VelLpfResult VelLpfTuner::tuneMotor(hal::motor::IMotor* motor,
         // Guard against zero lag-change-rate (division by zero).
         const double lag_inv = 1.0 / (p.lag_change_rate + 1e-9);
         const double score   = cfg.noise_weight * p.variance + cfg.lag_weight * lag_inv;
+
+        result.sweep.push_back(
+            VelLpfSweepPoint{alpha, p.variance, p.lag_change_rate, score});
 
         LIBSTP_LOG_DEBUG("[VelLpfTuner] port={} alpha={:.3f} variance={:.4f} "
                          "lag_rate={:.4f} score={:.6f}",
@@ -192,6 +204,32 @@ VelLpfResult VelLpfTuner::tuneMotor(hal::motor::IMotor* motor,
     return result;
 }
 
+VelLpfResult VelLpfTuner::tuneMotor(hal::motor::IMotor* motor,
+                                    const VelLpfConfig& cfg) const
+{
+    if (motor == nullptr)
+    {
+        LIBSTP_LOG_WARN("[VelLpfTuner] Null motor pointer — skipping");
+        return {};
+    }
+
+    LIBSTP_LOG_INFO("[VelLpfTuner] Tuning port={} (spin {}% / settle {:.1f}s / "
+                    "sample {:.1f}s)",
+                    motor->getPort(), cfg.spin_percent, cfg.settle_s,
+                    cfg.measure_duration_s);
+
+    // The LPF filters the *running* velocity estimate, so the motor must be
+    // spinning while we sample. Spin this single motor (the chassis curves),
+    // settle to steady state, capture BEMF, then stop.
+    motor->setSpeed(cfg.spin_percent);
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(static_cast<int>(cfg.settle_s * 1000.0)));
+    auto raw = sampleBemfWhileSpinning({motor}, cfg);
+    motor->brake();
+
+    return scoreFromRaw(motor, std::move(raw[motor->getPort()]), cfg);
+}
+
 std::map<int, VelLpfResult> VelLpfTuner::tune(const VelLpfConfig& cfg) const
 {
     LIBSTP_LOG_INFO("============================================================");
@@ -199,12 +237,31 @@ std::map<int, VelLpfResult> VelLpfTuner::tune(const VelLpfConfig& cfg) const
     LIBSTP_LOG_INFO("============================================================");
 
     std::map<int, VelLpfResult> results;
-    for (auto* motor : motors_)
+
+    std::vector<hal::motor::IMotor*> live;
+    for (auto* m : motors_)
+        if (m != nullptr) live.push_back(m);
+    if (live.empty())
     {
-        if (motor == nullptr)
-            continue;
-        results[motor->getPort()] = tuneMotor(motor, cfg);
+        LIBSTP_LOG_WARN("[VelLpfTuner] no drive motors — skipping");
+        return results;
     }
+
+    // Spin every drive motor forward together so the chassis tracks roughly
+    // straight, let the velocities settle, then sample all motors during a
+    // single run. Sampling at standstill only captures deadzone noise.
+    LIBSTP_LOG_INFO("[VelLpfTuner] spinning {} motors at {}% (settle {:.1f}s, "
+                    "sample {:.1f}s)",
+                    live.size(), cfg.spin_percent, cfg.settle_s,
+                    cfg.measure_duration_s);
+    for (auto* m : live) m->setSpeed(cfg.spin_percent);
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(static_cast<int>(cfg.settle_s * 1000.0)));
+    auto raw = sampleBemfWhileSpinning(live, cfg);
+    for (auto* m : live) m->brake();
+
+    for (auto* m : live)
+        results[m->getPort()] = scoreFromRaw(m, std::move(raw[m->getPort()]), cfg);
 
     LIBSTP_LOG_INFO("============================================================");
     LIBSTP_LOG_INFO("  VELOCITY LPF TUNING RESULTS");

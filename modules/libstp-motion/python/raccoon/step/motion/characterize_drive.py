@@ -189,6 +189,9 @@ class CharacterizeDrive(Step):
             self.info("--no-calibrate: skipping drive characterization, using stored values")
             return
 
+        import os
+        import tempfile
+
         from raccoon.autotune import CharacterizeConfig, DriveCharacterizer
 
         cfg = CharacterizeConfig()
@@ -200,16 +203,51 @@ class CharacterizeDrive(Step):
 
         char = DriveCharacterizer(robot.drive, robot.odometry)
 
-        # Runs in C++ at sample_hz, GIL released for the full sampling loop.
-        self.results = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: char.characterize(self.axes, cfg)
-        )
+        # The C++ trial loop dumps per-axis accel_/decel_ CSVs (t,pos,vel) when
+        # LIBSTP_AUTOTUNE_CSV points at a directory. Capture them in a temp dir
+        # so the report can plot velocity-vs-time per axis afterwards.
+        csv_dir = tempfile.mkdtemp(prefix="raccoon_char_")
+        prev_csv_env = os.environ.get("LIBSTP_AUTOTUNE_CSV")
+        os.environ["LIBSTP_AUTOTUNE_CSV"] = csv_dir
+        try:
+            # Runs in C++ at sample_hz, GIL released for the full sampling loop.
+            self.results = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: char.characterize(self.axes, cfg)
+            )
+        finally:
+            if prev_csv_env is None:
+                os.environ.pop("LIBSTP_AUTOTUNE_CSV", None)
+            else:
+                os.environ["LIBSTP_AUTOTUNE_CSV"] = prev_csv_env
 
         self._apply_to_config(robot, self.results)
         self.info("  Applied to in-memory motion config")
+
+        self._write_report(csv_dir)
 
         if self.persist:
             if self._persist_to_yaml(self.results):
                 self.info("  Saved to raccoon.project.yml (robot.motion_pid)")
             else:
                 self.warn("  Failed to save to raccoon.project.yml")
+
+    def _write_report(self, csv_dir: str) -> None:
+        """Persist a per-axis velocity-vs-time report; never abort the step."""
+        from ._autotune_report import write_report
+
+        payload = {
+            "csv_dir": csv_dir,
+            "axes": list(self.axes),
+            "results": {
+                axis: {
+                    "max_velocity": r.max_velocity,
+                    "acceleration": r.acceleration,
+                    "deceleration": r.deceleration,
+                }
+                for axis, r in self.results.items()
+            },
+        }
+        try:
+            write_report("characterize", payload, self.info)
+        except Exception as exc:  # reporting must never fail a tune
+            self.warn(f"  report generation failed (characterize): {exc}")
