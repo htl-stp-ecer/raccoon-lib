@@ -83,6 +83,11 @@ namespace libstp::autotune
         double baseline_ise{0.0};
         double tuned_ise{0.0};
         bool accepted{false};
+        /// Raw baseline step-response recording (commanded vs measured), for
+        /// offline plotting of the open-loop fit.
+        StepResponseData baseline_response{};
+        /// Raw tuned step-response recording (empty when CHR was skipped).
+        StepResponseData tuned_response{};
     };
 
     /**
@@ -251,6 +256,15 @@ namespace libstp::autotune
     };
 
     /**
+     * @brief One PWM-vs-BEMF sample taken during a static-friction sweep.
+     */
+    struct StaticFrictionSample
+    {
+        int pwm_pct{0};      ///< Signed PWM percent commanded (+ forward, − reverse).
+        int median_bemf{0};  ///< Median |BEMF| (ADC counts) at this step.
+    };
+
+    /**
      * @brief Per-motor static-friction measurement result (kS in PWM percent).
      */
     struct StaticFrictionResult
@@ -260,6 +274,12 @@ namespace libstp::autotune
         int  ks_negative_pct{0};
         int  ks_avg_pct{0};
         bool measured{false};
+        /// Forward sweep PWM-vs-BEMF curve (pwm_pct > 0), in sweep order.
+        std::vector<StaticFrictionSample> forward_sweep{};
+        /// Reverse sweep PWM-vs-BEMF curve (pwm_pct < 0), in sweep order.
+        std::vector<StaticFrictionSample> reverse_sweep{};
+        /// Motion threshold used (median |BEMF| above this counts as "moving").
+        int motion_threshold{0};
     };
 
     // ========================================================================
@@ -281,6 +301,18 @@ namespace libstp::autotune
     };
 
     /**
+     * @brief One point of the alpha sweep: the score (and its parts) the
+     *        candidate alpha achieved on the captured raw BEMF series.
+     */
+    struct VelLpfSweepPoint
+    {
+        double alpha{0.0};
+        double variance{0.0};        ///< Variance of the filtered series.
+        double lag_change_rate{0.0}; ///< Std-dev of |Δfilt| (movement proxy).
+        double score{0.0};           ///< Combined noise+lag score (lower is better).
+    };
+
+    /**
      * @brief Per-motor LPF-alpha tuning result.
      */
     struct VelLpfResult
@@ -290,6 +322,12 @@ namespace libstp::autotune
         double tuned_alpha{0.5};
         double min_score{0.0};
         bool   applied{false};
+        /// Raw BEMF samples captured while the motor was quiescent (ADC counts),
+        /// in acquisition order. These are replayed offline to render the
+        /// raw-vs-filtered overlay at the chosen alpha.
+        std::vector<int> raw_bemf{};
+        /// Score-vs-alpha sweep curve (one entry per evaluated alpha).
+        std::vector<VelLpfSweepPoint> sweep{};
     };
 
     // ========================================================================

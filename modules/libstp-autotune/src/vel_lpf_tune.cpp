@@ -142,6 +142,10 @@ VelLpfResult VelLpfTuner::tuneMotor(hal::motor::IMotor* motor,
             next = now2;
     }
 
+    // Preserve the raw BEMF series for the offline report (raw-vs-filtered
+    // overlay). Stored regardless of whether the sweep finds a usable signal.
+    result.raw_bemf = raw;
+
     if (raw.size() < 2)
     {
         LIBSTP_LOG_WARN("[VelLpfTuner] port={} too few samples ({}) — skipping",
@@ -162,6 +166,9 @@ VelLpfResult VelLpfTuner::tuneMotor(hal::motor::IMotor* motor,
         // Guard against zero lag-change-rate (division by zero).
         const double lag_inv = 1.0 / (p.lag_change_rate + 1e-9);
         const double score   = cfg.noise_weight * p.variance + cfg.lag_weight * lag_inv;
+
+        result.sweep.push_back(
+            VelLpfSweepPoint{alpha, p.variance, p.lag_change_rate, score});
 
         LIBSTP_LOG_DEBUG("[VelLpfTuner] port={} alpha={:.3f} variance={:.4f} "
                          "lag_rate={:.4f} score={:.6f}",

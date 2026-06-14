@@ -161,6 +161,10 @@ PYBIND11_MODULE(autotune, m)
                       "ISE of the tuned step response (0 if not run).")
         .def_readonly("accepted",     &VelocityTuneResult::accepted,
                       "True if the tuned gains were applied and accepted.")
+        .def_readonly("baseline_response", &VelocityTuneResult::baseline_response,
+                      "Raw baseline step response (StepResponseData).")
+        .def_readonly("tuned_response",    &VelocityTuneResult::tuned_response,
+                      "Raw tuned step response (StepResponseData; empty if skipped).")
         .def("__repr__", [](const VelocityTuneResult& r) {
             std::ostringstream oss;
             oss << "VelocityTuneResult(axis=\"" << r.axis
@@ -474,6 +478,14 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("samples_per_step", &StaticFrictionConfig::samples_per_step)
         .def_readwrite("motion_threshold", &StaticFrictionConfig::motion_threshold);
 
+    py::class_<StaticFrictionSample>(m, "StaticFrictionSample",
+                                     "One PWM-vs-BEMF sample from a kS sweep.")
+        .def(py::init<>())
+        .def_readonly("pwm_pct",     &StaticFrictionSample::pwm_pct,
+                      "Signed PWM percent (+ forward, - reverse).")
+        .def_readonly("median_bemf", &StaticFrictionSample::median_bemf,
+                      "Median |BEMF| (ADC counts) at this step.");
+
     py::class_<StaticFrictionResult>(m, "StaticFrictionResult",
                                      "Per-motor kS measurement result.")
         .def(py::init<>())
@@ -482,6 +494,12 @@ PYBIND11_MODULE(autotune, m)
         .def_readonly("ks_negative_pct", &StaticFrictionResult::ks_negative_pct)
         .def_readonly("ks_avg_pct",      &StaticFrictionResult::ks_avg_pct)
         .def_readonly("measured",        &StaticFrictionResult::measured)
+        .def_readonly("forward_sweep",   &StaticFrictionResult::forward_sweep,
+                      "Forward sweep PWM-vs-BEMF curve (list[StaticFrictionSample]).")
+        .def_readonly("reverse_sweep",   &StaticFrictionResult::reverse_sweep,
+                      "Reverse sweep PWM-vs-BEMF curve (list[StaticFrictionSample]).")
+        .def_readonly("motion_threshold", &StaticFrictionResult::motion_threshold,
+                      "Median |BEMF| threshold above which the motor counts as moving.")
         .def("__repr__", [](const StaticFrictionResult& r) {
             std::ostringstream oss;
             oss << "StaticFrictionResult(port=" << r.motor_port
@@ -529,6 +547,17 @@ PYBIND11_MODULE(autotune, m)
         .def_readwrite("noise_weight",       &VelLpfConfig::noise_weight)
         .def_readwrite("lag_weight",         &VelLpfConfig::lag_weight);
 
+    py::class_<VelLpfSweepPoint>(m, "VelLpfSweepPoint",
+                                 "One point of the vel_lpf alpha sweep.")
+        .def(py::init<>())
+        .def_readonly("alpha",           &VelLpfSweepPoint::alpha)
+        .def_readonly("variance",        &VelLpfSweepPoint::variance,
+                      "Variance of the filtered series at this alpha.")
+        .def_readonly("lag_change_rate", &VelLpfSweepPoint::lag_change_rate,
+                      "Std-dev of |delta filt| (movement proxy) at this alpha.")
+        .def_readonly("score",           &VelLpfSweepPoint::score,
+                      "Combined noise+lag score (lower is better).");
+
     py::class_<VelLpfResult>(m, "VelLpfResult",
                              "Per-motor vel_lpf_alpha tuning result.")
         .def(py::init<>())
@@ -537,6 +566,10 @@ PYBIND11_MODULE(autotune, m)
         .def_readonly("tuned_alpha",   &VelLpfResult::tuned_alpha)
         .def_readonly("min_score",     &VelLpfResult::min_score)
         .def_readonly("applied",       &VelLpfResult::applied)
+        .def_readonly("raw_bemf",      &VelLpfResult::raw_bemf,
+                      "Raw BEMF samples captured while quiescent (list[int]).")
+        .def_readonly("sweep",         &VelLpfResult::sweep,
+                      "Score-vs-alpha sweep curve (list[VelLpfSweepPoint]).")
         .def("__repr__", [](const VelLpfResult& r) {
             std::ostringstream oss;
             oss << "VelLpfResult(port=" << r.motor_port

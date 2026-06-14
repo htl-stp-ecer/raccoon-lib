@@ -245,6 +245,16 @@ def _run_in_executor(callable_):
     return asyncio.get_event_loop().run_in_executor(None, callable_)
 
 
+def _write_phase_report(phase_name: str, result, step) -> None:
+    """Persist a per-phase data+plot report; never let it abort the tune."""
+    from ._autotune_report import write_report
+
+    try:
+        write_report(phase_name, result, step.info)
+    except Exception as exc:  # reporting must never fail a tune
+        step.warn(f"  report generation failed ({phase_name}): {exc}")
+
+
 # ---------------------------------------------------------------------------
 # Single-phase step classes
 # ---------------------------------------------------------------------------
@@ -300,6 +310,8 @@ class AutoTuneVelLpf(Step):
                 f"(score={r.min_score:.4f})"
             )
 
+        _write_phase_report("vel_lpf", results, self)
+
         if self.persist and results and _persist_vel_lpf(results):
             self.info("  Saved vel_lpf_alpha to raccoon.project.yml")
 
@@ -354,6 +366,8 @@ class AutoTuneStaticFriction(Step):
                 )
             else:
                 self.warn(f"  port={port}: motor never moved — check wiring/power")
+
+        _write_phase_report("static_friction", results, self)
 
 
 @dsl_step(tags=["calibration", "auto-tune"])
@@ -611,6 +625,8 @@ class AutoTuneVelocity(Step):
 
         accepted_count = sum(1 for r in self.results.values() if r.accepted)
         self.info(f"\n  Applied {accepted_count} axis gains in-memory")
+
+        _write_phase_report("velocity", self.results, self)
 
         if self.persist and any(r.accepted for r in self.results.values()):
             if _persist_velocity_config(self.results):
@@ -896,16 +912,20 @@ class AutoTune(UIStep):
                 "Phase 1/8 – vel LPF\nMotoren samplen, alpha tunen…",
                 lambda: tuner.run_vel_lpf(VelLpfConfig()),
             )
+            if res:
+                _write_phase_report("vel_lpf", res, self)
             if self.persist and res:
                 _persist_vel_lpf(res)
 
         # -------- Phase 2: static_friction --------
         if self.tune_static_friction:
             await self._confirm("static_friction")
-            await self._phase(
+            sf_res = await self._phase(
                 "Phase 2/8 – static friction\nLosbrechmoment messen…",
                 lambda: tuner.run_static_friction(StaticFrictionConfig()),
             )
+            if sf_res:
+                _write_phase_report("static_friction", sf_res, self)
 
         # -------- Phase 3: encoder_cal (ticks_to_rad) --------
         # Runs before firmware_pid: the firmware velocity-PID setpoints are
@@ -955,6 +975,8 @@ class AutoTune(UIStep):
                         [ax], mv, VelocityTuneConfig()
                     ),
                 )
+                if results:
+                    _write_phase_report("velocity", results, self)
                 if self.persist and any(r.accepted for r in results.values()):
                     _persist_velocity_config(results)
 

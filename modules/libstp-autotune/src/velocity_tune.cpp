@@ -415,6 +415,9 @@ VelocityTuneResult VelocityTuner::tuneAxis(
     StepResponseData baseline = runStepResponse(axis, command, cfg.step_duration_s,
                                                 cfg.sample_hz);
     result.baseline_ise = computeIse(baseline);
+    // Preserve the raw recording for the offline report (step-response plot).
+    // Stored before any early return so every accept/reject path carries it.
+    result.baseline_response = baseline;
 
     LIBSTP_LOG_INFO("[VelocityTuner] [{}] Baseline ISE={:.6f}", axis, result.baseline_ise);
 
@@ -499,6 +502,7 @@ VelocityTuneResult VelocityTuner::tuneAxis(
     StepResponseData tuned = runStepResponse(axis, command, cfg.step_duration_s,
                                              cfg.sample_hz);
     result.tuned_ise = computeIse(tuned);
+    result.tuned_response = tuned;
 
     LIBSTP_LOG_INFO("[VelocityTuner] [{}] Tuned ISE={:.6f} (baseline={:.6f})",
                     axis, result.tuned_ise, result.baseline_ise);
