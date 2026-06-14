@@ -32,15 +32,22 @@ namespace libstp::foundation
     {
         double ticks_to_rad{2.0 * std::numbers::pi / kDefaultEncoderTicksPerRev};
         double vel_lpf_alpha{0.5};
+        /// Per-motor BEMF zero-offset (ADC counts) subtracted on the STM32
+        /// before integrating ticks, so the tick integral stays proportional to
+        /// wheel angle. Calibrated by auto_tune_bemf_velocity against the
+        /// calibration board (0 = no correction).
+        double bemf_offset{0.0};
         std::optional<PidGains> pid{};
 
         MotorCalibration() = default;
 
         MotorCalibration(double ticks_to_rad,
                          double vel_lpf_alpha,
-                         std::optional<PidGains> pid = std::nullopt)
+                         std::optional<PidGains> pid = std::nullopt,
+                         double bemf_offset = 0.0)
             : ticks_to_rad(ticks_to_rad),
               vel_lpf_alpha(vel_lpf_alpha),
+              bemf_offset(bemf_offset),
               pid(std::move(pid))
         {
         }
@@ -55,6 +62,8 @@ namespace libstp::foundation
                 throw std::invalid_argument("MotorCalibration: ticks_to_rad must be > 0");
             if (!(vel_lpf_alpha >= 0.0 && vel_lpf_alpha <= 1.0))
                 throw std::invalid_argument("MotorCalibration: vel_lpf_alpha must be in [0, 1]");
+            if (!std::isfinite(bemf_offset))
+                throw std::invalid_argument("MotorCalibration: bemf_offset must be finite");
             if (pid && (!std::isfinite(pid->kp) || !std::isfinite(pid->ki) || !std::isfinite(pid->kd)))
                 throw std::invalid_argument("MotorCalibration: pid gains must be finite");
         }

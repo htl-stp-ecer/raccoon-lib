@@ -7,6 +7,20 @@
 using namespace platform::wombat::core;
 namespace Channels = raccoon::Channels;
 
+namespace
+{
+    // External calibration-board odometry channels, published by the
+    // raccoon-calib-bridge (../calibration-board/host). Kept as local literals
+    // because they live outside the core raccoon::Channels namespace.
+    constexpr auto kCalibOdomPosX   = "raccoon/calib_board/odom/pos_x";   // cm
+    constexpr auto kCalibOdomPosY   = "raccoon/calib_board/odom/pos_y";   // cm
+    constexpr auto kCalibOdomHeading = "raccoon/calib_board/odom/heading"; // deg
+    constexpr auto kCalibStatusBoard = "raccoon/calib_board/status/board"; // "connected"/...
+
+    constexpr float kCmToMeters = 0.01f;
+    constexpr float kDegToRad = 0.017453292519943295f; // M_PI / 180
+}
+
 TransportReader::TransportReader()
     : transport_(libstp::transport_core::SharedTransport::instance())
 {
@@ -175,6 +189,38 @@ TransportReader::TransportReader()
             odom_cache_.wz = msg.value;
         }, retainedOpts);
 
+    // Subscribe to external calibration-board odometry — retained so a late
+    // subscriber immediately picks up the bridge's current pose. The bridge
+    // republishes status/board every 1 s, so attach/detach is observed even if
+    // we connect after the board.
+    transport_.subscribe<raccoon::scalar_f_t>(
+        kCalibOdomPosX,
+        [this](const raccoon::scalar_f_t& msg) {
+            { std::lock_guard<std::mutex> lock(cache_mutex_);
+              calib_pos_x_cm_ = msg.value; }
+            calib_odom_received_.store(true, std::memory_order_release);
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        kCalibOdomPosY,
+        [this](const raccoon::scalar_f_t& msg) {
+            { std::lock_guard<std::mutex> lock(cache_mutex_);
+              calib_pos_y_cm_ = msg.value; }
+            calib_odom_received_.store(true, std::memory_order_release);
+        }, retainedOpts);
+    transport_.subscribe<raccoon::scalar_f_t>(
+        kCalibOdomHeading,
+        [this](const raccoon::scalar_f_t& msg) {
+            { std::lock_guard<std::mutex> lock(cache_mutex_);
+              calib_heading_deg_ = msg.value; }
+            calib_odom_received_.store(true, std::memory_order_release);
+        }, retainedOpts);
+    transport_.subscribe<raccoon::string_t>(
+        kCalibStatusBoard,
+        [this](const raccoon::string_t& msg) {
+            calib_board_attached_.store(msg.value == "connected",
+                                        std::memory_order_release);
+        }, retainedOpts);
+
     // Initialize default values
     gyro_cache_.x = 0.0f;
     gyro_cache_.y = 0.0f;
@@ -317,6 +363,23 @@ TransportReader::OdometrySnapshot TransportReader::readOdometry() {
 void TransportReader::resetOdometry() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     odom_cache_ = OdometrySnapshot{};
+}
+
+TransportReader::CalibOdometrySnapshot TransportReader::readCalibOdometry() {
+    CalibOdometrySnapshot snap;
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        snap.pos_x = calib_pos_x_cm_ * kCmToMeters;
+        snap.pos_y = calib_pos_y_cm_ * kCmToMeters;
+        snap.heading = calib_heading_deg_ * kDegToRad;
+    }
+    snap.connected = isCalibBoardConnected();
+    return snap;
+}
+
+bool TransportReader::isCalibBoardConnected() {
+    return calib_board_attached_.load(std::memory_order_acquire)
+        && calib_odom_received_.load(std::memory_order_acquire);
 }
 
 bool TransportReader::waitForOdometryReset(int timeout_ms) {

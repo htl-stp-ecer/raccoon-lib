@@ -105,6 +105,7 @@ namespace libstp::kinematics
             std::array<std::array<float, 4>, 3> inv_matrix{};
             std::array<float, 4> ticks_to_rad{};
             std::array<std::array<float, 3>, 4> fwd_matrix{};
+            std::array<float, 4> bemf_offset{};
         };
 
         // Non-const: needs to look up motor handles via getMotors() to

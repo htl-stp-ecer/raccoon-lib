@@ -13,6 +13,7 @@ from raccoon.step.annotation import dsl
 from .auto_tune import (
     AutoTuneVelLpf,
     AutoTuneStaticFriction,
+    AutoTuneBemfVelocity,
     AutoTuneFirmwarePid,
     AutoTuneVelocity,
     AutoTuneMotion,
@@ -104,6 +105,103 @@ def auto_tune_static_friction(persist: bool = True):
     """
     b = AutoTuneStaticFrictionBuilder()
     b._persist = persist
+    return b
+
+
+class AutoTuneBemfVelocityBuilder(StepBuilder):
+    """Builder for AutoTuneBemfVelocity. Auto-generated — do not edit."""
+
+    def __init__(self):
+        super().__init__()
+        self._persist = True
+        self._pwm_min_percent = 30
+        self._pwm_max_percent = 90
+        self._pwm_steps = 6
+        self._sweeps = 3
+
+    def persist(self, value: bool):
+        self._persist = value
+        return self
+
+    def pwm_min_percent(self, value: int):
+        self._pwm_min_percent = value
+        return self
+
+    def pwm_max_percent(self, value: int):
+        self._pwm_max_percent = value
+        return self
+
+    def pwm_steps(self, value: int):
+        self._pwm_steps = value
+        return self
+
+    def sweeps(self, value: int):
+        self._sweeps = value
+        return self
+
+    def _build(self):
+        kwargs = {}
+        kwargs["persist"] = self._persist
+        kwargs["pwm_min_percent"] = self._pwm_min_percent
+        kwargs["pwm_max_percent"] = self._pwm_max_percent
+        kwargs["pwm_steps"] = self._pwm_steps
+        kwargs["sweeps"] = self._sweeps
+        return AutoTuneBemfVelocity(**kwargs)
+
+
+@dsl(tags=["calibration", "auto-tune"])
+def auto_tune_bemf_velocity(
+    persist: bool = True,
+    pwm_min_percent: int = 30,
+    pwm_max_percent: int = 90,
+    pwm_steps: int = 6,
+    sweeps: int = 3,
+):
+    """
+    Calibrate per-motor ``ticks_to_rad`` (BEMF→rad) against the calibration board.
+
+    Fully automatic. Drives the chassis straight forward at a sweep of open-loop
+    PWM levels (back-and-forth, staying near the start) and, for each level,
+    compares the ground-truth distance travelled — read from the external
+    calibration board's optical-flow + IMU odometry — against the accumulated
+    BEMF ticks per motor. From that it derives, per motor,
+    ``ticks_to_rad = (distance / wheel_radius) / Δticks``.
+
+    Crucially it does **not** assume the ADC-BEMF↔velocity relationship is
+    linear: it computes the per-motor coefficient of variation of
+    ``ticks_to_rad`` across the speed range plus an ω-vs-BEMF linear fit
+    (slope/intercept/R²) and reports whether a single scale actually holds. If
+    the relationship is clearly curved or offset, that is logged as a warning
+    rather than silently persisting a misleading single value.
+
+    Prerequisites:
+        - The calibration board must be connected and backing the odometry pose
+          (``robot.odometry.get_active_source() == CALIBRATION_BOARD``); the
+          tuner aborts otherwise.
+        - Roughly 1 m of clear runway forward/back.
+
+    Args:
+        persist: Write tuned ``ticks_to_rad`` per motor to ``raccoon.project.yml``. Default ``True``.
+        pwm_min_percent: Lowest PWM level in the sweep (percent). Default ``30``.
+        pwm_max_percent: Highest PWM level in the sweep (percent). Default ``90``.
+        pwm_steps: Number of evenly spaced PWM levels. Default ``6``.
+        sweeps: Number of full sweeps to run; points from all sweeps are pooled into one per-motor fit. More sweeps stabilise the extrapolated ``bemf_offset`` (the ω=0 intercept is noise-sensitive). Default ``3``.
+
+    Returns:
+        A AutoTuneBemfVelocityBuilder (chainable via ``.persist()``, ``.pwm_min_percent()``, ``.pwm_max_percent()``, ``.pwm_steps()``, ``.sweeps()``, ``.on_anomaly()``, ``.skip_timing()``).
+
+    Example::
+
+        from raccoon.step.motion import auto_tune_bemf_velocity
+
+        auto_tune_bemf_velocity()
+    """
+    b = AutoTuneBemfVelocityBuilder()
+    b._persist = persist
+    b._pwm_min_percent = pwm_min_percent
+    b._pwm_max_percent = pwm_max_percent
+    b._pwm_steps = pwm_steps
+    b._sweeps = sweeps
     return b
 
 
@@ -469,6 +567,8 @@ __all__ = [
     "auto_tune_vel_lpf",
     "AutoTuneStaticFrictionBuilder",
     "auto_tune_static_friction",
+    "AutoTuneBemfVelocityBuilder",
+    "auto_tune_bemf_velocity",
     "AutoTuneFirmwarePidBuilder",
     "auto_tune_firmware_pid",
     "AutoTuneVelocityBuilder",

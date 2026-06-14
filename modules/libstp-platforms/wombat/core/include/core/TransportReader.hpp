@@ -8,6 +8,7 @@
 #include <raccoon/scalar_i8_t.hpp>
 #include <raccoon/scalar_i32_t.hpp>
 #include <raccoon/scalar_f_t.hpp>
+#include <raccoon/string_t.hpp>
 #include <string>
 #include <unordered_map>
 #include <mutex>
@@ -68,6 +69,23 @@ namespace platform::wombat::core {
         /// Zero the local odometry cache (call alongside STM32 reset command).
         void resetOdometry();
 
+        /// External calibration-board odometry, converted to robot units.
+        ///
+        /// The calibration board publishes its fused optical-flow + IMU pose in
+        /// centimeters and degrees; this snapshot exposes it in meters and
+        /// radians to match the internal STM32 odometry contract.
+        struct CalibOdometrySnapshot {
+            float pos_x{0.0f};   ///< meters
+            float pos_y{0.0f};   ///< meters
+            float heading{0.0f}; ///< radians
+            bool connected{false};
+        };
+        CalibOdometrySnapshot readCalibOdometry();
+
+        /// True when the calibration board is attached AND has delivered at
+        /// least one odometry sample (so switching to it won't read stale zeros).
+        bool isCalibBoardConnected();
+
         /// Block until the STM32 publishes near-zero odometry after a reset.
         /// Returns true if confirmed, false on timeout.
         bool waitForOdometryReset(int timeout_ms = 500);
@@ -111,6 +129,15 @@ namespace platform::wombat::core {
         // STM32 odometry cache
         OdometrySnapshot odom_cache_{};
         std::condition_variable odom_cv_;
+
+        // External calibration-board odometry cache (raw board units: cm / deg).
+        float calib_pos_x_cm_{0.0f};
+        float calib_pos_y_cm_{0.0f};
+        float calib_heading_deg_{0.0f};
+        // Board attached per status/board channel.
+        std::atomic<bool> calib_board_attached_{false};
+        // At least one odometry sample has arrived since startup.
+        std::atomic<bool> calib_odom_received_{false};
 
         // Track whether real IMU heading data has been received.
         std::atomic<bool> imu_heading_received_{false};

@@ -7,6 +7,7 @@
 #include <pybind11/stl.h>
 
 #include "autotune/auto_tuner.hpp"
+#include "autotune/bemf_velocity_tune.hpp"
 #include "autotune/characterize_drive.hpp"
 #include "autotune/encoder_calibrator.hpp"
 #include "autotune/firmware_pid_tune.hpp"
@@ -658,6 +659,98 @@ PYBIND11_MODULE(autotune, m)
              "Run the IMU-vs-odometry calibration sweep. Updates each motor's "
              "MotorCalibration in place; the caller must re-publish the "
              "kinematics config to the STM32.");
+
+    // ------------------------------------------------------------------
+    // BEMF→velocity calibration (calibration-board ground truth)
+    // ------------------------------------------------------------------
+    py::class_<BemfVelocityConfig>(m, "BemfVelocityConfig",
+        "Configuration for the calibration-board BEMF→rad calibration.")
+        .def(py::init<>())
+        .def_readwrite("pwm_levels",            &BemfVelocityConfig::pwm_levels)
+        .def_readwrite("pwm_min_percent",       &BemfVelocityConfig::pwm_min_percent)
+        .def_readwrite("pwm_max_percent",       &BemfVelocityConfig::pwm_max_percent)
+        .def_readwrite("pwm_steps",             &BemfVelocityConfig::pwm_steps)
+        .def_readwrite("sweeps",                &BemfVelocityConfig::sweeps)
+        .def_readwrite("pre_roll_distance_m",   &BemfVelocityConfig::pre_roll_distance_m)
+        .def_readwrite("measure_distance_m",    &BemfVelocityConfig::measure_distance_m)
+        .def_readwrite("segment_timeout_s",     &BemfVelocityConfig::segment_timeout_s)
+        .def_readwrite("return_pwm_percent",    &BemfVelocityConfig::return_pwm_percent)
+        .def_readwrite("return_tolerance_m",    &BemfVelocityConfig::return_tolerance_m)
+        .def_readwrite("return_timeout_s",      &BemfVelocityConfig::return_timeout_s)
+        .def_readwrite("sample_hz",             &BemfVelocityConfig::sample_hz)
+        .def_readwrite("settle_s",              &BemfVelocityConfig::settle_s)
+        .def_readwrite("min_window_distance_m", &BemfVelocityConfig::min_window_distance_m)
+        .def_readwrite("min_window_ticks",      &BemfVelocityConfig::min_window_ticks)
+        .def_readwrite("require_calib_board",   &BemfVelocityConfig::require_calib_board)
+        .def_readwrite("apply",                 &BemfVelocityConfig::apply);
+
+    py::class_<BemfVelocityPoint>(m, "BemfVelocityPoint",
+        "One measurement window at a single PWM level.")
+        .def(py::init<>())
+        .def_readonly("pwm_percent",             &BemfVelocityPoint::pwm_percent)
+        .def_readonly("ground_truth_distance_m", &BemfVelocityPoint::ground_truth_distance_m)
+        .def_readonly("window_time_s",           &BemfVelocityPoint::window_time_s)
+        .def_readonly("body_speed_mps",          &BemfVelocityPoint::body_speed_mps)
+        .def_readonly("wheel_omega_rad_s",       &BemfVelocityPoint::wheel_omega_rad_s)
+        .def_readonly("delta_ticks",             &BemfVelocityPoint::delta_ticks)
+        .def_readonly("median_bemf",             &BemfVelocityPoint::median_bemf)
+        .def_readonly("ticks_to_rad",            &BemfVelocityPoint::ticks_to_rad)
+        .def_readonly("valid",                   &BemfVelocityPoint::valid);
+
+    py::class_<BemfMotorFit>(m, "BemfMotorFit",
+        "Per-motor fit + linearity diagnostics across the speed sweep.")
+        .def(py::init<>())
+        .def_readonly("port",                 &BemfMotorFit::port)
+        .def_readonly("n_points",             &BemfMotorFit::n_points)
+        .def_readonly("ticks_to_rad_median",  &BemfMotorFit::ticks_to_rad_median)
+        .def_readonly("ticks_to_rad_mean",    &BemfMotorFit::ticks_to_rad_mean)
+        .def_readonly("ticks_to_rad_cv",      &BemfMotorFit::ticks_to_rad_cv)
+        .def_readonly("bemf_omega_slope",     &BemfMotorFit::bemf_omega_slope)
+        .def_readonly("bemf_omega_intercept", &BemfMotorFit::bemf_omega_intercept)
+        .def_readonly("bemf_omega_r2",        &BemfMotorFit::bemf_omega_r2)
+        .def_readonly("bemf_offset",          &BemfMotorFit::bemf_offset)
+        .def_readonly("linear",               &BemfMotorFit::linear);
+
+    py::class_<BemfVelocityResult>(m, "BemfVelocityResult",
+        "Result of a BEMF→velocity calibration run.")
+        .def(py::init<>())
+        .def_readonly("points",         &BemfVelocityResult::points)
+        .def_readonly("motors",         &BemfVelocityResult::motors)
+        .def_readonly("ticks_to_rad",   &BemfVelocityResult::ticks_to_rad)
+        .def_readonly("bemf_offset",    &BemfVelocityResult::bemf_offset)
+        .def_readonly("linear_overall", &BemfVelocityResult::linear_overall)
+        .def_readonly("applied",        &BemfVelocityResult::applied)
+        .def_readonly("success",        &BemfVelocityResult::success)
+        .def_readonly("failure_reason", &BemfVelocityResult::failure_reason)
+        .def("__repr__", [](const BemfVelocityResult& r) {
+            std::ostringstream oss;
+            oss << "BemfVelocityResult(success=" << (r.success ? "True" : "False")
+                << ", linear=" << (r.linear_overall ? "True" : "False")
+                << ", points=" << r.points.size();
+            if (!r.failure_reason.empty())
+                oss << ", reason=\"" << r.failure_reason << "\"";
+            oss << ")";
+            return oss.str();
+        });
+
+    py::class_<BemfVelocityTuner>(m, "BemfVelocityTuner",
+        "Calibration-board BEMF→rad calibrator (fully automatic).")
+        .def(py::init([](libstp::drive::Drive& drive,
+                          libstp::odometry::IOdometry& odometry) {
+                 return std::make_unique<BemfVelocityTuner>(drive, odometry);
+             }),
+             py::arg("drive"),
+             py::arg("odometry"),
+             py::keep_alive<1, 2>(),
+             py::keep_alive<1, 3>(),
+             "Construct a BemfVelocityTuner.")
+        .def("tune",
+             &BemfVelocityTuner::tune,
+             py::arg("cfg"),
+             py::call_guard<py::gil_scoped_release>(),
+             "Sweep PWM levels, measure ground-truth distance vs accumulated "
+             "BEMF ticks per motor, derive per-motor ticks_to_rad + a linearity "
+             "report. Applies + republishes when cfg.apply is set.");
 
     // ------------------------------------------------------------------
     // Orchestrator — AutoTuner

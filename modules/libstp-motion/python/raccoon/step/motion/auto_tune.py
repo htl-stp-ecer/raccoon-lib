@@ -166,12 +166,15 @@ def _persist_vel_lpf(results: dict) -> bool:
 
 
 def _persist_ticks_to_rad(result) -> bool:
-    """Write tuned per-motor ticks_to_rad to definitions.<motor>.calibration."""
+    """Write tuned per-motor ticks_to_rad (and bemf_offset, when the result
+    carries it) to definitions.<motor>.calibration."""
     if not getattr(result, "success", False):
         return False
     project_root = find_project_root()
     if project_root is None:
         return False
+    # bemf_offset only exists on the BEMF→velocity result, not the encoder-cal one.
+    bemf_offsets = getattr(result, "bemf_offset", None)
     updated = False
     for port, t2r in enumerate(result.ticks_to_rad):
         if t2r <= 0.0:
@@ -183,6 +186,16 @@ def _persist_ticks_to_rad(result) -> bool:
             project_root,
             ["definitions", motor_name, "calibration", "ticks_to_rad"],
             round(t2r, 8),
+        ):
+            updated = True
+        if (
+            bemf_offsets is not None
+            and port < len(bemf_offsets)
+            and update_project_value(
+                project_root,
+                ["definitions", motor_name, "calibration", "bemf_offset"],
+                round(bemf_offsets[port], 4),
+            )
         ):
             updated = True
     return updated
@@ -341,6 +354,130 @@ class AutoTuneStaticFriction(Step):
                 )
             else:
                 self.warn(f"  port={port}: motor never moved — check wiring/power")
+
+
+@dsl_step(tags=["calibration", "auto-tune"])
+class AutoTuneBemfVelocity(Step):
+    """Calibrate per-motor ``ticks_to_rad`` (BEMF→rad) against the calibration board.
+
+    Fully automatic. Drives the chassis straight forward at a sweep of open-loop
+    PWM levels (back-and-forth, staying near the start) and, for each level,
+    compares the ground-truth distance travelled — read from the external
+    calibration board's optical-flow + IMU odometry — against the accumulated
+    BEMF ticks per motor. From that it derives, per motor,
+    ``ticks_to_rad = (distance / wheel_radius) / Δticks``.
+
+    Crucially it does **not** assume the ADC-BEMF↔velocity relationship is
+    linear: it computes the per-motor coefficient of variation of
+    ``ticks_to_rad`` across the speed range plus an ω-vs-BEMF linear fit
+    (slope/intercept/R²) and reports whether a single scale actually holds. If
+    the relationship is clearly curved or offset, that is logged as a warning
+    rather than silently persisting a misleading single value.
+
+    Prerequisites:
+        - The calibration board must be connected and backing the odometry pose
+          (``robot.odometry.get_active_source() == CALIBRATION_BOARD``); the
+          tuner aborts otherwise.
+        - Roughly 1 m of clear runway forward/back.
+
+    Args:
+        persist: Write tuned ``ticks_to_rad`` per motor to ``raccoon.project.yml``.
+            Default ``True``.
+        pwm_min_percent: Lowest PWM level in the sweep (percent). Default ``30``.
+        pwm_max_percent: Highest PWM level in the sweep (percent). Default ``90``.
+        pwm_steps: Number of evenly spaced PWM levels. Default ``6``.
+        sweeps: Number of full sweeps to run; points from all sweeps are pooled
+            into one per-motor fit. More sweeps stabilise the extrapolated
+            ``bemf_offset`` (the ω=0 intercept is noise-sensitive). Default ``3``.
+
+    Returns:
+        :class:`AutoTuneBemfVelocity` step.
+
+    Example::
+
+        from raccoon.step.motion import auto_tune_bemf_velocity
+
+        auto_tune_bemf_velocity()
+    """
+
+    def __init__(
+        self,
+        persist: bool = True,
+        pwm_min_percent: int = 30,
+        pwm_max_percent: int = 90,
+        pwm_steps: int = 6,
+        sweeps: int = 3,
+    ):
+        super().__init__()
+        self.persist = persist
+        self.pwm_min_percent = pwm_min_percent
+        self.pwm_max_percent = pwm_max_percent
+        self.pwm_steps = pwm_steps
+        self.sweeps = sweeps
+
+    def _generate_signature(self) -> str:
+        return (
+            f"AutoTuneBemfVelocity(persist={self.persist}, "
+            f"pwm={self.pwm_min_percent}-{self.pwm_max_percent}x{self.pwm_steps}, "
+            f"sweeps={self.sweeps})"
+        )
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
+        from raccoon.no_calibrate import is_no_calibrate
+
+        if is_no_calibrate():
+            self.info("--no-calibrate: skipping BEMF→velocity calibration")
+            return
+
+        from raccoon.autotune import BemfVelocityConfig, BemfVelocityTuner
+
+        self.info("=" * 60)
+        self.info("  AUTO-TUNE: BEMF→VELOCITY (calibration-board ground truth)")
+        self.info("=" * 60)
+
+        cfg = BemfVelocityConfig()
+        cfg.pwm_min_percent = self.pwm_min_percent
+        cfg.pwm_max_percent = self.pwm_max_percent
+        cfg.pwm_steps = self.pwm_steps
+        cfg.sweeps = self.sweeps
+        cfg.apply = True
+        cfg.require_calib_board = True
+
+        tuner = BemfVelocityTuner(robot.drive, robot.odometry)
+        result = await _run_in_executor(lambda: tuner.tune(cfg))
+
+        if not result.success:
+            self.warn(f"  BEMF→velocity calibration failed: {result.failure_reason}")
+            return
+
+        for fit in result.motors:
+            if fit.n_points == 0:
+                continue
+            self.info(
+                f"  port={fit.port}: ticks_to_rad={fit.ticks_to_rad_median:.6g} "
+                f"(CV={100.0 * fit.ticks_to_rad_cv:.1f}% over {fit.n_points} speeds) | "
+                f"ω={fit.bemf_omega_slope:.4g}·bemf+{fit.bemf_omega_intercept:.4g} "
+                f"R²={fit.bemf_omega_r2:.4f} -> "
+                f"{'LINEAR' if fit.linear else 'NON-LINEAR'}"
+            )
+
+        if not result.linear_overall:
+            self.warn(
+                "  BEMF↔velocity is NOT well described by a single ticks_to_rad "
+                "across the speed range — a single scale will be imprecise "
+                "(the firmware integration likely needs a speed-dependent model)."
+            )
+
+        # Persist data + plots under .raccoon/auto_tune/bemf_velocity/<ts>/.
+        from ._bemf_report import write_report
+
+        try:
+            write_report(result, self.info)
+        except Exception as exc:  # never let reporting abort the tune
+            self.warn(f"  report generation failed: {exc}")
+
+        if self.persist and _persist_ticks_to_rad(result):
+            self.info("  Saved ticks_to_rad to raccoon.project.yml")
 
 
 @dsl_step(tags=["calibration", "auto-tune"])

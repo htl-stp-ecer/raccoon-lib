@@ -131,6 +131,7 @@ from .auto_tune_dsl import (
     auto_tune_firmware_pid,
     auto_tune_static_friction,
     auto_tune_vel_lpf,
+    auto_tune_bemf_velocity,
 )
 from .sensor_group import SensorGroup
 from .drive_to_analog_target import DriveToAnalogTarget
@@ -228,6 +229,7 @@ __all__ = [
     "auto_tune_firmware_pid",
     "auto_tune_static_friction",
     "auto_tune_vel_lpf",
+    "auto_tune_bemf_velocity",
     # Sensor group
     "SensorGroup",
     # Analog sensor target drive
