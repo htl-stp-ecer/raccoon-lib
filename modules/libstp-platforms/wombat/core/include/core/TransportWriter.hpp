@@ -52,6 +52,12 @@ namespace platform::wombat::core
         /// Reset firmware motor position for one port.
         void resetMotorPosition(uint8_t port);
 
+        /// Command a body-frame chassis velocity [vx (m/s), vy (m/s), wz (rad/s)].
+        /// The reader puts all four motors into MOT_MODE_CHASSIS and the STM32
+        /// maps this to per-wheel setpoints via forward kinematics — the full
+        /// chassis velocity loop closes on-MCU. High-rate, best-effort.
+        void setChassisVelocity(float vx, float vy, float wz);
+
         /// Toggle the STM32-wide shutdown flag for the safest available stop path.
         void setShutdown(bool enabled);
 

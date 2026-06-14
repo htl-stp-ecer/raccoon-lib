@@ -165,4 +165,9 @@ namespace libstp::hal::platform
     {
         return std::make_shared<MockOdometry>(std::move(kinematics));
     }
+
+    void Platform::commandChassisVelocity(float /*vx*/, float /*vy*/, float /*wz*/)
+    {
+        // No coprocessor on the mock platform — chassis velocity is a no-op.
+    }
 }
