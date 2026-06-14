@@ -1,8 +1,15 @@
 #include "foundation/logging.hpp"
+#include "threading/thread_manager.hpp"
+
+// Mock bundles have no raccoon-transport (raccoon::transport is an empty stub
+// target), so the heartbeat cannot publish to the STM32 watchdog channel.
+// Guard every transport touchpoint and keep the daemon/diagnostics scaffolding
+// so `raccoon.hal` imports and the Python API stays identical across bundles.
+#ifndef DRIVER_BUNDLE_MOCK
 #include "raccoon/Channels.h"
 #include "raccoon/Transport.h"
 #include "raccoon/scalar_i32_t.hpp"
-#include "threading/thread_manager.hpp"
+#endif
 
 #include <pybind11/pybind11.h>
 
@@ -58,11 +65,13 @@ namespace
             std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
+#ifndef DRIVER_BUNDLE_MOCK
     raccoon::Transport& heartbeat_transport()
     {
         static raccoon::Transport transport = raccoon::Transport::create();
         return transport;
     }
+#endif
 
     std::string processIdentity()
     {
@@ -153,11 +162,17 @@ namespace
 
     bool publish_heartbeat()
     {
+#ifndef DRIVER_BUNDLE_MOCK
         raccoon::scalar_i32_t msg{};
         msg.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
         msg.value = static_cast<std::int32_t>(::getpid());
         return heartbeat_transport().publish(raccoon::Channels::HEARTBEAT_CMD, msg);
+#else
+        // No transport in mock bundles — there is no STM32 to feed, so the beat
+        // is a no-op that still counts as "sent" to keep diagnostics coherent.
+        return true;
+#endif
     }
 
     void heartbeat_loop(libstp::threading::stop_token stop)
