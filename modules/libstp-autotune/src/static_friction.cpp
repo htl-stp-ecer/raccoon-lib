@@ -15,9 +15,10 @@ namespace libstp::autotune
 namespace
 {
 
-int sweepDirection(hal::motor::IMotor*         motor,
-                   const StaticFrictionConfig& cfg,
-                   bool                        forward)
+int sweepDirection(hal::motor::IMotor*                motor,
+                   const StaticFrictionConfig&        cfg,
+                   bool                               forward,
+                   std::vector<StaticFrictionSample>& sweep_out)
 {
     const int sign = forward ? +1 : -1;
     const int n_samples = std::max(1, cfg.samples_per_step);
@@ -37,6 +38,10 @@ int sweepDirection(hal::motor::IMotor*         motor,
         }
         std::sort(samples.begin(), samples.end());
         const int median = samples[static_cast<std::size_t>(samples.size() / 2)];
+
+        // Record the PWM-vs-BEMF curve for the offline report (signed PWM so
+        // forward/reverse sweeps are distinguishable in one data file).
+        sweep_out.push_back(StaticFrictionSample{command, median});
 
         LIBSTP_LOG_DEBUG("[StaticFrictionMeasurer] port={} dir={} pct={} median_bemf={}",
                          motor->getPort(), forward ? "+" : "-", pct, median);
@@ -82,13 +87,13 @@ StaticFrictionResult StaticFrictionMeasurer::measureMotor(
     motor->resetPositionCounter();
 
     // Forward sweep.
-    const int ks_pos = sweepDirection(motor, cfg, /*forward=*/true);
+    const int ks_pos = sweepDirection(motor, cfg, /*forward=*/true, result.forward_sweep);
 
     motor->brake();
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     // Reverse sweep.
-    const int ks_neg = sweepDirection(motor, cfg, /*forward=*/false);
+    const int ks_neg = sweepDirection(motor, cfg, /*forward=*/false, result.reverse_sweep);
 
     motor->brake();
 
@@ -96,6 +101,7 @@ StaticFrictionResult StaticFrictionMeasurer::measureMotor(
     result.ks_negative_pct = ks_neg;
     result.ks_avg_pct      = (ks_pos + ks_neg) / 2;
     result.measured        = (ks_pos > 0 && ks_neg > 0);
+    result.motion_threshold = cfg.motion_threshold;
 
     LIBSTP_LOG_INFO("[StaticFrictionMeasurer] port={} ks_pos={}%% ks_neg={}%% "
                     "ks_avg={}%% measured={}",
