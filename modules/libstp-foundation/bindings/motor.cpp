@@ -74,6 +74,13 @@ void init_motor(const py::module_& m)
             py::arg("vel_lpf_alpha"),
             py::arg("pid") = std::nullopt
         )
+        .def(
+            py::init<double, double, std::optional<libstp::foundation::PidGains>, double>(),
+            py::arg("ticks_to_rad"),
+            py::arg("vel_lpf_alpha"),
+            py::arg("pid") = std::nullopt,
+            py::arg("bemf_offset") = 0.0
+        )
         .def_readwrite("ticks_to_rad", &libstp::foundation::MotorCalibration::ticks_to_rad)
         .def_readwrite("vel_lpf_alpha", &libstp::foundation::MotorCalibration::vel_lpf_alpha)
         .def_readwrite("bemf_offset", &libstp::foundation::MotorCalibration::bemf_offset)
