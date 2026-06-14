@@ -387,14 +387,19 @@ class AutoTuneBuilder(StepBuilder):
         self._vel_axes = None
         self._characterize_axes = None
         self._motion_axes = None
+        self._tune_bemf_velocity = True
         self._tune_vel_lpf = True
         self._tune_static_friction = True
-        self._tune_firmware_pid = False
-        self._tune_encoder_cal = True
-        self._tune_characterize = True
-        self._tune_velocity = True
-        self._tune_motion = True
-        self._tune_tolerances = True
+        self._tune_firmware_pid = True
+        self._tune_encoder_cal = False
+        self._tune_characterize = False
+        self._tune_velocity = False
+        self._tune_motion = False
+        self._tune_tolerances = False
+        self._pwm_min_percent = 30
+        self._pwm_max_percent = 90
+        self._pwm_steps = 6
+        self._sweeps = 2
         self._characterize_trials = 3
         self._characterize_power_percent = 100
         self._persist = True
@@ -410,6 +415,10 @@ class AutoTuneBuilder(StepBuilder):
 
     def motion_axes(self, value: list[str] | None):
         self._motion_axes = value
+        return self
+
+    def tune_bemf_velocity(self, value: bool):
+        self._tune_bemf_velocity = value
         return self
 
     def tune_vel_lpf(self, value: bool):
@@ -444,6 +453,22 @@ class AutoTuneBuilder(StepBuilder):
         self._tune_tolerances = value
         return self
 
+    def pwm_min_percent(self, value: int):
+        self._pwm_min_percent = value
+        return self
+
+    def pwm_max_percent(self, value: int):
+        self._pwm_max_percent = value
+        return self
+
+    def pwm_steps(self, value: int):
+        self._pwm_steps = value
+        return self
+
+    def sweeps(self, value: int):
+        self._sweeps = value
+        return self
+
     def characterize_trials(self, value: int):
         self._characterize_trials = value
         return self
@@ -465,6 +490,7 @@ class AutoTuneBuilder(StepBuilder):
         kwargs["vel_axes"] = self._vel_axes
         kwargs["characterize_axes"] = self._characterize_axes
         kwargs["motion_axes"] = self._motion_axes
+        kwargs["tune_bemf_velocity"] = self._tune_bemf_velocity
         kwargs["tune_vel_lpf"] = self._tune_vel_lpf
         kwargs["tune_static_friction"] = self._tune_static_friction
         kwargs["tune_firmware_pid"] = self._tune_firmware_pid
@@ -473,6 +499,10 @@ class AutoTuneBuilder(StepBuilder):
         kwargs["tune_velocity"] = self._tune_velocity
         kwargs["tune_motion"] = self._tune_motion
         kwargs["tune_tolerances"] = self._tune_tolerances
+        kwargs["pwm_min_percent"] = self._pwm_min_percent
+        kwargs["pwm_max_percent"] = self._pwm_max_percent
+        kwargs["pwm_steps"] = self._pwm_steps
+        kwargs["sweeps"] = self._sweeps
         kwargs["characterize_trials"] = self._characterize_trials
         kwargs["characterize_power_percent"] = self._characterize_power_percent
         kwargs["persist"] = self._persist
@@ -485,14 +515,19 @@ def auto_tune(
     vel_axes: list[str] | None = None,
     characterize_axes: list[str] | None = None,
     motion_axes: list[str] | None = None,
+    tune_bemf_velocity: bool = True,
     tune_vel_lpf: bool = True,
     tune_static_friction: bool = True,
-    tune_firmware_pid: bool = False,
-    tune_encoder_cal: bool = True,
-    tune_characterize: bool = True,
-    tune_velocity: bool = True,
-    tune_motion: bool = True,
-    tune_tolerances: bool = True,
+    tune_firmware_pid: bool = True,
+    tune_encoder_cal: bool = False,
+    tune_characterize: bool = False,
+    tune_velocity: bool = False,
+    tune_motion: bool = False,
+    tune_tolerances: bool = False,
+    pwm_min_percent: int = 30,
+    pwm_max_percent: int = 90,
+    pwm_steps: int = 6,
+    sweeps: int = 2,
     characterize_trials: int = 3,
     characterize_power_percent: int = 100,
     persist: bool = True,
@@ -506,36 +541,49 @@ def auto_tune(
     motors / motion-config objects and writes back to those same objects, so
     state stays coherent without Python having to shuttle calibration values.
 
-    Phase order (each depends on the previous):
+    Only the phases that are currently validated run by default. The remaining
+    phases are kept but disabled — pass the matching ``tune_*=True`` to re-enable.
 
-    1. vel_lpf — per-motor IIR alpha for velocity feedback
-    2. static_friction — kS per motor
-    3. firmware_pid — STM32 MAV-mode inner loop
-    4. encoder_cal — ticks_to_rad scaling via IMU ground truth
-    5. characterize — physical drive limits
-    6. velocity — chassis-axis velocity PID
-    7. motion — distance / heading PID
-    8. tolerances — derived from motion-trial residuals
+    Default-enabled phases:
+
+    * ``bemf_velocity`` — per-motor ``ticks_to_rad`` against the calibration
+      board (the big validated win; supersedes the IMU ``encoder_cal``).
+    * ``vel_lpf`` — per-motor IIR alpha for velocity feedback.
+    * ``static_friction`` — kS per motor (PWM percent).
+    * ``firmware_pid`` — STM32 MAV-mode inner velocity loop.
+
+    Default-disabled phases (re-enable explicitly):
+
+    * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
+    * ``characterize`` — known broken (aliases calib-board position).
+    * ``velocity`` — chassis-axis velocity PID; untested.
+    * ``motion`` — distance / heading PID; untested.
+    * ``tolerances`` — derived from motion-trial residuals; untested.
 
     Args:
-        vel_axes: Override the auto-detected velocity axis list for Phase 6.
-        characterize_axes: Override the auto-detected axis list for Phase 5.
-        motion_axes: Override the auto-detected motion-parameter list for Phase 7.
-        tune_vel_lpf: Enable Phase 1 (vel LPF alpha). Default ``True``.
-        tune_static_friction: Enable Phase 2 (static friction). Default ``True``.
-        tune_firmware_pid: Enable Phase 3 (firmware PID). Default ``False``.
-        tune_encoder_cal: Enable Phase 4 (encoder calibration). Default ``True``.
-        tune_characterize: Enable Phase 5 (drive characterization). Default ``True``.
-        tune_velocity: Enable Phase 6 (velocity PID). Default ``True``.
-        tune_motion: Enable Phase 7 (motion PID). Default ``True``.
-        tune_tolerances: Enable Phase 8 (tolerance derivation). Default ``True``.
-        characterize_trials: Number of Phase 5 trials per axis. Default ``3``.
-        characterize_power_percent: Raw PWM for Phase 5 trials (1–100). Default ``100``.
+        vel_axes: Override the auto-detected velocity axis list.
+        characterize_axes: Override the auto-detected characterize axis list.
+        motion_axes: Override the auto-detected motion-parameter list.
+        tune_bemf_velocity: Enable BEMF→velocity ``ticks_to_rad`` calibration against the calibration board. Default ``True``.
+        tune_vel_lpf: Enable vel LPF alpha tuning. Default ``True``.
+        tune_static_friction: Enable static friction measurement. Default ``True``.
+        tune_firmware_pid: Enable firmware velocity PID tuning. Default ``True``.
+        tune_encoder_cal: Enable IMU encoder calibration. Default ``False``.
+        tune_characterize: Enable drive characterization. Default ``False``.
+        tune_velocity: Enable velocity PID tuning. Default ``False``.
+        tune_motion: Enable motion PID tuning. Default ``False``.
+        tune_tolerances: Enable tolerance derivation. Default ``False``.
+        pwm_min_percent: Lowest PWM level for the bemf_velocity sweep. Default ``30``.
+        pwm_max_percent: Highest PWM level for the bemf_velocity sweep. Default ``90``.
+        pwm_steps: Number of bemf_velocity sweep PWM levels. Default ``6``.
+        sweeps: Number of bemf_velocity sweeps to pool. Default ``2``.
+        characterize_trials: Number of characterize trials per axis. Default ``3``.
+        characterize_power_percent: Raw PWM for characterize trials (1–100). Default ``100``.
         persist: Write phase results to ``raccoon.project.yml``. Default ``True``.
         step_confirm: Pause for a button press before every phase. Default ``True``.
 
     Returns:
-        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_vel_lpf()``, ``.tune_static_friction()``, ``.tune_firmware_pid()``, ``.tune_encoder_cal()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.tune_tolerances()``, ``.characterize_trials()``, ``.characterize_power_percent()``, ``.persist()``, ``.step_confirm()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A AutoTuneBuilder (chainable via ``.vel_axes()``, ``.characterize_axes()``, ``.motion_axes()``, ``.tune_bemf_velocity()``, ``.tune_vel_lpf()``, ``.tune_static_friction()``, ``.tune_firmware_pid()``, ``.tune_encoder_cal()``, ``.tune_characterize()``, ``.tune_velocity()``, ``.tune_motion()``, ``.tune_tolerances()``, ``.pwm_min_percent()``, ``.pwm_max_percent()``, ``.pwm_steps()``, ``.sweeps()``, ``.characterize_trials()``, ``.characterize_power_percent()``, ``.persist()``, ``.step_confirm()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -547,6 +595,7 @@ def auto_tune(
     b._vel_axes = vel_axes
     b._characterize_axes = characterize_axes
     b._motion_axes = motion_axes
+    b._tune_bemf_velocity = tune_bemf_velocity
     b._tune_vel_lpf = tune_vel_lpf
     b._tune_static_friction = tune_static_friction
     b._tune_firmware_pid = tune_firmware_pid
@@ -555,6 +604,10 @@ def auto_tune(
     b._tune_velocity = tune_velocity
     b._tune_motion = tune_motion
     b._tune_tolerances = tune_tolerances
+    b._pwm_min_percent = pwm_min_percent
+    b._pwm_max_percent = pwm_max_percent
+    b._pwm_steps = pwm_steps
+    b._sweeps = sweeps
     b._characterize_trials = characterize_trials
     b._characterize_power_percent = characterize_power_percent
     b._persist = persist

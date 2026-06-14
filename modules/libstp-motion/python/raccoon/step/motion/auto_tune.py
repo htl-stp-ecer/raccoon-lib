@@ -50,7 +50,16 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from raccoon.project_yaml import find_project_root, read_project_value, update_project_value
-from raccoon.ui import UIStep
+from raccoon.ui import (
+    Card,
+    Divider,
+    ProgressSpinner,
+    Row,
+    Text,
+    UIScreen,
+    UIStep,
+    Widget,
+)
 
 from .. import Step
 from ..annotation import dsl_step
@@ -58,6 +67,76 @@ from .characterize_drive import CharacterizeDrive
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
+
+
+# ---------------------------------------------------------------------------
+# Custom per-phase progress screen
+# ---------------------------------------------------------------------------
+
+
+class AutoTuneProgressScreen(UIScreen[None]):
+    """Live checklist of the auto-tune pipeline.
+
+    Shows every active phase with a status glyph so the operator can follow the
+    pipeline's progress on the robot screen. Reused across all phases of a single
+    :class:`AutoTune` run — the orchestrator mutates this object via :meth:`mark`
+    and re-displays it for each phase, so the checklist persists.
+    """
+
+    title = "Auto-Tune"
+
+    def __init__(self, phases: list[tuple[str, str]]):
+        super().__init__()
+        self._phases = list(phases)
+        self.status: dict[str, str] = {key: "pending" for key, _ in self._phases}
+        self.detail: str = ""
+
+    def mark(self, key: str, status: str, detail: str = "") -> None:
+        """Update a phase's status (``pending``/``running``/``done``/``failed``/``skipped``)."""
+        self.status[key] = status
+        self.detail = detail
+
+    def build(self) -> Widget:
+        n_total = len(self._phases)
+        n_done = sum(1 for s in self.status.values() if s in ("done", "skipped"))
+
+        children: list[Widget] = [
+            Text(text=f"Auto-Tune  {n_done}/{n_total}", size="large", bold=True),
+            Divider(),
+        ]
+
+        for key, label in self._phases:
+            status = self.status.get(key, "pending")
+            if status == "running":
+                glyph: Widget = ProgressSpinner(size="small", color="amber")
+            elif status == "done":
+                glyph = Text(text="✓", color="green")
+            elif status == "failed":
+                glyph = Text(text="✗", color="amber")
+            elif status == "skipped":
+                glyph = Text(text="–", muted=True, color="grey")
+            else:  # pending
+                glyph = Text(text="○", muted=True, color="grey")
+
+            children.append(
+                Row(
+                    children=[
+                        glyph,
+                        Text(
+                            text=label,
+                            bold=(status == "running"),
+                            muted=(status in ("pending", "skipped")),
+                        ),
+                    ],
+                    spacing=8,
+                )
+            )
+
+        if self.detail:
+            children.append(Divider())
+            children.append(Text(text=self.detail, size="small", muted=True))
+
+        return Card(title="Auto-Tune", children=children)
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +275,34 @@ def _persist_ticks_to_rad(result) -> bool:
                 ["definitions", motor_name, "calibration", "bemf_offset"],
                 round(bemf_offsets[port], 4),
             )
+        ):
+            updated = True
+    return updated
+
+
+def _persist_static_friction(results: dict) -> bool:
+    """Write measured static-friction kS (PWM percent) per motor to
+    definitions.<motor>.calibration.static_friction_pct.
+
+    Only motors that actually moved (``measured``) with a positive ``ks_avg_pct``
+    are written; the rest carry no usable threshold.
+    """
+    project_root = find_project_root()
+    if project_root is None:
+        return False
+    updated = False
+    for port, r in results.items():
+        if not getattr(r, "measured", False):
+            continue
+        if r.ks_avg_pct <= 0:
+            continue
+        motor_name = _motor_name_by_port(project_root, port)
+        if motor_name is None:
+            continue
+        if update_project_value(
+            project_root,
+            ["definitions", motor_name, "calibration", "static_friction_pct"],
+            int(r.ks_avg_pct),
         ):
             updated = True
     return updated
@@ -731,7 +838,9 @@ class AutoTuneMotion(Step):
 # ---------------------------------------------------------------------------
 
 _CONFIRM_MESSAGES: dict[str, str] = {
-    # Phase 1 — vel LPF
+    # ticks_to_rad via calibration board
+    "bemf_velocity": "ticks: ~1 m vorwärts/rückwärts frei (Calib-Board als Referenz)",
+    # vel LPF
     "vel_lpf": "Phase 1 – vel LPF: Motoren kurz drehen, BEMF samplen",
     # Phase 2 — static friction
     "static_friction": "Phase 2 – static friction: Motoren einzeln auf Losbrechmoment testen",
@@ -763,31 +872,45 @@ class AutoTune(UIStep):
     motors / motion-config objects and writes back to those same objects, so
     state stays coherent without Python having to shuttle calibration values.
 
-    Phase order (each depends on the previous):
+    Only the phases that are currently validated run by default. The remaining
+    phases are kept but disabled — pass the matching ``tune_*=True`` to re-enable.
 
-    1. vel_lpf — per-motor IIR alpha for velocity feedback
-    2. static_friction — kS per motor
-    3. encoder_cal — ticks_to_rad scaling via IMU ground truth
-    4. firmware_pid — STM32 MAV-mode inner loop (setpoints derived via ticks_to_rad)
-    5. characterize — physical drive limits
-    6. velocity — chassis-axis velocity PID
-    7. motion — distance / heading PID
-    8. tolerances — derived from motion-trial residuals
+    Default-enabled phases:
+
+    * ``bemf_velocity`` — per-motor ``ticks_to_rad`` against the calibration
+      board (the big validated win; supersedes the IMU ``encoder_cal``).
+    * ``vel_lpf`` — per-motor IIR alpha for velocity feedback.
+    * ``static_friction`` — kS per motor (PWM percent).
+    * ``firmware_pid`` — STM32 MAV-mode inner velocity loop.
+
+    Default-disabled phases (re-enable explicitly):
+
+    * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
+    * ``characterize`` — known broken (aliases calib-board position).
+    * ``velocity`` — chassis-axis velocity PID; untested.
+    * ``motion`` — distance / heading PID; untested.
+    * ``tolerances`` — derived from motion-trial residuals; untested.
 
     Args:
-        vel_axes: Override the auto-detected velocity axis list for Phase 6.
-        characterize_axes: Override the auto-detected axis list for Phase 5.
-        motion_axes: Override the auto-detected motion-parameter list for Phase 7.
-        tune_vel_lpf: Enable Phase 1 (vel LPF alpha). Default ``True``.
-        tune_static_friction: Enable Phase 2 (static friction). Default ``True``.
-        tune_encoder_cal: Enable Phase 3 (encoder calibration). Default ``True``.
-        tune_firmware_pid: Enable Phase 4 (firmware PID). Default ``False``.
-        tune_characterize: Enable Phase 5 (drive characterization). Default ``True``.
-        tune_velocity: Enable Phase 6 (velocity PID). Default ``True``.
-        tune_motion: Enable Phase 7 (motion PID). Default ``True``.
-        tune_tolerances: Enable Phase 8 (tolerance derivation). Default ``True``.
-        characterize_trials: Number of Phase 5 trials per axis. Default ``3``.
-        characterize_power_percent: Raw PWM for Phase 5 trials (1–100). Default ``100``.
+        vel_axes: Override the auto-detected velocity axis list.
+        characterize_axes: Override the auto-detected characterize axis list.
+        motion_axes: Override the auto-detected motion-parameter list.
+        tune_bemf_velocity: Enable BEMF→velocity ``ticks_to_rad`` calibration
+            against the calibration board. Default ``True``.
+        tune_vel_lpf: Enable vel LPF alpha tuning. Default ``True``.
+        tune_static_friction: Enable static friction measurement. Default ``True``.
+        tune_firmware_pid: Enable firmware velocity PID tuning. Default ``True``.
+        tune_encoder_cal: Enable IMU encoder calibration. Default ``False``.
+        tune_characterize: Enable drive characterization. Default ``False``.
+        tune_velocity: Enable velocity PID tuning. Default ``False``.
+        tune_motion: Enable motion PID tuning. Default ``False``.
+        tune_tolerances: Enable tolerance derivation. Default ``False``.
+        pwm_min_percent: Lowest PWM level for the bemf_velocity sweep. Default ``30``.
+        pwm_max_percent: Highest PWM level for the bemf_velocity sweep. Default ``90``.
+        pwm_steps: Number of bemf_velocity sweep PWM levels. Default ``6``.
+        sweeps: Number of bemf_velocity sweeps to pool. Default ``2``.
+        characterize_trials: Number of characterize trials per axis. Default ``3``.
+        characterize_power_percent: Raw PWM for characterize trials (1–100). Default ``100``.
         persist: Write phase results to ``raccoon.project.yml``. Default ``True``.
         step_confirm: Pause for a button press before every phase. Default ``True``.
     """
@@ -797,14 +920,19 @@ class AutoTune(UIStep):
         vel_axes: list[str] | None = None,
         characterize_axes: list[str] | None = None,
         motion_axes: list[str] | None = None,
+        tune_bemf_velocity: bool = True,
         tune_vel_lpf: bool = True,
         tune_static_friction: bool = True,
-        tune_firmware_pid: bool = False,
-        tune_encoder_cal: bool = True,
-        tune_characterize: bool = True,
-        tune_velocity: bool = True,
-        tune_motion: bool = True,
-        tune_tolerances: bool = True,
+        tune_firmware_pid: bool = True,
+        tune_encoder_cal: bool = False,
+        tune_characterize: bool = False,
+        tune_velocity: bool = False,
+        tune_motion: bool = False,
+        tune_tolerances: bool = False,
+        pwm_min_percent: int = 30,
+        pwm_max_percent: int = 90,
+        pwm_steps: int = 6,
+        sweeps: int = 2,
         characterize_trials: int = 3,
         characterize_power_percent: int = 100,
         persist: bool = True,
@@ -814,6 +942,7 @@ class AutoTune(UIStep):
         self.characterize_axes = characterize_axes
         self.vel_axes = vel_axes
         self.motion_axes = motion_axes
+        self.tune_bemf_velocity = tune_bemf_velocity
         self.tune_vel_lpf = tune_vel_lpf
         self.tune_static_friction = tune_static_friction
         self.tune_firmware_pid = tune_firmware_pid
@@ -822,6 +951,10 @@ class AutoTune(UIStep):
         self.tune_velocity = tune_velocity
         self.tune_motion = tune_motion
         self.tune_tolerances = tune_tolerances
+        self.pwm_min_percent = pwm_min_percent
+        self.pwm_max_percent = pwm_max_percent
+        self.pwm_steps = pwm_steps
+        self.sweeps = sweeps
         self.characterize_trials = characterize_trials
         self.characterize_power_percent = characterize_power_percent
         self.persist = persist
@@ -829,7 +962,8 @@ class AutoTune(UIStep):
 
     def _generate_signature(self) -> str:
         return (
-            f"AutoTune(vel_lpf={self.tune_vel_lpf}, "
+            f"AutoTune(bemf_vel={self.tune_bemf_velocity}, "
+            f"vel_lpf={self.tune_vel_lpf}, "
             f"static={self.tune_static_friction}, "
             f"fw_pid={self.tune_firmware_pid}, "
             f"enc_cal={self.tune_encoder_cal}, "
@@ -844,19 +978,6 @@ class AutoTune(UIStep):
             msg = _CONFIRM_MESSAGES.get(key, key)
             await self.wait_for_button(msg)
 
-    async def _phase(self, message: str, fn):
-        """Run a blocking C++ tuner call in an executor while showing a progress screen.
-
-        ``message`` is displayed on the robot's screen for the duration of the call.
-        Returns whatever ``fn()`` returns.
-        """
-        from raccoon.ui.screens.basic import ProgressScreen
-
-        async def runner():
-            return await _run_in_executor(fn)
-
-        return await self.run_with_ui(ProgressScreen(message), runner)
-
     async def _execute_step(self, robot: "GenericRobot") -> None:
         from raccoon.no_calibrate import is_no_calibrate
 
@@ -865,6 +986,8 @@ class AutoTune(UIStep):
             return
 
         from raccoon.autotune import (
+            BemfVelocityConfig,
+            BemfVelocityTuner,
             EncoderCalConfig,
             FirmwarePidConfig,
             MotionTuneConfig,
@@ -887,130 +1010,266 @@ class AutoTune(UIStep):
         if not has_lateral:
             self.info("  Kinematics does not support lateral motion — skipping lateral axes")
 
-        active_phases = []
-        if self.tune_vel_lpf:
-            active_phases.append("vel_lpf")
-        if self.tune_static_friction:
-            active_phases.append("static friction")
-        if self.tune_firmware_pid:
-            active_phases.append("firmware PID")
-        if self.tune_encoder_cal:
-            active_phases.append("encoder cal")
-        if self.tune_characterize:
-            active_phases.append("characterize")
-        if self.tune_velocity:
-            active_phases.append("velocity PID")
-        if self.tune_motion:
-            active_phases.append("motion PID")
-        if self.tune_tolerances:
-            active_phases.append("tolerances")
+        # Build the ordered (key, label) list of enabled phases.
+        phase_labels: list[tuple[str, str]] = [
+            ("bemf_velocity", "ticks_to_rad (calib board)"),
+            ("vel_lpf", "velocity LPF alpha"),
+            ("static_friction", "static friction kS"),
+            ("firmware_pid", "firmware velocity PID"),
+            ("encoder_cal", "encoder cal (IMU)"),
+            ("characterize", "drive limits"),
+            ("velocity", "velocity PID"),
+            ("motion", "motion PID"),
+            ("tolerances", "tolerances"),
+        ]
+        enabled = {
+            "bemf_velocity": self.tune_bemf_velocity,
+            "vel_lpf": self.tune_vel_lpf,
+            "static_friction": self.tune_static_friction,
+            "firmware_pid": self.tune_firmware_pid,
+            "encoder_cal": self.tune_encoder_cal,
+            "characterize": self.tune_characterize,
+            "velocity": self.tune_velocity,
+            "motion": self.tune_motion,
+            "tolerances": self.tune_tolerances,
+        }
+        active_phases = [(k, label) for k, label in phase_labels if enabled[k]]
 
         self.info("=" * 60)
         self.info("  AUTO-TUNE PID CONTROLLERS")
-        self.info(f"  Phases: {' -> '.join(active_phases)}")
+        self.info(f"  Phases: {' -> '.join(label for _, label in active_phases)}")
         self.info("=" * 60)
 
+        screen = AutoTuneProgressScreen(active_phases)
         tuner = _make_tuner(robot)
-
-        # -------- Phase 1: vel_lpf --------
-        if self.tune_vel_lpf:
-            await self._confirm("vel_lpf")
-            res = await self._phase(
-                "Phase 1/8 – vel LPF\nMotoren samplen, alpha tunen…",
-                lambda: tuner.run_vel_lpf(VelLpfConfig()),
-            )
-            if res:
-                _write_phase_report("vel_lpf", res, self)
-            if self.persist and res:
-                _persist_vel_lpf(res)
-
-        # -------- Phase 2: static_friction --------
-        if self.tune_static_friction:
-            await self._confirm("static_friction")
-            sf_res = await self._phase(
-                "Phase 2/8 – static friction\nLosbrechmoment messen…",
-                lambda: tuner.run_static_friction(StaticFrictionConfig()),
-            )
-            if sf_res:
-                _write_phase_report("static_friction", sf_res, self)
-
-        # -------- Phase 3: encoder_cal (ticks_to_rad) --------
-        # Runs before firmware_pid: the firmware velocity-PID setpoints are
-        # derived through ticks_to_rad, so the scale must be calibrated first.
-        if self.tune_encoder_cal:
-            await self._confirm("encoder_cal")
-            enc = await self._phase(
-                "Phase 3/8 – encoder cal\nticks_to_rad via IMU…",
-                lambda: tuner.run_encoder_calibration(EncoderCalConfig()),
-            )
-            if self.persist and getattr(enc, "success", False):
-                _persist_ticks_to_rad(enc)
-
-        # -------- Phase 4: firmware_pid --------
-        if self.tune_firmware_pid:
-            await self._confirm("firmware_pid")
-            fw_cfg = FirmwarePidConfig()
-            fw_cfg.csv_dir = "/tmp/auto_tune"
-            fw_results = await self._phase(
-                f"Phase 4/8 – firmware PID\nBEMF step response per Motor…\nCSV: {fw_cfg.csv_dir}",
-                lambda: tuner.run_firmware_pid(fw_cfg, None),
-            )
-            if fw_results:
-                _write_phase_report(
-                    "firmware_pid",
-                    {"csv_dir": fw_cfg.csv_dir, "results": fw_results},
-                    self,
-                )
-
-        # -------- Phase 5: characterize --------
-        if self.tune_characterize:
-            for axis in characterize_axes:
-                await self._confirm(f"char_{axis}")
-                char_step = CharacterizeDrive(
-                    axes=[axis],
-                    trials=self.characterize_trials,
-                    power_percent=self.characterize_power_percent,
-                    accel_timeout=3.0,
-                    decel_timeout=3.0,
-                    persist=self.persist,
-                )
-                await char_step._execute_step(robot)
-
-        # -------- Phase 6: velocity --------
         motion_results: dict = {}
-        if self.tune_velocity:
-            for axis in velocity_axes:
-                await self._confirm(f"vel_{axis}")
-                max_velocities = {axis: _get_max_velocity(robot, axis)}
-                results = await self._phase(
-                    f"Phase 6/8 – velocity PID ({axis})\nStep response + CHR tune…",
-                    lambda ax=axis, mv=max_velocities: tuner.run_velocity(
-                        [ax], mv, VelocityTuneConfig()
-                    ),
-                )
-                if results:
-                    _write_phase_report("velocity", results, self)
-                if self.persist and any(r.accepted for r in results.values()):
-                    _persist_velocity_config(results)
 
-        # -------- Phase 7: motion --------
-        if self.tune_motion:
-            for param in motion_params:
-                await self._confirm(f"motion_{param}")
-                results = await self._phase(
-                    f"Phase 7/8 – motion PID ({param})\nHooke-Jeeves Trials…",
-                    lambda p=param: tuner.run_motion([p], MotionTuneConfig()),
-                )
-                motion_results.update(results)
-            if self.persist and motion_results:
-                _persist_motion_config(motion_results)
+        for key, _label in active_phases:
+            await self._confirm(key)
 
-        # -------- Phase 8: tolerances --------
-        if self.tune_tolerances and motion_results:
-            await self._phase(
-                "Phase 8/8 – tolerances\nResiduen auswerten…",
-                lambda: tuner.run_tolerances(motion_results, MotionTuneConfig(), ToleranceConfig()),
-            )
+            # -------- bemf_velocity --------
+            if key == "bemf_velocity":
+                screen.mark(key, "running", detail="ticks_to_rad vs calib board…")
+
+                async def runner_bemf():
+                    try:
+                        cfg = BemfVelocityConfig()
+                        cfg.pwm_min_percent = self.pwm_min_percent
+                        cfg.pwm_max_percent = self.pwm_max_percent
+                        cfg.pwm_steps = self.pwm_steps
+                        cfg.sweeps = self.sweeps
+                        cfg.apply = True
+                        cfg.require_calib_board = True
+                        bemf_tuner = BemfVelocityTuner(robot.drive, robot.odometry)
+                        result = await _run_in_executor(lambda: bemf_tuner.tune(cfg))
+                        if not getattr(result, "success", False):
+                            reason = getattr(result, "failure_reason", "unknown")
+                            self.warn(f"  bemf_velocity failed: {reason}")
+                            screen.mark("bemf_velocity", "failed", detail=str(reason))
+                            await screen.refresh()
+                            return
+                        from ._bemf_report import write_report
+
+                        try:
+                            write_report(result, self.info)
+                        except Exception as exc:  # reporting must never abort a tune
+                            self.warn(f"  bemf_velocity report failed: {exc}")
+                        if self.persist:
+                            _persist_ticks_to_rad(result)
+                        screen.mark("bemf_velocity", "done")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  bemf_velocity raised: {exc}")
+                        screen.mark("bemf_velocity", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_bemf)
+
+            # -------- vel_lpf --------
+            elif key == "vel_lpf":
+                screen.mark(key, "running", detail="Motoren samplen, alpha tunen…")
+
+                async def runner_vel_lpf():
+                    try:
+                        res = await _run_in_executor(lambda: tuner.run_vel_lpf(VelLpfConfig()))
+                        if res:
+                            _write_phase_report("vel_lpf", res, self)
+                            if self.persist:
+                                _persist_vel_lpf(res)
+                            screen.mark("vel_lpf", "done")
+                        else:
+                            screen.mark("vel_lpf", "failed", detail="no result")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  vel_lpf raised: {exc}")
+                        screen.mark("vel_lpf", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_vel_lpf)
+
+            # -------- static_friction --------
+            elif key == "static_friction":
+                screen.mark(key, "running", detail="Losbrechmoment messen…")
+
+                async def runner_sf():
+                    try:
+                        res = await _run_in_executor(
+                            lambda: tuner.run_static_friction(StaticFrictionConfig())
+                        )
+                        if res:
+                            _write_phase_report("static_friction", res, self)
+                            if self.persist:
+                                _persist_static_friction(res)
+                            screen.mark("static_friction", "done")
+                        else:
+                            screen.mark("static_friction", "failed", detail="no result")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  static_friction raised: {exc}")
+                        screen.mark("static_friction", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_sf)
+
+            # -------- firmware_pid --------
+            elif key == "firmware_pid":
+                screen.mark(key, "running", detail="BEMF step response per Motor…")
+
+                async def runner_fw():
+                    try:
+                        fw_cfg = FirmwarePidConfig()
+                        fw_cfg.csv_dir = "/tmp/auto_tune"
+                        res = await _run_in_executor(lambda: tuner.run_firmware_pid(fw_cfg, None))
+                        if res:
+                            _write_phase_report(
+                                "firmware_pid",
+                                {"csv_dir": fw_cfg.csv_dir, "results": res},
+                                self,
+                            )
+                            screen.mark("firmware_pid", "done")
+                        else:
+                            screen.mark("firmware_pid", "failed", detail="no result")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  firmware_pid raised: {exc}")
+                        screen.mark("firmware_pid", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_fw)
+
+            # -------- encoder_cal (IMU ticks_to_rad) --------
+            elif key == "encoder_cal":
+                screen.mark(key, "running", detail="ticks_to_rad via IMU…")
+
+                async def runner_enc():
+                    try:
+                        enc = await _run_in_executor(
+                            lambda: tuner.run_encoder_calibration(EncoderCalConfig())
+                        )
+                        if getattr(enc, "success", False):
+                            if self.persist:
+                                _persist_ticks_to_rad(enc)
+                            screen.mark("encoder_cal", "done")
+                        else:
+                            screen.mark("encoder_cal", "failed", detail="no result")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  encoder_cal raised: {exc}")
+                        screen.mark("encoder_cal", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_enc)
+
+            # -------- characterize --------
+            elif key == "characterize":
+                screen.mark(key, "running", detail="drive limits messen…")
+                ok = True
+                for axis in characterize_axes:
+                    try:
+                        char_step = CharacterizeDrive(
+                            axes=[axis],
+                            trials=self.characterize_trials,
+                            power_percent=self.characterize_power_percent,
+                            accel_timeout=3.0,
+                            decel_timeout=3.0,
+                            persist=self.persist,
+                        )
+                        await char_step._execute_step(robot)
+                    except Exception as exc:
+                        ok = False
+                        self.warn(f"  characterize[{axis}] raised: {exc}")
+                screen.mark("characterize", "done" if ok else "failed")
+
+            # -------- velocity --------
+            elif key == "velocity":
+                screen.mark(key, "running", detail="Step response + CHR tune…")
+
+                async def runner_vel():
+                    try:
+                        for axis in velocity_axes:
+                            max_velocities = {axis: _get_max_velocity(robot, axis)}
+                            results = await _run_in_executor(
+                                lambda ax=axis, mv=max_velocities: tuner.run_velocity(
+                                    [ax], mv, VelocityTuneConfig()
+                                )
+                            )
+                            if results:
+                                _write_phase_report("velocity", results, self)
+                                if self.persist and any(r.accepted for r in results.values()):
+                                    _persist_velocity_config(results)
+                        screen.mark("velocity", "done")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  velocity raised: {exc}")
+                        screen.mark("velocity", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_vel)
+
+            # -------- motion --------
+            elif key == "motion":
+                screen.mark(key, "running", detail="Hooke-Jeeves Trials…")
+
+                async def runner_motion():
+                    try:
+                        for param in motion_params:
+                            results = await _run_in_executor(
+                                lambda p=param: tuner.run_motion([p], MotionTuneConfig())
+                            )
+                            motion_results.update(results)
+                        if self.persist and motion_results:
+                            _persist_motion_config(motion_results)
+                        screen.mark("motion", "done")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  motion raised: {exc}")
+                        screen.mark("motion", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_motion)
+
+            # -------- tolerances --------
+            elif key == "tolerances":
+                if not motion_results:
+                    screen.mark(key, "skipped", detail="no motion residuals")
+                    continue
+                screen.mark(key, "running", detail="Residuen auswerten…")
+
+                async def runner_tol():
+                    try:
+                        await _run_in_executor(
+                            lambda: tuner.run_tolerances(
+                                motion_results, MotionTuneConfig(), ToleranceConfig()
+                            )
+                        )
+                        screen.mark("tolerances", "done")
+                        await screen.refresh()
+                    except Exception as exc:
+                        self.warn(f"  tolerances raised: {exc}")
+                        screen.mark("tolerances", "failed", detail=str(exc))
+                        await screen.refresh()
+
+                await self.run_with_ui(screen, runner_tol)
 
         self.info("\n" + "=" * 60)
         self.info("  AUTO-TUNE COMPLETE")
