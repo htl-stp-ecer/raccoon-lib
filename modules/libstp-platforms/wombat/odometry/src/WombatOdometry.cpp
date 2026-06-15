@@ -227,7 +227,18 @@ namespace
         {
             const auto snap = ::platform::wombat::core::TransportReader::instance().readCalibOdometry();
             libstp::foundation::Pose pose;
-            pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
+            // The calib board's optical-flow position frame is mounted rotated
+            // 180° from the robot drive frame: a forward drive shows as (−x,−y)
+            // in the raw board position while the board heading points ~forward.
+            // Confirmed on hardware as a CONSTANT 180° rotation (displacement
+            // angle − heading ≈ −180° at every heading; not a reflection).
+            // Negate the position to undo it so heading-relative consumers
+            // (LinearMotion projects displacement onto the start heading) see a
+            // forward drive as +forward. Heading is left untouched — turn
+            // control nulls heading ERROR so a constant offset cancels — and the
+            // straight-line norm is sign-independent (Phase 5/6 + velocity-gain
+            // calibration stay valid).
+            pose.position = Eigen::Vector3f(-snap.pos_x, -snap.pos_y, 0.0f);
             pose.heading = snap.heading;
             return pose;
         }
