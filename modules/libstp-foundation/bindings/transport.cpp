@@ -4,8 +4,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
-#include <unistd.h>  // _exit()
 #include <utility>
+#ifndef _WIN32
+#include <unistd.h>  // POSIX-only; the actual orderly exit goes through Python os._exit
+#endif
 
 #ifdef LIBSTP_HAS_TRANSPORT
 #include "transport_core/shared_transport.hpp"

@@ -20,19 +20,36 @@ extern "C" bool raccoon_platform_heartbeat_publish(std::int32_t pid);
 #include <chrono>
 #include <cstdio>
 #include <cstring>
-#include <fcntl.h>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <thread>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <fcntl.h>
 #include <sys/file.h>
 #include <sys/types.h>
-#include <thread>
 #include <unistd.h>
+#endif
 
 namespace py = pybind11;
 
 namespace
 {
+    // Portable process id (POSIX getpid vs Windows _getpid). Windows is a
+    // dev-only target with no STM32 watchdog, but the daemon still compiles and
+    // runs as a harmless no-op publisher there.
+    inline int current_pid()
+    {
+#ifdef _WIN32
+        return ::_getpid();
+#else
+        return ::getpid();
+#endif
+    }
+
     // STM32 hardware watchdog expects a heartbeat every ~100 ms.
     constexpr auto kHeartbeatInterval = std::chrono::milliseconds(100);
     constexpr auto kOwnerRetryInterval = std::chrono::seconds(1);
@@ -69,7 +86,7 @@ namespace
     std::string processIdentity()
     {
         std::ostringstream out;
-        out << "pid=" << static_cast<int>(::getpid());
+        out << "pid=" << static_cast<int>(current_pid());
 
         std::ifstream cmdline("/proc/self/cmdline", std::ios::binary);
         std::string payload;
@@ -99,6 +116,15 @@ namespace
                 return true;
             }
 
+#ifdef _WIN32
+            // Windows is a dev-only target with no cross-process flock; the
+            // single dev process is always the heartbeat owner. fd_ = 1 marks
+            // ownership without touching the (unix-style) lock file path.
+            fd_ = 1;
+            ownerIdentity_ = processIdentity();
+            LIBSTP_LOG_WARN("Heartbeat ownership acquired by {}", ownerIdentity_);
+            return true;
+#else
             const int fd = ::open(kHeartbeatOwnerLockPath, O_CREAT | O_RDWR, 0666);
             if (fd < 0)
             {
@@ -120,6 +146,7 @@ namespace
             (void)::write(fd_, contents.data(), contents.size());
             LIBSTP_LOG_WARN("Heartbeat ownership acquired by {}", ownerIdentity_);
             return true;
+#endif
         }
 
         void release()
@@ -127,8 +154,10 @@ namespace
             if (fd_ >= 0)
             {
                 LIBSTP_LOG_WARN("Heartbeat ownership released by {}", ownerIdentity_);
+#ifndef _WIN32
                 ::flock(fd_, LOCK_UN);
                 ::close(fd_);
+#endif
                 fd_ = -1;
             }
         }
@@ -158,7 +187,7 @@ namespace
         // Delegates to the active platform bundle. On wombat this publishes a
         // scalar to the STM32 watchdog channel; on mock it is a no-op that
         // returns true so the diagnostics stay coherent.
-        return raccoon_platform_heartbeat_publish(static_cast<std::int32_t>(::getpid()));
+        return raccoon_platform_heartbeat_publish(static_cast<std::int32_t>(current_pid()));
     }
 
     void heartbeat_loop(libstp::threading::stop_token stop)
@@ -194,7 +223,7 @@ namespace
                     if (!observedOwner.empty() && observedOwner != lastObservedOwner)
                     {
                         LIBSTP_LOG_WARN("Heartbeat ownership denied to pid={} because {} is active",
-                                        static_cast<int>(::getpid()),
+                                        static_cast<int>(current_pid()),
                                         observedOwner);
                         lastObservedOwner = observedOwner;
                     }
@@ -202,7 +231,7 @@ namespace
             }
 
             g_is_owner.store(ownerLock.isOwner(), std::memory_order_relaxed);
-            g_owner_pid.store(ownerLock.isOwner() ? static_cast<int32_t>(::getpid()) : 0,
+            g_owner_pid.store(ownerLock.isOwner() ? static_cast<int32_t>(current_pid()) : 0,
                               std::memory_order_relaxed);
             if (!ownerLock.isOwner())
             {
