@@ -93,6 +93,17 @@ namespace libstp::autotune
             const MotionTuneConfig& cfg) const;
 
         /**
+         * @brief Closed-loop return to the trial origin (0,0, home_heading).
+         *
+         * Drives the robot back to the pose captured right after the trial's
+         * odometry reset, using FIXED gentle gains (independent of the PID gains
+         * being tuned, so a bad candidate cannot strand the robot) so every
+         * trial starts and ends in the same place. Holonomic: corrects position
+         * (forward + lateral) and heading. Bounded by an internal timeout.
+         */
+        void returnToOrigin(double home_heading_rad, const MotionTuneConfig& cfg) const;
+
+        /**
          * @brief Set kp/kd on the live config, run the appropriate trial,
          *        settle, then return the composite score.
          */
