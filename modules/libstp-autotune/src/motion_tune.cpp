@@ -33,56 +33,83 @@ void MotionTuner::returnToOrigin(double home_heading_rad, const MotionTuneConfig
 {
     using Clock = std::chrono::steady_clock;
 
+    // The calib board's PAA optical-flow sensor is NOT at the rotation center,
+    // so while the robot rotates the reported position is contaminated by the
+    // lever-arm term (ω × r). The heading (gyro) stays trustworthy. We therefore
+    // return in TWO phases so position is only ever used when the robot is not
+    // rotating (ω ≈ 0), sidestepping the lever arm entirely:
+    //   Phase 1 — rotate back to the home heading (position ignored).
+    //   Phase 2 — translate back to the origin holding heading (ω ≈ 0, so the
+    //             position read is clean).
     // Fixed, gentle gains — deliberately NOT the gains being tuned, so a bad
-    // candidate cannot strand the robot away from home.
+    // candidate cannot strand the robot.
     constexpr double kPosTolM    = 0.025;  // m
     constexpr double kHeadTolRad = 0.035;  // ~2°
     constexpr double kKpPos      = 1.5;
     constexpr double kKpHead     = 2.0;
     constexpr double kMaxV       = 0.12;   // m/s
     constexpr double kMaxW       = 1.0;    // rad/s
-    constexpr double kReturnTimeoutS = 6.0;
+    constexpr double kPhaseTimeoutS = 4.0;
 
     const double dt = 1.0 / static_cast<double>(cfg.sample_hz);
     const auto   clampAbs = [](double v, double lim) { return std::clamp(v, -lim, lim); };
-
-    auto t0 = Clock::now();
-    while (true)
-    {
-        const double rel = std::chrono::duration<double>(Clock::now() - t0).count();
-        if (rel >= kReturnTimeoutS)
-            break;
-
-        const auto   pose = odometry_.getPose();
-        const double x    = static_cast<double>(pose.position.x());
-        const double y    = static_cast<double>(pose.position.y());
-        const double h    = odometry_.getHeading();
-        const double head_err = std::remainder(home_heading_rad - h, 2.0 * M_PI);
-
-        if (std::hypot(x, y) < kPosTolM && std::abs(head_err) < kHeadTolRad)
-            break;
-
-        // Error vector toward the origin (0,0), rotated into the body frame.
-        // After the calib-frame fix the pose frame matches the command frame:
-        // +vx → +(cos h, sin h), +vy → +(sin h, −cos h) (body "right").
-        const double ch = std::cos(h);
-        const double sh = std::sin(h);
-        const double body_fwd   = (-x) * ch + (-y) * sh;
-        const double body_right = (-x) * sh - (-y) * ch;
-
-        foundation::ChassisVelocity cmd{
-            clampAbs(kKpPos * body_fwd, kMaxV),
-            clampAbs(kKpPos * body_right, kMaxV),
-            clampAbs(kKpHead * head_err, kMaxW),
-        };
-        drive_.setVelocity(cmd);
-        drive_.update(dt);
+    const auto   sleepStep = [&]() {
         std::this_thread::sleep_for(std::chrono::microseconds(1'000'000 / cfg.sample_hz));
+    };
+
+    // ---- Phase 1: rotate to home heading (heading-only) ----
+    {
+        auto t0 = Clock::now();
+        while (std::chrono::duration<double>(Clock::now() - t0).count() < kPhaseTimeoutS)
+        {
+            const double head_err =
+                std::remainder(home_heading_rad - odometry_.getHeading(), 2.0 * M_PI);
+            if (std::abs(head_err) < kHeadTolRad)
+                break;
+            drive_.setVelocity(foundation::ChassisVelocity{0.0, 0.0,
+                                                           clampAbs(kKpHead * head_err, kMaxW)});
+            drive_.update(dt);
+            sleepStep();
+        }
+        drive_.hardStop();
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
     }
 
-    drive_.hardStop();
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(static_cast<long long>(cfg.settle_s * 1000.0)));
+    // ---- Phase 2: translate to the origin holding heading (ω ≈ 0) ----
+    {
+        auto t0 = Clock::now();
+        while (std::chrono::duration<double>(Clock::now() - t0).count() < kPhaseTimeoutS)
+        {
+            const auto   pose = odometry_.getPose();
+            const double x    = static_cast<double>(pose.position.x());
+            const double y    = static_cast<double>(pose.position.y());
+            const double h    = odometry_.getHeading();
+            const double head_err = std::remainder(home_heading_rad - h, 2.0 * M_PI);
+
+            if (std::hypot(x, y) < kPosTolM)
+                break;
+
+            // Error toward origin (0,0) rotated into the body frame. With the
+            // calib-frame fix and ω ≈ 0 here, the pose frame matches the command
+            // frame: +vx → +(cos h, sin h), +vy → +(sin h, −cos h) ("right").
+            const double ch = std::cos(h);
+            const double sh = std::sin(h);
+            const double body_fwd   = (-x) * ch + (-y) * sh;
+            const double body_right = (-x) * sh - (-y) * ch;
+
+            foundation::ChassisVelocity cmd{
+                clampAbs(kKpPos * body_fwd, kMaxV),
+                clampAbs(kKpPos * body_right, kMaxV),
+                clampAbs(kKpHead * head_err, kMaxW),  // gentle heading hold
+            };
+            drive_.setVelocity(cmd);
+            drive_.update(dt);
+            sleepStep();
+        }
+        drive_.hardStop();
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(static_cast<long long>(cfg.settle_s * 1000.0)));
+    }
 }
 
 // ============================================================================
