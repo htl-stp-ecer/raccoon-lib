@@ -280,8 +280,9 @@ namespace libstp::hal::platform
         return std::make_shared<WombatOdometry>(std::move(imu), std::move(kinematics));
     }
 
-    void Platform::commandChassisVelocity(float vx, float vy, float wz)
+    bool Platform::commandChassisVelocity(float vx, float vy, float wz)
     {
         ::platform::wombat::core::TransportWriter::instance().setChassisVelocity(vx, vy, wz);
+        return true;
     }
 }

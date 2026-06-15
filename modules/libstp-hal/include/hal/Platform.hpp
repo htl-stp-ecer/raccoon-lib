@@ -130,9 +130,13 @@ namespace libstp::hal::platform
         /// Command a body-frame chassis velocity [vx (m/s), vy (m/s), wz (rad/s)]
         /// to the coprocessor's on-board chassis velocity loop (MOT_MODE_CHASSIS):
         /// the wombat bundle forwards it to the STM32, which maps it to per-wheel
-        /// setpoints via forward kinematics and runs the per-motor PID. The mock
-        /// bundle is a no-op. Requires kinematics to have been pushed already
-        /// (createOdometry sends it). High-rate, best-effort.
-        static void commandChassisVelocity(float vx, float vy, float wz);
+        /// setpoints via forward kinematics and runs the per-motor PID. Requires
+        /// kinematics to have been pushed already (createOdometry sends it).
+        /// High-rate, best-effort.
+        ///
+        /// @return true if the platform has an on-board chassis loop and accepted
+        ///         the command (wombat); false if there is none (mock) — in which
+        ///         case the caller should fall back to host-side IK + control.
+        static bool commandChassisVelocity(float vx, float vy, float wz);
     };
 }

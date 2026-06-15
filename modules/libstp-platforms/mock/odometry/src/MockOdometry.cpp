@@ -166,8 +166,10 @@ namespace libstp::hal::platform
         return std::make_shared<MockOdometry>(std::move(kinematics));
     }
 
-    void Platform::commandChassisVelocity(float /*vx*/, float /*vy*/, float /*wz*/)
+    bool Platform::commandChassisVelocity(float /*vx*/, float /*vy*/, float /*wz*/)
     {
-        // No coprocessor on the mock platform — chassis velocity is a no-op.
+        // No coprocessor on the mock platform — report "not handled" so the Drive
+        // falls back to host-side IK + control (drives the in-process sim world).
+        return false;
     }
 }

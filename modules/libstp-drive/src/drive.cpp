@@ -1,5 +1,6 @@
 #include "drive/drive.hpp"
 #include "hal/IIMU.hpp"
+#include "hal/Platform.hpp"
 #include "foundation/config.hpp"
 #include <stdexcept>
 #include <limits>
@@ -37,9 +38,23 @@ void Drive::setVelocity(const foundation::ChassisVelocity& v_body)
 
 libstp::kinematics::MotorCommands Drive::update(const double dt)
 {
-    const auto measured_enc = kinematics_->estimateState();
-
     last_gyro_wz_ = imu_.getYawRate();
+
+    // On platforms with an on-board chassis velocity loop (real hardware),
+    // forward the body-frame command to the coprocessor: it does the inverse
+    // kinematics + per-motor velocity PID, so the Pi performs NO host-side IK
+    // or velocity control. Returns empty commands — the side effect is the
+    // chassis command, not per-wheel velocities. Mock/sim platforms return
+    // false here and fall through to the host-side path below.
+    if (hal::platform::Platform::commandChassisVelocity(
+            static_cast<float>(desired_.vx),
+            static_cast<float>(desired_.vy),
+            static_cast<float>(desired_.wz)))
+    {
+        return {};
+    }
+
+    const auto measured_enc = kinematics_->estimateState();
 
     constexpr double kNoLimit = std::numeric_limits<double>::infinity();
     const double corrected_vx = ctrl_vx_.compute(desired_.vx, 0.0, measured_enc.vx, dt, kNoLimit);
