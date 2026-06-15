@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "foundation/logging.hpp"
+#include "foundation/types.hpp"
 #include "motion/linear_motion.hpp"
 #include "motion/motion.hpp"
 #include "motion/turn_motion.hpp"
@@ -170,6 +171,37 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
             if (excess > overshoot)
                 overshoot = excess;
         }
+    }
+
+    // Return to the trial start so repeated Hooke-Jeeves trials don't march the
+    // robot across the field. The trial reset() put the origin at the start, so
+    // drive the opposite direction (open-loop, via the MCU chassis loop) until
+    // the straight-line distance back is small, or a timeout. Approximate is
+    // fine — the next trial reset()s the origin anyway.
+    {
+        const double ret_speed = std::max(0.05, 0.6 * max_vel);
+        foundation::ChassisVelocity rev{0.0, 0.0, 0.0};
+        if (axis == motion::LinearAxis::Lateral)
+            rev.vy = -ret_speed;
+        else
+            rev.vx = -ret_speed;
+
+        const double ret_timeout = trialTimeoutS(distance_m, max_vel, 0.6, cfg) + 1.0;
+        auto         rt0         = Clock::now();
+        while (true)
+        {
+            double rel = std::chrono::duration<double>(Clock::now() - rt0).count();
+            if (rel >= ret_timeout)
+                break;
+            if (odometry_.getDistanceFromOrigin().straight_line < 0.03)
+                break;
+            drive_.setVelocity(rev);
+            drive_.update(1.0 / static_cast<double>(cfg.sample_hz));
+            std::this_thread::sleep_for(std::chrono::microseconds(1'000'000 / cfg.sample_hz));
+        }
+        drive_.hardStop();
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(static_cast<long long>(cfg.settle_s * 1000.0)));
     }
 
     return {settle_time, overshoot, final_error};

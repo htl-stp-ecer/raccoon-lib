@@ -892,12 +892,13 @@ class AutoTune(UIStep):
       distance).
     * ``velocity`` — MCU chassis velocity-command gain per axis: makes commanded
       body velocity match the calib-board-measured achieved velocity.
+    * ``motion`` — distance / heading PID via real LinearMotion/TurnMotion
+      trials (Hooke-Jeeves); linear trials return to start between runs.
+    * ``tolerances`` — distance/angle tolerances derived from motion residuals.
 
     Default-disabled phases (re-enable explicitly):
 
     * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
-    * ``motion`` — distance / heading PID.
-    * ``tolerances`` — derived from motion-trial residuals.
 
     Args:
         vel_axes: Override the auto-detected velocity axis list.
@@ -913,8 +914,11 @@ class AutoTune(UIStep):
             per axis vs calib board). Default ``True``.
         tune_velocity: Enable MCU chassis velocity-command-gain calibration
             (commanded == achieved body velocity). Default ``True``.
-        tune_motion: Enable motion PID tuning (distance / heading). Default ``False``.
-        tune_tolerances: Enable tolerance derivation. Default ``False``.
+        tune_motion: Enable motion PID tuning (distance / heading) via real
+            LinearMotion/TurnMotion trials; linear trials return to start after
+            each so the robot stays in place. Default ``True``.
+        tune_tolerances: Enable tolerance derivation from motion residuals.
+            Default ``True``.
         pwm_min_percent: Lowest PWM level for the bemf_velocity sweep. Default ``30``.
         pwm_max_percent: Highest PWM level for the bemf_velocity sweep. Default ``90``.
         pwm_steps: Number of bemf_velocity sweep PWM levels. Default ``6``.
@@ -937,8 +941,8 @@ class AutoTune(UIStep):
         tune_encoder_cal: bool = False,
         tune_characterize: bool = True,
         tune_velocity: bool = True,
-        tune_motion: bool = False,
-        tune_tolerances: bool = False,
+        tune_motion: bool = True,
+        tune_tolerances: bool = True,
         pwm_min_percent: int = 30,
         pwm_max_percent: int = 90,
         pwm_steps: int = 6,
