@@ -93,15 +93,25 @@ namespace libstp::autotune
             const MotionTuneConfig& cfg) const;
 
         /**
-         * @brief Closed-loop return to the trial origin (0,0, home_heading).
+         * @brief Return after a LINEAR trial by retracing the SAME axis.
          *
-         * Drives the robot back to the pose captured right after the trial's
-         * odometry reset, using FIXED gentle gains (independent of the PID gains
-         * being tuned, so a bad candidate cannot strand the robot) so every
-         * trial starts and ends in the same place. Holonomic: corrects position
-         * (forward + lateral) and heading. Bounded by an internal timeout.
+         * Drives the negative of the trial's axis velocity (forward trial →
+         * reverse forward, strafe trial → reverse strafe) with heading-hold
+         * correction ON, until the robot is back at the start (straight-line
+         * distance from the trial origin is minimal) or a timeout. Uses fixed
+         * gentle gains, never the gains being tuned. Pure straight motion keeps
+         * ω ≈ 0 so the offset-PAA lever arm never contaminates the position.
          */
-        void returnToOrigin(double home_heading_rad, const MotionTuneConfig& cfg) const;
+        void returnLinear(motion::LinearAxis axis, double home_heading_rad,
+                          const MotionTuneConfig& cfg) const;
+
+        /**
+         * @brief Return after a TURN trial by rotating back to the home heading.
+         *
+         * Heading-only (gyro), so the offset-PAA position is never used while
+         * rotating. Fixed gentle gains; bounded by a timeout.
+         */
+        void returnTurn(double home_heading_rad, const MotionTuneConfig& cfg) const;
 
         /**
          * @brief Set kp/kd on the live config, run the appropriate trial,
