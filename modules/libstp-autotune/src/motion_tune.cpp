@@ -159,8 +159,12 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
 
     const Micros period{1'000'000 / cfg.sample_hz};
 
-    // Capture world heading as the heading target for this trial.
-    double target_heading_rad = odometry_.getAbsoluteHeading();
+    // Heading target for this trial. MUST use the SAME heading source that
+    // LinearMotion measures against (odometry_.getHeading() — the calib gyro),
+    // NOT getAbsoluteHeading() (the wombat on-board IMU). Those two references
+    // can differ by ~100°, which made LinearMotion spin to "correct" a phantom
+    // heading error before driving ("turns first, then moves", then stalls).
+    double target_heading_rad = odometry_.getHeading();
 
     odometry_.reset();
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
