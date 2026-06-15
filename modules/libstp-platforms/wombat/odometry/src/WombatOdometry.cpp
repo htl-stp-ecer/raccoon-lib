@@ -11,6 +11,7 @@
 
 #include "core/TransportReader.hpp"
 #include "core/TransportWriter.hpp"
+#include "foundation/chassis_control_context.hpp"
 #include "foundation/config.hpp"
 #include "foundation/logging.hpp"
 #include "foundation/speed_mode_context.hpp"
@@ -273,11 +274,32 @@ namespace
 
 namespace libstp::hal::platform
 {
+    namespace
+    {
+        // On-MCU chassis sink registered with the foundation context: forwards a
+        // body-frame velocity command to the STM32 (which does the IK + per-motor
+        // PID). Non-capturing so it stores as a plain function pointer.
+        bool wombatChassisSink(double vx, double vy, double wz)
+        {
+            ::platform::wombat::core::TransportWriter::instance().setChassisVelocity(
+                static_cast<float>(vx), static_cast<float>(vy), static_cast<float>(wz));
+            return true;
+        }
+    }
+
     std::shared_ptr<libstp::odometry::IOdometry> Platform::createOdometry(
         std::shared_ptr<libstp::kinematics::IKinematics> kinematics)
     {
         auto imu = std::make_shared<libstp::hal::imu::IMU>();
-        return std::make_shared<WombatOdometry>(std::move(imu), std::move(kinematics));
+        auto odom = std::make_shared<WombatOdometry>(std::move(imu), std::move(kinematics));
+
+        // Register the on-MCU chassis loop so Drive::update routes body-velocity
+        // commands to the STM32 instead of running host-side IK. Done here: this
+        // runs once at robot startup and is where the kinematics matrices the
+        // STM32 needs for its IK are pushed.
+        libstp::foundation::ChassisControlContext::instance().setSink(&wombatChassisSink);
+
+        return odom;
     }
 
     bool Platform::commandChassisVelocity(float vx, float vy, float wz)
