@@ -372,8 +372,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cmake-cache
-          key: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v3
-          restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-
+          # Bumped to v4: the v3 cache stored FetchContent subbuild dirs pinned
+          # to "Visual Studio 17 2022"; windows-latest moved to "Visual Studio
+          # 18 2026", and a generator mismatch aborts configure. The restore-key
+          # is version-anchored so a miss can NOT fall back to the stale v3
+          # cache (which would re-introduce the wrong generator).
+          key: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v4
+          restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v4
 
       # Compiler cache for the host-runner builds (macOS, Windows). On Linux
       # the manylinux container can't reach the GHA cache API directly, so we
