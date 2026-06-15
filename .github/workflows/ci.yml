@@ -343,7 +343,7 @@ jobs:
     name: Wheels • ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [changes]
-    if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
+    if: (github.event_name == 'push' || github.event_name == 'pull_request') && needs.changes.outputs.has-code == 'true'
     strategy:
       fail-fast: false
       matrix:
