@@ -10,7 +10,7 @@ target_link_libraries(foundation PUBLIC Eigen3::Eigen spdlog::spdlog)
 # static lib) to avoid a link cycle between foundation and threading. We pull
 # transport_core in only for the pybind11 module (libstp_foundation), and only
 # when it actually exists — mock bundles skip the transport binding entirely.
-if(NOT DRIVER_BUNDLE STREQUAL "mock")
+if(NOT DRIVER_BUNDLE STREQUAL "mock" OR LIBSTP_RUNTIME_PLATFORM)
   # transport_core is added later in modules/CMakeLists.txt but CMake resolves
   # target link references at generate time, so a forward reference is fine.
   target_link_libraries(libstp_foundation PRIVATE transport_core)

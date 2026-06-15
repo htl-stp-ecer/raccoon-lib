@@ -471,7 +471,12 @@ jobs:
             rm -rf "$D"' _ {wheel} {dest_dir}
 
           # ── CMake config settings per platform ────────────────────────────
-          # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
+          # DRIVER_BUNDLE=mock selects the fallback static bundle. On Linux
+          # LIBSTP_RUNTIME_PLATFORM defaults ON, so the Linux wheels actually
+          # build BOTH the mock and wombat bundles as runtime-switchable shared
+          # libraries and DRIVER_BUNDLE is only the static fallback (unused at
+          # runtime) — one Linux/aarch64 wheel runs as mock on a dev laptop and
+          # as wombat on a Raspberry Pi. macOS/Windows keep the static-mock path.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
           CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock

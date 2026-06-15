@@ -30,4 +30,9 @@ add_subdirectory(threading)
 add_subdirectory(hal)
 add_subdirectory(kmeans)
 add_subdirectory(platform)
-add_subdirectory(transport_core)
+# transport_core only exists for non-mock / runtime-platform builds. A mock test
+# build has no real transport, so its shared-transport test can't link — skip it
+# rather than break the whole test build.
+if(TARGET transport_core)
+  add_subdirectory(transport_core)
+endif()

@@ -1,6 +1,4 @@
-add_library(platform_core STATIC
-        src/MockPlatform.cpp
-)
+add_library(platform_core STATIC src/MockPlatform.cpp src/heartbeat_publish.cpp)
 
 target_include_directories(platform_core PUBLIC include)
 target_link_libraries(platform_core PUBLIC sim)

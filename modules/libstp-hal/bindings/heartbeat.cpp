@@ -1,17 +1,18 @@
 #include "foundation/logging.hpp"
 #include "threading/thread_manager.hpp"
 
-// Mock bundles have no raccoon-transport (raccoon::transport is an empty stub
-// target), so the heartbeat cannot publish to the STM32 watchdog channel.
-// Guard every transport touchpoint and keep the daemon/diagnostics scaffolding
-// so `raccoon.hal` imports and the Python API stays identical across bundles.
-#ifndef DRIVER_BUNDLE_MOCK
-#include "raccoon/Channels.h"
-#include "raccoon/Transport.h"
-#include "raccoon/scalar_i32_t.hpp"
-#endif
-
 #include <pybind11/pybind11.h>
+
+#include <cstdint>
+
+// The actual transport publish lives in the selected platform bundle, not in
+// the bundle-agnostic `raccoon.hal` extension. Each bundle defines this symbol:
+// the wombat bundle publishes a scalar to the STM32 watchdog channel; the mock
+// bundle is a no-op that returns true. This keeps `raccoon.hal` free of any
+// raccoon-transport dependency so the same extension works regardless of which
+// platform .so is loaded at runtime. Resolved at load time from the
+// RTLD_GLOBAL-loaded platform bundle (Linux) or static-linked mock (Win/macOS).
+extern "C" bool raccoon_platform_heartbeat_publish(std::int32_t pid);
 
 #include <algorithm>
 #include <atomic>
@@ -64,14 +65,6 @@ namespace
         return std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
     }
-
-#ifndef DRIVER_BUNDLE_MOCK
-    raccoon::Transport& heartbeat_transport()
-    {
-        static raccoon::Transport transport = raccoon::Transport::create();
-        return transport;
-    }
-#endif
 
     std::string processIdentity()
     {
@@ -162,17 +155,10 @@ namespace
 
     bool publish_heartbeat()
     {
-#ifndef DRIVER_BUNDLE_MOCK
-        raccoon::scalar_i32_t msg{};
-        msg.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-        msg.value = static_cast<std::int32_t>(::getpid());
-        return heartbeat_transport().publish(raccoon::Channels::HEARTBEAT_CMD, msg);
-#else
-        // No transport in mock bundles — there is no STM32 to feed, so the beat
-        // is a no-op that still counts as "sent" to keep diagnostics coherent.
-        return true;
-#endif
+        // Delegates to the active platform bundle. On wombat this publishes a
+        // scalar to the STM32 watchdog channel; on mock it is a no-op that
+        // returns true so the diagnostics stay coherent.
+        return raccoon_platform_heartbeat_publish(static_cast<std::int32_t>(::getpid()));
     }
 
     void heartbeat_loop(libstp::threading::stop_token stop)
