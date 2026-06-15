@@ -81,8 +81,26 @@ function(register_libstp_module module_name is_interface additional_libraries)
     set_target_properties(${PY_LIB_NAME} PROPERTIES BUILD_RPATH "$ORIGIN"
                                                     INSTALL_RPATH "$ORIGIN")
     target_include_directories(${PY_LIB_NAME} PRIVATE ${_INC_BUILD})
-    target_link_libraries(${PY_LIB_NAME} PRIVATE ${module_name} platform
-                                                 pybind11::headers)
+    # In a runtime-platform build there is no static `platform` target: the
+    # device symbols are left undefined here and resolved at import time from
+    # the RTLD_GLOBAL-loaded platform bundle. Link platform statically only on
+    # the single-bundle (macOS/Windows/test) path.
+    if(LIBSTP_RUNTIME_PLATFORM)
+      # `hal` (in place of the static `platform`) provides the device-class
+      # headers + bundle-agnostic glue that every binding got transitively
+      # through platform before. The concrete device symbols (Motor::setSpeed
+      # etc.) stay undefined and are resolved at import time from the preloaded
+      # platform bundle.
+      target_link_libraries(${PY_LIB_NAME} PRIVATE ${module_name} hal
+                                                   pybind11::headers)
+      # Allow the extension to load with device symbols still unresolved; the
+      # dynamic linker binds them against the preloaded bundle .so.
+      target_link_options(${PY_LIB_NAME} PRIVATE
+                          "LINKER:--allow-shlib-undefined")
+    else()
+      target_link_libraries(${PY_LIB_NAME} PRIVATE ${module_name} platform
+                                                   pybind11::headers)
+    endif()
     if(additional_libraries)
       target_link_libraries(${PY_LIB_NAME} PRIVATE ${additional_libraries})
     endif()
@@ -113,7 +131,9 @@ endfunction()
 
 add_subdirectory(libstp-foundation)
 add_subdirectory(libstp-threading)
-if(NOT DRIVER_BUNDLE STREQUAL "mock")
+# transport_core is needed whenever real transport exists: any non-mock bundle,
+# or a runtime-platform build (whose wombat bundle links it).
+if(NOT DRIVER_BUNDLE STREQUAL "mock" OR LIBSTP_RUNTIME_PLATFORM)
   add_subdirectory(libstp-transport-core)
 endif()
 add_subdirectory(libstp-hal)
@@ -138,7 +158,7 @@ add_subdirectory(libstp-arm)
 add_subdirectory(libstp-step)
 add_subdirectory(libstp-kmeans)
 add_subdirectory(libstp-calibration-store)
-if(NOT DRIVER_BUNDLE STREQUAL "mock")
+if(NOT DRIVER_BUNDLE STREQUAL "mock" OR LIBSTP_RUNTIME_PLATFORM)
   add_subdirectory(libstp-cam)
 endif()
 add_subdirectory(libstp-map)

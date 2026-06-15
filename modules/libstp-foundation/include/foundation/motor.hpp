@@ -38,17 +38,23 @@ namespace libstp::foundation
         /// calibration board (0 = no correction).
         double bemf_offset{0.0};
         std::optional<PidGains> pid{};
+        /// Static-friction threshold (PWM %): the minimum open-loop duty that
+        /// overcomes stiction, measured by auto_tune static_friction. Stored as
+        /// a per-motor calibration record (0 = unmeasured).
+        double static_friction_pct{0.0};
 
         MotorCalibration() = default;
 
         MotorCalibration(double ticks_to_rad,
                          double vel_lpf_alpha,
                          std::optional<PidGains> pid = std::nullopt,
-                         double bemf_offset = 0.0)
+                         double bemf_offset = 0.0,
+                         double static_friction_pct = 0.0)
             : ticks_to_rad(ticks_to_rad),
               vel_lpf_alpha(vel_lpf_alpha),
               bemf_offset(bemf_offset),
-              pid(std::move(pid))
+              pid(std::move(pid)),
+              static_friction_pct(static_friction_pct)
         {
         }
 
@@ -64,6 +70,8 @@ namespace libstp::foundation
                 throw std::invalid_argument("MotorCalibration: vel_lpf_alpha must be in [0, 1]");
             if (!std::isfinite(bemf_offset))
                 throw std::invalid_argument("MotorCalibration: bemf_offset must be finite");
+            if (!(std::isfinite(static_friction_pct) && static_friction_pct >= 0.0))
+                throw std::invalid_argument("MotorCalibration: static_friction_pct must be finite and >= 0");
             if (pid && (!std::isfinite(pid->kp) || !std::isfinite(pid->ki) || !std::isfinite(pid->kd)))
                 throw std::invalid_argument("MotorCalibration: pid gains must be finite");
         }
