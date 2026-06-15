@@ -887,17 +887,17 @@ class AutoTune(UIStep):
     * ``vel_lpf`` — per-motor IIR alpha for velocity feedback.
     * ``static_friction`` — kS per motor (PWM percent).
     * ``firmware_pid`` — STM32 MAV-mode inner velocity loop.
-
-    Default-disabled phases (re-enable explicitly):
-
-    * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
     * ``characterize`` — max velocity / accel / decel per axis at 100% PWM,
       measured against calib-board ground truth (frame-independent straight-line
       distance).
     * ``velocity`` — MCU chassis velocity-command gain per axis: makes commanded
       body velocity match the calib-board-measured achieved velocity.
-    * ``motion`` — distance / heading PID; untested.
-    * ``tolerances`` — derived from motion-trial residuals; untested.
+
+    Default-disabled phases (re-enable explicitly):
+
+    * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
+    * ``motion`` — distance / heading PID.
+    * ``tolerances`` — derived from motion-trial residuals.
 
     Args:
         vel_axes: Override the auto-detected velocity axis list.
@@ -909,9 +909,11 @@ class AutoTune(UIStep):
         tune_static_friction: Enable static friction measurement. Default ``True``.
         tune_firmware_pid: Enable firmware velocity PID tuning. Default ``True``.
         tune_encoder_cal: Enable IMU encoder calibration. Default ``False``.
-        tune_characterize: Enable drive characterization. Default ``False``.
-        tune_velocity: Enable velocity PID tuning. Default ``False``.
-        tune_motion: Enable motion PID tuning. Default ``False``.
+        tune_characterize: Enable drive characterization (max vel/accel/decel
+            per axis vs calib board). Default ``True``.
+        tune_velocity: Enable MCU chassis velocity-command-gain calibration
+            (commanded == achieved body velocity). Default ``True``.
+        tune_motion: Enable motion PID tuning (distance / heading). Default ``False``.
         tune_tolerances: Enable tolerance derivation. Default ``False``.
         pwm_min_percent: Lowest PWM level for the bemf_velocity sweep. Default ``30``.
         pwm_max_percent: Highest PWM level for the bemf_velocity sweep. Default ``90``.
@@ -933,8 +935,8 @@ class AutoTune(UIStep):
         tune_static_friction: bool = True,
         tune_firmware_pid: bool = True,
         tune_encoder_cal: bool = False,
-        tune_characterize: bool = False,
-        tune_velocity: bool = False,
+        tune_characterize: bool = True,
+        tune_velocity: bool = True,
         tune_motion: bool = False,
         tune_tolerances: bool = False,
         pwm_min_percent: int = 30,

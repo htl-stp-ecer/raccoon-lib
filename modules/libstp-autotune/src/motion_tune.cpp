@@ -107,20 +107,20 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
         if (elapsed >= timeout_s)
         {
             drive_.hardStop();
-            auto dist_from_origin = odometry_.getDistanceFromOrigin();
-            double progress = (axis == motion::LinearAxis::Lateral)
-                                  ? std::abs(dist_from_origin.lateral)
-                                  : std::abs(dist_from_origin.forward);
+            // Frame-independent: .forward/.lateral project onto the odometry
+            // origin frame (the calib board's fixed axes), not the robot's
+            // heading, so they under-read whenever the robot is not axis-aligned.
+            // For a pure single-axis trial the straight-line distance IS the
+            // travelled distance. (Scoring uses the motion's own telemetry,
+            // which is already correct — this only feeds timeout/stuck logic.)
+            double progress = odometry_.getDistanceFromOrigin().straight_line;
             double remaining = std::abs(distance_m) - progress;
             LIBSTP_LOG_WARN("[MotionTuner] Linear trial timed out after {:.2f}s", elapsed);
             return {cfg.score_timeout_penalty, 0.0, remaining};
         }
 
-        // Progress for stuck detection.
-        auto   dist_from_origin = odometry_.getDistanceFromOrigin();
-        double progress = (axis == motion::LinearAxis::Lateral)
-                              ? std::abs(dist_from_origin.lateral)
-                              : std::abs(dist_from_origin.forward);
+        // Progress for stuck detection (frame-independent; see note above).
+        double progress = odometry_.getDistanceFromOrigin().straight_line;
 
         if (elapsed >= cfg.stuck_timeout_s && progress < cfg.stuck_linear_progress_m)
         {
