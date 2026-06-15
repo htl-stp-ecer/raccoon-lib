@@ -113,6 +113,25 @@ namespace libstp::kinematics
         [[nodiscard]] virtual StmOdometryConfig getStmOdometryConfig() = 0;
 
         /**
+         * Per-axis velocity-command gain [vx, vy, wz].
+         *
+         * Multiplies the forward-kinematics (chassis→wheel) coefficients so a
+         * commanded body velocity produces a proportionally larger wheel
+         * setpoint. This compensates for drivetrain efficiency that the ideal
+         * geometry does not model — most notably mecanum roller slip, where the
+         * wheels track their BEMF setpoint correctly yet the chassis travels
+         * less than the kinematics predict. Calibrated by the autotune velocity
+         * phase against an external ground-truth (calib board) so commanded ==
+         * achieved. Default 1.0 (no correction). Applied in
+         * getStmOdometryConfig() so it is pushed to the coprocessor.
+         */
+        virtual void setVelocityCommandGains(double /*gx*/, double /*gy*/, double /*gw*/) {}
+        [[nodiscard]] virtual std::array<double, 3> getVelocityCommandGains() const
+        {
+            return {1.0, 1.0, 1.0};
+        }
+
+        /**
          * Command motors at raw open-loop power using the inverse kinematics
          * to determine per-wheel direction signs.
          *

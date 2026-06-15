@@ -84,6 +84,14 @@ namespace libstp::autotune
         double baseline_ise{0.0};
         double tuned_ise{0.0};
         bool accepted{false};
+        /// MCU-chassis path: the calibrated per-axis velocity-command gain that
+        /// was applied to the kinematics fwd_matrix (and pushed to the STM32) so
+        /// commanded == achieved body velocity. 1.0 means no correction.
+        double velocity_command_gain{1.0};
+        /// Measured steady-state gain (achieved/commanded) before tuning.
+        double measured_gain_before{0.0};
+        /// Measured steady-state gain (achieved/commanded) after tuning.
+        double measured_gain_after{0.0};
         /// Raw baseline step-response recording (commanded vs measured), for
         /// offline plotting of the open-loop fit.
         StepResponseData baseline_response{};
@@ -115,6 +123,15 @@ namespace libstp::autotune
         double low_dead_time_ratio{0.05};
         /// |Ks - 1| tolerance accompanying the low-dead-time early-return.
         double low_dead_time_gain_tol{0.15};
+
+        // ---- MCU-chassis velocity-command-gain calibration ----
+        /// Clamp range for the calibrated per-axis command gain (1/Ks).
+        double gain_min{0.3};
+        double gain_max{3.0};
+        /// Settle time (s) after re-publishing the kinematics config to the STM32.
+        double republish_settle_s{0.4};
+        /// Fraction of the run (from the end) used to fit steady-state velocity.
+        double steady_state_frac{0.5};
     };
 
     // ========================================================================

@@ -222,7 +222,15 @@ namespace libstp::kinematics::mecanum
             cfg.inv_matrix[1][port] = slot_inv_cols[slot][1];  // vy
             cfg.inv_matrix[2][port] = slot_inv_cols[slot][2];  // wz
 
-            cfg.fwd_matrix[port] = slot_fwd_rows[slot];
+            // Fold the per-axis velocity-command gain into the forward matrix
+            // so the coprocessor receives a proportionally scaled wheel setpoint
+            // for each commanded body-velocity axis (drivetrain-efficiency
+            // compensation, e.g. mecanum roller slip). Default gains are 1.0.
+            cfg.fwd_matrix[port] = {{
+                static_cast<float>(slot_fwd_rows[slot][0] * m_velCmdGain[0]),
+                static_cast<float>(slot_fwd_rows[slot][1] * m_velCmdGain[1]),
+                static_cast<float>(slot_fwd_rows[slot][2] * m_velCmdGain[2]),
+            }};
 
             double t2r = motors[slot]->getCalibration().ticks_to_rad;
             // STM32 reads raw BEMF ticks — negate for inverted motors so
@@ -269,5 +277,17 @@ namespace libstp::kinematics::mecanum
         front_right_motor_.motor().setSpeed(p_fr);
         back_left_motor_.motor().setSpeed(p_bl);
         back_right_motor_.motor().setSpeed(p_br);
+    }
+
+    void MecanumKinematics::setVelocityCommandGains(double gx, double gy, double gw)
+    {
+        m_velCmdGain = {gx, gy, gw};
+        LIBSTP_LOG_DEBUG("MecanumKinematics velocity command gains -> vx={:.4f} vy={:.4f} wz={:.4f}",
+                         gx, gy, gw);
+    }
+
+    std::array<double, 3> MecanumKinematics::getVelocityCommandGains() const
+    {
+        return m_velCmdGain;
     }
 }

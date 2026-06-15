@@ -161,6 +161,12 @@ PYBIND11_MODULE(autotune, m)
                       "ISE of the tuned step response (0 if not run).")
         .def_readonly("accepted",     &VelocityTuneResult::accepted,
                       "True if the tuned gains were applied and accepted.")
+        .def_readonly("velocity_command_gain", &VelocityTuneResult::velocity_command_gain,
+                      "Calibrated per-axis MCU velocity-command gain (1.0 = none).")
+        .def_readonly("measured_gain_before", &VelocityTuneResult::measured_gain_before,
+                      "Effective gain (achieved/commanded) before tuning.")
+        .def_readonly("measured_gain_after", &VelocityTuneResult::measured_gain_after,
+                      "Effective gain (achieved/commanded) after tuning.")
         .def_readonly("baseline_response", &VelocityTuneResult::baseline_response,
                       "Raw baseline step response (StepResponseData).")
         .def_readonly("tuned_response",    &VelocityTuneResult::tuned_response,

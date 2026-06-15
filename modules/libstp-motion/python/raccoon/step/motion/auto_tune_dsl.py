@@ -294,20 +294,27 @@ class AutoTuneVelocityBuilder(StepBuilder):
 @dsl(tags=["motion", "calibration", "auto-tune"])
 def auto_tune_velocity(axes: list[str] | None = None, persist: bool = True):
     """
-    Tune velocity controllers via step-response system identification (Phase 6).
+    Calibrate the MCU chassis velocity-command gain per axis (Phase 6).
 
-    Records a baseline step response, fits a FOPDT plant model, derives CHR
-    PID gains, applies them, then re-runs the step response to validate via
-    ISE. The accepted gains are pushed to ``drive.set_velocity_control_config``
-    immediately by the C++ tuner.
+    With the chassis velocity loop running on the coprocessor (forward
+    kinematics + per-wheel MAV PID), there is no host velocity PID left to tune.
+    What this phase tunes instead is the chassis-level command ACCURACY: it
+    commands a mid-range body velocity, measures the achieved velocity against
+    external ground truth (the calib board), and folds a per-axis correction
+    gain into the STM32 forward-kinematics matrix so commanded == achieved. This
+    compensates drivetrain efficiency the ideal geometry ignores (most notably
+    mecanum roller slip, where wheels track their BEMF setpoint correctly yet
+    the chassis travels less than predicted). The candidate gain is validated by
+    re-measuring and accepted only if the effective gain moved closer to 1.0.
 
-    Prerequisites: Phase 5 (drive characterization) should have run first so
-    a max-velocity-per-axis is known. Phase 3 (firmware PID) should also have
-    run so the inner loop is stable.
+    Prerequisites: Phase 5 (drive characterization) should have run first so a
+    max-velocity-per-axis is known. Phases 1–4 (LPF, static friction, firmware
+    MAV PID, ticks_to_rad) should also have run so the inner loop is stable.
+    A calib board must be connected for the external measurement.
 
     Args:
         axes: Velocity axes to tune (``"vx"``, ``"vy"``, ``"wz"``). Default auto-detects from kinematics.
-        persist: Write accepted gains to ``raccoon.project.yml``. Default ``True``.
+        persist: Write accepted gains to ``raccoon.project.yml`` (``robot.drive.kinematics.velocity_command_gain``). Default ``True``.
 
     Returns:
         A AutoTuneVelocityBuilder (chainable via ``.axes()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -555,8 +562,11 @@ def auto_tune(
     Default-disabled phases (re-enable explicitly):
 
     * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
-    * ``characterize`` — known broken (aliases calib-board position).
-    * ``velocity`` — chassis-axis velocity PID; untested.
+    * ``characterize`` — max velocity / accel / decel per axis at 100% PWM,
+      measured against calib-board ground truth (frame-independent straight-line
+      distance).
+    * ``velocity`` — MCU chassis velocity-command gain per axis: makes commanded
+      body velocity match the calib-board-measured achieved velocity.
     * ``motion`` — distance / heading PID; untested.
     * ``tolerances`` — derived from motion-trial residuals; untested.
 

@@ -47,6 +47,14 @@ PYBIND11_MODULE(kinematics_mecanum, m)
              "Set max wheel speed (rad/s) for desaturation. 0 = disabled.")
         .def("get_max_wheel_speed", &libstp::kinematics::mecanum::MecanumKinematics::getMaxWheelSpeed,
              "Get the max wheel speed limit (rad/s). 0 = disabled.")
+        .def("set_velocity_command_gains",
+             &libstp::kinematics::mecanum::MecanumKinematics::setVelocityCommandGains,
+             py::arg("gx"), py::arg("gy"), py::arg("gw"),
+             "Set the per-axis velocity-command gain [vx, vy, wz] folded into the "
+             "STM32 forward kinematics (drivetrain-efficiency compensation).")
+        .def("get_velocity_command_gains",
+             &libstp::kinematics::mecanum::MecanumKinematics::getVelocityCommandGains,
+             "Get the per-axis velocity-command gain [vx, vy, wz].")
         .def("apply_power_command", &libstp::kinematics::mecanum::MecanumKinematics::applyPowerCommand,
              py::arg("direction"), py::arg("power_percent"),
              "Command motors at raw open-loop power using kinematics for direction")
