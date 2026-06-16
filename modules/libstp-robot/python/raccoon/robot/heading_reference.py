@@ -76,6 +76,23 @@ class HeadingReferenceService(RobotService):
             return None
         return math.degrees(self._reference_rad)
 
+    def current_relative_deg(self) -> float:
+        """The current world heading in degrees relative to the reference.
+
+        Uses the same positive-direction convention as :meth:`compute_turn`
+        (``"left"`` → CCW positive). Useful for logging "where we are now"
+        before a heading turn.
+
+        Raises:
+            RuntimeError: If no reference has been marked yet.
+        """
+        if self._reference_rad is None:
+            msg = "No heading reference set. Call mark_heading_reference() first."
+            raise RuntimeError(msg)
+        sign = 1.0 if self._positive_direction == "left" else -1.0
+        current_absolute = _world_heading(self.robot)
+        return math.degrees(sign * _normalize_angle(current_absolute - self._reference_rad))
+
     def target_absolute_rad(self, target_deg: float) -> float:
         """Convert a relative target (degrees from reference) to absolute IMU radians.
 

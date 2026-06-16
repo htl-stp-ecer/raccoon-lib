@@ -46,6 +46,14 @@ void init_odometry(py::module& m)
              py::arg("source"))
         .def("get_preferred_source", &libstp::odometry::IOdometry::getPreferredSource)
         .def("get_active_source", &libstp::odometry::IOdometry::getActiveSource)
+        // Preference-independent reads: sample an alternate source (e.g. the
+        // calibration board) passively to tune the internal estimate against
+        // it, WITHOUT switching the preferred source (which re-routes motion
+        // and hard-resets the frame).
+        .def("get_pose_from_source", &libstp::odometry::IOdometry::getPoseFromSource,
+             py::arg("source"))
+        .def("is_source_available", &libstp::odometry::IOdometry::isSourceAvailable,
+             py::arg("source"))
         .def("get_internal_pose", &libstp::odometry::IOdometry::getInternalPose)
         .def("get_internal_heading", &libstp::odometry::IOdometry::getInternalHeading)
         .def("get_internal_distance_from_origin",

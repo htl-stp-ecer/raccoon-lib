@@ -20,8 +20,10 @@ namespace libstp::button {
 
         // Set up the digital sensor using a port number (creates the sensor internally).
         void setDigital(int port);
-        // Alternatively inject an already-created sensor (helps in tests).
-        void setDigital(std::unique_ptr<hal::digital::DigitalSensor> sensor);
+        // Share an already-created sensor instance (e.g. the one from robot
+        // defs). The dynamic type is preserved, so a ButtonGroup keeps its
+        // OR-over-ports behaviour — no copy, no reconstruction.
+        void setDigital(std::shared_ptr<hal::digital::DigitalSensor> sensor);
 
         /** Return the current raw pressed state. */
         bool isPressed() const;
@@ -38,6 +40,6 @@ namespace libstp::button {
         Button() = default;
         ~Button();
 
-        std::unique_ptr<hal::digital::DigitalSensor> digital_sensor_;
+        std::shared_ptr<hal::digital::DigitalSensor> digital_sensor_;
     };
 } // namespace libstp::button

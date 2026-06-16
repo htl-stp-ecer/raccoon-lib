@@ -96,8 +96,16 @@ def _build_heading_turn(
 ) -> Step:
     """Shared logic for heading turn steps."""
     service = robot.get_service(HeadingReferenceService)
+    current_deg = service.current_relative_deg()
     relative_deg = service.compute_turn(target_deg, force_direction=force_direction)
     angle = abs(relative_deg)
+
+    direction = "left" if relative_deg > 0 else "right"
+    service.debug(
+        f"turn_to_heading: compensating {abs(relative_deg):.1f}° {direction} "
+        f"(from {current_deg:.1f}° → to {target_deg:.1f}°, "
+        f"delta={relative_deg:+.1f}°)"
+    )
 
     if angle < 0.1:
         service.debug(f"Already at target heading (error={angle:.3f}°) — skipping turn")

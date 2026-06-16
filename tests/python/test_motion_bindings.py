@@ -94,3 +94,24 @@ def test_unified_motion_pid_config_nested_axis_constraints_share_type() -> None:
     assert cfg.linear.max_velocity == pytest.approx(0.6)
     assert cfg.lateral.max_velocity == pytest.approx(0.4)
     assert cfg.angular.max_velocity == pytest.approx(2.0)
+
+
+def test_directional_line_follow_motion_config_defaults_roundtrip() -> None:
+    from raccoon.motion import DirectionalLineFollowMotionConfig, LineFollowCorrectionMode
+
+    cfg = DirectionalLineFollowMotionConfig()
+    assert cfg.heading_speed == pytest.approx(0.0)
+    assert cfg.strafe_speed == pytest.approx(0.0)
+    assert cfg.distance_m == pytest.approx(0.0)
+    assert cfg.has_distance_target is False
+    assert cfg.correction_mode == LineFollowCorrectionMode.Angular
+    assert cfg.heading_hold is True
+    assert cfg.correction_sign == pytest.approx(1.0)
+
+    cfg.correction_mode = LineFollowCorrectionMode.Forward
+    cfg.heading_hold = False
+    cfg.correction_sign = -1.0
+
+    assert cfg.correction_mode == LineFollowCorrectionMode.Forward
+    assert cfg.heading_hold is False
+    assert cfg.correction_sign == pytest.approx(-1.0)

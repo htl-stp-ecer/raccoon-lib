@@ -147,6 +147,21 @@ namespace
             return resolveSource();
         }
 
+        [[nodiscard]] libstp::foundation::Pose getPoseFromSource(OdometrySource source) const override
+        {
+            // Direct, preference-independent read so callers can passively
+            // compare the calibration board against the internal estimate
+            // without re-routing the motion system or resetting the frame.
+            return poseFor(source);
+        }
+
+        [[nodiscard]] bool isSourceAvailable(OdometrySource source) const override
+        {
+            if (source == OdometrySource::Internal)
+                return true;
+            return ::platform::wombat::core::TransportReader::instance().isCalibBoardConnected();
+        }
+
         void setPreferredSource(OdometrySource source) override
         {
             std::lock_guard<std::mutex> lock(source_switch_mutex_);

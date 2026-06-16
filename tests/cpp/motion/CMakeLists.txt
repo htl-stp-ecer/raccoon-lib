@@ -1,13 +1,14 @@
-register_libstp_test(test_motion
-    SOURCES
-        test_motion_pid.cpp
-        test_trapezoidal_profile.cpp
-        test_linear_motion.cpp
-        test_turn_motion.cpp
-        test_spline_motion.cpp
-    LIBS
-        motion
-        drive
-        kinematics
-        odometry
-)
+register_libstp_test(
+  test_motion
+  SOURCES
+  test_motion_pid.cpp
+  test_trapezoidal_profile.cpp
+  test_linear_motion.cpp
+  test_directional_line_follow_motion.cpp
+  test_turn_motion.cpp
+  test_spline_motion.cpp
+  LIBS
+  motion
+  drive
+  kinematics
+  odometry)

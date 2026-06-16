@@ -26,7 +26,19 @@ namespace libstp::sensors::ir {
         float whiteStdDev = 1.0f;
         float blackStdDev = 1.0f;
 
+        /**
+         * Construct an IR sensor on @p port.
+         *
+         * On construction the sensor automatically applies any stored
+         * calibration for its port from the process-wide CalibrationStore
+         * (set ``"default_port<port>"``). When no stored calibration is found
+         * the sensor stays uncalibrated and any black/white query will throw
+         * until it is calibrated.
+         */
         explicit IRSensor(const int& port);
+
+        /** Return true once thresholds have been established (stored, loaded or live). */
+        [[nodiscard]] bool isCalibrated() const;
 
         /** Compute the arithmetic mean of a sample set. */
         static float mean(const std::vector<float>& v);
@@ -53,5 +65,15 @@ namespace libstp::sensors::ir {
         float probabilityOfBlack() const;
         /** Estimate how likely the current reading belongs to the white cluster. */
         float probabilityOfWhite() const;
+
+    private:
+        /** True once calibration thresholds have been set. */
+        bool calibrated = false;
+
+        /** Apply stored thresholds for this port from the CalibrationStore, if any. */
+        void loadStoredCalibration();
+
+        /** Throw if the sensor has not been calibrated yet. */
+        void ensureCalibrated(const char* query) const;
     };
 }

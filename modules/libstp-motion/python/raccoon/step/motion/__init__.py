@@ -101,6 +101,11 @@ from .line_follow_dsl import (
     lateral_follow_line_single,
     directional_follow_line_single,
 )
+from .line_follow_builder import (
+    ConfigurableLineFollowBuilder,
+    FollowCorrection,
+    line_follow,
+)
 from .resync import (
     AlignToWallResync,
     FindLineResync,
@@ -156,98 +161,101 @@ from .set_speed_mode_dsl import set_speed_mode
 # class lets callers bypass the factory's parameter validation and unit
 # conversion, then breaks them when an internal refactor renames the field.
 __all__ = [
+    "BumpResult",
+    "ConfigurableLineFollowBuilder",
+    "CorrectionSide",
+    # Custom velocity
+    "CustomVelocityBuilder",
+    # Directional line follow
+    "DirectionalLineFollowConfig",
+    "DirectionalSingleLineFollowConfig",
+    "FollowCorrection",
+    # Heading wait
+    "HeadingOrigin",
+    # Line follow
+    "LineFollowConfig",
+    "LineSide",
     # Base class (extension point)
     "MotionStep",
-    # Basic motion factories
-    "drive_forward",
-    "drive_backward",
-    "stop",
-    "strafe_left",
-    "strafe_right",
+    # Odometry source selection
+    "OdometrySource",
+    # Sensor group
+    "SensorGroup",
+    "SingleLineFollowConfig",
+    "SingleSensorLineupConfig",
+    # Lineup
+    "SurfaceColor",
+    # Wall align
+    "WallDirection",
+    # Localization resync
+    "align_to_wall_resync",
+    # Auto-tune PID
+    "auto_tune",
+    "auto_tune_bemf_velocity",
+    "auto_tune_firmware_pid",
+    "auto_tune_motion",
+    "auto_tune_static_friction",
+    "auto_tune_vel_lpf",
+    "auto_tune_velocity",
+    "backward_lineup_on_black",
+    "backward_lineup_on_white",
+    "backward_single_lineup",
+    # Drive characterization
+    "characterize_drive",
+    "custom_velocity",
+    "directional_follow_line",
+    "directional_follow_line_single",
     "drive_angle",
     "drive_arc_left",
     "drive_arc_right",
     "drive_arc_segment",
-    "strafe_arc_left",
-    "strafe_arc_right",
-    "turn_left",
-    "turn_right",
-    # Heading reference
-    "mark_heading_reference",
-    "turn_to_heading_right",
-    "turn_to_heading_left",
-    # Lineup
-    "SurfaceColor",
-    "CorrectionSide",
-    "SingleSensorLineupConfig",
-    "lineup",
-    "forward_lineup_on_black",
-    "forward_lineup_on_white",
-    "backward_lineup_on_black",
-    "backward_lineup_on_white",
-    "strafe_right_lineup_on_black",
-    "strafe_right_lineup_on_white",
-    "strafe_left_lineup_on_black",
-    "strafe_left_lineup_on_white",
-    "forward_single_lineup",
-    "backward_single_lineup",
-    # Wall align
-    "WallDirection",
-    "BumpResult",
-    "wall_align_forward",
-    "wall_align_backward",
-    "wall_align_strafe_left",
-    "wall_align_strafe_right",
-    # Line follow
-    "LineFollowConfig",
-    "LineSide",
-    "SingleLineFollowConfig",
-    "follow_line",
-    "follow_line_single",
-    # Directional line follow
-    "DirectionalLineFollowConfig",
-    "DirectionalSingleLineFollowConfig",
-    "directional_follow_line",
-    "strafe_follow_line",
-    "strafe_follow_line_single",
-    "lateral_follow_line",
-    "lateral_follow_line_single",
-    "directional_follow_line_single",
-    # Localization resync
-    "align_to_wall_resync",
-    "find_line_resync",
-    "resync_at_start_pose",
-    # Distance wait
-    "wait_until_distance",
-    # Heading wait
-    "HeadingOrigin",
-    "wait_until_degrees",
-    # Odometry source selection
-    "OdometrySource",
-    "set_odometry_source",
-    # Drive telemetry
-    "tune_drive",
-    # Drive characterization
-    "characterize_drive",
-    # Auto-tune PID
-    "auto_tune",
-    "auto_tune_velocity",
-    "auto_tune_motion",
-    "auto_tune_firmware_pid",
-    "auto_tune_static_friction",
-    "auto_tune_vel_lpf",
-    "auto_tune_bemf_velocity",
-    # Sensor group
-    "SensorGroup",
+    "drive_backward",
+    # Basic motion factories
+    "drive_forward",
     # Analog sensor target drive
     "drive_to_analog_target",
-    # Custom velocity
-    "CustomVelocityBuilder",
-    "custom_velocity",
+    "find_line_resync",
+    "follow_line",
+    "follow_line_single",
+    "forward_lineup_on_black",
+    "forward_lineup_on_white",
+    "forward_single_lineup",
+    "lateral_follow_line",
+    "lateral_follow_line_single",
+    "line_follow",
+    "lineup",
+    # Heading reference
+    "mark_heading_reference",
+    "resync_at_start_pose",
+    "set_odometry_source",
+    # SpeedMode (BEMF on/off)
+    "set_speed_mode",
     # Smooth path
     "smooth_path",
     # Spline path
     "spline",
-    # SpeedMode (BEMF on/off)
-    "set_speed_mode",
+    "stop",
+    "strafe_arc_left",
+    "strafe_arc_right",
+    "strafe_follow_line",
+    "strafe_follow_line_single",
+    "strafe_left",
+    "strafe_left_lineup_on_black",
+    "strafe_left_lineup_on_white",
+    "strafe_right",
+    "strafe_right_lineup_on_black",
+    "strafe_right_lineup_on_white",
+    # Drive telemetry
+    "tune_drive",
+    "turn_left",
+    "turn_right",
+    "turn_to_heading_left",
+    "turn_to_heading_right",
+    "wait_until_degrees",
+    # Distance wait
+    "wait_until_distance",
+    "wall_align_backward",
+    "wall_align_forward",
+    "wall_align_strafe_left",
+    "wall_align_strafe_right",
 ]
