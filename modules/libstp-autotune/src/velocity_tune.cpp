@@ -120,7 +120,17 @@ StepResponseData VelocityTuner::runStepResponse(
     using Clock  = std::chrono::steady_clock;
     using Micros = std::chrono::microseconds;
 
+    static constexpr double kVelEmaAlpha = 0.3;
+    static constexpr double kPi          = 3.14159265358979;
+
     const Micros period{1'000'000 / sample_hz};
+
+    // Fresh odometry origin. On the wombat platform reset() ALSO re-publishes
+    // the current kinematics config (including any newly-set velocity-command
+    // gain) to the STM32 — so calling this after setVelocityCommandGains()
+    // is what makes the validation run use the candidate gain.
+    odometry_.reset();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // Build velocity command for the selected axis.
     foundation::ChassisVelocity vel{};
@@ -130,6 +140,28 @@ StepResponseData VelocityTuner::runStepResponse(
 
     drive_.setVelocity(vel);
 
+    // Position accessor measured against EXTERNAL ground truth (the wombat
+    // odometry resolves to the calib board when connected). Translation uses
+    // the frame-independent straight-line distance; rotation uses the unwrapped
+    // heading so it stays valid across ±π crossings. Measuring externally is
+    // essential: drive_.estimateState() comes from the same kinematics used to
+    // command, so it cannot see the drivetrain-efficiency gap we are tuning.
+    double ang_unwrapped = 0.0;
+    double ang_prev      = odometry_.getHeading();
+    auto getPos = [&]() -> double {
+        if (axis == "wz")
+        {
+            const double raw = odometry_.getHeading();
+            double delta = raw - ang_prev;
+            if (delta > kPi) delta -= 2.0 * kPi;
+            else if (delta < -kPi) delta += 2.0 * kPi;
+            ang_unwrapped += delta;
+            ang_prev = raw;
+            return ang_unwrapped;
+        }
+        return odometry_.getDistanceFromOrigin().straight_line;
+    };
+
     StepResponseData data;
     data.times.reserve(static_cast<std::size_t>(duration_s * sample_hz * 1.1));
     data.commanded.reserve(data.times.capacity());
@@ -137,6 +169,8 @@ StepResponseData VelocityTuner::runStepResponse(
 
     auto t0   = Clock::now();
     auto next = t0;
+    double prev_pos = getPos();
+    double prev_vel = 0.0;
 
     while (true)
     {
@@ -150,17 +184,18 @@ StepResponseData VelocityTuner::runStepResponse(
                     ? (1.0 / sample_hz)
                     : (elapsed - data.times.back());
 
-        drive_.update(dt);
+        drive_.update(dt); // forwards the body command to the MCU chassis loop
 
-        foundation::ChassisVelocity state = drive_.estimateState();
-        double measured = 0.0;
-        if      (axis == "vx") measured = state.vx;
-        else if (axis == "vy") measured = state.vy;
-        else                   measured = state.wz;
+        const double pos     = getPos();
+        const double raw_vel = (dt > 1e-6) ? (pos - prev_pos) / dt : prev_vel;
+        const double filt    = kVelEmaAlpha * raw_vel + (1.0 - kVelEmaAlpha) * prev_vel;
 
         data.times.push_back(elapsed);
         data.commanded.push_back(command);
-        data.measured.push_back(measured);
+        data.measured.push_back(filt);
+
+        prev_pos = pos;
+        prev_vel = filt;
 
         next += period;
         auto now2 = Clock::now();
@@ -389,139 +424,110 @@ VelocityTuneResult VelocityTuner::tuneAxis(
     double                   max_velocity,
     const VelocityTuneConfig& cfg) const
 {
-    if (axis != "vx" && axis != "vy" && axis != "wz")
-    {
-        LIBSTP_LOG_WARN("[VelocityTuner] Unknown axis '{}' — skipping", axis);
-        VelocityTuneResult r;
-        r.axis = axis;
-        return r;
-    }
-
-    LIBSTP_LOG_INFO("[VelocityTuner] Tuning axis '{}'", axis);
-
-    const double command = max_velocity * cfg.step_command_frac;
-
-    // Save current drive config before any modifications.
-    auto saved_cfg = drive_.getVelocityControlConfig();
-
     VelocityTuneResult result;
     result.axis = axis;
     result.ff   = {0.0, 1.0, 0.0};
 
-    // ---- Step 1: Baseline step response ----
-    LIBSTP_LOG_INFO("[VelocityTuner] [{}] Running baseline step response (command={:.4f})",
-                    axis, command);
+    int axis_idx = 0;
+    if      (axis == "vx") axis_idx = 0;
+    else if (axis == "vy") axis_idx = 1;
+    else if (axis == "wz") axis_idx = 2;
+    else
+    {
+        LIBSTP_LOG_WARN("[VelocityTuner] Unknown axis '{}' — skipping", axis);
+        return result;
+    }
 
-    StepResponseData baseline = runStepResponse(axis, command, cfg.step_duration_s,
-                                                cfg.sample_hz);
-    result.baseline_ise = computeIse(baseline);
-    // Preserve the raw recording for the offline report (step-response plot).
-    // Stored before any early return so every accept/reject path carries it.
+    // On the MCU-chassis path the per-axis velocity loop runs on the
+    // coprocessor (forward kinematics + per-wheel MAV PID). There is no host
+    // velocity PID left to tune. What remains is the chassis-level command
+    // ACCURACY: a commanded body velocity must produce that body velocity. The
+    // wheels track their BEMF setpoint (firmware-PID phase), but drivetrain
+    // efficiency (mecanum roller slip) makes the chassis travel less than the
+    // ideal kinematics predict. We measure that gap against external ground
+    // truth (calib board) and fold a correction into the kinematics
+    // forward-matrix command gain, which is pushed to the STM32.
+    LIBSTP_LOG_INFO("[VelocityTuner] Calibrating MCU chassis velocity gain for axis '{}'", axis);
+
+    const double command = max_velocity * cfg.step_command_frac; // mid-range: headroom, no saturation
+
+    auto& kin              = drive_.getKinematics();
+    const auto base_gains  = kin.getVelocityCommandGains();
+    const double cur_gain  = base_gains[static_cast<std::size_t>(axis_idx)];
+
+    // ---- Baseline: measure achieved vs commanded at the current gain ----
+    LIBSTP_LOG_INFO("[VelocityTuner] [{}] Baseline run (command={:.4f}, current gain={:.4f})",
+                    axis, command, cur_gain);
+    StepResponseData baseline = runStepResponse(axis, command, cfg.step_duration_s, cfg.sample_hz);
     result.baseline_response = baseline;
+    result.baseline_ise      = computeIse(baseline);
 
-    LIBSTP_LOG_INFO("[VelocityTuner] [{}] Baseline ISE={:.6f}", axis, result.baseline_ise);
-
-    // ---- Step 2: Reject if response too small ----
-    double tail = tailMeanAbs(baseline);
-    if (tail < std::abs(command) * cfg.min_response_frac)
+    const double y_ss_before = tailMeanAbs(baseline);
+    if (y_ss_before < std::abs(command) * cfg.min_response_frac)
     {
         LIBSTP_LOG_WARN(
-            "[VelocityTuner] [{}] Insufficient response: tail={:.4f} < {:.4f} — skipping",
-            axis, tail, std::abs(command) * cfg.min_response_frac);
-        result.plant.method = "insufficient_response";
-        result.accepted     = false;
+            "[VelocityTuner] [{}] Insufficient response (ss={:.4f} < {:.4f}) — skipping",
+            axis, y_ss_before, std::abs(command) * cfg.min_response_frac);
+        result.plant.method          = "insufficient_response";
+        result.accepted              = false;
+        result.velocity_command_gain = cur_gain;
         return result;
     }
 
-    // ---- Step 3: Plant identification ----
-    std::optional<PlantParams> opt_plant = identifyPlantInflection(baseline, command);
+    // Effective gain achieved-per-commanded (already includes cur_gain).
+    const double ks_before       = y_ss_before / std::abs(command);
+    result.measured_gain_before  = ks_before;
+    result.plant.Ks              = ks_before; // reuse for the report
+    result.plant.method          = "chassis_gain";
 
-    if (opt_plant.has_value())
-    {
-        result.plant = *opt_plant;
-        LIBSTP_LOG_INFO("[VelocityTuner] [{}] Plant (inflection): Ks={:.4f}, Tu={:.4f}s, "
-                        "Tg={:.4f}s", axis, result.plant.Ks, result.plant.Tu, result.plant.Tg);
-    }
-    else
-    {
-        result.plant = identifyPlantRiseTime(baseline, command);
-        LIBSTP_LOG_INFO("[VelocityTuner] [{}] Plant (rise_time): Ks={:.4f}, Tu={:.4f}s, "
-                        "Tg={:.4f}s", axis, result.plant.Ks, result.plant.Tu, result.plant.Tg);
-    }
+    // To drive the effective gain to 1.0, scale the current command gain by
+    // 1/ks_before. Clamp to a sane range so a noisy/failed measurement cannot
+    // command a wild setpoint.
+    double new_gain = cur_gain / ks_before;
+    new_gain = std::clamp(new_gain, cfg.gain_min, cfg.gain_max);
 
-    // ---- Step 4: Reject bad Ks ----
-    if (result.plant.Ks <= 0.0)
-    {
-        LIBSTP_LOG_WARN("[VelocityTuner] [{}] Ks <= 0 — rejecting", axis);
-        result.accepted = false;
-        return result;
-    }
+    LIBSTP_LOG_INFO(
+        "[VelocityTuner] [{}] Measured effective gain={:.4f} (achieved {:.4f} for cmd {:.4f}) "
+        "-> candidate command gain {:.4f}", axis, ks_before, y_ss_before, command, new_gain);
 
-    // ---- Step 5: Low dead-time early return ----
-    double dt_ratio = result.plant.Tu / result.plant.Tg;
-    if (dt_ratio <= cfg.low_dead_time_ratio
-        && std::abs(result.plant.Ks - 1.0) <= cfg.low_dead_time_gain_tol)
-    {
-        LIBSTP_LOG_INFO(
-            "[VelocityTuner] [{}] Low dead-time (Tu/Tg={:.4f}) + near-unity Ks — "
-            "skipping CHR, returning baseline gains", axis, dt_ratio);
-        result.plant.method += "+low_dead_time_baseline";
-        result.accepted   = false;  // no new gains were applied
-        result.tuned_ise  = result.baseline_ise;
-        return result;
-    }
+    // ---- Apply the candidate gain (runStepResponse's reset re-publishes it) ----
+    auto cand_gains = base_gains;
+    cand_gains[static_cast<std::size_t>(axis_idx)] = new_gain;
+    kin.setVelocityCommandGains(cand_gains[0], cand_gains[1], cand_gains[2]);
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(static_cast<long long>(cfg.republish_settle_s * 1000.0)));
 
-    // ---- Step 6: Compute CHR gains ----
-    result.pid = computeChrGains(result.plant, cfg);
-
-    if (result.pid.kp <= 0.0)
-    {
-        LIBSTP_LOG_WARN("[VelocityTuner] [{}] CHR gave kp <= 0 — rejecting", axis);
-        result.accepted = false;
-        return result;
-    }
-
-    LIBSTP_LOG_INFO("[VelocityTuner] [{}] CHR gains: kp={:.4f}, ki={:.4f}, kd={:.4f}",
-                    axis, result.pid.kp, result.pid.ki, result.pid.kd);
-
-    // ---- Step 7: Apply candidate gains ----
-    auto test_cfg = drive_.getVelocityControlConfig();
-    drive::AxisVelocityControlConfig axis_cfg;
-    axis_cfg.pid = result.pid;
-    axis_cfg.ff  = foundation::Feedforward{0.0, 1.0, 0.0};
-
-    if      (axis == "vx") test_cfg.vx = axis_cfg;
-    else if (axis == "vy") test_cfg.vy = axis_cfg;
-    else                   test_cfg.wz = axis_cfg;
-
-    drive_.setVelocityControlConfig(test_cfg);
-    drive_.resetVelocityControllers();
-
-    // ---- Step 8: Tuned step response ----
-    LIBSTP_LOG_INFO("[VelocityTuner] [{}] Running tuned step response", axis);
-    StepResponseData tuned = runStepResponse(axis, command, cfg.step_duration_s,
-                                             cfg.sample_hz);
-    result.tuned_ise = computeIse(tuned);
+    // ---- Validation: re-measure achieved vs commanded at the new gain ----
+    LIBSTP_LOG_INFO("[VelocityTuner] [{}] Validation run (new gain={:.4f})", axis, new_gain);
+    StepResponseData tuned = runStepResponse(axis, command, cfg.step_duration_s, cfg.sample_hz);
     result.tuned_response = tuned;
+    result.tuned_ise      = computeIse(tuned);
 
-    LIBSTP_LOG_INFO("[VelocityTuner] [{}] Tuned ISE={:.6f} (baseline={:.6f})",
-                    axis, result.tuned_ise, result.baseline_ise);
+    const double y_ss_after = tailMeanAbs(tuned);
+    const double ks_after   = (std::abs(command) > 1e-9) ? y_ss_after / std::abs(command) : 0.0;
+    result.measured_gain_after = ks_after;
 
-    // ---- Step 9: Accept or revert ----
-    if (result.tuned_ise < result.baseline_ise)
+    // ---- Accept only if the effective gain moved closer to 1.0 ----
+    if (std::abs(ks_after - 1.0) < std::abs(ks_before - 1.0))
     {
-        result.accepted = true;
-        LIBSTP_LOG_INFO("[VelocityTuner] [{}] Gains ACCEPTED (ISE improved {:.2f}%%)",
-                        axis,
-                        100.0 * (result.baseline_ise - result.tuned_ise) / result.baseline_ise);
+        result.accepted              = true;
+        result.velocity_command_gain = new_gain;
+        LIBSTP_LOG_INFO(
+            "[VelocityTuner] [{}] ACCEPTED: effective gain {:.4f} -> {:.4f} (command gain {:.4f})",
+            axis, ks_before, ks_after, new_gain);
     }
     else
     {
-        result.accepted = false;
-        LIBSTP_LOG_WARN("[VelocityTuner] [{}] Gains REJECTED (ISE did not improve) — "
-                        "reverting", axis);
-        drive_.setVelocityControlConfig(saved_cfg);
-        drive_.resetVelocityControllers();
+        result.accepted              = false;
+        result.velocity_command_gain = cur_gain;
+        kin.setVelocityCommandGains(base_gains[0], base_gains[1], base_gains[2]);
+        // The rejected validation run already pushed the candidate gain to the
+        // STM32 (via its reset()); re-publish the reverted gains so the
+        // coprocessor config matches the in-memory kinematics again.
+        odometry_.reset();
+        LIBSTP_LOG_WARN(
+            "[VelocityTuner] [{}] REJECTED: effective gain {:.4f} -> {:.4f} did not improve — "
+            "reverting to {:.4f}", axis, ks_before, ks_after, cur_gain);
     }
 
     return result;

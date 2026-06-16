@@ -175,9 +175,10 @@ def auto_tune_bemf_velocity(
     rather than silently persisting a misleading single value.
 
     Prerequisites:
-        - The calibration board must be connected and backing the odometry pose
-          (``robot.odometry.get_active_source() == CALIBRATION_BOARD``); the
-          tuner aborts otherwise.
+        - The calibration board must be connected. This step temporarily
+          requests calibration-board odometry for the tune and restores the
+          previous preference afterward; the tuner aborts if the board still is
+          not the active source.
         - Roughly 1 m of clear runway forward/back.
 
     Args:
@@ -294,20 +295,27 @@ class AutoTuneVelocityBuilder(StepBuilder):
 @dsl(tags=["motion", "calibration", "auto-tune"])
 def auto_tune_velocity(axes: list[str] | None = None, persist: bool = True):
     """
-    Tune velocity controllers via step-response system identification (Phase 6).
+    Calibrate the MCU chassis velocity-command gain per axis (Phase 6).
 
-    Records a baseline step response, fits a FOPDT plant model, derives CHR
-    PID gains, applies them, then re-runs the step response to validate via
-    ISE. The accepted gains are pushed to ``drive.set_velocity_control_config``
-    immediately by the C++ tuner.
+    With the chassis velocity loop running on the coprocessor (forward
+    kinematics + per-wheel MAV PID), there is no host velocity PID left to tune.
+    What this phase tunes instead is the chassis-level command ACCURACY: it
+    commands a mid-range body velocity, measures the achieved velocity against
+    external ground truth (the calib board), and folds a per-axis correction
+    gain into the STM32 forward-kinematics matrix so commanded == achieved. This
+    compensates drivetrain efficiency the ideal geometry ignores (most notably
+    mecanum roller slip, where wheels track their BEMF setpoint correctly yet
+    the chassis travels less than predicted). The candidate gain is validated by
+    re-measuring and accepted only if the effective gain moved closer to 1.0.
 
-    Prerequisites: Phase 5 (drive characterization) should have run first so
-    a max-velocity-per-axis is known. Phase 3 (firmware PID) should also have
-    run so the inner loop is stable.
+    Prerequisites: Phase 5 (drive characterization) should have run first so a
+    max-velocity-per-axis is known. Phases 1–4 (LPF, static friction, firmware
+    MAV PID, ticks_to_rad) should also have run so the inner loop is stable.
+    A calib board must be connected for the external measurement.
 
     Args:
         axes: Velocity axes to tune (``"vx"``, ``"vy"``, ``"wz"``). Default auto-detects from kinematics.
-        persist: Write accepted gains to ``raccoon.project.yml``. Default ``True``.
+        persist: Write accepted gains to ``raccoon.project.yml`` (``robot.drive.kinematics.velocity_command_gain``). Default ``True``.
 
     Returns:
         A AutoTuneVelocityBuilder (chainable via ``.axes()``, ``.persist()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -392,10 +400,10 @@ class AutoTuneBuilder(StepBuilder):
         self._tune_static_friction = True
         self._tune_firmware_pid = True
         self._tune_encoder_cal = False
-        self._tune_characterize = False
-        self._tune_velocity = False
-        self._tune_motion = False
-        self._tune_tolerances = False
+        self._tune_characterize = True
+        self._tune_velocity = True
+        self._tune_motion = True
+        self._tune_tolerances = True
         self._pwm_min_percent = 30
         self._pwm_max_percent = 90
         self._pwm_steps = 6
@@ -520,10 +528,10 @@ def auto_tune(
     tune_static_friction: bool = True,
     tune_firmware_pid: bool = True,
     tune_encoder_cal: bool = False,
-    tune_characterize: bool = False,
-    tune_velocity: bool = False,
-    tune_motion: bool = False,
-    tune_tolerances: bool = False,
+    tune_characterize: bool = True,
+    tune_velocity: bool = True,
+    tune_motion: bool = True,
+    tune_tolerances: bool = True,
     pwm_min_percent: int = 30,
     pwm_max_percent: int = 90,
     pwm_steps: int = 6,
@@ -551,14 +559,18 @@ def auto_tune(
     * ``vel_lpf`` — per-motor IIR alpha for velocity feedback.
     * ``static_friction`` — kS per motor (PWM percent).
     * ``firmware_pid`` — STM32 MAV-mode inner velocity loop.
+    * ``characterize`` — max velocity / accel / decel per axis at 100% PWM,
+      measured against calib-board ground truth (frame-independent straight-line
+      distance).
+    * ``velocity`` — MCU chassis velocity-command gain per axis: makes commanded
+      body velocity match the calib-board-measured achieved velocity.
+    * ``motion`` — distance / heading PID via real LinearMotion/TurnMotion
+      trials (Hooke-Jeeves); linear trials return to start between runs.
+    * ``tolerances`` — distance/angle tolerances derived from motion residuals.
 
     Default-disabled phases (re-enable explicitly):
 
     * ``encoder_cal`` — IMU ticks_to_rad; superseded by ``bemf_velocity``.
-    * ``characterize`` — known broken (aliases calib-board position).
-    * ``velocity`` — chassis-axis velocity PID; untested.
-    * ``motion`` — distance / heading PID; untested.
-    * ``tolerances`` — derived from motion-trial residuals; untested.
 
     Args:
         vel_axes: Override the auto-detected velocity axis list.
@@ -569,10 +581,10 @@ def auto_tune(
         tune_static_friction: Enable static friction measurement. Default ``True``.
         tune_firmware_pid: Enable firmware velocity PID tuning. Default ``True``.
         tune_encoder_cal: Enable IMU encoder calibration. Default ``False``.
-        tune_characterize: Enable drive characterization. Default ``False``.
-        tune_velocity: Enable velocity PID tuning. Default ``False``.
-        tune_motion: Enable motion PID tuning. Default ``False``.
-        tune_tolerances: Enable tolerance derivation. Default ``False``.
+        tune_characterize: Enable drive characterization (max vel/accel/decel per axis vs calib board). Default ``True``.
+        tune_velocity: Enable MCU chassis velocity-command-gain calibration (commanded == achieved body velocity). Default ``True``.
+        tune_motion: Enable motion PID tuning (distance / heading) via real LinearMotion/TurnMotion trials; linear trials return to start after each so the robot stays in place. Default ``True``.
+        tune_tolerances: Enable tolerance derivation from motion residuals. Default ``True``.
         pwm_min_percent: Lowest PWM level for the bemf_velocity sweep. Default ``30``.
         pwm_max_percent: Highest PWM level for the bemf_velocity sweep. Default ``90``.
         pwm_steps: Number of bemf_velocity sweep PWM levels. Default ``6``.

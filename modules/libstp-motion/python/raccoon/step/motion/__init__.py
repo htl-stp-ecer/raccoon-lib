@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from raccoon.hal import OdometrySource
+
 from .motion_step import MotionStep
 from .drive import (
     DriveForward,
@@ -140,6 +142,8 @@ from .custom_velocity import CustomVelocity
 from .custom_velocity_dsl import CustomVelocityBuilder, custom_velocity
 from .smooth_path import SmoothPath, smooth_path
 from .spline_path import SplinePath, spline
+from .set_odometry_source import SetOdometrySource
+from .set_odometry_source_dsl import set_odometry_source
 from .set_speed_mode import SetSpeedMode
 from .set_speed_mode_dsl import set_speed_mode
 
@@ -218,6 +222,9 @@ __all__ = [
     # Heading wait
     "HeadingOrigin",
     "wait_until_degrees",
+    # Odometry source selection
+    "OdometrySource",
+    "set_odometry_source",
     # Drive telemetry
     "tune_drive",
     # Drive characterization

@@ -37,6 +37,17 @@ class LocalizationNotWiredError(RuntimeError):
     """
 
 
+def _format_odometry_source(source) -> str:
+    """Render a pybind ``OdometrySource`` enum or fallback value for logs."""
+    name = getattr(source, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    text = str(source)
+    if "." in text:
+        return text.rsplit(".", 1)[-1]
+    return text
+
+
 if TYPE_CHECKING:
     from raccoon.drive import Drive
     from raccoon.hal import IOdometry as Odometry
@@ -316,8 +327,42 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             self.kinematics.set_max_wheel_speed(max_wheel)
             self.info(f"Kinematics desaturation: max_wheel_speed={max_wheel:.2f} rad/s")
 
+        # Re-apply the MCU chassis velocity-command gains calibrated by the
+        # autotune velocity phase (Phase 6). They are persisted under
+        # robot.drive.kinematics.velocity_command_gain and folded into the STM32
+        # forward kinematics, so they must be set BEFORE odometry is first
+        # created (which pushes the kinematics config to the coprocessor).
+        if hasattr(self.kinematics, "set_velocity_command_gains"):
+            try:
+                from raccoon.project_yaml import find_project_root, read_project_value
+
+                root = find_project_root()
+                gains = (
+                    read_project_value(
+                        root, ["robot", "drive", "kinematics", "velocity_command_gain"], None
+                    )
+                    if root is not None
+                    else None
+                )
+                if isinstance(gains, dict):
+                    gx = float(gains.get("vx", 1.0))
+                    gy = float(gains.get("vy", 1.0))
+                    gw = float(gains.get("wz", 1.0))
+                    self.kinematics.set_velocity_command_gains(gx, gy, gw)
+                    self.info(
+                        f"Kinematics velocity-command gains: vx={gx:.4f} vy={gy:.4f} wz={gw:.4f}"
+                    )
+            except Exception as exc:
+                self.warn(f"Could not apply velocity_command_gain from config: {exc}")
+
         if not self.missions:
             self.warn("Robot does not have any missions attached")
+
+        try:
+            source = self.odometry.get_active_source()
+            self.info(f"Odometry source at startup: {_format_odometry_source(source)}")
+        except Exception as exc:
+            self.warn(f"Could not determine startup odometry source: {exc}")
 
         if self.setup_mission is not None:
             from raccoon.mission.api import SetupMission

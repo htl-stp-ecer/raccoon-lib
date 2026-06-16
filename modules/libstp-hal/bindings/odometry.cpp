@@ -37,9 +37,14 @@ void init_odometry(py::module& m)
         .def("reset", py::overload_cast<>(&libstp::odometry::IOdometry::reset))
         // Source introspection + internal (cheap) estimate, exposed so the
         // accurate external calibration board can be used to tune the internal
-        // dead reckoning. get_active_source() reports which source currently
-        // backs get_pose()/get_heading(); the get_internal_* accessors always
-        // return the on-board STM32 estimate regardless of the active source.
+        // dead reckoning. set/get_preferred_source() control whether callers
+        // want the calibration board considered at all; get_active_source()
+        // reports which source currently backs get_pose()/get_heading(); the
+        // get_internal_* accessors always return the on-board STM32 estimate
+        // regardless of the active source.
+        .def("set_preferred_source", &libstp::odometry::IOdometry::setPreferredSource,
+             py::arg("source"))
+        .def("get_preferred_source", &libstp::odometry::IOdometry::getPreferredSource)
         .def("get_active_source", &libstp::odometry::IOdometry::getActiveSource)
         .def("get_internal_pose", &libstp::odometry::IOdometry::getInternalPose)
         .def("get_internal_heading", &libstp::odometry::IOdometry::getInternalHeading)

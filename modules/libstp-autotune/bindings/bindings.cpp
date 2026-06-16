@@ -161,6 +161,12 @@ PYBIND11_MODULE(autotune, m)
                       "ISE of the tuned step response (0 if not run).")
         .def_readonly("accepted",     &VelocityTuneResult::accepted,
                       "True if the tuned gains were applied and accepted.")
+        .def_readonly("velocity_command_gain", &VelocityTuneResult::velocity_command_gain,
+                      "Calibrated per-axis MCU velocity-command gain (1.0 = none).")
+        .def_readonly("measured_gain_before", &VelocityTuneResult::measured_gain_before,
+                      "Effective gain (achieved/commanded) before tuning.")
+        .def_readonly("measured_gain_after", &VelocityTuneResult::measured_gain_after,
+                      "Effective gain (achieved/commanded) after tuning.")
         .def_readonly("baseline_response", &VelocityTuneResult::baseline_response,
                       "Raw baseline step response (StepResponseData).")
         .def_readonly("tuned_response",    &VelocityTuneResult::tuned_response,
@@ -390,7 +396,16 @@ PYBIND11_MODULE(autotune, m)
              "Updates pid_config in place with best-found gains for each.\n\n"
              "Releases the GIL for the full tuning loop.\n\n"
              "Returns\n-------\n"
-             "dict[str, MotionTuneResult]\n    Map from param name to result.");
+             "dict[str, MotionTuneResult]\n    Map from param name to result.")
+        .def("request_pause_after_trial",
+             &MotionTuner::requestPauseAfterTrial,
+             "Queue a stop that takes effect after the current motion trial finishes.")
+        .def("resume",
+             &MotionTuner::resume,
+             "Cancel a queued stop or continue after the tuner is stopped.")
+        .def("pause_state",
+             &MotionTuner::pauseState,
+             "Return \"running\", \"stop_queued\", or \"stopped\".");
 
     // ------------------------------------------------------------------
     // Phase 4 — FirmwarePidTuner

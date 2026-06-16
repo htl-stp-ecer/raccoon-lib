@@ -84,6 +84,14 @@ namespace libstp::autotune
         double baseline_ise{0.0};
         double tuned_ise{0.0};
         bool accepted{false};
+        /// MCU-chassis path: the calibrated per-axis velocity-command gain that
+        /// was applied to the kinematics fwd_matrix (and pushed to the STM32) so
+        /// commanded == achieved body velocity. 1.0 means no correction.
+        double velocity_command_gain{1.0};
+        /// Measured steady-state gain (achieved/commanded) before tuning.
+        double measured_gain_before{0.0};
+        /// Measured steady-state gain (achieved/commanded) after tuning.
+        double measured_gain_after{0.0};
         /// Raw baseline step-response recording (commanded vs measured), for
         /// offline plotting of the open-loop fit.
         StepResponseData baseline_response{};
@@ -115,6 +123,15 @@ namespace libstp::autotune
         double low_dead_time_ratio{0.05};
         /// |Ks - 1| tolerance accompanying the low-dead-time early-return.
         double low_dead_time_gain_tol{0.15};
+
+        // ---- MCU-chassis velocity-command-gain calibration ----
+        /// Clamp range for the calibrated per-axis command gain (1/Ks).
+        double gain_min{0.3};
+        double gain_max{3.0};
+        /// Settle time (s) after re-publishing the kinematics config to the STM32.
+        double republish_settle_s{0.4};
+        /// Fraction of the run (from the end) used to fit steady-state velocity.
+        double steady_state_frac{0.5};
     };
 
     // ========================================================================
@@ -149,7 +166,13 @@ namespace libstp::autotune
         double delta_shrink{0.5};              ///< Factor to shrink deltas on no improvement.
 
         // Trial parameters.
-        double linear_test_distance_m{0.50};   ///< Fallback linear test distance (m).
+        // Every linear trial drives a FIXED distance (not speed-derived) so the
+        // robot reliably uses the ~1 m runway the operator cleared. Forward to
+        // linear_test_distance_m (recorded for scoring), then a closed return to
+        // the start; repeat. Decoupled from max_velocity on purpose — a 0.2 m/s
+        // chassis would otherwise only ever test ~0.2 m and never characterise
+        // settle/overshoot at a realistic distance.
+        double linear_test_distance_m{0.90};   ///< Linear test distance per trial (m).
         double turn_test_angle_deg{90.0};      ///< Turn test angle (degrees).
         double motion_timeout_s{10.0};         ///< Maximum trial duration (s).
         double min_timeout_s{4.0};             ///< Minimum computed timeout (s).
@@ -157,8 +180,8 @@ namespace libstp::autotune
         double stuck_linear_progress_m{0.03};  ///< Linear progress threshold (m).
         double stuck_angular_progress_deg{8.0};///< Angular progress threshold (deg).
         double primary_speed_scale{1.0};       ///< Speed scale for trial motions.
-        double min_linear_distance_m{0.20};    ///< Minimum clamped test distance (m).
-        double max_linear_distance_m{0.50};    ///< Maximum clamped test distance (m).
+        double min_linear_distance_m{0.40};    ///< Minimum clamped test distance (m).
+        double max_linear_distance_m{1.00};    ///< Maximum clamped test distance (m).
 
         // Scoring weights.
         double score_settle_weight{1.0};

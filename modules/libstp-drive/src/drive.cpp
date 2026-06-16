@@ -1,6 +1,7 @@
 #include "drive/drive.hpp"
 #include "hal/IIMU.hpp"
 #include "foundation/config.hpp"
+#include "foundation/chassis_control_context.hpp"
 #include <stdexcept>
 #include <limits>
 
@@ -37,9 +38,21 @@ void Drive::setVelocity(const foundation::ChassisVelocity& v_body)
 
 libstp::kinematics::MotorCommands Drive::update(const double dt)
 {
-    const auto measured_enc = kinematics_->estimateState();
-
     last_gyro_wz_ = imu_.getYawRate();
+
+    // On platforms with an on-board chassis velocity loop (real hardware), the
+    // platform bundle registers a sink in ChassisControlContext. Forward the
+    // body-frame command to it: the coprocessor does the inverse kinematics +
+    // per-motor velocity PID, so the Pi runs NO host-side IK or velocity
+    // control. Returns empty commands (the side effect is the chassis command).
+    // No sink registered (mock/sim) -> fall through to host-side control below.
+    if (foundation::ChassisControlContext::instance().command(
+            desired_.vx, desired_.vy, desired_.wz))
+    {
+        return {};
+    }
+
+    const auto measured_enc = kinematics_->estimateState();
 
     constexpr double kNoLimit = std::numeric_limits<double>::infinity();
     const double corrected_vx = ctrl_vx_.compute(desired_.vx, 0.0, measured_enc.vx, dt, kNoLimit);

@@ -3,6 +3,7 @@
 #include "drive/motor_adapter.hpp"
 #include "foundation/config.hpp"
 #include "hal/IMotor.hpp"
+#include <array>
 #include <vector>
 
 namespace libstp::kinematics::mecanum
@@ -21,6 +22,11 @@ namespace libstp::kinematics::mecanum
         double m_wheelRadius;
         double m_maxWheelSpeed{0.0}; // 0 = no limiting
 
+        // Per-axis velocity-command gain [vx, vy, wz]; folded into fwd_matrix in
+        // getStmOdometryConfig() to compensate drivetrain efficiency (e.g.
+        // mecanum roller slip). Calibrated by the autotune velocity phase.
+        std::array<double, 3> m_velCmdGain{1.0, 1.0, 1.0};
+
         drive::MotorAdapter front_left_motor_;
         drive::MotorAdapter front_right_motor_;
         drive::MotorAdapter back_left_motor_;
@@ -35,6 +41,10 @@ namespace libstp::kinematics::mecanum
          * @param wheelbase Front-to-back axle spacing in meters.
          * @param trackWidth Left-to-right wheel spacing in meters.
          * @param wheelRadius Radius of each drive wheel in meters.
+         * @param velocityCommandGain Per-axis velocity-command gain (identity by
+         *        default); folded into the STM32 forward kinematics to
+         *        compensate drivetrain efficiency. Calibrated by the autotune
+         *        velocity phase.
          */
         MecanumKinematics(hal::motor::IMotor* front_left_motor,
                          hal::motor::IMotor* front_right_motor,
@@ -42,7 +52,8 @@ namespace libstp::kinematics::mecanum
                          hal::motor::IMotor* back_right_motor,
                          double wheelbase,
                          double trackWidth,
-                         double wheelRadius);
+                         double wheelRadius,
+                         foundation::VelocityCommandGain velocityCommandGain = {});
         ~MecanumKinematics() override = default;
 
         /** Always returns `4`. */
@@ -73,6 +84,10 @@ namespace libstp::kinematics::mecanum
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() override;
 
         [[nodiscard]] StmOdometryConfig getStmOdometryConfig() override;
+
+        /** Set/get the per-axis velocity-command gain [vx, vy, wz]. */
+        void setVelocityCommandGains(double gx, double gy, double gw) override;
+        [[nodiscard]] std::array<double, 3> getVelocityCommandGains() const override;
 
         /** Command motors at raw open-loop power using mecanum inverse kinematics for direction. */
         void applyPowerCommand(const foundation::ChassisVelocity& direction,

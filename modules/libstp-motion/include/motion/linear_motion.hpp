@@ -131,10 +131,13 @@ namespace libstp::motion
         /// Replaces the historical `odometry().reset()` call in start()/startWarm().
         void captureInitialPose();
 
-        /// Project the current world-frame pose into the body frame captured
-        /// at start. Returns (forward, lateral) signed distances in the same
-        /// convention as `IOdometry::getDistanceFromOrigin` (lateral positive
-        /// = right of initial heading).
+        /// Project the displacement since start into a body frame aligned with
+        /// the *target* heading (cfg_.target_heading_rad), not the heading
+        /// captured at start. This keeps the measured forward distance aligned
+        /// with the direction the heading PID actually drives toward, so an
+        /// absolute-heading motion that begins with a heading error does not
+        /// overshoot. Returns (forward, lateral) signed distances; lateral is
+        /// positive to the right of the target heading.
         [[nodiscard]] std::pair<double, double> projectBodyFrame() const;
 
         LinearMotionConfig cfg_{};

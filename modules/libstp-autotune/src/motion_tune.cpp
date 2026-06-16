@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "foundation/logging.hpp"
+#include "foundation/types.hpp"
 #include "motion/linear_motion.hpp"
 #include "motion/motion.hpp"
 #include "motion/turn_motion.hpp"
@@ -24,6 +25,133 @@ MotionTuner::MotionTuner(drive::Drive&                   drive,
 {
 }
 
+void MotionTuner::requestPauseAfterTrial() const noexcept
+{
+    pause_requested_.store(true, std::memory_order_release);
+}
+
+void MotionTuner::resume() const noexcept
+{
+    pause_requested_.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(pause_mutex_);
+        paused_.store(false, std::memory_order_release);
+    }
+    pause_cv_.notify_all();
+}
+
+std::string MotionTuner::pauseState() const
+{
+    if (paused_.load(std::memory_order_acquire))
+        return "stopped";
+    if (pause_requested_.load(std::memory_order_acquire))
+        return "stop_queued";
+    return "running";
+}
+
+void MotionTuner::pauseIfRequested() const
+{
+    if (!pause_requested_.load(std::memory_order_acquire))
+        return;
+
+    drive_.hardStop();
+    paused_.store(true, std::memory_order_release);
+
+    std::unique_lock<std::mutex> lock(pause_mutex_);
+    pause_cv_.wait(lock, [this] {
+        return !pause_requested_.load(std::memory_order_acquire);
+    });
+    paused_.store(false, std::memory_order_release);
+}
+
+// ============================================================================
+// returnToOrigin
+// ============================================================================
+
+void MotionTuner::returnLinear(motion::LinearAxis      axis,
+                               double                  home_heading_rad,
+                               const MotionTuneConfig& cfg) const
+{
+    using Clock = std::chrono::steady_clock;
+
+    // Drive the robot back to the trial origin along the SAME axis, with
+    // heading-hold correction ON the whole time so it stays straight. Pure
+    // straight motion (ω ≈ 0) keeps the offset PAA lever arm out of the picture.
+    //
+    // The drive direction is derived from the SIGNED axis offset from the origin
+    // (.forward / .lateral, which are positive ahead / right of the reset pose),
+    // so this returns home regardless of which way the trial went — the previous
+    // version always drove −axis and so, after a backward trial, accelerated AWAY
+    // from home until it gave up. We stop once within tolerance of the origin or
+    // on timeout. Fixed gentle gains, never the gains being tuned.
+    constexpr double kRevSpeed   = 0.12;   // m/s
+    constexpr double kKpHead     = 2.0;
+    constexpr double kMaxW       = 1.0;    // rad/s
+    constexpr double kPosTolM    = 0.02;   // m
+    constexpr double kTimeoutS   = 8.0;
+    const double dt = 1.0 / static_cast<double>(cfg.sample_hz);
+    const auto   clampAbs = [](double v, double lim) { return std::clamp(v, -lim, lim); };
+
+    auto t0 = Clock::now();
+    while (std::chrono::duration<double>(Clock::now() - t0).count() < kTimeoutS)
+    {
+        const auto   d   = odometry_.getDistanceFromOrigin();
+        const double pos = (axis == motion::LinearAxis::Lateral) ? d.lateral : d.forward;
+        if (std::abs(pos) < kPosTolM)
+            break;
+
+        const double head_err =
+            std::remainder(home_heading_rad - odometry_.getHeading(), 2.0 * M_PI);
+
+        // Move opposite the current signed offset → toward the origin.
+        const double v = (pos > 0.0) ? -kRevSpeed : kRevSpeed;
+        foundation::ChassisVelocity cmd{0.0, 0.0, clampAbs(kKpHead * head_err, kMaxW)};
+        if (axis == motion::LinearAxis::Lateral)
+            cmd.vy = v;
+        else
+            cmd.vx = v;
+
+        drive_.setVelocity(cmd);
+        drive_.update(dt);
+        std::this_thread::sleep_for(std::chrono::microseconds(1'000'000 / cfg.sample_hz));
+    }
+
+    drive_.hardStop();
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(static_cast<long long>(cfg.settle_s * 1000.0)));
+}
+
+void MotionTuner::returnTurn(double home_heading_rad, const MotionTuneConfig& cfg) const
+{
+    using Clock = std::chrono::steady_clock;
+
+    // Rotate back to the home heading (gyro only — the offset PAA position is
+    // never used while rotating). Fixed gentle gains.
+    constexpr double kKpHead     = 2.0;
+    constexpr double kMaxW       = 1.0;    // rad/s
+    constexpr double kHeadTolRad = 0.02;   // ~1.1°
+    constexpr double kTimeoutS   = 5.0;
+    const double dt = 1.0 / static_cast<double>(cfg.sample_hz);
+    const auto   clampAbs = [](double v, double lim) { return std::clamp(v, -lim, lim); };
+
+    auto t0 = Clock::now();
+    while (std::chrono::duration<double>(Clock::now() - t0).count() < kTimeoutS)
+    {
+        const double head_err =
+            std::remainder(home_heading_rad - odometry_.getHeading(), 2.0 * M_PI);
+        if (std::abs(head_err) < kHeadTolRad)
+            break;
+        drive_.setVelocity(
+            foundation::ChassisVelocity{0.0, 0.0, clampAbs(kKpHead * head_err, kMaxW)});
+        drive_.update(dt);
+        std::this_thread::sleep_for(std::chrono::microseconds(1'000'000 / cfg.sample_hz));
+    }
+
+    drive_.hardStop();
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(static_cast<long long>(cfg.settle_s * 1000.0)));
+}
+
 // ============================================================================
 // linearTargetDistance
 // ============================================================================
@@ -31,15 +159,12 @@ MotionTuner::MotionTuner(drive::Drive&                   drive,
 double MotionTuner::linearTargetDistance(motion::LinearAxis       axis,
                                          const MotionTuneConfig&  cfg) const
 {
-    const motion::AxisConstraints& constraints =
-        (axis == motion::LinearAxis::Lateral) ? pid_config_.lateral : pid_config_.linear;
-
-    double max_vel = std::max(constraints.max_velocity, 0.0);
-    if (max_vel < 1e-6)
-        return cfg.linear_test_distance_m;
-
-    double dist = max_vel * 0.8;
-    return std::clamp(dist, cfg.min_linear_distance_m, cfg.max_linear_distance_m);
+    // Fixed test distance, independent of the (often slow) chassis max velocity.
+    // The operator clears ~1 m of runway; we always use it so settle time and
+    // overshoot are measured at a realistic distance rather than a 0.2 m crawl.
+    (void)axis;
+    return std::clamp(
+        cfg.linear_test_distance_m, cfg.min_linear_distance_m, cfg.max_linear_distance_m);
 }
 
 // ============================================================================
@@ -71,11 +196,23 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
 
     const Micros period{1'000'000 / cfg.sample_hz};
 
-    // Capture world heading as the heading target for this trial.
-    double target_heading_rad = odometry_.getAbsoluteHeading();
-
     odometry_.reset();
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // Heading target for this trial. MUST be sampled AFTER reset(), in the same
+    // (post-reset) frame that LinearMotion measures against via getHeading().
+    // reset() zeroes the STM32 heading frame, so a value captured BEFORE the
+    // reset lives in the old frame and is offset from current_heading by the
+    // whole reset discontinuity (≈100° on this robot, where the internal STM32
+    // heading is the broken source). That phantom yaw_error made LinearMotion
+    // slam ω to "correct" it, saturate the chassis on rotation, derate the
+    // forward command to zero, and just spin in place ("stuck, progress ≈0").
+    // Sampling here ties the target to the home heading (≈0) → yaw_error starts
+    // near zero and the forward command dominates.
+    //
+    // Home pose for the post-trial return (origin is here after the reset).
+    const double home_heading_rad   = odometry_.getHeading();
+    const double target_heading_rad = home_heading_rad;
 
     // Determine max_velocity for timeout calculation.
     const motion::AxisConstraints& constraints =
@@ -107,20 +244,21 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
         if (elapsed >= timeout_s)
         {
             drive_.hardStop();
-            auto dist_from_origin = odometry_.getDistanceFromOrigin();
-            double progress = (axis == motion::LinearAxis::Lateral)
-                                  ? std::abs(dist_from_origin.lateral)
-                                  : std::abs(dist_from_origin.forward);
+            // Frame-independent: .forward/.lateral project onto the odometry
+            // origin frame (the calib board's fixed axes), not the robot's
+            // heading, so they under-read whenever the robot is not axis-aligned.
+            // For a pure single-axis trial the straight-line distance IS the
+            // travelled distance. (Scoring uses the motion's own telemetry,
+            // which is already correct — this only feeds timeout/stuck logic.)
+            double progress = odometry_.getDistanceFromOrigin().straight_line;
             double remaining = std::abs(distance_m) - progress;
             LIBSTP_LOG_WARN("[MotionTuner] Linear trial timed out after {:.2f}s", elapsed);
+            returnLinear(axis, home_heading_rad, cfg);
             return {cfg.score_timeout_penalty, 0.0, remaining};
         }
 
-        // Progress for stuck detection.
-        auto   dist_from_origin = odometry_.getDistanceFromOrigin();
-        double progress = (axis == motion::LinearAxis::Lateral)
-                              ? std::abs(dist_from_origin.lateral)
-                              : std::abs(dist_from_origin.forward);
+        // Progress for stuck detection (frame-independent; see note above).
+        double progress = odometry_.getDistanceFromOrigin().straight_line;
 
         if (elapsed >= cfg.stuck_timeout_s && progress < cfg.stuck_linear_progress_m)
         {
@@ -128,6 +266,7 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
             double remaining = std::abs(distance_m) - progress;
             LIBSTP_LOG_WARN("[MotionTuner] Linear trial stuck at t={:.2f}s, progress={:.4f}m",
                             elapsed, progress);
+            returnLinear(axis, home_heading_rad, cfg);
             return {cfg.score_timeout_penalty, 0.0, remaining};
         }
 
@@ -172,6 +311,10 @@ std::tuple<double, double, double> MotionTuner::runLinearTrial(
         }
     }
 
+    // Retrace the same axis back to the start (heading-corrected), so repeated
+    // Hooke-Jeeves trials keep the robot in the same place.
+    returnLinear(axis, home_heading_rad, cfg);
+
     return {settle_time, overshoot, final_error};
 }
 
@@ -191,6 +334,10 @@ std::tuple<double, double, double> MotionTuner::runTurnTrial(
 
     odometry_.reset();
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // Home heading for the post-trial return (so the robot rotates back instead
+    // of accumulating the trial angle across many trials).
+    const double home_heading_rad = odometry_.getHeading();
 
     double max_vel   = std::max(pid_config_.angular.max_velocity, 0.1);
     double timeout_s = trialTimeoutS(std::abs(angle_rad), max_vel, speed_scale, cfg);
@@ -224,6 +371,7 @@ std::tuple<double, double, double> MotionTuner::runTurnTrial(
             drive_.hardStop();
             double remaining = std::abs(angle_rad) - std::abs(last_heading);
             LIBSTP_LOG_WARN("[MotionTuner] Turn trial timed out after {:.2f}s", elapsed);
+            returnTurn(home_heading_rad, cfg);
             return {cfg.score_timeout_penalty, 0.0, std::max(0.0, remaining)};
         }
 
@@ -239,6 +387,7 @@ std::tuple<double, double, double> MotionTuner::runTurnTrial(
             double remaining = std::abs(angle_rad) - std::abs(heading);
             LIBSTP_LOG_WARN("[MotionTuner] Turn trial stuck at t={:.2f}s, heading={:.4f}rad",
                             elapsed, heading);
+            returnTurn(home_heading_rad, cfg);
             return {cfg.score_timeout_penalty, 0.0, std::max(0.0, remaining)};
         }
 
@@ -272,6 +421,9 @@ std::tuple<double, double, double> MotionTuner::runTurnTrial(
 
     double settle_time = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - t0).count();
+
+    // Rotate back to the start heading so trials don't accumulate rotation.
+    returnTurn(home_heading_rad, cfg);
 
     return {settle_time, overshoot, final_error};
 }
@@ -339,14 +491,11 @@ double MotionTuner::evaluateGains(const std::string&      param_name,
     pid_cfg.kp = kp;
     pid_cfg.kd = kd;
 
-    // Alternate direction each trial.
-    double sign = (trial_idx % 2 == 0) ? 1.0 : -1.0;
-
     double settle, overshoot, final_error;
 
     if (param_name == "heading")
     {
-        double angle_rad = sign * cfg.turn_test_angle_deg * (M_PI / 180.0);
+        double angle_rad = cfg.turn_test_angle_deg * (M_PI / 180.0);
         auto [s, o, e] = runTurnTrial(angle_rad, cfg.primary_speed_scale, cfg);
         settle = s; overshoot = o; final_error = e;
     }
@@ -355,13 +504,16 @@ double MotionTuner::evaluateGains(const std::string&      param_name,
         motion::LinearAxis axis = (param_name == "lateral")
                                       ? motion::LinearAxis::Lateral
                                       : motion::LinearAxis::Forward;
-        double distance_m = sign * linearTargetDistance(axis, cfg);
+        double distance_m = linearTargetDistance(axis, cfg);
+        if (param_name == "lateral" && (trial_idx % 2) == 1)
+            distance_m = -distance_m;
         auto [s, o, e] = runLinearTrial(axis, distance_m, cfg.primary_speed_scale, cfg);
         settle = s; overshoot = o; final_error = e;
     }
 
     std::this_thread::sleep_for(
         std::chrono::milliseconds(static_cast<long long>(cfg.settle_s * 1000.0)));
+    pauseIfRequested();
 
     return scoreMotionTrial(param_name, settle, overshoot, final_error, cfg);
 }

@@ -11,6 +11,7 @@
 
 #include "core/TransportReader.hpp"
 #include "core/TransportWriter.hpp"
+#include "foundation/chassis_control_context.hpp"
 #include "foundation/config.hpp"
 #include "foundation/logging.hpp"
 #include "foundation/speed_mode_context.hpp"
@@ -24,6 +25,7 @@
 #include <Eigen/Core>
 #include <atomic>
 #include <cmath>
+#include <mutex>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -38,6 +40,18 @@ namespace
 
     constexpr int kImuReadyTimeoutMs = 1000;
     constexpr int kStm32ResetTimeoutMs = 500;
+
+    const char* sourceName(OdometrySource source)
+    {
+        switch (source)
+        {
+        case OdometrySource::CalibrationBoard:
+            return "CALIBRATION_BOARD";
+        case OdometrySource::Internal:
+        default:
+            return "INTERNAL";
+        }
+    }
 
     class WombatOdometry final : public IOdometry
     {
@@ -133,6 +147,21 @@ namespace
             return resolveSource();
         }
 
+        void setPreferredSource(OdometrySource source) override
+        {
+            std::lock_guard<std::mutex> lock(source_switch_mutex_);
+            if (preferred_source_ == source)
+                return;
+            preferred_source_ = source;
+            LIBSTP_LOG_INFO("[Odometry] preferred source -> {}", sourceName(source));
+        }
+
+        [[nodiscard]] OdometrySource getPreferredSource() const override
+        {
+            std::lock_guard<std::mutex> lock(source_switch_mutex_);
+            return preferred_source_;
+        }
+
         [[nodiscard]] libstp::foundation::Pose getInternalPose() const override
         {
             return internalPose();
@@ -149,6 +178,12 @@ namespace
         }
 
         void reset() override
+        {
+            performReset("manual reset");
+        }
+
+    private:
+        void performReset(const char* reason)
         {
             if (!imu_->waitForReady(kImuReadyTimeoutMs))
             {
@@ -172,33 +207,36 @@ namespace
             }
             ::platform::wombat::core::TransportReader::instance().resetOdometry();
 
-            LIBSTP_LOG_WARN("WombatOdometry::reset complete");
+            LIBSTP_LOG_INFO("WombatOdometry::reset complete ({})", reason);
         }
 
-    private:
-        /// Decide which source backs the primary pose right now, logging every
-        /// transition so it is obvious in the logs which system is in use.
+        /// Decide which source backs the primary pose right now. If the source
+        /// flips mid-run, log it and hard-reset the odometry frame so callers
+        /// never stitch together samples from two different systems.
         [[nodiscard]] OdometrySource resolveSource() const
         {
             const bool calib =
                 ::platform::wombat::core::TransportReader::instance().isCalibBoardConnected();
+            std::lock_guard<std::mutex> lock(source_switch_mutex_);
+            const OdometrySource preferred = preferred_source_;
             const OdometrySource source =
-                calib ? OdometrySource::CalibrationBoard : OdometrySource::Internal;
+                (preferred == OdometrySource::CalibrationBoard && calib)
+                    ? OdometrySource::CalibrationBoard
+                    : OdometrySource::Internal;
+            const OdometrySource previous = active_source_;
+            if (!source_initialized_)
+            {
+                active_source_ = source;
+                source_initialized_ = true;
+                return source;
+            }
 
-            const OdometrySource previous =
-                active_source_.exchange(source, std::memory_order_relaxed);
             if (source != previous)
             {
-                if (source == OdometrySource::CalibrationBoard)
-                {
-                    LIBSTP_LOG_WARN(
-                        "[Odometry] source -> CALIBRATION_BOARD (external optical-flow + IMU)");
-                }
-                else
-                {
-                    LIBSTP_LOG_WARN(
-                        "[Odometry] source -> INTERNAL (STM32 wheel dead reckoning)");
-                }
+                LIBSTP_LOG_INFO("[Odometry] source {} -> {}; hard-resetting odometry frame",
+                                sourceName(previous), sourceName(source));
+                active_source_ = source;
+                const_cast<WombatOdometry*>(this)->performReset("odometry source swap");
             }
             return source;
         }
@@ -226,7 +264,18 @@ namespace
         {
             const auto snap = ::platform::wombat::core::TransportReader::instance().readCalibOdometry();
             libstp::foundation::Pose pose;
-            pose.position = Eigen::Vector3f(snap.pos_x, snap.pos_y, 0.0f);
+            // The calib board's optical-flow position frame is mounted rotated
+            // 180° from the robot drive frame: a forward drive shows as (−x,−y)
+            // in the raw board position while the board heading points ~forward.
+            // Confirmed on hardware as a CONSTANT 180° rotation (displacement
+            // angle − heading ≈ −180° at every heading; not a reflection).
+            // Negate the position to undo it so heading-relative consumers
+            // (LinearMotion projects displacement onto the start heading) see a
+            // forward drive as +forward. Heading is left untouched — turn
+            // control nulls heading ERROR so a constant offset cancels — and the
+            // straight-line norm is sign-independent (Phase 5/6 + velocity-gain
+            // calibration stay valid).
+            pose.position = Eigen::Vector3f(-snap.pos_x, -snap.pos_y, 0.0f);
             pose.heading = snap.heading;
             return pose;
         }
@@ -266,17 +315,46 @@ namespace
         bool path_initialized_{false};
         OdometrySource path_source_{OdometrySource::Internal};
 
-        // Tracks the last resolved source purely for transition logging.
-        mutable std::atomic<OdometrySource> active_source_{OdometrySource::Internal};
+        mutable std::mutex source_switch_mutex_;
+        mutable bool source_initialized_{false};
+        OdometrySource preferred_source_{OdometrySource::Internal};
+        mutable OdometrySource active_source_{OdometrySource::Internal};
     };
 }
 
 namespace libstp::hal::platform
 {
+    namespace
+    {
+        // On-MCU chassis sink registered with the foundation context: forwards a
+        // body-frame velocity command to the STM32 (which does the IK + per-motor
+        // PID). Non-capturing so it stores as a plain function pointer.
+        bool wombatChassisSink(double vx, double vy, double wz)
+        {
+            ::platform::wombat::core::TransportWriter::instance().setChassisVelocity(
+                static_cast<float>(vx), static_cast<float>(vy), static_cast<float>(wz));
+            return true;
+        }
+    }
+
     std::shared_ptr<libstp::odometry::IOdometry> Platform::createOdometry(
         std::shared_ptr<libstp::kinematics::IKinematics> kinematics)
     {
         auto imu = std::make_shared<libstp::hal::imu::IMU>();
-        return std::make_shared<WombatOdometry>(std::move(imu), std::move(kinematics));
+        auto odom = std::make_shared<WombatOdometry>(std::move(imu), std::move(kinematics));
+
+        // Register the on-MCU chassis loop so Drive::update routes body-velocity
+        // commands to the STM32 instead of running host-side IK. Done here: this
+        // runs once at robot startup and is where the kinematics matrices the
+        // STM32 needs for its IK are pushed.
+        libstp::foundation::ChassisControlContext::instance().setSink(&wombatChassisSink);
+
+        return odom;
+    }
+
+    bool Platform::commandChassisVelocity(float vx, float vy, float wz)
+    {
+        ::platform::wombat::core::TransportWriter::instance().setChassisVelocity(vx, vy, wz);
+        return true;
     }
 }
