@@ -16,6 +16,7 @@ namespace libstp::test
         MOCK_METHOD(double, getAbsoluteHeading, (), (const, override));
         MOCK_METHOD(double, getPathLength, (), (const, override));
         MOCK_METHOD(double, getHeadingError, (double target_heading_rad), (const, override));
+        MOCK_METHOD(odometry::OdometrySource, getActiveSource, (), (const, override));
         MOCK_METHOD(void, reset, (), (override));
 
         // Simulation state for testing motion controllers
@@ -52,6 +53,8 @@ namespace libstp::test
             setHeadingError(0.0);
             setPose(foundation::Pose{});
             setPathLength(0.0);
+            ON_CALL(*this, getActiveSource())
+                .WillByDefault(testing::Return(odometry::OdometrySource::Internal));
         }
 
     private:

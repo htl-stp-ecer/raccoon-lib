@@ -66,5 +66,12 @@ void init_platform(py::module& m)
                     "STM32-computed dead-reckoning over LCM; the mock bundle reads\n"
                     "the in-process SimWorld. ``kinematics`` is forwarded so the\n"
                     "implementation can push pre-baked kinematics matrices to the\n"
-                    "coprocessor where applicable.");
+                    "coprocessor where applicable.")
+        .def_static("command_chassis_velocity",
+                    &Platform::commandChassisVelocity,
+                    py::arg("vx"), py::arg("vy"), py::arg("wz"),
+                    "Command a body-frame chassis velocity [vx (m/s), vy (m/s), "
+                    "wz (rad/s)] to the coprocessor's on-board chassis velocity "
+                    "loop (MOT_MODE_CHASSIS). Wombat forwards it to the STM32; the "
+                    "mock bundle is a no-op. Kinematics must already be pushed.");
 }

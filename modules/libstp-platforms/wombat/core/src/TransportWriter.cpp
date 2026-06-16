@@ -90,6 +90,16 @@ void TransportWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
     transport_.publish(Channels::motorPidCommand(port), msg, reliableOpts);
 }
 
+void TransportWriter::setChassisVelocity(float vx, float vy, float wz)
+{
+    raccoon::vector3f_t msg{};
+    msg.timestamp = currentTimestampUsec();
+    msg.x = vx;
+    msg.y = vy;
+    msg.z = wz;
+    transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg);
+}
+
 void TransportWriter::resetMotorPosition(uint8_t port)
 {
     raccoon::scalar_i32_t msg{};

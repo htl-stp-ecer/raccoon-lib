@@ -28,6 +28,22 @@ namespace libstp::foundation {
         ChassisVelocity(double vx_, double vy_, double wz_) : vx(vx_), vy(vy_), wz(wz_) {}
     };
 
+    /**
+     * Per-axis velocity-command gain folded into a drivetrain's forward
+     * kinematics to compensate efficiency losses (e.g. mecanum roller slip).
+     * Calibrated by the autotune velocity phase; identity (1.0) means no
+     * scaling. Shares the vx/vy/wz axis convention with ChassisVelocity but is
+     * a distinct type so it cannot be mixed up with an actual velocity.
+     */
+    struct VelocityCommandGain {
+        double vx{1.0};  ///< Forward-axis command gain (1.0 = no scaling)
+        double vy{1.0};  ///< Lateral-axis command gain (1.0 = no scaling)
+        double wz{1.0};  ///< Angular-axis command gain (1.0 = no scaling)
+
+        VelocityCommandGain() = default;
+        VelocityCommandGain(double vx_, double vy_, double wz_) : vx(vx_), vy(vy_), wz(wz_) {}
+    };
+
     // ============================================================================
     // Strongly-typed unit wrappers to prevent unit conversion errors
     // ============================================================================

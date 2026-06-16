@@ -431,8 +431,15 @@ static AxisResult runSingleTrial(
             angular_prev_raw   = raw;
             return angular_unwrapped;
         }
-        auto d = odometry.getDistanceFromOrigin();
-        return (axis == "forward") ? d.forward : d.lateral;
+        // Use the frame-independent straight-line distance, NOT .forward /
+        // .lateral. getDistanceFromOrigin() projects onto the origin frame
+        // (origin_heading_ == 0), i.e. the calib board's fixed x/y axes — which
+        // are not the robot's forward/lateral unless it happens to start axis
+        // aligned. For a pure single-axis trial the robot travels in a straight
+        // line, so the Euclidean distance from the origin IS the distance along
+        // that axis, regardless of the board's orientation. (This was the
+        // long-standing "characterize aliases calib-board position" bug.)
+        return odometry.getDistanceFromOrigin().straight_line;
     };
 
     auto accel_samples = recordSamples(getPos, cfg.accel_timeout, cfg.sample_hz,

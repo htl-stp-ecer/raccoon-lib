@@ -118,11 +118,41 @@ namespace libstp::odometry
         virtual void reset() = 0;
 
         /**
+         * Select which source should back getPose()/getHeading()/etc. when
+         * available.
+         *
+         * Implementations may fall back to ::Internal when the requested
+         * source is unavailable (for example when the calibration board is not
+         * connected). Callers can inspect getActiveSource() to see which source
+         * is actually in use right now.
+         *
+         * @param source Preferred odometry source.
+         */
+        virtual void setPreferredSource(OdometrySource source)
+        {
+            (void)source;
+        }
+
+        /**
+         * Get the caller-selected preferred source.
+         *
+         * Implementations that do not support source switching always report
+         * ::Internal here.
+         *
+         * @return Preferred odometry source.
+         */
+        [[nodiscard]] virtual OdometrySource getPreferredSource() const
+        {
+            return OdometrySource::Internal;
+        }
+
+        /**
          * Which source currently backs getPose()/getHeading()/etc.
          *
          * Implementations that have no external reference (mock, sim) always
-         * report ::Internal. The wombat implementation reports
-         * ::CalibrationBoard while the calibration board is detected.
+         * report ::Internal. Implementations that support a secondary source
+         * may still report ::Internal here when that source is not preferred
+         * or not currently available.
          *
          * @return Active odometry source.
          */
