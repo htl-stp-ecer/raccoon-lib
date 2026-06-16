@@ -9,6 +9,7 @@ register_libstp_test(
   test_control_elements.cpp
   test_control_optimization.cpp
   test_control_edge_cases.cpp
+  test_bemf_velocity_tuner.cpp
   LIBS
   autotune
   motion

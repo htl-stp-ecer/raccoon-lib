@@ -33,6 +33,7 @@ from raccoon.motion import (
     TurnMotion,
 )
 
+from .._motion_trim import MotionTrimService
 from .ir import SENTINEL_DISTANCE_M, Segment
 
 if TYPE_CHECKING:
@@ -157,6 +158,10 @@ def _create_linear_motion(
         config.distance_m = actual + math.copysign(OVERSHOOT_M, actual)
     else:
         config.distance_m = actual
+    if seg.distance_m is not None:
+        trim_svc = robot.get_service(MotionTrimService)
+        axis_name = "forward" if seg.axis.name.lower() == "forward" else "lateral"
+        config.distance_m = trim_svc.scale_distance_m(axis_name, config.distance_m)
     # Path segments with a real `distance_m` are positional goals; ones
     # backed by the sentinel are condition-driven. Flag accordingly so
     # the motion can still run while SpeedMode is on.

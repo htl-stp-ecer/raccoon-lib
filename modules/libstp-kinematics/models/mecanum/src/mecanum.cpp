@@ -14,10 +14,12 @@ namespace libstp::kinematics::mecanum
                                          hal::motor::IMotor* back_right_motor,
                                          const double wheelbase,
                                          const double trackWidth,
-                                         const double wheelRadius)
+                                         const double wheelRadius,
+                                         const foundation::VelocityCommandGain velocityCommandGain)
         : m_wheelbase(wheelbase)
           , m_trackWidth(trackWidth)
           , m_wheelRadius(wheelRadius)
+          , m_velCmdGain{velocityCommandGain.vx, velocityCommandGain.vy, velocityCommandGain.wz}
           , front_left_motor_(front_left_motor)
           , front_right_motor_(front_right_motor)
           , back_left_motor_(back_left_motor)

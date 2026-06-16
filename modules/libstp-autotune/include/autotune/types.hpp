@@ -166,7 +166,13 @@ namespace libstp::autotune
         double delta_shrink{0.5};              ///< Factor to shrink deltas on no improvement.
 
         // Trial parameters.
-        double linear_test_distance_m{0.50};   ///< Fallback linear test distance (m).
+        // Every linear trial drives a FIXED distance (not speed-derived) so the
+        // robot reliably uses the ~1 m runway the operator cleared. Forward to
+        // linear_test_distance_m (recorded for scoring), then a closed return to
+        // the start; repeat. Decoupled from max_velocity on purpose — a 0.2 m/s
+        // chassis would otherwise only ever test ~0.2 m and never characterise
+        // settle/overshoot at a realistic distance.
+        double linear_test_distance_m{0.90};   ///< Linear test distance per trial (m).
         double turn_test_angle_deg{90.0};      ///< Turn test angle (degrees).
         double motion_timeout_s{10.0};         ///< Maximum trial duration (s).
         double min_timeout_s{4.0};             ///< Minimum computed timeout (s).
@@ -174,8 +180,8 @@ namespace libstp::autotune
         double stuck_linear_progress_m{0.03};  ///< Linear progress threshold (m).
         double stuck_angular_progress_deg{8.0};///< Angular progress threshold (deg).
         double primary_speed_scale{1.0};       ///< Speed scale for trial motions.
-        double min_linear_distance_m{0.20};    ///< Minimum clamped test distance (m).
-        double max_linear_distance_m{0.50};    ///< Maximum clamped test distance (m).
+        double min_linear_distance_m{0.40};    ///< Minimum clamped test distance (m).
+        double max_linear_distance_m{1.00};    ///< Maximum clamped test distance (m).
 
         // Scoring weights.
         double score_settle_weight{1.0};

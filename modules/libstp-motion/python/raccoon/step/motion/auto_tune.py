@@ -51,14 +51,19 @@ from typing import TYPE_CHECKING
 
 from raccoon.project_yaml import find_project_root, read_project_value, update_project_value
 from raccoon.ui import (
+    Button,
     Card,
     Divider,
+    HintBox,
     ProgressSpinner,
     Row,
+    StatusBadge,
     Text,
     UIScreen,
     UIStep,
     Widget,
+    on_button_press,
+    on_click,
 )
 
 from .. import Step
@@ -90,11 +95,28 @@ class AutoTuneProgressScreen(UIScreen[None]):
         self._phases = list(phases)
         self.status: dict[str, str] = {key: "pending" for key, _ in self._phases}
         self.detail: str = ""
+        self.motion_axis: str = ""
+        self.motion_control_state: str = "hidden"
+        self.motion_toggle_callback = None
 
     def mark(self, key: str, status: str, detail: str = "") -> None:
         """Update a phase's status (``pending``/``running``/``done``/``failed``/``skipped``)."""
         self.status[key] = status
         self.detail = detail
+
+    def set_motion_control_state(
+        self,
+        state: str,
+        *,
+        axis: str = "",
+        detail: str | None = None,
+        callback=None,
+    ) -> None:
+        self.motion_control_state = state
+        self.motion_axis = axis
+        if detail is not None:
+            self.detail = detail
+        self.motion_toggle_callback = callback
 
     def build(self) -> Widget:
         n_total = len(self._phases)
@@ -132,11 +154,62 @@ class AutoTuneProgressScreen(UIScreen[None]):
                 )
             )
 
+        if self.motion_control_state != "hidden":
+            if self.motion_control_state == "stopped":
+                badge = StatusBadge(text="STOPPED", color="amber", glow=True)
+                button = Button("motion_toggle", "Continue", style="success", icon="play_arrow")
+                hint = (
+                    "Robot stopped after the last completed move. Recenter manually, then continue."
+                )
+            elif self.motion_control_state == "stop_queued":
+                badge = StatusBadge(text="STOP QUEUED", color="orange", glow=True)
+                button = Button("motion_toggle", "Cancel Stop", style="warning", icon="pause")
+                hint = "Current move will finish, then the tuner will stop before the next trial."
+            else:
+                badge = StatusBadge(text="RUNNING", color="green")
+                button = Button(
+                    "motion_toggle",
+                    "Stop After Move",
+                    style="secondary",
+                    icon="pause",
+                )
+                hint = "Use this during motion tuning to stop after the current move completes."
+
+            children.extend(
+                [
+                    Divider(),
+                    Text(
+                        text=f"Motion axis: {self.motion_axis}"
+                        if self.motion_axis
+                        else "Motion axis",
+                        bold=True,
+                    ),
+                    badge,
+                    button,
+                    HintBox(text=hint, icon="touch_app"),
+                ]
+            )
+
         if self.detail:
             children.append(Divider())
             children.append(Text(text=self.detail, size="small", muted=True))
 
         return Card(title="Auto-Tune", children=children)
+
+    async def _toggle_motion_control(self) -> None:
+        if self.motion_toggle_callback is None:
+            return
+        maybe_awaitable = self.motion_toggle_callback()
+        if maybe_awaitable is not None:
+            await maybe_awaitable
+
+    @on_click("motion_toggle")
+    async def on_motion_toggle_click(self) -> None:
+        await self._toggle_motion_control()
+
+    @on_button_press()
+    async def on_motion_toggle_button_press(self) -> None:
+        await self._toggle_motion_control()
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +420,18 @@ def _run_in_executor(callable_):
     return asyncio.get_event_loop().run_in_executor(None, callable_)
 
 
+def _is_fatal_bemf_source_swap(reason: str) -> bool:
+    return "active odometry source changed during BEMF tuning" in reason
+
+
+def _set_preferred_odometry_source(robot: "GenericRobot", source_name: str) -> object:
+    from raccoon.hal import OdometrySource
+
+    source = getattr(OdometrySource, source_name)
+    robot.odometry.set_preferred_source(source)
+    return source
+
+
 def _write_phase_report(phase_name: str, result, step) -> None:
     """Persist a per-phase data+plot report; never let it abort the tune."""
     from ._autotune_report import write_report
@@ -491,9 +576,10 @@ class AutoTuneBemfVelocity(Step):
     rather than silently persisting a misleading single value.
 
     Prerequisites:
-        - The calibration board must be connected and backing the odometry pose
-          (``robot.odometry.get_active_source() == CALIBRATION_BOARD``); the
-          tuner aborts otherwise.
+        - The calibration board must be connected. This step temporarily
+          requests calibration-board odometry for the tune and restores the
+          previous preference afterward; the tuner aborts if the board still is
+          not the active source.
         - Roughly 1 m of clear runway forward/back.
 
     Args:
@@ -559,11 +645,19 @@ class AutoTuneBemfVelocity(Step):
         cfg.apply = True
         cfg.require_calib_board = True
 
-        tuner = BemfVelocityTuner(robot.drive, robot.odometry)
-        result = await _run_in_executor(lambda: tuner.tune(cfg))
+        previous_preferred = robot.odometry.get_preferred_source()
+        _set_preferred_odometry_source(robot, "CALIBRATION_BOARD")
+        try:
+            tuner = BemfVelocityTuner(robot.drive, robot.odometry)
+            result = await _run_in_executor(lambda: tuner.tune(cfg))
+        finally:
+            robot.odometry.set_preferred_source(previous_preferred)
 
         if not result.success:
-            self.warn(f"  BEMF→velocity calibration failed: {result.failure_reason}")
+            reason = str(result.failure_reason)
+            if _is_fatal_bemf_source_swap(reason):
+                raise RuntimeError(reason)
+            self.warn(f"  BEMF→velocity calibration failed: {reason}")
             return
 
         for fit in result.motors:
@@ -861,10 +955,10 @@ _CONFIRM_MESSAGES: dict[str, str] = {
     "vel_vx": "Phase 6 – vx: ~0.5 m vorwärts freimachen",
     "vel_vy": "Phase 6 – vy: ~0.5 m seitlich rechts freimachen",
     "vel_wz": "Phase 6 – wz: 270° Drehplatz freimachen",
-    # Phase 7 — Motion
-    "motion_distance": "Phase 7 – distance: ~0.5 m vorwärts (mehrfach)",
-    "motion_lateral": "Phase 7 – lateral: ~0.5 m seitlich (mehrfach)",
-    "motion_heading": "Phase 7 – heading: 90° Drehung (mehrfach)",
+    # Phase 7 — Motion (fwd ~1 m + zurück pro Trial, mehrere Trials je Achse)
+    "motion_distance": "Phase 7 – distance: ~1 m vorwärts frei? (fährt vor & zurück, mehrfach)",
+    "motion_lateral": "Phase 7 – lateral: ~1 m seitlich frei? (fährt hin & zurück, mehrfach)",
+    "motion_heading": "Phase 7 – heading: Drehplatz frei? (dreht hin & zurück, mehrfach)",
 }
 
 
@@ -1005,6 +1099,7 @@ class AutoTune(UIStep):
             EncoderCalConfig,
             FirmwarePidConfig,
             MotionTuneConfig,
+            MotionTuner,
             StaticFrictionConfig,
             ToleranceConfig,
             VelLpfConfig,
@@ -1059,7 +1154,10 @@ class AutoTune(UIStep):
         motion_results: dict = {}
 
         for key, _label in active_phases:
-            await self._confirm(key)
+            # The motion phase confirms per axis (each needs its own ~1 m / turn
+            # space), so skip the generic per-phase confirm for it.
+            if key != "motion":
+                await self._confirm(key)
 
             # -------- bemf_velocity --------
             if key == "bemf_velocity":
@@ -1074,10 +1172,17 @@ class AutoTune(UIStep):
                         cfg.sweeps = self.sweeps
                         cfg.apply = True
                         cfg.require_calib_board = True
-                        bemf_tuner = BemfVelocityTuner(robot.drive, robot.odometry)
-                        result = await _run_in_executor(lambda: bemf_tuner.tune(cfg))
+                        previous_preferred = robot.odometry.get_preferred_source()
+                        _set_preferred_odometry_source(robot, "CALIBRATION_BOARD")
+                        try:
+                            bemf_tuner = BemfVelocityTuner(robot.drive, robot.odometry)
+                            result = await _run_in_executor(lambda: bemf_tuner.tune(cfg))
+                        finally:
+                            robot.odometry.set_preferred_source(previous_preferred)
                         if not getattr(result, "success", False):
                             reason = getattr(result, "failure_reason", "unknown")
+                            if _is_fatal_bemf_source_swap(str(reason)):
+                                raise RuntimeError(str(reason))
                             self.warn(f"  bemf_velocity failed: {reason}")
                             screen.mark("bemf_velocity", "failed", detail=str(reason))
                             await screen.refresh()
@@ -1096,6 +1201,7 @@ class AutoTune(UIStep):
                         self.warn(f"  bemf_velocity raised: {exc}")
                         screen.mark("bemf_velocity", "failed", detail=str(exc))
                         await screen.refresh()
+                        raise
 
                 await self.run_with_ui(screen, runner_bemf)
 
@@ -1242,25 +1348,104 @@ class AutoTune(UIStep):
 
             # -------- motion --------
             elif key == "motion":
-                screen.mark(key, "running", detail="Hooke-Jeeves Trials…")
+                # One axis at a time: each drives a clean "forward ~1 m, then
+                # back" pattern (turn: rotate, then back) repeated across the
+                # Hooke-Jeeves trials, so confirm the needed space per axis.
+                failed_params: list[str] = []
+                for param in motion_params:
+                    await self._confirm(f"motion_{param}")
+                    screen.mark("motion", "running", detail=f"{param}: vor/zurück Trials…")
+                    motion_tuner = MotionTuner(robot.drive, robot.odometry, robot.motion_pid_config)
 
-                async def runner_motion():
-                    try:
-                        for param in motion_params:
-                            results = await _run_in_executor(
-                                lambda p=param: tuner.run_motion([p], MotionTuneConfig())
+                    async def toggle_motion_control(
+                        tuner=motion_tuner,
+                        phase_screen=screen,
+                        active_param=param,
+                    ) -> None:
+                        state = tuner.pause_state()
+                        if state == "running":
+                            tuner.request_pause_after_trial()
+                            phase_screen.set_motion_control_state(
+                                "stop_queued",
+                                axis=active_param,
+                                detail=f"{active_param}: stop queued after current move…",
+                                callback=toggle_motion_control,
                             )
-                            motion_results.update(results)
-                        if self.persist and motion_results:
-                            _persist_motion_config(motion_results)
-                        screen.mark("motion", "done")
-                        await screen.refresh()
-                    except Exception as exc:
-                        self.warn(f"  motion raised: {exc}")
-                        screen.mark("motion", "failed", detail=str(exc))
-                        await screen.refresh()
+                        elif state == "stop_queued":
+                            tuner.resume()
+                            phase_screen.set_motion_control_state(
+                                "running",
+                                axis=active_param,
+                                detail=f"{active_param}: vor/zurück Trials…",
+                                callback=toggle_motion_control,
+                            )
+                        else:
+                            tuner.resume()
+                            phase_screen.set_motion_control_state(
+                                "running",
+                                axis=active_param,
+                                detail=f"{active_param}: continuing…",
+                                callback=toggle_motion_control,
+                            )
+                        await phase_screen.refresh()
 
-                await self.run_with_ui(screen, runner_motion)
+                    screen.set_motion_control_state(
+                        "running",
+                        axis=param,
+                        detail=f"{param}: vor/zurück Trials…",
+                        callback=toggle_motion_control,
+                    )
+
+                    async def runner_motion(
+                        p=param,
+                        _failures=failed_params,
+                        tuner_for_param=motion_tuner,
+                    ):
+                        try:
+                            motion_cfg = MotionTuneConfig()
+                            future = _run_in_executor(lambda: tuner_for_param.tune([p], motion_cfg))
+                            last_state = "running"
+                            while not future.done():
+                                state = tuner_for_param.pause_state()
+                                if state != last_state:
+                                    if state == "stopped":
+                                        detail = f"{p}: stopped after completed move. Recenter, then continue."
+                                    elif state == "stop_queued":
+                                        detail = f"{p}: stop queued after current move…"
+                                    else:
+                                        detail = f"{p}: vor/zurück Trials…"
+                                    screen.set_motion_control_state(
+                                        state,
+                                        axis=p,
+                                        detail=detail,
+                                        callback=toggle_motion_control,
+                                    )
+                                    await screen.refresh()
+                                    last_state = state
+                                await asyncio.sleep(0.05)
+
+                            results = await future
+                            motion_results.update(results)
+                            screen.set_motion_control_state(
+                                "running",
+                                axis=p,
+                                detail=f"{p}: done",
+                                callback=toggle_motion_control,
+                            )
+                            await screen.refresh()
+                        except Exception as exc:
+                            self.warn(f"  motion[{p}] raised: {exc}")
+                            _failures.append(p)
+                            screen.set_motion_control_state("hidden")
+                            screen.mark("motion", "failed", detail=f"{p}: {exc}")
+                            await screen.refresh()
+
+                    await self.run_with_ui(screen, runner_motion)
+                    screen.set_motion_control_state("hidden")
+
+                if self.persist and motion_results:
+                    _persist_motion_config(motion_results)
+                screen.mark("motion", "failed" if failed_params else "done")
 
             # -------- tolerances --------
             elif key == "tolerances":

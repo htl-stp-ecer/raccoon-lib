@@ -62,7 +62,9 @@ namespace libstp::autotune
         double min_window_ticks{20.0};
 
         /// Fail outright unless the calibration board currently backs the
-        /// odometry pose (we need an accurate external ground truth).
+        /// odometry pose. The Python auto-tune step explicitly requests that
+        /// source before entering the tune; internal odometry remains the
+        /// default everywhere else.
         bool   require_calib_board{true};
         /// Apply the derived ticks_to_rad to the live motors and republish the
         /// kinematics config (via odometry.reset()) at the end. The Python step
@@ -123,6 +125,8 @@ namespace libstp::autotune
      *
      * @note Requires the calibration-board odometry to back `IOdometry::getPose()`
      *       (i.e. `getActiveSource() == OdometrySource::CalibrationBoard`).
+     *       Callers are expected to request that source explicitly; internal
+     *       odometry is otherwise the default.
      */
     class BemfVelocityTuner
     {

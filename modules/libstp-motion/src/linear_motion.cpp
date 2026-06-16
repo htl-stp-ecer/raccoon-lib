@@ -63,11 +63,20 @@ namespace libstp::motion
         const auto pose = odometry().getPose();
         const double dx = static_cast<double>(pose.position.x()) - initial_position_m_.x();
         const double dy = static_cast<double>(pose.position.y()) - initial_position_m_.y();
-        const double cos_h = std::cos(initial_heading_rad_);
-        const double sin_h = std::sin(initial_heading_rad_);
-        // Match IOdometry::getDistanceFromOrigin convention:
-        //   forward = pos · (cos θ0, sin θ0)
-        //   lateral = pos · (-sin θ0, cos θ0)   ("right-positive" by libstp-odometry convention)
+        // Project onto the *target* heading, not the heading captured at start.
+        // The heading PID drives the chassis toward cfg_.target_heading_rad, so
+        // the robot's steady-state direction of travel is the target heading. If
+        // we projected onto initial_heading_rad_ instead, an absolute-heading
+        // motion that begins with a heading error θ_err would measure distance
+        // along a direction θ_err off the actual travel: the forward component
+        // shrinks by cos(θ_err), so the motion would overshoot by 1/cos(θ_err)
+        // before the distance target is satisfied. In relative mode the caller
+        // sets target_heading_rad to the current world heading, so this equals
+        // the start heading and nothing changes.
+        const double cos_h = std::cos(cfg_.target_heading_rad);
+        const double sin_h = std::sin(cfg_.target_heading_rad);
+        //   forward = pos · (cos θ_t, sin θ_t)
+        //   lateral = pos · (-sin θ_t, cos θ_t)   ("right-positive" by libstp-odometry convention)
         const double forward = dx * cos_h + dy * sin_h;
         const double lateral = -dx * sin_h + dy * cos_h;
         return {forward, lateral};

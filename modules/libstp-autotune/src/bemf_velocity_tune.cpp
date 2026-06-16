@@ -115,6 +115,7 @@ BemfVelocityTuner::BemfVelocityTuner(drive::Drive& drive, odometry::IOdometry& o
 BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
 {
     BemfVelocityResult result{};
+    const auto initial_source = odometry_.getActiveSource();
 
     auto motors = drive_.getMotors();
     if (motors.empty())
@@ -133,7 +134,7 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
     }
 
     if (cfg.require_calib_board &&
-        odometry_.getActiveSource() != odometry::OdometrySource::CalibrationBoard)
+        initial_source != odometry::OdometrySource::CalibrationBoard)
     {
         result.failure_reason =
             "calibration board is not the active odometry source — connect it before tuning";
@@ -151,18 +152,32 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
                     r, pwm_levels.size(), std::max(1, cfg.sweeps));
     LIBSTP_LOG_INFO("============================================================");
 
+    auto sourceStillValid = [&]() -> bool {
+        const auto current_source = odometry_.getActiveSource();
+        if (current_source == initial_source)
+            return true;
+        result.failure_reason =
+            "active odometry source changed during BEMF tuning — stopping because a mid-run "
+            "source swap invalidates the calibration";
+        LIBSTP_LOG_ERROR("[BemfVelocityTune] {}", result.failure_reason);
+        return false;
+    };
+
     // --- Drive a direction until `predicate(pose)` is true or timeout. Optionally
     //     accumulate |BEMF| samples per motor while driving. ----------------------
     auto driveUntil = [&](const ChassisVelocity& dir, int pwm,
                           const std::function<bool(const Pose&)>& done,
                           double timeout_s,
                           std::vector<double>* bemf_acc /*size n_motors, may be null*/)
+        -> bool
     {
         drive_.applyPowerCommand(dir, pwm);
         const auto t0 = Clock::now();
         auto next = t0;
         while (true)
         {
+            if (!sourceStillValid())
+                return false;
             const Pose p = odometry_.getPose();
             if (done(p))
                 break;
@@ -176,6 +191,7 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
             if (next > now) std::this_thread::sleep_until(next);
             else            next = now;
         }
+        return true;
     };
 
     auto brakeAll = [&]() { for (auto* m : motors) m->brake(); };
@@ -190,9 +206,15 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
 
         // Pre-roll to steady state (discarded).
         const Pose seg_start = odometry_.getPose();
-        driveUntil(kForward, pwm,
-                   [&](const Pose& p) { return planarDist(p, seg_start) >= cfg.pre_roll_distance_m; },
-                   cfg.segment_timeout_s, nullptr);
+        if (!driveUntil(kForward, pwm,
+                        [&](const Pose& p) {
+                            return planarDist(p, seg_start) >= cfg.pre_roll_distance_m;
+                        },
+                        cfg.segment_timeout_s, nullptr))
+        {
+            brakeAll();
+            return result;
+        }
 
         // Measurement window at (hopefully) steady speed.
         const Pose win_start = odometry_.getPose();
@@ -202,9 +224,15 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
         const auto win_t0 = Clock::now();
 
         std::vector<double> bemf_acc[4];
-        driveUntil(kForward, pwm,
-                   [&](const Pose& p) { return planarDist(p, win_start) >= cfg.measure_distance_m; },
-                   cfg.segment_timeout_s, bemf_acc);
+        if (!driveUntil(kForward, pwm,
+                        [&](const Pose& p) {
+                            return planarDist(p, win_start) >= cfg.measure_distance_m;
+                        },
+                        cfg.segment_timeout_s, bemf_acc))
+        {
+            brakeAll();
+            return result;
+        }
 
         const Pose win_end = odometry_.getPose();
         const double win_dt = std::chrono::duration<double>(Clock::now() - win_t0).count();
@@ -242,15 +270,19 @@ BemfVelocityResult BemfVelocityTuner::tune(const BemfVelocityConfig& cfg) const
         // Settle, then drive back toward the origin to conserve runway.
         std::this_thread::sleep_for(std::chrono::duration<double>(cfg.settle_s));
         double prev_dist = planarDist(odometry_.getPose(), origin);
-        driveUntil(kBackward, cfg.return_pwm_percent,
-                   [&](const Pose& p) {
-                       const double d = planarDist(p, origin);
-                       const bool reached   = d <= cfg.return_tolerance_m;
-                       const bool overshoot = d > prev_dist + 0.01; // moving away => passed origin
-                       prev_dist = d;
-                       return reached || overshoot;
-                   },
-                   cfg.return_timeout_s, nullptr);
+        if (!driveUntil(kBackward, cfg.return_pwm_percent,
+                        [&](const Pose& p) {
+                            const double d = planarDist(p, origin);
+                            const bool reached = d <= cfg.return_tolerance_m;
+                            const bool overshoot = d > prev_dist + 0.01;
+                            prev_dist = d;
+                            return reached || overshoot;
+                        },
+                        cfg.return_timeout_s, nullptr))
+        {
+            brakeAll();
+            return result;
+        }
         brakeAll();
         std::this_thread::sleep_for(std::chrono::duration<double>(cfg.settle_s));
     }

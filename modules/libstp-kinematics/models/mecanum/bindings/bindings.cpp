@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "kinematics/mecanum/mecanum.hpp"
+#include "foundation/types.hpp"
 #include "hal/Motor.hpp"
 
 namespace py = pybind11;
@@ -14,6 +15,7 @@ PYBIND11_MODULE(kinematics_mecanum, m)
     // Ensure dependent base/types are registered before referencing them
     py::module_::import("raccoon.kinematics");
     py::module_::import("raccoon.hal");
+    py::module_::import("raccoon.foundation");
 
     py::class_<libstp::kinematics::mecanum::MecanumKinematics, libstp::kinematics::IKinematics,
                 std::shared_ptr<libstp::kinematics::mecanum::MecanumKinematics>>(m, "MecanumKinematics")
@@ -22,7 +24,8 @@ PYBIND11_MODULE(kinematics_mecanum, m)
                       libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,
                       libstp::hal::motor::Motor*,
-                      double, double, double>(),
+                      double, double, double,
+                      libstp::foundation::VelocityCommandGain>(),
              py::arg("front_left_motor"),
              py::arg("front_right_motor"),
              py::arg("back_left_motor"),
@@ -30,6 +33,7 @@ PYBIND11_MODULE(kinematics_mecanum, m)
              py::arg("wheelbase"),
              py::arg("track_width"),
              py::arg("wheel_radius"),
+             py::arg("velocity_command_gain") = libstp::foundation::VelocityCommandGain{},
              py::keep_alive<1, 2>())
         .def("wheel_count", &libstp::kinematics::mecanum::MecanumKinematics::wheelCount)
         .def("apply_command", &libstp::kinematics::mecanum::MecanumKinematics::applyCommand,

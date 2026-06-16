@@ -6,6 +6,7 @@ from raccoon.motion import LinearAxis, LinearMotion, LinearMotionConfig
 
 from ..annotation import dsl_step
 from ..condition import StopCondition
+from ._motion_trim import MotionTrimService
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -81,6 +82,10 @@ class _ConditionalDrive(MotionStep):
             if self._cm is not None
             else self._sign * self._SENTINEL_DISTANCE_M
         )
+        if self._cm is not None:
+            trim_svc = robot.get_service(MotionTrimService)
+            axis_name = "forward" if self._axis == LinearAxis.Forward else "lateral"
+            config.distance_m = trim_svc.scale_distance_m(axis_name, config.distance_m)
         # When `cm` is None the motion runs purely as a "drive until …"
         # — the sentinel distance is only an upper bound the until-clause
         # is expected to fire well before. Mark the config so the C++

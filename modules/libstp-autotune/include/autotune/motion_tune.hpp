@@ -1,9 +1,12 @@
 #pragma once
 
 #include <map>
+#include <mutex>
 #include <string>
 #include <tuple>
 #include <vector>
+#include <condition_variable>
+#include <atomic>
 
 #include "autotune/types.hpp"
 #include "drive/drive.hpp"
@@ -68,6 +71,15 @@ namespace libstp::autotune
             const std::string& param_name,
             const MotionTuneConfig& cfg) const;
 
+        /// Queue a pause that takes effect after the current trial completes.
+        void requestPauseAfterTrial() const noexcept;
+
+        /// Cancel a queued pause or resume from an active pause.
+        void resume() const noexcept;
+
+        /// Current operator-control state: "running", "stop_queued", or "stopped".
+        [[nodiscard]] std::string pauseState() const;
+
     private:
         /**
          * @brief Run one closed-loop linear trial.
@@ -95,12 +107,12 @@ namespace libstp::autotune
         /**
          * @brief Return after a LINEAR trial by retracing the SAME axis.
          *
-         * Drives the negative of the trial's axis velocity (forward trial →
-         * reverse forward, strafe trial → reverse strafe) with heading-hold
-         * correction ON, until the robot is back at the start (straight-line
-         * distance from the trial origin is minimal) or a timeout. Uses fixed
-         * gentle gains, never the gains being tuned. Pure straight motion keeps
-         * ω ≈ 0 so the offset-PAA lever arm never contaminates the position.
+         * Drives back toward the trial origin along the trial axis, choosing the
+         * direction from the SIGNED offset from origin (.forward / .lateral) so it
+         * returns home whichever way the trial went, with heading-hold correction
+         * ON, until within tolerance of the origin or a timeout. Uses fixed gentle
+         * gains, never the gains being tuned. Pure straight motion keeps ω ≈ 0 so
+         * the offset-PAA lever arm never contaminates the position.
          */
         void returnLinear(motion::LinearAxis axis, double home_heading_rad,
                           const MotionTuneConfig& cfg) const;
@@ -154,9 +166,16 @@ namespace libstp::autotune
             double speed_scale,
             const MotionTuneConfig& cfg) const;
 
+        /// Block between trials when the operator queued a stop.
+        void pauseIfRequested() const;
+
         drive::Drive& drive_;
         odometry::IOdometry& odometry_;
         motion::UnifiedMotionPidConfig& pid_config_;
+        mutable std::atomic<bool> pause_requested_{false};
+        mutable std::atomic<bool> paused_{false};
+        mutable std::mutex pause_mutex_;
+        mutable std::condition_variable pause_cv_;
     };
 
 } // namespace libstp::autotune

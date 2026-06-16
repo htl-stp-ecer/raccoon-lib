@@ -41,6 +41,10 @@ namespace libstp::kinematics::mecanum
          * @param wheelbase Front-to-back axle spacing in meters.
          * @param trackWidth Left-to-right wheel spacing in meters.
          * @param wheelRadius Radius of each drive wheel in meters.
+         * @param velocityCommandGain Per-axis velocity-command gain (identity by
+         *        default); folded into the STM32 forward kinematics to
+         *        compensate drivetrain efficiency. Calibrated by the autotune
+         *        velocity phase.
          */
         MecanumKinematics(hal::motor::IMotor* front_left_motor,
                          hal::motor::IMotor* front_right_motor,
@@ -48,7 +52,8 @@ namespace libstp::kinematics::mecanum
                          hal::motor::IMotor* back_right_motor,
                          double wheelbase,
                          double trackWidth,
-                         double wheelRadius);
+                         double wheelRadius,
+                         foundation::VelocityCommandGain velocityCommandGain = {});
         ~MecanumKinematics() override = default;
 
         /** Always returns `4`. */

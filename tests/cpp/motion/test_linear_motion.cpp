@@ -158,6 +158,30 @@ TEST_F(LinearMotionTest, ForwardAxis_HeadingNonZero_ProjectsIntoBodyFrame) {
     EXPECT_NEAR(t.back().cross_track_m, 0.0, 1e-5);
 }
 
+TEST_F(LinearMotionTest, ForwardAxis_InitialHeadingError_ProjectsOntoTargetHeading) {
+    // Regression: the robot starts with a heading error (start heading 0.5 rad,
+    // target 0.0). The heading PID drives it onto the target, so it travels
+    // along world-x (the target direction). Distance must be projected onto the
+    // TARGET heading, not the start heading. Moving +0.10 m along world-x must
+    // read as 0.10 m of forward progress — projecting onto the 0.5 rad start
+    // heading would (incorrectly) report 0.10*cos(0.5) ≈ 0.0878 m and overshoot.
+    LinearMotionConfig cfg;
+    cfg.distance_m = 0.50;
+    cfg.target_heading_rad = 0.0;
+
+    auto motion = makeMotion(cfg);
+    setWorldPose(0.0, 0.0, 0.5);  // 0.5 rad heading error at start
+    motion->start();
+
+    setWorldPose(0.10, 0.0, 0.0);  // moved along the target direction
+    motion->update(kDt);
+
+    const auto& t = motion->getTelemetry();
+    ASSERT_FALSE(t.empty());
+    EXPECT_NEAR(t.back().position_m, 0.10, 1e-5);
+    EXPECT_NEAR(t.back().cross_track_m, 0.0, 1e-5);
+}
+
 // ===================================================================
 // Heading error: yaw_error_rad uses the absolute target.
 // ===================================================================

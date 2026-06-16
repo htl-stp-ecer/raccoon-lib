@@ -25,6 +25,7 @@
 #include <Eigen/Core>
 #include <atomic>
 #include <cmath>
+#include <mutex>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -39,6 +40,18 @@ namespace
 
     constexpr int kImuReadyTimeoutMs = 1000;
     constexpr int kStm32ResetTimeoutMs = 500;
+
+    const char* sourceName(OdometrySource source)
+    {
+        switch (source)
+        {
+        case OdometrySource::CalibrationBoard:
+            return "CALIBRATION_BOARD";
+        case OdometrySource::Internal:
+        default:
+            return "INTERNAL";
+        }
+    }
 
     class WombatOdometry final : public IOdometry
     {
@@ -134,6 +147,21 @@ namespace
             return resolveSource();
         }
 
+        void setPreferredSource(OdometrySource source) override
+        {
+            std::lock_guard<std::mutex> lock(source_switch_mutex_);
+            if (preferred_source_ == source)
+                return;
+            preferred_source_ = source;
+            LIBSTP_LOG_INFO("[Odometry] preferred source -> {}", sourceName(source));
+        }
+
+        [[nodiscard]] OdometrySource getPreferredSource() const override
+        {
+            std::lock_guard<std::mutex> lock(source_switch_mutex_);
+            return preferred_source_;
+        }
+
         [[nodiscard]] libstp::foundation::Pose getInternalPose() const override
         {
             return internalPose();
@@ -150,6 +178,12 @@ namespace
         }
 
         void reset() override
+        {
+            performReset("manual reset");
+        }
+
+    private:
+        void performReset(const char* reason)
         {
             if (!imu_->waitForReady(kImuReadyTimeoutMs))
             {
@@ -173,33 +207,36 @@ namespace
             }
             ::platform::wombat::core::TransportReader::instance().resetOdometry();
 
-            LIBSTP_LOG_WARN("WombatOdometry::reset complete");
+            LIBSTP_LOG_INFO("WombatOdometry::reset complete ({})", reason);
         }
 
-    private:
-        /// Decide which source backs the primary pose right now, logging every
-        /// transition so it is obvious in the logs which system is in use.
+        /// Decide which source backs the primary pose right now. If the source
+        /// flips mid-run, log it and hard-reset the odometry frame so callers
+        /// never stitch together samples from two different systems.
         [[nodiscard]] OdometrySource resolveSource() const
         {
             const bool calib =
                 ::platform::wombat::core::TransportReader::instance().isCalibBoardConnected();
+            std::lock_guard<std::mutex> lock(source_switch_mutex_);
+            const OdometrySource preferred = preferred_source_;
             const OdometrySource source =
-                calib ? OdometrySource::CalibrationBoard : OdometrySource::Internal;
+                (preferred == OdometrySource::CalibrationBoard && calib)
+                    ? OdometrySource::CalibrationBoard
+                    : OdometrySource::Internal;
+            const OdometrySource previous = active_source_;
+            if (!source_initialized_)
+            {
+                active_source_ = source;
+                source_initialized_ = true;
+                return source;
+            }
 
-            const OdometrySource previous =
-                active_source_.exchange(source, std::memory_order_relaxed);
             if (source != previous)
             {
-                if (source == OdometrySource::CalibrationBoard)
-                {
-                    LIBSTP_LOG_WARN(
-                        "[Odometry] source -> CALIBRATION_BOARD (external optical-flow + IMU)");
-                }
-                else
-                {
-                    LIBSTP_LOG_WARN(
-                        "[Odometry] source -> INTERNAL (STM32 wheel dead reckoning)");
-                }
+                LIBSTP_LOG_INFO("[Odometry] source {} -> {}; hard-resetting odometry frame",
+                                sourceName(previous), sourceName(source));
+                active_source_ = source;
+                const_cast<WombatOdometry*>(this)->performReset("odometry source swap");
             }
             return source;
         }
@@ -278,8 +315,10 @@ namespace
         bool path_initialized_{false};
         OdometrySource path_source_{OdometrySource::Internal};
 
-        // Tracks the last resolved source purely for transition logging.
-        mutable std::atomic<OdometrySource> active_source_{OdometrySource::Internal};
+        mutable std::mutex source_switch_mutex_;
+        mutable bool source_initialized_{false};
+        OdometrySource preferred_source_{OdometrySource::Internal};
+        mutable OdometrySource active_source_{OdometrySource::Internal};
     };
 }
 

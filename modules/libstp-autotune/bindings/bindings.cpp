@@ -396,7 +396,16 @@ PYBIND11_MODULE(autotune, m)
              "Updates pid_config in place with best-found gains for each.\n\n"
              "Releases the GIL for the full tuning loop.\n\n"
              "Returns\n-------\n"
-             "dict[str, MotionTuneResult]\n    Map from param name to result.");
+             "dict[str, MotionTuneResult]\n    Map from param name to result.")
+        .def("request_pause_after_trial",
+             &MotionTuner::requestPauseAfterTrial,
+             "Queue a stop that takes effect after the current motion trial finishes.")
+        .def("resume",
+             &MotionTuner::resume,
+             "Cancel a queued stop or continue after the tuner is stopped.")
+        .def("pause_state",
+             &MotionTuner::pauseState,
+             "Return \"running\", \"stop_queued\", or \"stopped\".");
 
     // ------------------------------------------------------------------
     // Phase 4 — FirmwarePidTuner

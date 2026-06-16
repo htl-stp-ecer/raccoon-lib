@@ -37,6 +37,17 @@ class LocalizationNotWiredError(RuntimeError):
     """
 
 
+def _format_odometry_source(source) -> str:
+    """Render a pybind ``OdometrySource`` enum or fallback value for logs."""
+    name = getattr(source, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    text = str(source)
+    if "." in text:
+        return text.rsplit(".", 1)[-1]
+    return text
+
+
 if TYPE_CHECKING:
     from raccoon.drive import Drive
     from raccoon.hal import IOdometry as Odometry
@@ -346,6 +357,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
         if not self.missions:
             self.warn("Robot does not have any missions attached")
+
+        try:
+            source = self.odometry.get_active_source()
+            self.info(f"Odometry source at startup: {_format_odometry_source(source)}")
+        except Exception as exc:
+            self.warn(f"Could not determine startup odometry source: {exc}")
 
         if self.setup_mission is not None:
             from raccoon.mission.api import SetupMission
