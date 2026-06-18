@@ -146,6 +146,10 @@ class Optimizer(Step):
         self._passes: list = []
         self._repr = Representation.RELATIVE
         self._terminated_by: str | None = None
+        # Absolute MODE — set by to_absolute(). Drives whether the compiled
+        # pipeline runs the per-leg ToAbsolutePass and whether splinify renders
+        # absolute (SplineFollow) vs relative (Segment(kind="spline")).
+        self._absolute = False
 
     _composite = True
 
@@ -181,24 +185,40 @@ class Optimizer(Step):
         user's opt-in passes in the order they were chained.  decompose runs
         before merge — and both before user passes — which also yields the
         canonical "merge before cut_corners" ordering for free.
+
+        Absolute-mode coupling: when both ``to_absolute()`` and ``splinify()``
+        are chained, the whole path becomes ONE absolute spline — so the per-leg
+        ``ToAbsolutePass`` is dropped and ``splinify`` renders absolute.  With
+        only ``to_absolute()`` the per-leg pass runs; with only ``splinify()`` it
+        renders the relative spline.
         """
-        return [DecomposePass(), MergePass(), *self._passes]
+        has_splinify = any(isinstance(p, SplinifyPass) for p in self._passes)
+        out: list = [DecomposePass(), MergePass()]
+        for p in self._passes:
+            if isinstance(p, ToAbsolutePass) and has_splinify:
+                continue  # subsumed: the whole path is one absolute spline
+            if isinstance(p, SplinifyPass):
+                out.append(SplinifyPass(absolute=self._absolute))
+            else:
+                out.append(p)
+        return out
 
     # -- public chain methods ----------------------------------------------
 
     def to_absolute(self) -> "Optimizer":
-        """Convert known-endpoint relative runs into closed-loop navigate-to-pose.
+        """Drive as ABSOLUTE as possible — closed-loop on the localization filter.
 
-        Replaces each maximal run of consecutive known-endpoint ``linear`` /
-        ``turn`` segments with ONE inline ``GotoWaypoints`` move
-        (``ToAbsolutePass``).  It captures the localization pose once per run as
-        a single anchor, computes the run's absolute world waypoints from it, and
-        regulates onto each in sequence on the particle filter — so the
-        dead-reckoned legs become one closed-loop run that shrugs off odometry
-        drift (drift does not chain leg-to-leg).  ``.until(after_cm())`` legs
-        qualify automatically (distance recovered at lowering); non-qualifying
-        nodes pass through untouched.
+        Turns on absolute mode.  On its own, each maximal run of known-endpoint
+        ``linear`` / ``turn`` / ``diagonal`` legs becomes ONE ``GotoWaypoints``
+        and each sensor-bounded single-axis leg becomes an ``AbsoluteHoldMove``
+        (cross-axis + heading held absolute, free axis until the sensor) — every
+        leg regulating on the particle filter so accumulated odometry drift is
+        corrected during the move.  Chained with ``.splinify()`` the whole path
+        instead becomes one absolute spline (a continuous ``SplineFollow``).
+
+        Reads localization only — never feeds it.
         """
+        self._absolute = True
         return self._add(ToAbsolutePass())
 
     def absolute_heading(self) -> "Optimizer":

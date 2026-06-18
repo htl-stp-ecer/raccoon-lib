@@ -149,17 +149,92 @@ def sample_centripetal_catmull_rom(
     return samples
 
 
+# Sample an arc roughly every this many radians (~18°) so the Catmull-Rom
+# traces the arc's curvature rather than chording it.  At least 2 samples per
+# arc are emitted regardless (the endpoint and one intermediate).
+_ARC_SAMPLE_STEP_RAD = math.radians(18.0)
+
+
+def _arc_samples(
+    x: float,
+    y: float,
+    heading: float,
+    radius_m: float,
+    arc_angle_rad: float,
+    lateral: bool,
+) -> tuple[list[tuple[float, float]], float, float, float]:
+    """Sample one arc into intermediate ``(x_m, y_m)`` control points.
+
+    Reproduces the ``ArcMotion`` (``arc_motion.cpp``) geometry exactly:
+
+    - The arc has signed sweep ``arc_angle_rad`` (>0 = CCW/left, <0 = CW/right);
+      the robot's heading rotates by this amount over the arc.
+    - ``lateral=False`` (drive arc): the body-frame velocity is ``+vx`` (forward,
+      along ``heading``).  ``lateral=True`` (strafe arc): the velocity is ``+vy``
+      with sign matching ``arc_angle`` (``+`` = left for CCW), i.e. along
+      ``heading + sign(arc_angle)·90°``.
+    - Centre of the circle is 90° to the LEFT of the velocity for CCW motion and
+      90° to the RIGHT for CW motion, i.e. at ``velocity_dir + sign·90°`` at
+      ``radius_m``.  The centre→robot vector rotates rigidly with the heading, so
+      sampling at heading-sweep fraction ``f`` places the robot at
+      ``centre + rotate(robot - centre, arc_angle·f)``.
+
+    Returns ``(samples, x_end, y_end, heading_end)`` where ``samples`` is the
+    list of ``(x_m, y_m)`` control points (excluding the arc start, including the
+    endpoint) and the end pose is the exact arc endpoint so subsequent segments
+    integrate from the true position/heading.
+    """
+    radius = radius_m or 0.0
+    sign = 1.0 if arc_angle_rad >= 0.0 else -1.0
+
+    # Velocity direction in world frame at the arc start.
+    velocity_dir = heading if not lateral else heading + sign * (math.pi / 2.0)
+    # Centre is 90° toward the inside of the turn from the velocity.
+    centre_dir = velocity_dir + sign * (math.pi / 2.0)
+    cx = x + radius * math.cos(centre_dir)
+    cy = y + radius * math.sin(centre_dir)
+
+    # Centre→robot vector at the arc start; it rotates by the heading sweep.
+    r0x = x - cx
+    r0y = y - cy
+
+    sweep = abs(arc_angle_rad)
+    num = max(2, int(math.ceil(sweep / _ARC_SAMPLE_STEP_RAD)))
+
+    samples: list[tuple[float, float]] = []
+    for i in range(1, num + 1):
+        f = i / num
+        ang = arc_angle_rad * f
+        ca, sa = math.cos(ang), math.sin(ang)
+        px = cx + (r0x * ca - r0y * sa)
+        py = cy + (r0x * sa + r0y * ca)
+        samples.append((px, py))
+
+    # Final pose: position is the last sample, heading sweeps by arc_angle.
+    x_end, y_end = samples[-1]
+    return samples, x_end, y_end, heading + arc_angle_rad
+
+
 def segments_to_spline_waypoints(
     segments: list[Segment],
 ) -> list[tuple[float, float]]:
-    """Compute ``(forward_cm, left_cm)`` waypoints from a linear/turn sequence.
+    """Compute ``(forward_cm, left_cm)`` control waypoints from a segment sequence.
 
-    Turns update the running heading but do not produce waypoints; each
-    linear segment appends its endpoint.  The robot's start position
-    ``(0, 0)`` is *not* included — it is the implicit origin for ``spline()``.
+    Walks the SAME body-frame pose integration as ``to_absolute`` (+forward is
+    the robot's initial heading, +left is 90° CCW, heading CCW-positive):
 
-    Coordinate system: +forward is the robot's initial heading, +left is
-    90° CCW of that (same convention as ``spline()`` waypoints).
+    - ``linear`` advances along its axis and emits the endpoint.
+    - ``diagonal`` holds heading and advances by its known body-frame
+      displacement ``(forward_m, left_m)`` rotated into world, emitting the
+      endpoint.
+    - ``arc`` is SAMPLED into several intermediate control points (≈ one every
+      18° of sweep, min 2) so the Catmull-Rom traces the arc's curvature; the
+      running pose advances to the arc's exact endpoint/heading.
+    - ``turn`` only updates the running heading (no waypoint) — the corner is
+      rounded by the Catmull-Rom through the neighbouring waypoints.
+
+    The robot's start position ``(0, 0)`` is *not* included — it is the implicit
+    origin for ``spline()``.
     """
     x = 0.0  # meters, forward from start
     y = 0.0  # meters, left from start
@@ -177,9 +252,25 @@ def segments_to_spline_waypoints(
                 x += d * (-math.sin(heading))
                 y += d * math.cos(heading)
             waypoints.append((x * 100.0, y * 100.0))
+        elif seg.kind == "diagonal":
+            fwd = seg.forward_m or 0.0
+            left = seg.left_m or 0.0
+            x += fwd * math.cos(heading) - left * math.sin(heading)
+            y += fwd * math.sin(heading) + left * math.cos(heading)
+            waypoints.append((x * 100.0, y * 100.0))
+        elif seg.kind == "arc":
+            samples, x, y, heading = _arc_samples(
+                x,
+                y,
+                heading,
+                seg.radius_m or 0.0,
+                seg.arc_angle_rad or 0.0,
+                seg.lateral,
+            )
+            for sx, sy in samples:
+                waypoints.append((sx * 100.0, sy * 100.0))
         elif seg.kind == "turn":
             heading += seg.angle_rad or 0.0
-        # Arc segments are rejected before this function is called.
 
     return waypoints
 
@@ -188,10 +279,12 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
     """Build a SplinePath from a fully-splinifiable node list.
 
     Raises ``ValueError`` for any node that cannot be represented as a
-    waypoint: deferred placeholders, side actions, arc segments, condition-
-    based segments, or segments with unknown endpoints.  A minimum of 2
-    linear segments is required so the spline has at least 2 explicit
-    waypoints.
+    waypoint: deferred placeholders, side actions, condition-based segments,
+    ``follow_line`` / ``spline`` segments, or segments with unknown endpoints.
+    Arcs and diagonals ARE accepted — they are integrated into control
+    waypoints the Catmull-Rom traces (arcs are sampled along their curvature).
+    A minimum of 2 control waypoints (after sampling) is required so the spline
+    has at least 2 explicit control points.
     """
     from ...spline_path import SplinePath  # deferred to avoid circular import
 
@@ -217,12 +310,6 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
             if not node.has_known_endpoint:
                 msg = "splinify() requires all segments to have " "known endpoints"
                 raise ValueError(msg)
-            if node.kind == "arc":
-                msg = (
-                    "splinify() cannot contain arc segments — "
-                    "use corner_cut_cm instead, or remove the arc"
-                )
-                raise ValueError(msg)
             if node.kind in ("follow_line", "spline"):
                 msg = (
                     f"splinify() cannot contain "
@@ -232,71 +319,68 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
                 raise ValueError(msg)
 
     segs = [n for n in nodes if isinstance(n, Segment)]
-    linear_count = sum(1 for s in segs if s.kind == "linear")
-    if linear_count < 2:
+    waypoints = segments_to_spline_waypoints(segs)
+    if len(waypoints) < 2:
         msg = (
-            "splinify() requires at least 2 linear segments "
-            f"to form a valid spline (found {linear_count})"
+            "splinify() requires at least 2 control waypoints "
+            f"to form a valid spline (found {len(waypoints)})"
         )
         raise ValueError(msg)
 
-    waypoints = segments_to_spline_waypoints(segs)
-    speed = min((s.speed_scale for s in segs if s.kind == "linear"), default=1.0)
+    geom_kinds = ("linear", "diagonal", "arc")
+    speed = min((s.speed_scale for s in segs if s.kind in geom_kinds), default=1.0)
     return SplinePath(waypoints, speed=speed)
 
 
 class SplinifyPass:
-    """Terminal pass that collapses a relative path into one ABSOLUTE spline.
+    """Terminal pass that collapses the whole path into ONE continuous spline.
 
-    Validates the entire node list via :func:`build_spline_step` (which raises
-    ``ValueError`` for anything that can't be splinified — defers, side actions,
-    arcs, conditions, or fewer than 2 linear segments) and reuses its control
-    waypoints.  Instead of emitting the relative odometry-driven
-    ``Segment(kind="spline")``, it densely samples the SAME centripetal
-    Catmull-Rom curve (see :func:`sample_centripetal_catmull_rom`) through those
-    control points and replaces the whole run with ONE inline
-    ``SideAction(GotoWaypoints)`` that follows the dense samples CLOSED-LOOP on
-    the localization particle filter — correcting drift along the whole curve
-    and composing with the rest of the absolute pipeline.
+    Validates the node list via :func:`build_spline_step` (raises ``ValueError``
+    for anything unsplinifiable — defers, side actions, conditions, or fewer than
+    2 control waypoints; arcs/diagonals ARE accepted and become control
+    waypoints — "everything is one spline") and reuses its control waypoints.
 
-    Heading: the dense waypoints use ``dtheta=None`` (HOLD the anchor heading),
-    matching ``GotoWaypoints``' translation-along-the-curve semantics. The
-    relative ``SplinePath`` orients along the spline TANGENT, but tangent-follow
-    requires the robot to slew its heading at every sample and assumes an omni
-    base; holding heading lets a differential or omni base translate along the
-    SAME absolute curve geometry without per-sample rotation. The traced path
-    (the ``(x, y)`` samples) is identical to the relative spline's curve.
+    Two render modes, chosen by the builder from whether ``to_absolute()`` is on:
 
-    This is a *terminal* pass: it replaces the path wholesale, so nothing
-    may run after it in a pipeline.
+    - **relative** (default) → ``Segment(kind="spline")``: the continuous,
+      odometry-driven C++ ``SplineMotion`` follows the centripetal Catmull-Rom.
+    - **absolute** → ``SideAction(SplineFollow)``: a continuous pure-pursuit
+      follower rides the SAME curve closed-loop on the localization particle
+      filter, correcting drift along the whole curve. Holonomic — heading held,
+      independent of the path tangent.
+
+    Terminal: it replaces the path wholesale, so nothing may run after it.
     """
 
     name = "splinify"
     requires = Representation.RELATIVE
     terminal = True
 
-    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
-        from ...goto import GotoWaypoints  # deferred to avoid import cycle
+    def __init__(self, absolute: bool = False) -> None:
+        # ``absolute`` is set by the builder from whether to_absolute() is on.
+        self.absolute = absolute
 
-        # Validate (propagating ValueErrors) and obtain the control waypoints +
-        # speed.  ``build_spline_step`` returns a SplinePath carrying the control
-        # waypoints (centimetres, +forward / +left body frame).
+    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
+        # Validate (propagating ValueErrors) and build the spline control points
+        # (arcs/diagonals already sampled into waypoints by build_spline_step).
         spline_path = build_spline_step(nodes)
+
+        if not self.absolute:
+            # Relative (default): the continuous odometry-driven C++ SplineMotion
+            # segment. Already smooth — no per-sample stepping.
+            return spline_path.lower_to_segments()
+
+        # Absolute: a continuous pure-pursuit follower rides the SAME centripetal
+        # Catmull-Rom curve closed-loop on the localization particle filter,
+        # correcting drift along the whole curve. Holonomic (heading held).
+        from ...goto import SplineFollow  # deferred to avoid import cycle
+
         control_points_m = [
             (fwd_cm / 100.0, left_cm / 100.0) for (fwd_cm, left_cm) in spline_path._waypoints
         ]
-
-        # Same control points as the relative spline (the implicit (0, 0)
-        # run-start is NOT a control point — the relative SplineMotion likewise
-        # builds its curve only through these explicit waypoints), so the
-        # absolute curve traces the SAME geometry.
-        dense = sample_centripetal_catmull_rom(control_points_m)
-
-        # HOLD heading (dtheta=None): translate along the absolute curve holding
-        # the anchor heading. Body-frame +forward / +left, all relative to the
-        # single anchor GotoWaypoints captures at on_start.
-        waypoints = [(x_m, y_m, None) for (x_m, y_m) in dense]
-
-        speed = spline_path._speed
-        step = GotoWaypoints(waypoints=waypoints, speed=speed)
+        step = SplineFollow(
+            waypoints=control_points_m,
+            speed=spline_path._speed,
+            heading_mode="hold",
+        )
         return [SideAction(step=step, is_background=False)]

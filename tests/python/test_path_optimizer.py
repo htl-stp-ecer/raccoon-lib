@@ -465,7 +465,10 @@ class TestSmoothPathConstruction:
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
 
-        with pytest.raises(ValueError, match="at least 2 linear"):
+        # CHANGED: the count check is now on resulting control waypoints (an arc
+        # alone can yield enough), so a single linear (1 waypoint) is rejected
+        # with the new "at least 2 control waypoints" message.
+        with pytest.raises(ValueError, match="at least 2 control waypoints"):
             smooth_path(drive_forward(50), spline=True)
 
     @requires_libstp
@@ -514,18 +517,20 @@ class TestSmoothPathConstruction:
             )
 
     @requires_libstp
-    def test_spline_rejects_arc_segments(self):
+    def test_spline_accepts_arc_segments(self):
+        # CHANGED: arcs are now incorporated into the single Catmull-Rom spline
+        # (sampled along their curvature) rather than rejected.
         from raccoon.step.motion.arc import DriveArcRight
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
 
-        with pytest.raises(ValueError, match="arc segments"):
-            smooth_path(
-                drive_forward(30),
-                DriveArcRight(radius_cm=10, degrees=45),
-                drive_forward(30),
-                spline=True,
-            )
+        # Should build without raising.
+        smooth_path(
+            drive_forward(30),
+            DriveArcRight(radius_cm=10, degrees=45),
+            drive_forward(30),
+            spline=True,
+        )
 
     @requires_libstp
     def test_signature_reflects_flags(self):

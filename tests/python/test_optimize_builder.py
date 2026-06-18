@@ -268,27 +268,36 @@ class _FakeIRSensor:
 
 class TestRepresentationGuard:
     @requires_libstp
-    def test_to_absolute_then_splinify_raises_build_error(self):
-        """to_absolute() produces ABSOLUTE; splinify() requires RELATIVE.
-
-        The guard fires at BUILD time with a clean PathBuildError, not a raw
-        ValueError from build_spline_step.
+    def test_to_absolute_then_splinify_is_one_absolute_spline(self):
+        """to_absolute() + splinify() is now ALLOWED: to_absolute turns on
+        absolute mode, so the whole path becomes ONE absolute spline
+        (SplineFollow) and the per-leg ToAbsolutePass is subsumed. No error.
         """
+        from raccoon.step.motion import SplineFollow
+        from raccoon.step.motion.path.compiler import PathCompiler
+        from raccoon.step.motion.path.ir import Segment, SideAction
+
         imp = _imports()
-        opt = imp["optimize"]([imp["drive_forward"](50), imp["drive_forward"](30)]).to_absolute()
-        with pytest.raises(imp["PathBuildError"]) as excinfo:
-            opt.splinify()
-        msg = str(excinfo.value)
-        assert "splinify" in msg
-        assert "RELATIVE" in msg
-        assert "ABSOLUTE" in msg
+        opt = (
+            imp["optimize"](
+                [imp["drive_forward"](50), imp["turn_right"](90), imp["drive_forward"](30)]
+            )
+            .to_absolute()
+            .splinify()
+        )
+        nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
+        side = [n for n in nodes if isinstance(n, SideAction)]
+        assert len(side) == 1
+        assert isinstance(side[0].step, SplineFollow)
+        assert not any(isinstance(n, Segment) for n in nodes)
 
     @requires_libstp
-    def test_cut_corners_then_splinify_value_error_message(self):
-        """cut_corners() stays RELATIVE, so splinify() reaches compile and the
-        ValueError from build_spline_step must name splinify(), not smooth_path.
+    def test_cut_corners_then_splinify_composes(self):
+        """cut_corners() inserts an arc; splinify() now INCORPORATES it into the
+        single spline (no rejection) → compiles to one relative spline segment.
         """
         from raccoon.step.motion.path.compiler import PathCompiler
+        from raccoon.step.motion.path.ir import Segment
 
         imp = _imports()
         opt = (
@@ -298,11 +307,10 @@ class TestRepresentationGuard:
             .cut_corners(5)
             .splinify()
         )
-        with pytest.raises(ValueError) as excinfo:
-            PathCompiler(opt._effective_passes()).compile(opt._raw_steps)
-        msg = str(excinfo.value)
-        assert "splinify()" in msg
-        assert "smooth_path" not in msg
+        nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
+        segs = [n for n in nodes if isinstance(n, Segment)]
+        assert len(segs) == 1
+        assert segs[0].kind == "spline"
 
 
 # ---------------------------------------------------------------------------

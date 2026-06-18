@@ -52,10 +52,12 @@ recovered at lowering time, so a BAKED ``after_cm`` leg becomes a
 ``GotoWaypoints`` waypoint, NOT an ``AbsoluteHoldMove``.  ``follow_line`` /
 ``spline`` / ``arc`` / ``diagonal`` sensor legs are left untouched.
 
-This pass declares ``produces = Representation.ABSOLUTE`` (imported from the
-neutral ``.contract`` module — no circular import): once a run is converted to
-a closed-loop ``GotoWaypoints``, the stream is in world-frame absolute terms, so
-a downstream RELATIVE-only pass (e.g. ``splinify``) is rejected at build time.
+to_absolute is driven by the builder as a MODE flag (``optimizer._absolute``),
+not a representation-changing pass. When ``splinify()`` is also chained the whole
+path becomes ONE absolute spline and this per-leg pass is skipped; with only
+``to_absolute()`` the builder appends this pass for the per-leg conversion. It
+leaves ``produces`` at the default (SAME) so chaining with the terminal
+``splinify()`` is allowed.
 """
 
 from __future__ import annotations
@@ -65,7 +67,6 @@ import math
 from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
-from .contract import Representation
 
 _RUN_KINDS = ("linear", "turn", "diagonal")
 
@@ -204,12 +205,15 @@ class ToAbsolutePass:
     ``AbsoluteHoldMove``).  ``follow_line`` / ``spline`` / ``arc`` / ``diagonal``
     sensor legs pass through untouched.
 
-    Declares ``produces = Representation.ABSOLUTE`` so the optimizer's state
-    machine knows the stream is world-frame after this pass.
+    to_absolute is driven by the builder as a MODE flag (``optimizer._absolute``),
+    not a representation-changing pass: when ``splinify()`` is also chained the
+    whole path becomes one absolute spline and this per-leg pass is skipped; when
+    it isn't, the builder appends this pass to do the per-leg conversion. It
+    therefore leaves ``produces`` at the default (SAME) so chaining with the
+    terminal ``splinify()`` is allowed.
     """
 
     name = "to_absolute"
-    produces = Representation.ABSOLUTE
 
     def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
         from ...goto import AbsoluteHoldMove, GotoWaypoints  # deferred (import cycle)

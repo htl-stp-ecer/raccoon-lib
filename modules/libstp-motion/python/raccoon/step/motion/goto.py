@@ -26,6 +26,7 @@ from raccoon.motion import LinearAxis
 
 from .. import dsl
 from .motion_step import MotionStep
+from .path.passes.spline import sample_centripetal_catmull_rom
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -626,6 +627,337 @@ class AbsoluteHoldMove(MotionStep):
         return bool(self._condition is not None and self._condition.check(robot))
 
 
+# Default pure-pursuit lookahead distance (metres). Picks a point this far
+# ahead along the polyline as the carrot the robot chases — large enough to
+# smooth out sample-to-sample jitter, small enough to track curvature.
+_DEFAULT_LOOKAHEAD_M = 0.15
+
+# Heading-channel sentinels for SplineFollow.
+_HEADING_HOLD = "hold"
+_HEADING_TANGENT = "tangent"
+
+
+def _project_index(
+    path: list[tuple[float, float]],
+    point: tuple[float, float],
+    start_idx: int,
+    window: int,
+) -> int:
+    """Project ``point`` onto ``path``, scanning forward from ``start_idx``.
+
+    Pure helper (no robot). Searches the polyline indices in
+    ``[start_idx, start_idx + window]`` (clamped to the path) for the one whose
+    point is nearest ``point`` and returns it. The search is MONOTONIC: it never
+    returns an index below ``start_idx``, so progress along the curve cannot run
+    backward even if the robot wobbles laterally near an earlier sample.
+
+    Args:
+        path: Dense world polyline ``[(x, y), ...]`` (at least 1 point).
+        point: The query point ``(x, y)`` (the robot position).
+        start_idx: Lower bound — never project before this index.
+        window: How many indices ahead of ``start_idx`` to consider.
+
+    Returns:
+        The index in ``path`` of the nearest forward point.
+    """
+    n = len(path)
+    if n == 0:
+        msg = "_project_index requires a non-empty path"
+        raise ValueError(msg)
+    lo = max(0, min(start_idx, n - 1))
+    hi = min(n - 1, lo + max(0, window))
+    best_idx = lo
+    best_d2 = float("inf")
+    px, py = point
+    for i in range(lo, hi + 1):
+        dx = path[i][0] - px
+        dy = path[i][1] - py
+        d2 = dx * dx + dy * dy
+        if d2 < best_d2:
+            best_d2 = d2
+            best_idx = i
+    return best_idx
+
+
+def _lookahead_point(
+    path: list[tuple[float, float]],
+    idx: int,
+    lookahead_m: float,
+) -> tuple[float, float]:
+    """Walk ``lookahead_m`` of arc length forward from ``idx`` along ``path``.
+
+    Pure helper (no robot). Accumulates straight-line segment lengths starting
+    at ``path[idx]`` until the running arc length reaches ``lookahead_m``, then
+    returns that point (the last segment is linearly interpolated for a smooth
+    carrot). If the remaining path is shorter than ``lookahead_m``, returns the
+    final point — so near the end the carrot clamps to the goal.
+
+    Args:
+        path: Dense world polyline ``[(x, y), ...]`` (at least 1 point).
+        idx: Index to start walking from (the projected progress index).
+        lookahead_m: Arc-length distance to walk forward (metres).
+
+    Returns:
+        The lookahead target point ``(x, y)``.
+    """
+    n = len(path)
+    if n == 0:
+        msg = "_lookahead_point requires a non-empty path"
+        raise ValueError(msg)
+    i = max(0, min(idx, n - 1))
+    if lookahead_m <= 0.0 or i >= n - 1:
+        return path[-1] if i >= n - 1 else path[i]
+
+    remaining = lookahead_m
+    for j in range(i, n - 1):
+        ax, ay = path[j]
+        bx, by = path[j + 1]
+        seg = math.hypot(bx - ax, by - ay)
+        if seg >= remaining:
+            if seg < 1e-12:
+                return (bx, by)
+            t = remaining / seg
+            return (ax + t * (bx - ax), ay + t * (by - ay))
+        remaining -= seg
+    return path[-1]
+
+
+def _pursuit_velocity(
+    current_pose,
+    lookahead_pt: tuple[float, float],
+    heading_target: float,
+    speed: float,
+    *,
+    linear_gain: float = _LINEAR_GAIN,
+    angular_gain: float = _ANGULAR_GAIN,
+) -> tuple[float, float, float]:
+    """Pure pure-pursuit control law — no robot required.
+
+    Drives the robot toward the lookahead carrot ``lookahead_pt`` (a world point
+    already chosen ``lookahead_m`` ahead along the curve) and independently
+    rotates toward ``heading_target``. Unlike :func:`_compute_body_velocity`,
+    there is NO at-target zeroing of the translational command — the carrot is
+    always ahead, so continuous pursuit keeps the robot flowing along the curve.
+
+    - World error ``(tx - x, ty - y)`` is rotated into the body frame via
+      :func:`_world_to_body` using the CURRENT heading → ``(forward, strafe)``.
+    - ``vx = linear_gain · forward · speed``, ``vy = linear_gain · strafe · speed``
+      (``vy`` positive = right, matching ``ChassisVelocity``).
+    - ``wz = angular_gain · wrap(heading_target − current_heading) · speed``
+      (positive = counter-clockwise).
+
+    Args:
+        current_pose: Pose-like with ``.position`` (indexable x, y in metres)
+            and ``.heading`` (radians).
+        lookahead_pt: World carrot point ``(x, y)`` in metres.
+        heading_target: Absolute target heading (radians) for the independent
+            heading channel.
+        speed: Velocity scale applied to the proportional output.
+        linear_gain: Gain mapping metres of carrot error → m/s.
+        angular_gain: Gain mapping radians of heading error → rad/s.
+
+    Returns:
+        Body-frame ``(vx, vy, wz)`` — NOT clamped (the step clamps against the
+        robot's configured per-axis limits, keeping this helper pure).
+    """
+    heading_rad = float(current_pose.heading)
+    dx_m = float(lookahead_pt[0]) - float(current_pose.position[0])
+    dy_m = float(lookahead_pt[1]) - float(current_pose.position[1])
+
+    forward_m, strafe_right_m = _world_to_body(dx_m, dy_m, heading_rad)
+    vx = linear_gain * forward_m * speed
+    vy = linear_gain * strafe_right_m * speed
+
+    dtheta_rad = math.remainder(float(heading_target) - heading_rad, 2.0 * math.pi)
+    wz = angular_gain * dtheta_rad * speed
+
+    return (vx, vy, wz)
+
+
+def _path_tangent_heading(path: list[tuple[float, float]], idx: int) -> float:
+    """World heading (radians) of the local polyline tangent at ``idx``.
+
+    Uses the segment leaving ``path[idx]`` (or entering it, at the last point):
+    ``atan2(dy, dx)``. Falls back to the previous segment if the local segment
+    is degenerate (zero length).
+    """
+    n = len(path)
+    if n < 2:
+        return 0.0
+    i = max(0, min(idx, n - 1))
+    j = i if i < n - 1 else i - 1
+    ax, ay = path[j]
+    bx, by = path[j + 1]
+    dx, dy = bx - ax, by - ay
+    if dx * dx + dy * dy < 1e-18 and j > 0:
+        ax, ay = path[j - 1]
+        bx, by = path[j]
+        dx, dy = bx - ax, by - ay
+    return math.atan2(dy, dx)
+
+
+@dsl(hidden=True)
+class SplineFollow(MotionStep):
+    """Continuous pure-pursuit follower of a Catmull-Rom curve, closed-loop.
+
+    Rides a centripetal Catmull-Rom spline SMOOTHLY on the localization particle
+    filter instead of stop-and-go stepping through dense waypoints. At
+    ``on_start`` it captures the live pose as an anchor, transforms the
+    body-frame control points ``(forward_m, left_m)`` (run-start frame, same
+    format as :class:`GotoWaypoints`) into absolute world points via
+    :func:`_anchor_to_world_target`, and densely samples the curve through them
+    (:func:`sample_centripetal_catmull_rom`) into a world polyline.
+
+    Each tick it PROJECTS the live pose onto the polyline (monotonic forward
+    progress), picks a carrot ``lookahead_m`` ahead along the arc, and commands a
+    proportional body velocity toward it (:func:`_pursuit_velocity`). HEADING is
+    an INDEPENDENT channel — hold the anchor heading, interpolate to a goal angle
+    with progress, or face the path tangent — so a mecanum base can strafe along
+    the curve without rotating to follow it. It finishes when the projection
+    reaches the end of the polyline and the robot is within ``pos_tol_m`` of the
+    final point.
+
+    Requires ``robot.localization`` (the particle filter); raises at start
+    otherwise.
+
+    Args:
+        waypoints: Body-frame control points ``[(forward_m, left_m), ...]`` in
+            the run-start frame (relative to the single ``on_start`` anchor).
+        speed: Velocity scale in ``(0.0, 1.0]`` applied to the pursuit command.
+        heading_mode: ``"hold"`` (default — keep the anchor heading),
+            ``"tangent"`` (face the local curve tangent), or a float goal angle
+            in radians (interpolate from the anchor heading to it with progress).
+        pos_tol_m: Final-point position tolerance (metres) for completion.
+        lookahead_m: Pure-pursuit lookahead arc length (metres, default
+            ``0.15``).
+        spacing_m: Dense-sample spacing along the spline (metres, default
+            ``0.03``).
+    """
+
+    def __init__(
+        self,
+        waypoints: list[tuple[float, float]],
+        speed: float = 1.0,
+        heading_mode: "str | float" = _HEADING_HOLD,
+        pos_tol_m: float = 0.02,
+        lookahead_m: float = _DEFAULT_LOOKAHEAD_M,
+        spacing_m: float = 0.03,
+    ) -> None:
+        super().__init__()
+        if not isinstance(speed, int | float):
+            msg = f"speed must be a number, got {type(speed).__name__}"
+            raise TypeError(msg)
+        if not (0.0 < speed <= 1.0):
+            msg = f"speed must be in (0.0, 1.0], got {speed}"
+            raise ValueError(msg)
+        if pos_tol_m <= 0.0:
+            msg = f"pos_tol_m must be > 0, got {pos_tol_m}"
+            raise ValueError(msg)
+        if lookahead_m <= 0.0:
+            msg = f"lookahead_m must be > 0, got {lookahead_m}"
+            raise ValueError(msg)
+        if spacing_m <= 0.0:
+            msg = f"spacing_m must be > 0, got {spacing_m}"
+            raise ValueError(msg)
+        if len(waypoints) < 2:
+            msg = "SplineFollow requires at least 2 control points"
+            raise ValueError(msg)
+        if isinstance(heading_mode, str) and heading_mode not in (
+            _HEADING_HOLD,
+            _HEADING_TANGENT,
+        ):
+            msg = (
+                f"heading_mode str must be '{_HEADING_HOLD}' or "
+                f"'{_HEADING_TANGENT}', got {heading_mode!r}"
+            )
+            raise ValueError(msg)
+        if not isinstance(heading_mode, str) and not isinstance(heading_mode, int | float):
+            msg = "heading_mode must be 'hold', 'tangent', or a goal angle (radians)"
+            raise TypeError(msg)
+        self._waypoints: list[tuple[float, float]] = [
+            (float(fwd), float(left)) for (fwd, left) in waypoints
+        ]
+        self._speed = speed
+        self._heading_mode = heading_mode
+        self._pos_tol_m = pos_tol_m
+        self._lookahead_m = lookahead_m
+        self._spacing_m = spacing_m
+        # Resolved at on_start once the anchor pose is known.
+        self._path: list[tuple[float, float]] = []
+        self._idx = 0
+        self._anchor_heading = 0.0
+        # Search window (in polyline indices) for the monotonic projection: a
+        # couple of lookahead-distances' worth of samples ahead is plenty.
+        self._window = max(4, int(math.ceil((2.0 * lookahead_m) / spacing_m)))
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive", "localization"})
+
+    def _generate_signature(self) -> str:
+        if isinstance(self._heading_mode, str):
+            heading = self._heading_mode
+        else:
+            heading = f"{math.degrees(self._heading_mode):.1f}"
+        return f"SplineFollow(n_ctrl={len(self._waypoints)}, heading={heading})"
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        if getattr(robot, "localization", None) is None:
+            msg = "spline_follow requires robot.localization (the particle filter)"
+            raise RuntimeError(msg)
+        anchor = robot.localization.get_pose()
+        self._anchor_heading = float(anchor.heading)
+        abs_points = [
+            (x_m, y_m)
+            for (x_m, y_m, _theta) in (
+                _anchor_to_world_target(anchor, forward_m, left_m, 0.0)
+                for (forward_m, left_m) in self._waypoints
+            )
+        ]
+        self._path = sample_centripetal_catmull_rom(abs_points, self._spacing_m)
+        self._idx = 0
+
+    def _heading_target(self, current_heading: float) -> float:
+        mode = self._heading_mode
+        if mode == _HEADING_HOLD:
+            return self._anchor_heading
+        if mode == _HEADING_TANGENT:
+            return _path_tangent_heading(self._path, self._idx)
+        # Goal-angle interpolation: lerp anchor → goal by fractional progress.
+        n = len(self._path)
+        progress = (self._idx / (n - 1)) if n > 1 else 1.0
+        progress = max(0.0, min(1.0, progress))
+        delta = math.remainder(float(mode) - self._anchor_heading, 2.0 * math.pi)
+        return self._anchor_heading + progress * delta
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        pose = robot.localization.get_pose()
+        point = (float(pose.position[0]), float(pose.position[1]))
+
+        # Monotonic projection onto the polyline (never runs backward).
+        self._idx = _project_index(self._path, point, self._idx, self._window)
+
+        # Completion: projection at the end AND within tolerance of the final pt.
+        last = self._path[-1]
+        dist_to_end = math.hypot(last[0] - point[0], last[1] - point[1])
+        if self._idx >= len(self._path) - 2 and dist_to_end <= self._pos_tol_m:
+            return True
+
+        lookahead_pt = _lookahead_point(self._path, self._idx, self._lookahead_m)
+        heading_target = self._heading_target(float(pose.heading))
+        vx, vy, wz = _pursuit_velocity(pose, lookahead_pt, heading_target, self._speed)
+
+        cfg = robot.motion_pid_config
+        robot.drive.set_velocity(
+            ChassisVelocity(
+                _clamp(vx, cfg.linear.max_velocity),
+                _clamp(vy, cfg.lateral.max_velocity),
+                _clamp(wz, cfg.angular.max_velocity),
+            )
+        )
+        robot.drive.update(dt)
+        return False
+
+
 @dsl(tags=["motion", "drive"])
 def goto_relative(
     forward_cm: float,
@@ -772,6 +1104,7 @@ __all__ = [
     "Goto",
     "GotoRelative",
     "GotoWaypoints",
+    "SplineFollow",
     "goto",
     "goto_relative",
 ]

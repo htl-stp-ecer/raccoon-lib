@@ -145,7 +145,7 @@ from .drive_to_analog_target import DriveToAnalogTarget
 from .drive_to_analog_target_dsl import drive_to_analog_target
 from .custom_velocity import CustomVelocity
 from .custom_velocity_dsl import CustomVelocityBuilder, custom_velocity
-from .goto import AbsoluteHoldMove, GotoWaypoints, goto, goto_relative
+from .goto import AbsoluteHoldMove, GotoWaypoints, SplineFollow, goto, goto_relative
 from .smooth_path import SmoothPath, smooth_path
 from .path.optimize import Optimizer, PathBuildError, optimize
 from .spline_path import SplinePath, spline
@@ -225,6 +225,7 @@ __all__ = [
     # Closed-loop navigate-to-pose
     "AbsoluteHoldMove",
     "GotoWaypoints",
+    "SplineFollow",
     "goto",
     "goto_relative",
     "lateral_follow_line",
