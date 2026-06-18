@@ -106,23 +106,18 @@ class SmoothPath(Step):
                 corner_cut_m=corner_cut_m,
             ),
         )
-        self._plan: CompiledPlan = compiler.compile_via_absolute_bridge(steps)
+        self._plan: CompiledPlan = compiler.compile(steps)
 
         # Spline mode collapses the entire drive/turn sequence into a single
         # spline segment that runs through the unified executor loop like any
         # other opaque (kind="spline") node.  Build the SplinePath up-front so
         # waypoint/validation errors surface at construction time, then lower
-        # it to its segment node and drop the absolute-bridge plan (the
-        # original linear/turn segments no longer drive the motion).
+        # it to its segment node (the original linear/turn segments no longer
+        # drive the motion).
         if spline:
             spline_step = _build_spline_step(self._plan.nodes)
             self._plan.nodes = spline_step.lower_to_segments()
             self._plan.deferred = []
-            self._plan.absolute_plan = None
-            self._plan.fallback_reason = None
-
-        self._absolute_plan = self._plan.absolute_plan
-        self._absolute_bridge_fallback_reason = self._plan.fallback_reason
 
         # Backwards-compat: expose the IR fields via the same attribute names
         # the previous implementation used.
@@ -195,7 +190,6 @@ class SmoothPath(Step):
         executor = PathExecutor(
             nodes=self._plan.nodes,
             deferred=self._plan.deferred,
-            absolute_nodes=None if self._absolute_plan is None else self._absolute_plan.nodes,
             hz=self.hz,
         )
         await executor.run(robot)

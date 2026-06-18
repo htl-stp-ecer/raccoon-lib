@@ -222,7 +222,6 @@ class Optimizer(Step):
         executor = PathExecutor(
             nodes=plan.nodes,
             deferred=plan.deferred,
-            absolute_nodes=None,
             hz=self.hz,
         )
         await executor.run(robot)

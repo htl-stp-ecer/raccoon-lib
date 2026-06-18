@@ -44,8 +44,7 @@ def test_spline_compiles_to_single_spline_segment_node():
     # The SplinePath travels along as the opaque step the executor drives.
     assert isinstance(seg.opaque_step, SplinePath)
 
-    # Spline mode no longer takes the absolute-bridge runtime path.
-    assert step._absolute_plan is None
+    # Spline mode lowers to a single opaque segment with no deferred nodes.
     assert step._plan.deferred == []
 
 
