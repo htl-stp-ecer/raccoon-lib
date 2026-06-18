@@ -85,6 +85,21 @@ class _ConditionalTurn(MotionStep):
         robot.drive.update(dt)
         return False
 
+    def lower_to_segments(self) -> "list":
+        from .path.ir import Segment
+
+        degrees = self._degrees
+        return [
+            Segment(
+                kind="turn",
+                sign=self._sign,
+                angle_rad=self._sign * math.radians(degrees) if degrees is not None else None,
+                speed_scale=self._speed,
+                condition=self._until,
+                has_known_endpoint=degrees is not None,
+            )
+        ]
+
 
 @dsl_step(tags=["motion", "turn"])
 class TurnLeft(_ConditionalTurn):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from .base import Step, StepAnomalyCallback
 from .annotation import dsl, dsl_step, DslMeta
-from .model import StepProtocol, SimulationStepDelta, SimulationStep
+from .model import StepProtocol
 from .resource import ResourceConflictError
 from .step_builder import StepBuilder
 from .condition import (
@@ -68,8 +68,6 @@ __all__ = [
     "StepProtocol",
     "ResourceConflictError",
     "StepBuilder",
-    "SimulationStepDelta",
-    "SimulationStep",
     "Sequential",
     "seq",
     "parallel",

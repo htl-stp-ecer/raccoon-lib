@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -16,28 +15,3 @@ class StepProtocol(Protocol):
     def required_resources(self) -> frozenset[str]: ...
 
     def collected_resources(self) -> frozenset[str]: ...
-
-
-@dataclass
-class SimulationStepDelta:
-    """Estimated pose change caused by a step in simulation space."""
-
-    forward: float  # in meters
-    strafe: float  # in meters
-    angular: float  # in radians
-
-
-@dataclass
-class SimulationStep:
-    """Simulation metadata derived from a runtime step."""
-
-    # unique identifier for this step
-    id: str
-    # For display purposes only
-    label: str | None
-    # how long does it take on avg to execute this step
-    average_duration_ms: float
-    # std deviation of execution time
-    duration_stddev_ms: float
-    # how much this step changes the robot's position
-    delta: SimulationStepDelta

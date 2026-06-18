@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from raccoon.motion import DiagonalMotion, DiagonalMotionConfig
 
-from .. import SimulationStep, SimulationStepDelta
 from ..annotation import dsl_step
 from ..condition import StopCondition
 from .motion_step import MotionStep
@@ -69,17 +68,6 @@ class DriveAngle(MotionStep):
             f"DriveAngle(angle={self._angle_deg:.1f}\u00b0, mode={mode}, "
             f"speed={self._speed:.2f})"
         )
-
-    def to_simulation_step(self) -> SimulationStep:
-        angle_rad = math.radians(self._angle_deg)
-        distance_m = self._cm / 100.0 if self._cm is not None else 0.0
-        base = super().to_simulation_step()
-        base.delta = SimulationStepDelta(
-            forward=distance_m * math.cos(angle_rad),
-            strafe=distance_m * math.sin(angle_rad),
-            angular=0.0,
-        )
-        return base
 
     def on_start(self, robot: "GenericRobot") -> None:
         from ._heading_utils import get_world_heading_rad

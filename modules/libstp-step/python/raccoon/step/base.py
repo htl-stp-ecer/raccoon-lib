@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from raccoon.class_name_logger import ClassNameLogger
 from raccoon.timing import StepTimingTracker
 
-from .model import SimulationStep, SimulationStepDelta
 from .resource import get_resource_manager
 
 if TYPE_CHECKING:
@@ -199,47 +198,11 @@ class Step(ClassNameLogger):
         """Actual step logic implemented by subclasses."""
         raise NotImplementedError
 
-    def to_simulation_step(self) -> SimulationStep:
+    def lower_to_segments(self) -> "list | None":
+        """Lower this step into optimizer IR segments (``list[Segment]``).
+
+        Return ``None`` (the default) to remain OPAQUE to the path optimizer:
+        it is then preserved verbatim as a barrier / side action and never
+        transformed. Motion steps override this to return their segment(s).
         """
-        Convert this step to a simulation-friendly summary.
-
-        The default implementation uses timing history only when it can query
-        the tracker synchronously; otherwise it returns conservative defaults.
-        Override in subclasses that know their motion delta or exact duration.
-        """
-        signature = self._generate_signature()
-
-        # Try to get timing statistics from database
-        avg_duration_ms = 100.0  # Default: 100ms
-        stddev_ms = 10.0  # Default: 10ms
-
-        tracker = StepTimingTracker.get_instance()
-        if tracker.config.enabled:
-
-            async def fetch_timing() -> tuple[float, float]:
-                durations = await tracker.database.fetch_recent_durations(
-                    signature, tracker.config.window_size
-                )
-                if len(durations) >= 2:
-                    import statistics
-
-                    mean_s = statistics.mean(durations)
-                    stddev_s = statistics.stdev(durations)
-                    return mean_s * 1000.0, stddev_s * 1000.0
-                return 100.0, 10.0
-
-            # Run in event loop if one exists, otherwise use default values
-            try:
-                asyncio.get_running_loop()
-                # Can't await in sync context, use defaults
-            except RuntimeError:
-                # No running loop, can create one
-                avg_duration_ms, stddev_ms = asyncio.run(fetch_timing())
-
-        return SimulationStep(
-            id=signature,
-            label=self.__class__.__name__,
-            average_duration_ms=avg_duration_ms,
-            duration_stddev_ms=stddev_ms,
-            delta=SimulationStepDelta(forward=0.0, strafe=0.0, angular=0.0),
-        )
+        return None

@@ -24,7 +24,6 @@ method, enabling patterns like::
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -40,7 +39,7 @@ from raccoon.motion import (
 )
 from raccoon.sensor_ir import IRSensor
 
-from .. import SimulationStep, SimulationStepDelta, dsl
+from .. import dsl
 from ..annotation import dsl_step
 from ..condition import StopCondition
 from ._heading_utils import get_world_heading_rad
@@ -122,15 +121,24 @@ class LineFollow(MotionStep):
         mode = "+".join(parts) if parts else "indefinite"
         return f"LineFollow(mode={mode}, speed={self.config.speed_scale:.2f})"
 
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else 0.3
-        base.delta = SimulationStepDelta(
-            forward=distance_m,
-            strafe=0.0,
-            angular=0.0,
-        )
-        return base
+    def lower_to_segments(self) -> "list":
+        from raccoon.motion import LinearAxis
+
+        from .path.ir import Segment
+
+        cfg = self.config
+        return [
+            Segment(
+                kind="follow_line",
+                axis=LinearAxis.Forward,
+                sign=1.0,
+                distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
+                speed_scale=cfg.speed_scale,
+                condition=None,
+                has_known_endpoint=cfg.distance_cm is not None,
+                opaque_step=self,
+            )
+        ]
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
@@ -239,15 +247,24 @@ class SingleSensorLineFollow(MotionStep):
             f"side={self.config.side.value}, speed={self.config.speed_scale:.2f})"
         )
 
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else 0.3
-        base.delta = SimulationStepDelta(
-            forward=distance_m,
-            strafe=0.0,
-            angular=0.0,
-        )
-        return base
+    def lower_to_segments(self) -> "list":
+        from raccoon.motion import LinearAxis
+
+        from .path.ir import Segment
+
+        cfg = self.config
+        return [
+            Segment(
+                kind="follow_line",
+                axis=LinearAxis.Forward,
+                sign=1.0,
+                distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
+                speed_scale=cfg.speed_scale,
+                condition=None,
+                has_known_endpoint=cfg.distance_cm is not None,
+                opaque_step=self,
+            )
+        ]
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
@@ -601,23 +618,6 @@ class DirectionalLineFollow(MotionStep):
             f"strafe={self.config.strafe_speed:.2f})"
         )
 
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else 0.3
-        # Approximate direction from speed components
-        speed_mag = math.hypot(self.config.heading_speed, self.config.strafe_speed)
-        if speed_mag > 0:
-            fwd_frac = self.config.heading_speed / speed_mag
-            str_frac = self.config.strafe_speed / speed_mag
-        else:
-            fwd_frac, str_frac = 1.0, 0.0
-        base.delta = SimulationStepDelta(
-            forward=distance_m * fwd_frac,
-            strafe=distance_m * str_frac,
-            angular=0.0,
-        )
-        return base
-
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
         motion_config = DirectionalLineFollowMotionConfig()
@@ -744,22 +744,6 @@ class DirectionalSingleLineFollow(MotionStep):
             f"heading={self.config.heading_speed:.2f}, "
             f"strafe={self.config.strafe_speed:.2f})"
         )
-
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        distance_m = (self.config.distance_cm / 100.0) if self.config.distance_cm else 0.3
-        speed_mag = math.hypot(self.config.heading_speed, self.config.strafe_speed)
-        if speed_mag > 0:
-            fwd_frac = self.config.heading_speed / speed_mag
-            str_frac = self.config.strafe_speed / speed_mag
-        else:
-            fwd_frac, str_frac = 1.0, 0.0
-        base.delta = SimulationStepDelta(
-            forward=distance_m * fwd_frac,
-            strafe=distance_m * str_frac,
-            angular=0.0,
-        )
-        return base
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config

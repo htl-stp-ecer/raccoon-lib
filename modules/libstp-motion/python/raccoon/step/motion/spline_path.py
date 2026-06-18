@@ -121,6 +121,11 @@ class SplinePath(MotionStep):
         self._motion.update(dt)
         return self._motion.is_finished()
 
+    def lower_to_segments(self) -> "list":
+        from .path.ir import Segment
+
+        return [Segment(kind="spline", has_known_endpoint=True, opaque_step=self)]
+
 
 @dsl(tags=["motion", "drive"])
 def spline(

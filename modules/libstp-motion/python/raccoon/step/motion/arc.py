@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from raccoon.motion import ArcMotion, ArcMotionConfig
 
-from .. import SimulationStep, SimulationStepDelta, dsl
+from .. import dsl
 from ..annotation import dsl_step
 from .motion_step import MotionStep
 
@@ -29,27 +29,20 @@ class Arc(MotionStep):
             f"speed_scale={self.config.speed_scale:.2f})"
         )
 
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        r = self.config.radius_m
-        theta = self.config.arc_angle_rad
-        if self.config.lateral:
-            # Strafe arc: primary motion is lateral
-            # strafe = R * sin(|theta|), forward drift from turning
-            strafe_sign = 1.0 if theta >= 0 else -1.0
-            base.delta = SimulationStepDelta(
-                forward=r * (1 - math.cos(theta)),
-                strafe=strafe_sign * r * math.sin(abs(theta)),
-                angular=theta,
+    def lower_to_segments(self) -> "list":
+        from .path.ir import Segment
+
+        cfg = self.config
+        return [
+            Segment(
+                kind="arc",
+                radius_m=cfg.radius_m,
+                arc_angle_rad=cfg.arc_angle_rad,
+                speed_scale=cfg.speed_scale,
+                lateral=cfg.lateral,
+                has_known_endpoint=True,
             )
-        else:
-            # Drive arc: primary motion is forward
-            base.delta = SimulationStepDelta(
-                forward=r * math.sin(abs(theta)),
-                strafe=r * (1 - math.cos(theta)) * (-1 if theta > 0 else 1),
-                angular=theta,
-            )
-        return base
+        ]
 
     def on_start(self, robot: "GenericRobot") -> None:
         self._motion = ArcMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)

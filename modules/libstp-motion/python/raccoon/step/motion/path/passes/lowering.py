@@ -12,7 +12,6 @@ identifies the motion spine inside parallel branches, and produces:
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
@@ -25,79 +24,25 @@ if TYPE_CHECKING:
 
 
 def extract_segment(step: "Step") -> Segment:
-    """Extract motion parameters from a resolved step into a ``Segment``."""
-    # Local imports to avoid circular dependencies at module load time.
-    # Path: step/motion/path/passes/lowering.py — `...` = step/motion/.
-    from ...arc import Arc
-    from ...drive import _ConditionalDrive
-    from ...line_follow import LineFollow, SingleSensorLineFollow
-    from ...spline_path import SplinePath
-    from ...turn import _ConditionalTurn
+    """Extract motion IR from a resolved step via its ``lower_to_segments()``.
 
-    if isinstance(step, _ConditionalDrive):
-        cm = step._cm
-        return Segment(
-            kind="linear",
-            axis=step._axis,
-            sign=step._sign,
-            distance_m=step._sign * cm / 100.0 if cm is not None else None,
-            speed_scale=step._speed,
-            heading_deg=step._heading_deg,
-            condition=step._until,
-            has_known_endpoint=cm is not None,
+    A step that is not optimizer-supported returns ``None`` and is rejected
+    here with ``TypeError`` so ``flatten_one`` can treat it as a side action.
+    """
+    segs = step.lower_to_segments()
+    if not segs:
+        msg = (
+            f"smooth_path() does not support {type(step).__name__} as a motion "
+            f"step. Supported motion steps: drive, turn, arc, follow_line, "
+            f"follow_line_single, spline."
         )
-
-    if isinstance(step, _ConditionalTurn):
-        degrees = step._degrees
-        return Segment(
-            kind="turn",
-            sign=step._sign,
-            angle_rad=step._sign * math.radians(degrees) if degrees is not None else None,
-            speed_scale=step._speed,
-            condition=step._until,
-            has_known_endpoint=degrees is not None,
-        )
-
-    if isinstance(step, Arc):
-        cfg = step.config
-        return Segment(
-            kind="arc",
-            radius_m=cfg.radius_m,
-            arc_angle_rad=cfg.arc_angle_rad,
-            speed_scale=cfg.speed_scale,
-            lateral=cfg.lateral,
-            has_known_endpoint=True,
-        )
-
-    if isinstance(step, LineFollow | SingleSensorLineFollow):
-        cfg = step.config
-        return Segment(
-            kind="follow_line",
-            axis=LinearAxis.Forward,
-            sign=1.0,
-            distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
-            speed_scale=cfg.speed_scale,
-            # Condition is handled internally by on_update; not exposed here
-            # to avoid double-starting it.  Completion is detected via
-            # adapter.is_finished().
-            condition=None,
-            has_known_endpoint=cfg.distance_cm is not None,
-            opaque_step=step,
-        )
-
-    if isinstance(step, SplinePath):
-        return Segment(
-            kind="spline",
-            has_known_endpoint=True,
-            opaque_step=step,
-        )
-
-    msg = (
-        f"smooth_path() does not support {type(step).__name__} as a motion "
-        f"step. Supported motion steps: drive, turn, arc, follow_line, "
-        f"follow_line_single, spline."
-    )
-    raise TypeError(msg)
+        raise TypeError(msg)
+    if len(segs) != 1:
+        # Current pipeline assumes one segment per leaf step; multi-segment
+        # lowering is a future extension.
+        msg = f"{type(step).__name__}.lower_to_segments() returned {len(segs)} segments; expected 1"
+        raise TypeError(msg)
+    return segs[0]
 
 
 def resolve_step(step) -> "Step":
