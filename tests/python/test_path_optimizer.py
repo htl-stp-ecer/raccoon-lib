@@ -413,15 +413,20 @@ class TestSmoothPathConstruction:
         assert action_count == 1
 
     @requires_libstp
-    def test_spline_true_stores_spline_step(self):
+    def test_spline_true_yields_single_spline_segment_node(self):
+        # Spline mode now collapses the path into a single Segment(kind="spline")
+        # node in the executor's node list (no separate _spline_step attribute).
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.spline_path import SplinePath
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
-        assert step._spline_step is not None
-        assert isinstance(step._spline_step, SplinePath)
+        assert not hasattr(step, "_spline_step")
+        assert len(step._nodes) == 1
+        seg = step._nodes[0]
+        assert seg.kind == "spline"
+        assert isinstance(seg.opaque_step, SplinePath)
 
     @requires_libstp
     def test_spline_waypoints_correct(self):
@@ -431,7 +436,7 @@ class TestSmoothPathConstruction:
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
-        wps = step._spline_step._waypoints
+        wps = step._nodes[0].opaque_step._waypoints
         assert len(wps) == 2
         # First WP: end of drive(50) — 50cm forward, 0 lateral
         assert abs(wps[0][0] - 50.0) < 1e-4

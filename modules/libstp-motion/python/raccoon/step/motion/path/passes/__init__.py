@@ -23,6 +23,7 @@ from .lowering import (
     flatten_steps,
 )
 from .merge import can_merge, merge_two, run_merge, MergePass
+from .known_distance import run_known_distance, KnownDistancePass
 from .corner_cut import try_corner_arc, run_corner_cut, CornerCutPass
 from .spline import segments_to_spline_waypoints, build_spline_step
 
@@ -39,6 +40,9 @@ __all__ = [
     "merge_two",
     "run_merge",
     "MergePass",
+    # Known distance
+    "run_known_distance",
+    "KnownDistancePass",
     # Corner cut
     "try_corner_arc",
     "run_corner_cut",

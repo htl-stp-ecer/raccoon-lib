@@ -53,7 +53,6 @@ if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
     from ...logic.defer import Defer
-    from .. import Step
 
 
 # ---------------------------------------------------------------------------
@@ -504,23 +503,16 @@ class PathExecutor:
         nodes: list[PathNode | None],
         deferred: list[tuple[int, "Defer"]],
         absolute_nodes: tuple[Goto | TurnTo | Resync | Action, ...] | None = None,
-        spline_step: "Step" | None = None,
         hz: int = DEFAULT_HZ,
     ) -> None:
         self._nodes = nodes
         self._deferred = deferred
         self._absolute_nodes = absolute_nodes
-        self._spline_step = spline_step
         self._hz = hz
 
     # -- Main entrypoint ---------------------------------------------------
 
     async def run(self, robot: "GenericRobot") -> None:
-        # Spline-mode shortcut: a spline-conversion pass replaced the path
-        # with a single SplinePath step; just delegate to it.
-        if self._spline_step is not None:
-            await self._spline_step._execute_step(robot)
-            return
         if self._absolute_nodes is not None:
             await self._run_absolute(robot)
             return

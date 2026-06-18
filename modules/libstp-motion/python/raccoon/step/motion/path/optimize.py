@@ -28,7 +28,7 @@ from ... import Step
 from .compiler import PathCompiler
 from .executor import PathExecutor
 from .ir import Segment, SideAction
-from .passes import CornerCutPass, MergePass, flatten_steps
+from .passes import CornerCutPass, KnownDistancePass, MergePass, flatten_steps
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -171,6 +171,15 @@ class Optimizer(Step):
         """Collapse adjacent same-type/same-direction segments (``MergePass``)."""
         return self._add(MergePass())
 
+    def known_distance(self) -> "Optimizer":
+        """Recover travel distance hidden in ``after_cm`` conditions.
+
+        Promotes conditional ``linear`` / ``follow_line`` segments whose stop
+        condition is a bare relative-mode ``after_cm`` into known-endpoint
+        segments (``KnownDistancePass``), unlocking downstream geometry passes.
+        """
+        return self._add(KnownDistancePass())
+
     def cut_corners(self, radius_cm: float) -> "Optimizer":
         """Replace ``linear+turn+linear`` corners with arcs (``CornerCutPass``).
 
@@ -206,7 +215,6 @@ class Optimizer(Step):
             nodes=plan.nodes,
             deferred=plan.deferred,
             absolute_nodes=None,
-            spline_step=None,
             hz=self.hz,
         )
         await executor.run(robot)

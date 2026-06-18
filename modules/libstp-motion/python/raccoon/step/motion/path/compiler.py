@@ -19,7 +19,6 @@ from .passes import flatten_steps
 
 if TYPE_CHECKING:
     from ...logic.defer import Defer
-    from .. import Step
 
 
 @runtime_checkable
@@ -43,18 +42,16 @@ class CompilerPass(Protocol):
 class CompiledPlan:
     """Result of compiling a Step tree.
 
-    ``nodes``        — the path IR after all passes ran.
+    ``nodes``        — the path IR after all passes ran.  Spline mode lowers
+                       to a single ``Segment(kind="spline")`` node here, so the
+                       executor walks it through the unified loop like any
+                       other opaque segment.
     ``deferred``     — ``(index, Defer)`` pairs for runtime resolution.
-    ``spline_step``  — when the spline-conversion pass terminated the
-                       pipeline by replacing the path with a single
-                       SplinePath, that step lives here.  Otherwise
-                       ``None`` and the executor walks ``nodes`` normally.
     ``passes_applied`` — names of passes that ran, for diagnostics.
     """
 
     nodes: list[PathNode | None]
     deferred: list[tuple[int, "Defer"]]
-    spline_step: "Step" | None = None
     passes_applied: list[str] = field(default_factory=list)
     absolute_plan: "CompiledAbsolutePlan | None" = None
     fallback_reason: str | None = None
@@ -87,7 +84,6 @@ class PathCompiler:
         return CompiledPlan(
             nodes=nodes,
             deferred=deferred,
-            spline_step=None,
             passes_applied=applied,
         )
 
@@ -132,7 +128,6 @@ class PathCompiler:
         return CompiledPlan(
             nodes=legacy.nodes,
             deferred=legacy.deferred,
-            spline_step=None,
             passes_applied=applied,
             absolute_plan=abs_plan,
         )
