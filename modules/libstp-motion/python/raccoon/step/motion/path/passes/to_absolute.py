@@ -15,9 +15,9 @@ completion — so each leg runs its closed-loop controller to the target.
 
 Run-detection: a MAXIMAL run is a stretch of consecutive ``Segment`` nodes that
 are ALL ``kind in ("linear", "turn")``, ``has_known_endpoint is True`` and whose
-condition is "baked" — i.e. ``None``, or a bare relative ``after_cm`` already
-folded into ``distance_m`` by ``known_distance()`` (the runtime odometer stop is
-kept but the geometric endpoint is exact).  Anything else — a ``SideAction``, a
+condition is "baked" — i.e. ``None``, or a bare relative ``after_cm`` whose
+distance is folded into ``distance_m`` at lowering time (the runtime odometer
+stop is kept but the geometric endpoint is exact).  Anything else — a ``SideAction``, a
 ``None`` deferred placeholder, an ``arc`` / ``follow_line`` / ``spline``
 segment, a segment with a live (early-stopping / sensor / absolute) condition or
 an unknown endpoint — BREAKS the run and passes through unchanged.  Body-frame pose is integrated from ``(x=0, y=0, heading=0)`` at the
@@ -28,8 +28,8 @@ cutting); turns between linears fold into the following waypoint's target
 heading.
 
 Best-effort: segments that don't qualify are left untouched; the pass never
-crashes.  It is intended to run AFTER ``known_distance()`` so ``.until(after_cm)``
-legs qualify.
+crashes.  ``.until(after_cm)`` legs qualify automatically — their distance is
+recovered at lowering time.
 
 Representation declaration is intentionally left undeclared (defaults to
 ``EITHER`` / ``SAME`` / non-terminal) for v1 — see ``optimize.py`` for the
@@ -52,8 +52,8 @@ def _condition_is_baked(seg: Segment) -> bool:
     """Is ``seg``'s condition (if any) already captured by ``distance_m``?
 
     A ``None`` condition is trivially fine.  A bare relative ``after_cm`` is
-    the one condition ``known_distance()`` bakes into ``distance_m`` while
-    leaving in place as the runtime odometer stop — for a known-endpoint
+    the one condition whose distance is baked into ``distance_m`` at lowering
+    time while left in place as the runtime odometer stop — for a known-endpoint
     segment that distance IS the true endpoint, so the leg is convertible.
     Any other condition (combined ``_Then`` / ``_AnyOf`` / sensor stop, or an
     absolute ``after_cm``) may stop early and BREAKS the run.
@@ -125,8 +125,8 @@ class ToAbsolutePass:
     Pure node→node pass.  Replaces each maximal run of qualifying
     ``linear`` / ``turn`` segments with inline ``SideAction(goto_relative)``
     nodes — one per linear endpoint.  Non-qualifying nodes pass through
-    unchanged.  Use after ``known_distance()`` so ``.until(after_cm())`` legs
-    qualify.
+    unchanged.  ``.until(after_cm())`` legs qualify automatically — their
+    distance is recovered at lowering time.
 
     Representation/terminal contract left undeclared (defaults to
     ``EITHER`` / ``SAME`` / non-terminal) for v1.

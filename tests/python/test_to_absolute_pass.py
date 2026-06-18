@@ -145,25 +145,14 @@ class TestRunWithTurn:
 
 class TestKnownDistanceGating:
     @requires_libstp
-    def test_until_after_cm_needs_known_distance_first(self):
+    def test_until_after_cm_converts_without_extra_pass(self):
+        """after_cm distance is recovered at lowering, so to_absolute converts it."""
         imp = _imports()
         from raccoon.step.motion.path.compiler import PathCompiler
 
-        def _build():
-            return [imp["drive_forward"]().until(imp["after_cm"](20))]
-
-        # Without known_distance(): the condition segment is unknown-endpoint,
-        # so to_absolute leaves it as a Segment.
-        opt = imp["optimize"](_build()).to_absolute()
+        opt = imp["optimize"]([imp["drive_forward"]().until(imp["after_cm"](20))]).to_absolute()
         nodes = PathCompiler(opt._passes).compile(opt._raw_steps).nodes
-        assert any(isinstance(n, imp["Segment"]) for n in nodes)
-        assert not _goto_legs(nodes, imp)
-
-        # With known_distance() first: the segment is promoted to a known
-        # endpoint and to_absolute converts it.
-        opt2 = imp["optimize"](_build()).known_distance().to_absolute()
-        nodes2 = PathCompiler(opt2._passes).compile(opt2._raw_steps).nodes
-        legs = _goto_legs(nodes2, imp)
+        legs = _goto_legs(nodes, imp)
         assert len(legs) == 1
         assert legs[0]._forward_m == pytest.approx(0.20)
 

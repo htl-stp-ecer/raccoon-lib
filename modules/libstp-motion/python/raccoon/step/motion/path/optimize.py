@@ -30,7 +30,6 @@ from .executor import PathExecutor
 from .ir import Segment, SideAction
 from .passes import (
     CornerCutPass,
-    KnownDistancePass,
     MergePass,
     ToAbsolutePass,
     flatten_steps,
@@ -177,24 +176,15 @@ class Optimizer(Step):
         """Collapse adjacent same-type/same-direction segments (``MergePass``)."""
         return self._add(MergePass())
 
-    def known_distance(self) -> "Optimizer":
-        """Recover travel distance hidden in ``after_cm`` conditions.
-
-        Promotes conditional ``linear`` / ``follow_line`` segments whose stop
-        condition is a bare relative-mode ``after_cm`` into known-endpoint
-        segments (``KnownDistancePass``), unlocking downstream geometry passes.
-        """
-        return self._add(KnownDistancePass())
-
     def to_absolute(self) -> "Optimizer":
         """Convert known-endpoint relative runs into closed-loop ``goto_relative`` legs.
 
         Replaces each maximal run of consecutive known-endpoint ``linear`` /
-        ``turn`` segments (no live condition) with inline navigate-to-pose
-        moves (``ToAbsolutePass``) — one ``goto_relative`` per linear endpoint,
-        regulated on the localization particle filter so they shrug off
-        odometry drift.  Run after ``known_distance()`` so ``.until(after_cm())``
-        legs qualify; non-qualifying nodes pass through untouched.
+        ``turn`` segments with inline navigate-to-pose moves (``ToAbsolutePass``)
+        — one ``goto_relative`` per linear endpoint, regulated on the
+        localization particle filter so they shrug off odometry drift.
+        ``.until(after_cm())`` legs qualify automatically: their distance is
+        recovered at lowering time.  Non-qualifying nodes pass through untouched.
         """
         return self._add(ToAbsolutePass())
 

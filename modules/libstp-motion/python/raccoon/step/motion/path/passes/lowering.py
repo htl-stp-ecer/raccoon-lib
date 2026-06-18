@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
+from .known_distance import recover_known_distance
 
 if TYPE_CHECKING:
     from .... import Step
@@ -42,7 +43,9 @@ def extract_segment(step: "Step") -> Segment:
         # lowering is a future extension.
         msg = f"{type(step).__name__}.lower_to_segments() returned {len(segs)} segments; expected 1"
         raise TypeError(msg)
-    return segs[0]
+    # Always recover a known travel distance hidden in a bare after_cm
+    # condition — there is no reason the optimizer should see it as unknown.
+    return recover_known_distance(segs[0])
 
 
 def resolve_step(step) -> "Step":
