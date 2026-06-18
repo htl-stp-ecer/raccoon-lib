@@ -29,14 +29,21 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from raccoon.foundation import ChassisVelocity, PidConfig, PidController
-from raccoon.motion import LinearAxis, LinearMotion, LinearMotionConfig
+from raccoon.foundation import PidConfig, PidController
+from raccoon.motion import (
+    DirectionalLineFollowMotion,
+    DirectionalLineFollowMotionConfig,
+    LinearAxis,
+    LinearMotion,
+    LinearMotionConfig,
+    LineFollowCorrectionMode,
+)
 from raccoon.sensor_ir import IRSensor
 
 from .. import SimulationStep, SimulationStepDelta, dsl
 from ..annotation import dsl_step
 from ..condition import StopCondition
-from ._odometry_snapshot import PoseSnapshot
+from ._heading_utils import get_world_heading_rad
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -126,8 +133,6 @@ class LineFollow(MotionStep):
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
-        from ._heading_utils import get_world_heading_rad
-
         cfg = self.config
 
         motion_config = LinearMotionConfig()
@@ -245,8 +250,6 @@ class SingleSensorLineFollow(MotionStep):
         return base
 
     def on_start(self, robot: "GenericRobot") -> None:
-        from ._heading_utils import get_world_heading_rad
-
         cfg = self.config
 
         motion_config = LinearMotionConfig()
@@ -544,6 +547,7 @@ class DirectionalLineFollowConfig:
     kd: float = 0.1
     lateral_correction: bool = False
     forward_correction: bool = False
+    heading_hold: bool = True
     correction_sign: float = 1.0
 
 
@@ -581,15 +585,7 @@ class DirectionalLineFollow(MotionStep):
         super().__init__()
         self.config = config
         self._until = until
-        self._pid: PidController | None = None
-        self._heading_pid: PidController | None = None
-        self._vx: float = 0.0
-        self._vy: float = 0.0
-        self._max_linear: float = 0.0
-        self._max_lateral: float = 0.0
-        self._initial_heading: float = 0.0
-        self._target_distance_m: float | None = None
-        self._start_pose: PoseSnapshot | None = None
+        self._motion: DirectionalLineFollowMotion | None = None
 
     def _generate_signature(self) -> str:
         parts = []
@@ -624,44 +620,30 @@ class DirectionalLineFollow(MotionStep):
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
+        motion_config = DirectionalLineFollowMotionConfig()
+        motion_config.heading_speed = cfg.heading_speed
+        motion_config.strafe_speed = cfg.strafe_speed
+        motion_config.distance_m = (cfg.distance_cm / 100.0) if cfg.distance_cm is not None else 0.0
+        motion_config.has_distance_target = cfg.distance_cm is not None
+        motion_config.kp = cfg.kp
+        motion_config.ki = cfg.ki
+        motion_config.kd = cfg.kd
+        motion_config.heading_hold = cfg.heading_hold
+        motion_config.correction_sign = cfg.correction_sign
+        if cfg.forward_correction:
+            motion_config.correction_mode = LineFollowCorrectionMode.Forward
+        elif cfg.lateral_correction:
+            motion_config.correction_mode = LineFollowCorrectionMode.Lateral
+        else:
+            motion_config.correction_mode = LineFollowCorrectionMode.Angular
 
-        # Convert speed fractions to m/s
-        pid_cfg = robot.motion_pid_config
-        self._vx = cfg.heading_speed * pid_cfg.linear.max_velocity
-        self._vy = cfg.strafe_speed * pid_cfg.lateral.max_velocity
-        self._max_linear = pid_cfg.linear.max_velocity
-        self._max_lateral = pid_cfg.lateral.max_velocity
-
-        if cfg.distance_cm is not None:
-            self._target_distance_m = cfg.distance_cm / 100.0
-
-        self._start_pose = PoseSnapshot.capture(robot)
-
-        self._pid = PidController(
-            PidConfig(
-                kp=cfg.kp,
-                ki=cfg.ki,
-                kd=cfg.kd,
-                integral_max=1.0,
-                output_min=-1.0,
-                output_max=1.0,
-            )
+        self._motion = DirectionalLineFollowMotion(
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            motion_config,
         )
-
-        # Heading hold PID for translation-correction modes.
-        if cfg.lateral_correction or cfg.forward_correction:
-            self._initial_heading = self._start_pose.heading
-            h = pid_cfg.heading
-            self._heading_pid = PidController(
-                PidConfig(
-                    kp=h.kp,
-                    ki=h.ki,
-                    kd=h.kd,
-                    integral_max=1.0,
-                    output_min=-1.0,
-                    output_max=1.0,
-                )
-            )
+        self._motion.start()
 
         if self._until is not None:
             self._until.start(robot)
@@ -674,7 +656,7 @@ class DirectionalLineFollow(MotionStep):
         mode = "+".join(parts) if parts else "indefinite"
         corr_str = _correction_mode_name(cfg)
         self.debug(
-            f"on_start: mode={mode}, vx={self._vx:.3f}m/s, vy={self._vy:.3f}m/s, "
+            f"on_start: mode={mode}, heading={cfg.heading_speed:.2f}, strafe={cfg.strafe_speed:.2f}, "
             f"correction={corr_str}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
         )
 
@@ -688,44 +670,15 @@ class DirectionalLineFollow(MotionStep):
         left_conf = cfg.left_sensor.probabilityOfBlack()
         right_conf = cfg.right_sensor.probabilityOfBlack()
 
-        # Check distance stop condition
-        if self._target_distance_m is not None:
-            assert self._start_pose is not None
-            _f, _l, straight = self._start_pose.project(robot)
-            if straight >= self._target_distance_m:
-                self.debug(
-                    f"stop: distance reached ({straight:.3f}m >= "
-                    f"{self._target_distance_m:.3f}m)"
-                )
-                return True
-
-        # PID steering: sensor error -> correction
         error = left_conf - right_conf
-        correction = self._pid.update(error, dt) * cfg.correction_sign
-
-        if cfg.forward_correction:
-            # Correct forward/backward while gyro PID holds heading.
-            vx = self._vx + correction * self._max_linear
-            heading_error = self._initial_heading - robot.odometry.get_heading()
-            wz = self._heading_pid.update(heading_error, dt)
-            robot.drive.set_velocity(ChassisVelocity(vx, self._vy, wz))
-        elif cfg.lateral_correction:
-            # Correct by strafing left/right; gyro PID holds heading
-            vy = self._vy + correction * self._max_lateral
-            heading_error = self._initial_heading - robot.odometry.get_heading()
-            wz = self._heading_pid.update(heading_error, dt)
-            robot.drive.set_velocity(ChassisVelocity(self._vx, vy, wz))
-        else:
-            # Standard angular correction
-            robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, correction))
-        robot.odometry.update(dt)
-        robot.drive.update(dt)
-
+        self._motion.set_sensor_error(error)
+        self._motion.update(dt)
+        telemetry = self._motion.get_telemetry()
+        correction = telemetry[-1].correction if telemetry else 0.0
         self.debug(
             f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}"
         )
-
-        return False
+        return self._motion.is_finished()
 
 
 @dataclass
@@ -752,6 +705,7 @@ class DirectionalSingleLineFollowConfig:
     kd: float = 0.1
     lateral_correction: bool = False
     forward_correction: bool = False
+    heading_hold: bool = True
     correction_sign: float = 1.0
 
 
@@ -774,15 +728,7 @@ class DirectionalSingleLineFollow(MotionStep):
         super().__init__()
         self.config = config
         self._until = until
-        self._pid: PidController | None = None
-        self._heading_pid: PidController | None = None
-        self._vx: float = 0.0
-        self._vy: float = 0.0
-        self._max_linear: float = 0.0
-        self._max_lateral: float = 0.0
-        self._initial_heading: float = 0.0
-        self._target_distance_m: float | None = None
-        self._start_pose: PoseSnapshot | None = None
+        self._motion: DirectionalLineFollowMotion | None = None
 
     def _generate_signature(self) -> str:
         parts = []
@@ -817,51 +763,38 @@ class DirectionalSingleLineFollow(MotionStep):
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
+        motion_config = DirectionalLineFollowMotionConfig()
+        motion_config.heading_speed = cfg.heading_speed
+        motion_config.strafe_speed = cfg.strafe_speed
+        motion_config.distance_m = (cfg.distance_cm / 100.0) if cfg.distance_cm is not None else 0.0
+        motion_config.has_distance_target = cfg.distance_cm is not None
+        motion_config.kp = cfg.kp
+        motion_config.ki = cfg.ki
+        motion_config.kd = cfg.kd
+        motion_config.heading_hold = cfg.heading_hold
+        motion_config.correction_sign = cfg.correction_sign
+        if cfg.forward_correction:
+            motion_config.correction_mode = LineFollowCorrectionMode.Forward
+        elif cfg.lateral_correction:
+            motion_config.correction_mode = LineFollowCorrectionMode.Lateral
+        else:
+            motion_config.correction_mode = LineFollowCorrectionMode.Angular
 
-        pid_cfg = robot.motion_pid_config
-        self._vx = cfg.heading_speed * pid_cfg.linear.max_velocity
-        self._vy = cfg.strafe_speed * pid_cfg.lateral.max_velocity
-        self._max_linear = pid_cfg.linear.max_velocity
-        self._max_lateral = pid_cfg.lateral.max_velocity
-
-        if cfg.distance_cm is not None:
-            self._target_distance_m = cfg.distance_cm / 100.0
-
-        self._start_pose = PoseSnapshot.capture(robot)
-
-        self._pid = PidController(
-            PidConfig(
-                kp=cfg.kp,
-                ki=cfg.ki,
-                kd=cfg.kd,
-                integral_max=1.0,
-                output_min=-1.0,
-                output_max=1.0,
-            )
+        self._motion = DirectionalLineFollowMotion(
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            motion_config,
         )
-
-        # Heading hold PID for translation-correction modes.
-        if cfg.lateral_correction or cfg.forward_correction:
-            self._initial_heading = self._start_pose.heading
-            h = pid_cfg.heading
-            self._heading_pid = PidController(
-                PidConfig(
-                    kp=h.kp,
-                    ki=h.ki,
-                    kd=h.kd,
-                    integral_max=1.0,
-                    output_min=-1.0,
-                    output_max=1.0,
-                )
-            )
+        self._motion.start()
 
         if self._until is not None:
             self._until.start(robot)
 
         corr_str = _correction_mode_name(cfg)
         self.debug(
-            f"on_start: side={cfg.side.value}, vx={self._vx:.3f}m/s, vy={self._vy:.3f}m/s, "
-            f"correction={corr_str}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
+            f"on_start: side={cfg.side.value}, heading={cfg.heading_speed:.2f}, strafe={cfg.strafe_speed:.2f}, "
+            f"correction={corr_str}, heading_hold={cfg.heading_hold}, PID({cfg.kp}, {cfg.ki}, {cfg.kd})"
         )
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
@@ -871,46 +804,18 @@ class DirectionalSingleLineFollow(MotionStep):
         if self._until is not None and self._until.check(robot):
             return True
 
-        # Check distance
-        if self._target_distance_m is not None:
-            assert self._start_pose is not None
-            _f, _l, straight = self._start_pose.project(robot)
-            if straight >= self._target_distance_m:
-                self.debug(
-                    f"stop: distance reached ({straight:.3f}m >= "
-                    f"{self._target_distance_m:.3f}m)"
-                )
-                return True
-
         # Edge-tracking error: 0.5 = edge of line
         reading = cfg.sensor.probabilityOfBlack()
         error = reading - 0.5
         if cfg.side == LineSide.RIGHT:
             error = -error
 
-        correction = self._pid.update(error, dt) * cfg.correction_sign
-
-        if cfg.forward_correction:
-            # Correct forward/backward while gyro PID holds heading.
-            vx = self._vx + correction * self._max_linear
-            heading_error = self._initial_heading - robot.odometry.get_heading()
-            wz = self._heading_pid.update(heading_error, dt)
-            robot.drive.set_velocity(ChassisVelocity(vx, self._vy, wz))
-        elif cfg.lateral_correction:
-            # Correct by strafing left/right; gyro PID holds heading
-            vy = self._vy + correction * self._max_lateral
-            heading_error = self._initial_heading - robot.odometry.get_heading()
-            wz = self._heading_pid.update(heading_error, dt)
-            robot.drive.set_velocity(ChassisVelocity(self._vx, vy, wz))
-        else:
-            # Standard angular correction
-            robot.drive.set_velocity(ChassisVelocity(self._vx, self._vy, correction))
-        robot.odometry.update(dt)
-        robot.drive.update(dt)
-
+        self._motion.set_sensor_error(error)
+        self._motion.update(dt)
+        telemetry = self._motion.get_telemetry()
+        correction = telemetry[-1].correction if telemetry else 0.0
         self.debug(f"black={reading:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}")
-
-        return False
+        return self._motion.is_finished()
 
 
 # ---------------------------------------------------------------------------

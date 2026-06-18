@@ -66,7 +66,10 @@ def _load_platform_bundle() -> str | None:
 
 __platform__ = _load_platform_bundle()
 
-from raccoon._core import __version__
+try:
+    from raccoon._core import __version__
+except ImportError:  # pragma: no cover - source-tree fallback for local tooling/tests
+    __version__ = "0+source"
 
 # Minimum project format_version required by this version of raccoon-lib.
 # Bump this when a breaking YAML change lands (e.g. a robot.yml key renamed)
@@ -93,10 +96,12 @@ Motor = _hal.Motor
 Servo = _hal.Servo
 AnalogSensor = _hal.AnalogSensor
 DigitalSensor = _hal.DigitalSensor
+ButtonGroup = _hal.ButtonGroup
 
 from raccoon import hal
 from raccoon import foundation
 from raccoon.step import *
+from raccoon.step.motion import line_follow
 from raccoon.step import __all__ as _step_all
 from raccoon.step.servo.preset import ServoPreset
 from raccoon.step.arm.preset import ArmPreset
@@ -147,6 +152,7 @@ __all__ = [
     "ArmPreset",
     "AnalogSensor",
     "DigitalSensor",
+    "ButtonGroup",
     # Submodules
     "hal",
     "foundation",
@@ -201,6 +207,7 @@ __all__ = [
     "IMU",
     # Motion
     "AxisConstraints",
+    "line_follow",
 ]
 # Re-export everything from the bundled subpackages so callers can do
 # ``from raccoon import drive_forward`` without juggling submodule paths.

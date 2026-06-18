@@ -19,6 +19,7 @@ void init_ir_sensor(py::module& m) {
              py::arg("values"))
         .def_readonly("blackThreshold", &libstp::sensors::ir::IRSensor::blackThreshold)
         .def_readonly("whiteThreshold", &libstp::sensors::ir::IRSensor::whiteThreshold)
+        .def("isCalibrated", &libstp::sensors::ir::IRSensor::isCalibrated)
         .def("probabilityOfBlack", &libstp::sensors::ir::IRSensor::probabilityOfBlack)
         .def("probabilityOfWhite", &libstp::sensors::ir::IRSensor::probabilityOfWhite)
         .def("isOnBlack", &libstp::sensors::ir::IRSensor::isOnBlack)
