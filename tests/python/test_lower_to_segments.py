@@ -183,3 +183,119 @@ def test_flatten_mixed_motion_and_side_action():
     assert isinstance(nodes[0], Segment) and nodes[0].kind == "linear"
     assert isinstance(nodes[1], SideAction)  # opaque step pinned as side action
     assert isinstance(nodes[2], Segment) and nodes[2].kind == "linear"
+
+
+# ---------------------------------------------------------------------------
+# Modern directional line-follow family lowers to follow_line segments
+# ---------------------------------------------------------------------------
+
+
+class _DummySensor:
+    """Duck-typed IRSensor stand-in (matches test_line_follow_builder.py)."""
+
+    def probabilityOfBlack(self) -> float:  # pragma: no cover - trivial
+        return 0.5
+
+    def read(self) -> int:  # pragma: no cover - trivial
+        return 512
+
+
+@requires_libstp
+def test_directional_single_forward_follow_lowers_to_follow_line():
+    from raccoon.motion import LinearAxis
+    from raccoon.step.motion import line_follow
+
+    step = _resolve(
+        line_follow().single(_DummySensor()).move(forward=0.6).correct_angular().distance_cm(40)
+    )
+
+    segs = step.lower_to_segments()
+    assert isinstance(segs, list) and len(segs) == 1
+    seg = segs[0]
+    assert seg.kind == "follow_line"
+    assert seg.axis == LinearAxis.Forward
+    assert seg.distance_m == pytest.approx(0.40)
+    assert seg.has_known_endpoint is True
+    assert seg.opaque_step is step
+
+
+@requires_libstp
+def test_directional_single_forward_follow_unknown_endpoint_when_no_distance():
+    from raccoon.motion import LinearAxis
+    from raccoon.step.condition import StopCondition
+    from raccoon.step.motion import line_follow
+
+    class _AlwaysFalse(StopCondition):
+        def reset(self, robot):  # pragma: no cover - trivial
+            pass
+
+        def is_met(self, robot):  # pragma: no cover - trivial
+            return False
+
+    step = _resolve(
+        line_follow()
+        .single(_DummySensor())
+        .move(forward=0.6)
+        .correct_angular()
+        .until(_AlwaysFalse())
+    )
+
+    seg = step.lower_to_segments()[0]
+    assert seg.kind == "follow_line"
+    assert seg.axis == LinearAxis.Forward
+    assert seg.distance_m is None
+    assert seg.has_known_endpoint is False
+    # Line-follow handles its own .until internally; the segment carries none.
+    assert seg.condition is None
+
+
+@requires_libstp
+def test_strafe_single_lateral_follow_lowers_to_lateral_axis():
+    from raccoon.motion import LinearAxis
+    from raccoon.step.motion import line_follow
+
+    # forward_correction: primary travel is lateral (strafe on vy).
+    step = _resolve(
+        line_follow().single(_DummySensor()).move(strafe=0.5).correct_forward().distance_cm(30)
+    )
+
+    seg = step.lower_to_segments()[0]
+    assert seg.kind == "follow_line"
+    assert seg.axis == LinearAxis.Lateral
+    assert seg.distance_m == pytest.approx(0.30)
+    assert seg.speed_scale == pytest.approx(0.5)
+    assert seg.opaque_step is step
+
+
+@requires_libstp
+def test_dual_strafe_lateral_follow_lowers_to_lateral_axis():
+    from raccoon.motion import LinearAxis
+    from raccoon.step.motion import line_follow
+
+    step = _resolve(
+        line_follow()
+        .dual(_DummySensor(), _DummySensor())
+        .move(strafe=0.8)
+        .correct_forward()
+        .distance_cm(25)
+    )
+
+    seg = step.lower_to_segments()[0]
+    assert seg.kind == "follow_line"
+    assert seg.axis == LinearAxis.Lateral
+    assert seg.has_known_endpoint is True
+
+
+@requires_libstp
+def test_flatten_directional_line_follow_no_longer_raises():
+    from raccoon.step.motion import line_follow
+    from raccoon.step.motion.path.ir import Segment
+    from raccoon.step.motion.path.passes.lowering import flatten_steps
+
+    step = line_follow().single(_DummySensor()).move(forward=0.5).correct_angular().distance_cm(40)
+
+    nodes, deferred = flatten_steps([step])
+    assert deferred == []
+    assert len(nodes) == 1
+    assert isinstance(nodes[0], Segment)
+    assert nodes[0].kind == "follow_line"

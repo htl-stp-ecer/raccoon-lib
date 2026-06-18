@@ -618,6 +618,38 @@ class DirectionalLineFollow(MotionStep):
             f"strafe={self.config.strafe_speed:.2f})"
         )
 
+    def lower_to_segments(self) -> "list":
+        from raccoon.motion import LinearAxis
+
+        from .path.ir import Segment
+
+        cfg = self.config
+        # Travel axis follows the *primary* motion. When forward_correction is
+        # set the base motion is lateral (strafe on vy) and only the cross-track
+        # is corrected on vx, so the robot travels on the Lateral axis. Angular
+        # and lateral correction both keep forward (heading_speed) as the primary
+        # travel, so they remain on the Forward axis. Arbitrary diagonal travel
+        # (both heading and strafe non-zero) isn't axis-aligned; we default to
+        # Forward — the warm-start heuristic is best-effort.
+        if cfg.forward_correction:
+            axis = LinearAxis.Lateral
+            speed_scale = abs(cfg.strafe_speed)
+        else:
+            axis = LinearAxis.Forward
+            speed_scale = abs(cfg.heading_speed)
+        return [
+            Segment(
+                kind="follow_line",
+                axis=axis,
+                sign=1.0,
+                distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
+                speed_scale=speed_scale,
+                condition=None,
+                has_known_endpoint=cfg.distance_cm is not None,
+                opaque_step=self,
+            )
+        ]
+
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config
         motion_config = DirectionalLineFollowMotionConfig()
@@ -744,6 +776,34 @@ class DirectionalSingleLineFollow(MotionStep):
             f"heading={self.config.heading_speed:.2f}, "
             f"strafe={self.config.strafe_speed:.2f})"
         )
+
+    def lower_to_segments(self) -> "list":
+        from raccoon.motion import LinearAxis
+
+        from .path.ir import Segment
+
+        cfg = self.config
+        # See DirectionalLineFollow.lower_to_segments for the axis rationale:
+        # forward_correction => primary travel is lateral (strafe); otherwise
+        # the primary travel is forward. Diagonal travel defaults to Forward.
+        if cfg.forward_correction:
+            axis = LinearAxis.Lateral
+            speed_scale = abs(cfg.strafe_speed)
+        else:
+            axis = LinearAxis.Forward
+            speed_scale = abs(cfg.heading_speed)
+        return [
+            Segment(
+                kind="follow_line",
+                axis=axis,
+                sign=1.0,
+                distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
+                speed_scale=speed_scale,
+                condition=None,
+                has_known_endpoint=cfg.distance_cm is not None,
+                opaque_step=self,
+            )
+        ]
 
     def on_start(self, robot: "GenericRobot") -> None:
         cfg = self.config

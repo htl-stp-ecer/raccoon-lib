@@ -90,14 +90,17 @@ def flatten_one(
     from ....parallel import Parallel
     from ....sequential import Sequential
 
-    # 1. Defer — placeholder for runtime resolution.
+    # 1. Resolve builder (e.g., drive_forward(30) or defer(...) returns a
+    #    builder). Must happen before the isinstance checks below so that
+    #    builder factories such as defer() are matched as their concrete
+    #    step type (e.g. Defer) rather than slipping through as side actions.
+    step = resolve_step(step)
+
+    # 2. Defer — placeholder for runtime resolution.
     if isinstance(step, Defer):
         deferred.append((len(nodes), step))
         nodes.append(None)
         return
-
-    # 2. Resolve builder (e.g., drive_forward(30) returns a builder).
-    step = resolve_step(step)
 
     # 3. Sequential — flatten children recursively.
     if isinstance(step, Sequential):
