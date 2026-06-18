@@ -106,6 +106,33 @@ if(LIBSTP_BUILD_TESTS)
   include(GoogleTest)
 endif()
 
+# ---------- Runtime-switchable platform bundles ----------
+#
+# When ON, the build does NOT static-link a single platform driver into every
+# pybind11 extension. Instead it builds BOTH platform bundles as standalone
+# SHARED libraries (libraccoon_platform_mock.so / libraccoon_platform_wombat.so)
+# that export the hal device symbols, and the extensions are linked with those
+# symbols left undefined. At import time raccoon/__init__.py dlopen()s the
+# chosen bundle with RTLD_GLOBAL so its symbols satisfy the extensions. This is
+# what lets ONE Linux wheel run as mock on a dev laptop and as wombat on the Pi.
+#
+# Linux only: macOS/Windows and all test builds keep the simpler static-mock
+# path (one DRIVER_BUNDLE compiled straight into the extensions). MSVC can't do
+# the undefined-symbol-at-load trick, and tests link platform_core directly.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux"
+   AND NOT LIBSTP_BUILD_TESTS
+   AND NOT MSVC)
+  set(_RUNTIME_PLATFORM_DEFAULT ON)
+else()
+  set(_RUNTIME_PLATFORM_DEFAULT OFF)
+endif()
+option(LIBSTP_RUNTIME_PLATFORM
+       "Build both platform bundles as runtime-switchable shared libraries"
+       ${_RUNTIME_PLATFORM_DEFAULT})
+if(LIBSTP_RUNTIME_PLATFORM)
+  message(STATUS "Runtime-switchable platform bundles ENABLED (mock + wombat)")
+endif()
+
 set(EIGEN_BUILD_DOC
     OFF
     CACHE BOOL "" FORCE)
@@ -136,9 +163,11 @@ set(BUILD_SHARED_LIBS
     CACHE BOOL "Build vendored libraries as shared" FORCE)
 
 # ---------- raccoon-transport (brings LCM + message types) ----------
-# Mock builds skip LCM entirely. Provide an empty stub target so that modules
-# declaring raccoon::transport as a dependency still configure without errors.
-if(DRIVER_BUNDLE STREQUAL "mock")
+# Pure-mock builds skip LCM entirely and provide an empty stub target so modules
+# declaring raccoon::transport as a dependency still configure without errors. A
+# runtime-platform build always needs the real transport because the wombat
+# bundle it ships links against it (the mock bundle just never calls it).
+if(DRIVER_BUNDLE STREQUAL "mock" AND NOT LIBSTP_RUNTIME_PLATFORM)
   add_library(_raccoon_transport_stub INTERFACE)
   add_library(raccoon::transport ALIAS _raccoon_transport_stub)
   add_compile_definitions(DRIVER_BUNDLE_MOCK)

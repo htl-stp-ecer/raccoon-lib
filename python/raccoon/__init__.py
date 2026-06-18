@@ -2,8 +2,69 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import os
 import signal
 from types import FrameType
+
+
+def _load_platform_bundle() -> str | None:
+    """Preload the selected platform driver bundle before any native import.
+
+    Runtime-platform wheels (Linux) ship the hal device symbols in standalone
+    shared libraries — ``libraccoon_platform_mock.so`` and
+    ``libraccoon_platform_wombat.so`` — instead of static-linking one bundle
+    into every extension. The pybind11 extensions are built with those symbols
+    left undefined, so exactly one bundle must be dlopen()ed with RTLD_GLOBAL
+    *before* the first extension import so its symbols satisfy the rest.
+
+    Bundle selection:
+      * ``RACCOON_PLATFORM=mock|wombat`` forces a bundle.
+      * otherwise a Raspberry Pi (``/proc/device-tree/model``) gets ``wombat``;
+        every other machine (dev laptops) gets ``mock``.
+
+    On a static-mock wheel (macOS/Windows, or a build without
+    ``LIBSTP_RUNTIME_PLATFORM``) no bundle files exist; the extensions are
+    self-contained, so this is a silent no-op.
+
+    Returns the name of the bundle that was loaded, or ``None``.
+    """
+    import ctypes
+    from pathlib import Path
+
+    pkg_dir = Path(__file__).resolve().parent
+
+    def _bundle_path(name: str) -> Path:
+        return pkg_dir / f"libraccoon_platform_{name}.so"
+
+    # No bundles present → static-mock wheel, nothing to preload.
+    if not _bundle_path("mock").exists() and not _bundle_path("wombat").exists():
+        return None
+
+    chosen = os.environ.get("RACCOON_PLATFORM", "").strip().lower()
+    if chosen not in ("mock", "wombat"):
+        chosen = "mock"
+        with contextlib.suppress(OSError):
+            if b"Raspberry Pi" in Path("/proc/device-tree/model").read_bytes():
+                chosen = "wombat"
+
+    path = _bundle_path(chosen)
+    if not path.exists():
+        # Requested bundle missing — fall back to whichever is present so the
+        # import still succeeds rather than dying with unresolved symbols.
+        fallback = "wombat" if chosen == "mock" else "mock"
+        if _bundle_path(fallback).exists():
+            chosen, path = fallback, _bundle_path(fallback)
+        else:
+            return None
+
+    # RTLD_GLOBAL so the bundle's symbols enter the global namespace and resolve
+    # the extensions' undefined device symbols; RTLD_NOW to fail fast here rather
+    # than at first device call.
+    ctypes.CDLL(str(path), mode=ctypes.RTLD_GLOBAL | os.RTLD_NOW)
+    return chosen
+
+
+__platform__ = _load_platform_bundle()
 
 try:
     from raccoon._core import __version__

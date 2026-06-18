@@ -372,8 +372,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cmake-cache
-          key: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v3
-          restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-
+          # Bumped to v4: the v3 cache stored FetchContent subbuild dirs pinned
+          # to "Visual Studio 17 2022"; windows-latest moved to "Visual Studio
+          # 18 2026", and a generator mismatch aborts configure. The restore-key
+          # is version-anchored so a miss can NOT fall back to the stale v3
+          # cache (which would re-introduce the wrong generator).
+          key: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v4
+          restore-keys: cmake-deps-${{ runner.os }}-${{ matrix.name }}-v4
 
       # Compiler cache for the host-runner builds (macOS, Windows). On Linux
       # the manylinux container can't reach the GHA cache API directly, so we
@@ -415,7 +420,7 @@ jobs:
           print(f"Version set to: 1.0.{run_number}")
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4
+        uses: pypa/cibuildwheel@v4.0
         env:
           CIBW_BUILD: cp313-*
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
@@ -471,7 +476,12 @@ jobs:
             rm -rf "$D"' _ {wheel} {dest_dir}
 
           # ── CMake config settings per platform ────────────────────────────
-          # DRIVER_BUNDLE=mock — no wombat hardware deps, builds everywhere.
+          # DRIVER_BUNDLE=mock selects the fallback static bundle. On Linux
+          # LIBSTP_RUNTIME_PLATFORM defaults ON, so the Linux wheels actually
+          # build BOTH the mock and wombat bundles as runtime-switchable shared
+          # libraries and DRIVER_BUNDLE is only the static fallback (unused at
+          # runtime) — one Linux/aarch64 wheel runs as mock on a dev laptop and
+          # as wombat on a Raspberry Pi. macOS/Windows keep the static-mock path.
           # LIBSTP_RUN_RUFF/MYPY=OFF — linting is the test job's concern.
           CIBW_CONFIG_SETTINGS: >-
             cmake.define.DRIVER_BUNDLE=mock
