@@ -9,6 +9,7 @@ actions in between.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import math
 from typing import TYPE_CHECKING
 
@@ -63,6 +64,25 @@ ANGLE_TOL_RAD = 0.035  # ~2° tolerance for manual angle check
 # ---------------------------------------------------------------------------
 # Helpers — odometry reads, completion checks
 # ---------------------------------------------------------------------------
+
+
+def _with_heading_offset(seg: Segment, h0: float) -> Segment:
+    """Return ``seg`` with the path-start world heading ``h0`` folded in.
+
+    ``AbsoluteHeadingPass`` stamps ``target_heading_rad`` integrated from 0 at
+    PATH START (path-relative). The executor + motion factory consume
+    ``target_heading_rad`` as an ABSOLUTE raw-odometry world heading, so each
+    leg must be shifted by the world heading captured once at path start.
+
+    Segments with ``target_heading_rad is None`` (the common case — the
+    absolute_heading pass was not applied) are returned unchanged, so this is a
+    no-op for every existing path. The original segment is never mutated; a
+    ``dataclasses.replace`` copy is returned so the pass output (reused across
+    runs / explain) stays intact.
+    """
+    if seg.target_heading_rad is None:
+        return seg
+    return dataclasses.replace(seg, target_heading_rad=seg.target_heading_rad + h0)
 
 
 def _has_reached_target(motion, seg: Segment) -> bool:
@@ -284,7 +304,16 @@ class PathExecutor:
                 raise ValueError(msg)
 
             # Start first segment (cold start).
+            #
+            # Capture the path-start world heading H0 ONCE, here at the first
+            # real motion segment (after leading side actions advanced — those
+            # may reorient the robot). AbsoluteHeadingPass emits headings in the
+            # path-start frame (start = 0); H0 converts them to the absolute
+            # raw-odometry world frame the motion factory regulates against.
+            h0 = get_world_heading_rad(robot)
+
             seg: Segment = nodes[node_idx]  # type: ignore[assignment]
+            seg = _with_heading_offset(seg, h0)
             is_last = _is_last_segment(nodes, node_idx)
 
             motion = create_motion(
@@ -379,6 +408,7 @@ class PathExecutor:
                         break
 
                     seg = nodes[node_idx]  # type: ignore[assignment]
+                    seg = _with_heading_offset(seg, h0)
                     is_last = _is_last_segment(nodes, node_idx)
 
                     next_world_heading = await _world_heading_for_seg(robot, seg)

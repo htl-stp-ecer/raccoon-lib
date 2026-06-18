@@ -29,6 +29,7 @@ from .compiler import PathCompiler
 from .executor import PathExecutor
 from .ir import Segment, SideAction
 from .passes import (
+    AbsoluteHeadingPass,
     CornerCutPass,
     MergePass,
     SplinifyPass,
@@ -178,16 +179,33 @@ class Optimizer(Step):
         return self._add(MergePass())
 
     def to_absolute(self) -> "Optimizer":
-        """Convert known-endpoint relative runs into closed-loop ``goto_relative`` legs.
+        """Convert known-endpoint relative runs into closed-loop navigate-to-pose.
 
         Replaces each maximal run of consecutive known-endpoint ``linear`` /
-        ``turn`` segments with inline navigate-to-pose moves (``ToAbsolutePass``)
-        — one ``goto_relative`` per linear endpoint, regulated on the
-        localization particle filter so they shrug off odometry drift.
-        ``.until(after_cm())`` legs qualify automatically: their distance is
-        recovered at lowering time.  Non-qualifying nodes pass through untouched.
+        ``turn`` segments with ONE inline ``GotoWaypoints`` move
+        (``ToAbsolutePass``).  It captures the localization pose once per run as
+        a single anchor, computes the run's absolute world waypoints from it, and
+        regulates onto each in sequence on the particle filter — so the
+        dead-reckoned legs become one closed-loop run that shrugs off odometry
+        drift (drift does not chain leg-to-leg).  ``.until(after_cm())`` legs
+        qualify automatically (distance recovered at lowering); non-qualifying
+        nodes pass through untouched.
         """
         return self._add(ToAbsolutePass())
+
+    def absolute_heading(self) -> "Optimizer":
+        """Pin every straight leg to one integrated heading (``AbsoluteHeadingPass``).
+
+        Integrates a single running heading through the path at compile time
+        (start 0; turns/arcs add their signed angle) and stamps it onto each
+        ``linear`` / ``follow_line`` leg, so every straight leg regulates
+        against ONE coherent heading reference rather than re-zeroing on the
+        previous leg's drifted frame — drift-robust over long paths. The pass
+        emits headings in the path-start frame; the executor adds the
+        path-start world-heading offset H0 (captured once at the first motion
+        segment) at runtime so they become absolute world targets.
+        """
+        return self._add(AbsoluteHeadingPass())
 
     def cut_corners(self, radius_cm: float) -> "Optimizer":
         """Replace ``linear+turn+linear`` corners with arcs (``CornerCutPass``).

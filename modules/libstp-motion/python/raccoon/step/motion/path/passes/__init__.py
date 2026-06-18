@@ -27,6 +27,7 @@ from .known_distance import recover_known_distance
 from .corner_cut import try_corner_arc, run_corner_cut, CornerCutPass
 from .spline import segments_to_spline_waypoints, build_spline_step, SplinifyPass
 from .to_absolute import ToAbsolutePass
+from .absolute_heading import AbsoluteHeadingPass
 
 __all__ = [
     # Lowering
@@ -53,6 +54,8 @@ __all__ = [
     "SplinifyPass",
     # To absolute
     "ToAbsolutePass",
+    # Absolute heading
+    "AbsoluteHeadingPass",
     # Orchestrator
     "optimize_nodes",
 ]
