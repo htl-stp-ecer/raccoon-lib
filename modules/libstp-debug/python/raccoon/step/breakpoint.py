@@ -1,31 +1,58 @@
 from __future__ import annotations
 
-from raccoon.robot.api import GenericRobot
+from typing import TYPE_CHECKING
 
-from . import Step, dsl
+from raccoon.ui import UIStep
+
+from .annotation import dsl
+
+if TYPE_CHECKING:
+    from raccoon.robot.api import GenericRobot
 
 
 @dsl(hidden=True)
-class BreakpointStep(Step):
-    """Step-level breakpoint marker that currently only emits a log line."""
+class BreakpointStep(UIStep):
+    """Step-level breakpoint marker.
+
+    Behaviour depends on the global ``--debug`` flag
+    (``LIBSTP_DEBUG=1``, set by ``raccoon run --debug``):
+
+    * **Debug mode on** — pauses the mission and waits for a hardware
+      button press before continuing, like an interactive breakpoint.
+    * **Debug mode off** — emits a single log line and returns
+      immediately, so the step is effectively a no-op in normal runs.
+    """
 
     def __init__(self, label: str | None = None) -> None:
         """
         Initialize a lightweight breakpoint marker step.
 
         Args:
-            label: Optional label used for the runtime log message.
+            label: Optional label used for the runtime log message and
+                the on-screen prompt shown in debug mode.
         """
         super().__init__()
         self._label = label
 
-    async def _execute_step(self, robot: GenericRobot) -> None:
+    def _generate_signature(self) -> str:
+        return f"BreakpointStep(label={self._label!r})"
+
+    async def _execute_step(self, robot: "GenericRobot") -> None:
         """
-        Emit a log message for the breakpoint and return immediately.
+        In debug mode, block until the button is pressed. Otherwise emit
+        a log line and return immediately.
         """
+        from raccoon.debug import is_debug
+
         label_suffix = f" ({self._label})" if self._label else ""
-        self.info(f"Breakpoint reached{label_suffix}")
-        # ToDo: fully block process until lcm message has been sent to continue / unblock
+
+        if not is_debug():
+            self.info(f"Breakpoint reached{label_suffix} (debug off, skipping)")
+            return
+
+        self.info(f"Breakpoint reached{label_suffix} — waiting for button press")
+        prompt = f"Breakpoint: {self._label}" if self._label else "Breakpoint reached"
+        await self.wait_for_button(f"{prompt}\nPress button to continue")
 
 
 @dsl(hidden=True)
@@ -33,7 +60,12 @@ def breakpoint(label: str | None = None) -> BreakpointStep:
     """
     Create a breakpoint marker step.
 
+    In debug mode (``raccoon run --debug``) the step pauses the mission
+    and waits for a hardware button press. Without ``--debug`` it logs a
+    line and returns immediately.
+
     Args:
-        label: Optional label included in the breakpoint log message.
+        label: Optional label included in the breakpoint log message and
+            the on-screen prompt.
     """
     return BreakpointStep(label=label)

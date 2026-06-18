@@ -19,7 +19,14 @@ def _normalize_angle(angle: float) -> float:
 
 
 def _world_heading(robot: "GenericRobot") -> float:
-    """Read the current heading from odometry, with localization as override."""
+    """Read the current heading, preferring odometry over localization.
+
+    The motion controllers (``LinearMotion``/``TurnMotion``) close their heading
+    loop on ``odometry().getHeading()``. To keep the reference, the turn-delta
+    computation and the executed feedback in a single frame, all heading math
+    here must use the same source — odometry. Localization is only a fallback
+    when no odometry source is enabled.
+    """
     odom = getattr(robot, "odometry", None)
     loc = getattr(robot, "localization", None)
     if odom is None and loc is None:
@@ -28,11 +35,9 @@ def _world_heading(robot: "GenericRobot") -> float:
             "(at least one heading source must be enabled)."
         )
         raise RuntimeError(msg)
-    if loc is None:
-        return float(odom.get_pose().heading)
     if odom is None:
         return float(loc.get_pose().heading)
-    return float(loc.get_pose().heading)
+    return float(odom.get_pose().heading)
 
 
 class HeadingReferenceService(RobotService):
@@ -117,8 +122,9 @@ class HeadingReferenceService(RobotService):
     ) -> float:
         """Compute the signed relative turn angle to reach *target_deg* from reference.
 
-        Reads the current world heading from ``robot.localization`` (the
-        absolute-motion plan's first-class world-pose source).
+        Reads the current world heading via :func:`_world_heading` (odometry,
+        the same source the motion controllers regulate on), so the computed
+        turn delta and the executed feedback share one frame.
 
         Args:
             target_deg: Desired heading in degrees relative to the reference.

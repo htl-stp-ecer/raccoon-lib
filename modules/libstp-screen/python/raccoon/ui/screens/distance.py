@@ -192,9 +192,12 @@ class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
 
     @property
     def scale_factor(self) -> float:
-        if self.requested == 0:
+        # Distance-correction factor: how much to scale the NEXT commanded
+        # distance to land on target. Driving short (measured < requested)
+        # yields a factor > 1 so the next drive is lengthened, not shortened.
+        if self.measured == 0:
             return 1.0
-        return self.measured / self.requested
+        return self.requested / self.measured
 
     @property
     def adjustment(self) -> float:
