@@ -33,9 +33,24 @@ collected per LINEAR segment endpoint (preserving the path shape — no corner
 cutting); turns between linears fold into the following waypoint's target
 heading.  All the run's waypoints feed ONE emitted ``GotoWaypoints``.
 
+SENSOR-bounded single-axis linear legs.  A ``linear`` segment with NO known
+endpoint and a real (non-baked) ``condition`` — e.g. ``strafe_left().until(
+on_black)`` — does NOT join a known-endpoint run, but it pins 2 of 3 world DOF
+(the cross-axis position + heading) and leaves only the travel axis free until
+the sensor fires.  Such a leg is converted into a single inline
+``SideAction(AbsoluteHoldMove)``: a closed-loop-on-localization step that holds
+the 2 pinned DOF on their absolute targets (correcting drift DURING the move,
+read-only on the particle filter) while driving the free axis open-loop until
+the original ``.until()`` condition fires.  This keeps the WHOLE to_absolute
+path on the particle filter rather than odometry dead reckoning.  Each
+``AbsoluteHoldMove`` re-anchors at its own ``on_start``, so the next known run
+re-anchors naturally and a sensor leg flushes any in-progress known run.
+
 Best-effort: segments that don't qualify are left untouched; the pass never
 crashes.  ``.until(after_cm)`` legs qualify automatically — their distance is
-recovered at lowering time.
+recovered at lowering time, so a BAKED ``after_cm`` leg becomes a
+``GotoWaypoints`` waypoint, NOT an ``AbsoluteHoldMove``.  ``follow_line`` /
+``spline`` / ``arc`` / ``diagonal`` sensor legs are left untouched.
 
 This pass declares ``produces = Representation.ABSOLUTE`` (imported from the
 neutral ``.contract`` module — no circular import): once a run is converted to
@@ -71,6 +86,30 @@ def _condition_is_baked(seg: Segment) -> bool:
 
     cond = seg.condition
     return isinstance(cond, after_cm) and not cond._absolute
+
+
+def _is_sensor_linear_leg(node) -> bool:
+    """Is ``node`` a SENSOR-bounded single-axis LINEAR leg (no known endpoint)?
+
+    Such a leg (e.g. ``strafe_left().until(on_black)``) pins 2 of 3 world DOF
+    (cross-axis position + heading) and leaves the travel axis free until the
+    sensor fires. It does NOT qualify for the known-endpoint ``GotoWaypoints``
+    run, but to_absolute converts it into an :class:`AbsoluteHoldMove` that
+    holds the 2 pinned DOF absolutely while driving the free axis until the
+    condition.
+
+    Requires a ``linear`` segment with an UNKNOWN endpoint and a real,
+    non-baked condition (a sensor / combined / absolute-after_cm stop). A bare
+    relative ``after_cm`` is "baked" — its distance becomes a known endpoint, so
+    it stays on the ``GotoWaypoints`` path and is NOT matched here.
+    """
+    return (
+        isinstance(node, Segment)
+        and node.kind == "linear"
+        and node.has_known_endpoint is False
+        and node.condition is not None
+        and not _condition_is_baked(node)
+    )
 
 
 def _segment_qualifies(node) -> bool:
@@ -150,9 +189,20 @@ class ToAbsolutePass:
     ``SideAction(GotoWaypoints)`` node carrying all the run's body-frame
     waypoints — one per linear endpoint.  The ``GotoWaypoints`` captures one
     anchor per run at start and drives to the resulting ABSOLUTE world targets
-    in sequence (so drift does not chain leg-to-leg).  Non-qualifying nodes pass
-    through unchanged.  ``.until(after_cm())`` legs qualify automatically — their
-    distance is recovered at lowering time.
+    in sequence (so drift does not chain leg-to-leg).
+
+    Additionally converts each SENSOR-bounded single-axis ``linear`` leg (no
+    known endpoint, real non-baked condition — e.g. ``strafe_left().until(
+    on_black)``) into a single inline ``SideAction(AbsoluteHoldMove)`` that
+    holds the cross-axis position + heading absolutely (2 DOF, read-only on
+    localization) while driving the free axis until the sensor fires.  Such a
+    leg flushes any in-progress known run first.
+
+    Non-qualifying nodes pass through unchanged.  ``.until(after_cm())`` legs
+    qualify automatically — their distance is recovered at lowering time, so a
+    baked ``after_cm`` leg stays a ``GotoWaypoints`` waypoint (NOT an
+    ``AbsoluteHoldMove``).  ``follow_line`` / ``spline`` / ``arc`` / ``diagonal``
+    sensor legs pass through untouched.
 
     Declares ``produces = Representation.ABSOLUTE`` so the optimizer's state
     machine knows the stream is world-frame after this pass.
@@ -162,14 +212,34 @@ class ToAbsolutePass:
     produces = Representation.ABSOLUTE
 
     def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
-        from ...goto import GotoWaypoints  # deferred to avoid import cycle
+        from ...goto import AbsoluteHoldMove, GotoWaypoints  # deferred (import cycle)
 
         result: list[PathNode | None] = []
         i = 0
         n = len(nodes)
         while i < n:
             if not _segment_qualifies(nodes[i]):
-                result.append(nodes[i])
+                node = nodes[i]
+                if _is_sensor_linear_leg(node):
+                    # Sensor-bounded single-axis linear leg: hold the cross-axis
+                    # position + heading absolutely while driving the free axis
+                    # until the sensor fires. (Each AbsoluteHoldMove re-anchors
+                    # at its own on_start, so no run flush is needed here — runs
+                    # are already flushed before any non-qualifying node.)
+                    result.append(
+                        SideAction(
+                            step=AbsoluteHoldMove(
+                                free_axis=node.axis,
+                                sign=node.sign,
+                                speed=node.speed_scale,
+                                condition=node.condition,
+                            ),
+                            is_background=False,
+                        )
+                    )
+                    i += 1
+                    continue
+                result.append(node)
                 i += 1
                 continue
 

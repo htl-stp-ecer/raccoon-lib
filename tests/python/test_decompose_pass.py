@@ -188,7 +188,7 @@ def test_plain_drive_and_side_action_untouched():
 
 @requires_libstp
 def test_builder_decompose_then_to_absolute():
-    from raccoon.step.motion import GotoWaypoints, optimize
+    from raccoon.step.motion import AbsoluteHoldMove, GotoWaypoints, optimize
     from raccoon.step.motion.path.compiler import PathCompiler
 
     imp = _imports()
@@ -200,14 +200,20 @@ def test_builder_decompose_then_to_absolute():
     opt = optimize([imp["drive_forward"]().until(cond)]).to_absolute()
     nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
 
-    # The known leg became a GotoWaypoints SideAction.
+    # The known (after_cm 12) leg became a GotoWaypoints SideAction.
     goto_actions = [
         n for n in nodes if isinstance(n, imp["SideAction"]) and isinstance(n.step, GotoWaypoints)
     ]
     assert len(goto_actions) == 1
 
-    # The sensor leg stayed a Segment (unknown endpoint, over_line condition).
-    segs = _segments(nodes, imp["Segment"])
-    assert len(segs) == 1
-    assert segs[0].has_known_endpoint is False
-    assert isinstance(segs[0].condition, imp["_Then"])
+    # Behavior change: the SENSOR leg (unknown endpoint, over_line condition)
+    # used to stay a Segment; to_absolute now converts it into an
+    # AbsoluteHoldMove (cross-axis position + heading held absolute, free axis
+    # driven until the sensor fires). No Segment survives.
+    assert not _segments(nodes, imp["Segment"])
+    holds = [
+        n.step
+        for n in nodes
+        if isinstance(n, imp["SideAction"]) and isinstance(n.step, AbsoluteHoldMove)
+    ]
+    assert len(holds) == 1

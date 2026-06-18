@@ -181,15 +181,25 @@ class TestPassThrough:
         assert not _goto_steps(nodes, imp)
 
     @requires_libstp
-    def test_sensor_condition_segment_untouched(self):
+    def test_sensor_linear_leg_becomes_absolute_hold_move(self):
+        """Behavior change: a SENSOR-bounded single-axis linear leg used to stay
+        a Segment; to_absolute now converts it into an inline
+        ``SideAction(AbsoluteHoldMove)`` (2 DOF held absolute, free axis until
+        the sensor)."""
+        from raccoon.step.motion import AbsoluteHoldMove
+
         imp = _imports()
         sensor = _FakeIRSensor()
         step = imp["drive_forward"]().until(imp["over_line"](sensor))
         nodes = _run_pass([step], imp)
-        # Live sensor condition -> unknown endpoint -> stays a Segment.
-        segs = [n for n in nodes if isinstance(n, imp["Segment"])]
-        assert len(segs) == 1
-        assert segs[0].condition is not None
+        # No Segment survives; one inline AbsoluteHoldMove side action.
+        assert not any(isinstance(n, imp["Segment"]) for n in nodes)
+        holds = [
+            n.step
+            for n in nodes
+            if isinstance(n, imp["SideAction"]) and isinstance(n.step, AbsoluteHoldMove)
+        ]
+        assert len(holds) == 1
         assert not _goto_steps(nodes, imp)
 
     @requires_libstp

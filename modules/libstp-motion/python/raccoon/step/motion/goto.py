@@ -22,12 +22,15 @@ import math
 from typing import TYPE_CHECKING, NamedTuple
 
 from raccoon.foundation import ChassisVelocity
+from raccoon.motion import LinearAxis
 
 from .. import dsl
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
+
+    from ...condition import StopCondition
 
 
 # Proportional gains. Output is a body-frame velocity in m/s and rad/s; the
@@ -464,6 +467,165 @@ class GotoWaypoints(MotionStep):
         return False
 
 
+def _free_axis_world_dir(axis: "LinearAxis", heading_rad: float) -> tuple[float, float]:
+    """World-frame unit vector of a single LINEAR travel axis at ``heading_rad``.
+
+    Matches the integration convention used by ``_run_to_waypoints`` /
+    ``segments_to_spline_waypoints`` (and the inverse of goto's
+    ``_world_to_body``):
+
+    - ``Forward`` → the heading direction ``(cos h, sin h)``.
+    - ``Lateral`` → the +left direction ``(-sin h, cos h)`` (90° CCW of forward).
+
+    The segment's ``sign`` (direction along the axis) is applied by the caller;
+    this returns the unsigned positive-axis unit vector.
+    """
+    if axis == LinearAxis.Forward:
+        return (math.cos(heading_rad), math.sin(heading_rad))
+    # Lateral → +left, consistent with d·(-sin h, cos h) in _run_to_waypoints.
+    return (-math.sin(heading_rad), math.cos(heading_rad))
+
+
+def _hold_velocity(
+    anchor,
+    current,
+    free_axis: "LinearAxis",
+    sign: float,
+    speed: float,
+    *,
+    pos_gain: float = _LINEAR_GAIN,
+    heading_gain: float = _ANGULAR_GAIN,
+) -> tuple[float, float, float]:
+    """Pure control law for :class:`AbsoluteHoldMove` — no robot required.
+
+    Holds 2 of 3 world DOF absolutely (the CROSS-axis position + heading,
+    read off localization) while driving the FREE axis open-loop. Given the
+    ``anchor`` pose (captured at start) and the live ``current`` pose (both
+    pose-like with ``.position`` indexable x, y in metres and ``.heading`` in
+    radians):
+
+    - The free-axis world unit vector is taken at the ANCHOR heading (the line
+      the move travels along is fixed at start, like ``GotoWaypoints`` targets).
+    - The cross world unit vector is the free vector rotated 90° CCW.
+    - ``cross_err = (current_pos - anchor_pos) · cross_dir`` — drift off the
+      intended travel line (should be 0).
+    - Desired WORLD velocity = ``sign·speed·1.0`` along the free vector minus
+      ``pos_gain·cross_err`` along the cross vector. (The free magnitude is the
+      raw ``sign·speed`` fraction; the step clamps it to the configured per-axis
+      max velocity, so ``speed`` is a fraction of max like the relative drives.)
+    - That world velocity is rotated into the BODY frame using the CURRENT
+      heading (so drift in heading still produces a correct body command), via
+      the same ``_world_to_body`` convention goto uses.
+    - ``wz = heading_gain · wrap(anchor_heading - current_heading)`` corrects
+      heading back onto the anchor heading.
+
+    Returns body-frame ``(vx, vy, wz)`` — NOT clamped here (the step clamps
+    against the robot's configured limits, keeping this helper pure).
+    """
+    anchor_h = float(anchor.heading)
+    cur_h = float(current.heading)
+
+    free_x, free_y = _free_axis_world_dir(free_axis, anchor_h)
+    # Cross direction = free rotated 90° CCW: (x, y) -> (-y, x).
+    cross_x, cross_y = -free_y, free_x
+
+    dpos_x = float(current.position[0]) - float(anchor.position[0])
+    dpos_y = float(current.position[1]) - float(anchor.position[1])
+    cross_err = dpos_x * cross_x + dpos_y * cross_y
+
+    free_speed = sign * speed
+    # World-frame desired velocity: drive the free axis, correct the cross axis.
+    vx_world = free_speed * free_x - pos_gain * cross_err * cross_x
+    vy_world = free_speed * free_y - pos_gain * cross_err * cross_y
+
+    # Rotate world velocity into the body frame using the CURRENT heading
+    # (same convention as goto's _world_to_body: forward, strafe_right).
+    vx, vy = _world_to_body(vx_world, vy_world, cur_h)
+
+    heading_err = math.remainder(anchor_h - cur_h, 2.0 * math.pi)
+    wz = heading_gain * heading_err
+
+    return (vx, vy, wz)
+
+
+@dsl(hidden=True)
+class AbsoluteHoldMove(MotionStep):
+    """Closed-loop-on-localization single-axis drive that holds 2 world DOF.
+
+    A SENSOR-bounded single-axis drive (e.g. ``strafe_left().until(on_black)``)
+    pins 2 of 3 world DOF — the cross-axis position and the heading — and leaves
+    only the travel (free) axis free until the sensor fires. This step drives
+    the free body-axis open-loop at ``speed`` while CORRECTING drift on the two
+    pinned DOF against their absolute (localization) targets DURING the move,
+    until the original ``.until()`` condition fires.
+
+    At ``on_start`` it captures the localization pose as an anchor. The pinned
+    target is: stay on the world line through ``anchor_pos`` along the free-axis
+    direction (cross-axis displacement = 0) and hold ``anchor_heading``. Each
+    tick it reads the live pose and feeds :func:`_hold_velocity` (read-only on
+    localization — it never writes the filter). The result is the whole
+    ``to_absolute`` path regulating on the particle filter instead of odometry
+    dead reckoning.
+
+    Requires ``robot.localization`` (the particle filter); raises at start
+    otherwise.
+    """
+
+    def __init__(
+        self,
+        free_axis: "LinearAxis",
+        sign: float,
+        speed: float,
+        condition: "StopCondition",
+    ) -> None:
+        super().__init__()
+        if not isinstance(speed, int | float):
+            msg = f"speed must be a number, got {type(speed).__name__}"
+            raise TypeError(msg)
+        self._free_axis = free_axis
+        self._sign = sign
+        self._speed = speed
+        self._condition = condition
+        self._anchor = None
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive", "localization"})
+
+    def _generate_signature(self) -> str:
+        axis = "Forward" if self._free_axis == LinearAxis.Forward else "Lateral"
+        return f"AbsoluteHoldMove(free={axis}, sign={self._sign:+.0f}, until=...)"
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        if getattr(robot, "localization", None) is None:
+            msg = "AbsoluteHoldMove requires robot.localization (the particle filter)"
+            raise RuntimeError(msg)
+        self._anchor = robot.localization.get_pose()
+        if self._condition is not None:
+            self._condition.start(robot)
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        current = robot.localization.get_pose()
+        vx, vy, wz = _hold_velocity(
+            self._anchor,
+            current,
+            self._free_axis,
+            self._sign,
+            self._speed,
+        )
+
+        cfg = robot.motion_pid_config
+        robot.drive.set_velocity(
+            ChassisVelocity(
+                _clamp(vx, cfg.linear.max_velocity),
+                _clamp(vy, cfg.lateral.max_velocity),
+                _clamp(wz, cfg.angular.max_velocity),
+            )
+        )
+        robot.drive.update(dt)
+
+        return bool(self._condition is not None and self._condition.check(robot))
+
+
 @dsl(tags=["motion", "drive"])
 def goto_relative(
     forward_cm: float,
@@ -605,4 +767,11 @@ def goto(
     )
 
 
-__all__ = ["Goto", "GotoRelative", "GotoWaypoints", "goto", "goto_relative"]
+__all__ = [
+    "AbsoluteHoldMove",
+    "Goto",
+    "GotoRelative",
+    "GotoWaypoints",
+    "goto",
+    "goto_relative",
+]
