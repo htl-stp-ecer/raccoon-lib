@@ -420,7 +420,7 @@ jobs:
           print(f"Version set to: 1.0.{run_number}")
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.0
+        uses: pypa/cibuildwheel@v4.1
         env:
           CIBW_BUILD: cp313-*
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
