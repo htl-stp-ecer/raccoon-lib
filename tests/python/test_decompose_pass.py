@@ -1,10 +1,11 @@
 """Tests for the ``decompose`` pass.
 
 ``DecomposePass`` splits a conditional ``linear`` / ``follow_line`` leg whose
-stop condition is a sequential ``_Then`` LED by a bare relative ``after_cm``
-into a known-distance leg + the remaining-condition leg, so the known part
-becomes optimizable (absolutizable / splinifiable).  A chain of leading
-``after_cm`` conditions peels recursively.
+stop condition is a sequential ``_Then`` chain at EVERY bare relative
+``after_cm`` boundary — leading, trailing, or interleaved — emitting one
+known-distance leg per ``after_cm`` leaf and one grouped unknown sensor leg per
+run of consecutive non-``after_cm`` leaves, so each known part becomes
+optimizable (absolutizable / splinifiable).
 
 No simulator or C++ runtime is required beyond the raccoon package.
 """
@@ -28,7 +29,7 @@ requires_libstp = pytest.mark.skipif(
 
 def _imports():
     from raccoon.motion import LinearAxis
-    from raccoon.step.condition import _Then, after_cm, over_line
+    from raccoon.step.condition import _Then, after_cm, on_black, over_line
     from raccoon.step.motion.drive_dsl import drive_forward
     from raccoon.step.motion.path.ir import Segment, SideAction
     from raccoon.step.motion.path.passes import DecomposePass, flatten_steps
@@ -38,6 +39,7 @@ def _imports():
         "LinearAxis": LinearAxis,
         "_Then": _Then,
         "after_cm": after_cm,
+        "on_black": on_black,
         "over_line": over_line,
         "drive_forward": drive_forward,
         "Segment": Segment,
@@ -130,6 +132,89 @@ def test_after_cm_chain_peels_recursively():
     assert not isinstance(third.condition._first, imp["after_cm"])
 
 
+@requires_libstp
+def test_trailing_after_cm_splits_in_two():
+    # on_black + after_cm(5) → [sensor(on_black), known(0.05)].  The trailing
+    # after_cm measures from where the preceding (sensor) leg ended, so it is a
+    # real known distance once split off.
+    imp = _imports()
+    sensor = _FakeIRSensor()
+    cond = imp["on_black"](sensor) + imp["after_cm"](5)
+    nodes = _decompose([imp["drive_forward"]().until(cond)], imp)
+    segs = _segments(nodes, imp["Segment"])
+
+    assert len(segs) == 2
+    sensor_leg, known = segs
+
+    # First leg: the on_black sensor, unknown endpoint, condition is the bare
+    # on_black (single-leaf group → no _Then wrapper).
+    assert sensor_leg.distance_m is None
+    assert sensor_leg.has_known_endpoint is False
+    assert isinstance(sensor_leg.condition, imp["on_black"])
+
+    # Second leg: the trailing known 5 cm.
+    assert known.distance_m == pytest.approx(0.05)
+    assert known.has_known_endpoint is True
+    assert isinstance(known.condition, imp["after_cm"])
+    assert known.condition._absolute is False
+
+
+@requires_libstp
+def test_interleaved_sensor_and_after_cm_splits_into_four():
+    # on_black + after_cm + on_black + after_cm → [sensor, known, sensor, known].
+    imp = _imports()
+    sensor = _FakeIRSensor()
+    cond = (
+        imp["on_black"](sensor) + imp["after_cm"](7) + imp["on_black"](sensor) + imp["after_cm"](3)
+    )
+    nodes = _decompose([imp["drive_forward"]().until(cond)], imp)
+    segs = _segments(nodes, imp["Segment"])
+
+    assert len(segs) == 4
+    s1, k1, s2, k2 = segs
+
+    assert s1.has_known_endpoint is False
+    assert isinstance(s1.condition, imp["on_black"])
+
+    assert k1.distance_m == pytest.approx(0.07)
+    assert k1.has_known_endpoint is True
+    assert isinstance(k1.condition, imp["after_cm"])
+
+    assert s2.has_known_endpoint is False
+    assert isinstance(s2.condition, imp["on_black"])
+
+    assert k2.distance_m == pytest.approx(0.03)
+    assert k2.has_known_endpoint is True
+    assert isinstance(k2.condition, imp["after_cm"])
+
+
+@requires_libstp
+def test_over_line_grouped_then_trailing_after_cm():
+    # over_line + after_cm(5) = _Then(_Then(on_black, on_white), after_cm(5))
+    # → [sensor(_Then(on_black, on_white)), known(0.05)].  The two over_line
+    # leaves stay grouped as one sensor leg.
+    imp = _imports()
+    sensor = _FakeIRSensor()
+    cond = imp["over_line"](sensor) + imp["after_cm"](5)
+    nodes = _decompose([imp["drive_forward"]().until(cond)], imp)
+    segs = _segments(nodes, imp["Segment"])
+
+    assert len(segs) == 2
+    sensor_leg, known = segs
+
+    # over_line preserved as a grouped _Then sensor leg (on_black then on_white).
+    assert sensor_leg.distance_m is None
+    assert sensor_leg.has_known_endpoint is False
+    assert isinstance(sensor_leg.condition, imp["_Then"])
+    assert isinstance(sensor_leg.condition._first, imp["on_black"])
+    assert not isinstance(sensor_leg.condition._second, imp["after_cm"])
+
+    # Trailing known 5 cm.
+    assert known.distance_m == pytest.approx(0.05)
+    assert known.has_known_endpoint is True
+    assert isinstance(known.condition, imp["after_cm"])
+
+
 # ---------------------------------------------------------------------------
 # Guards — never decompose when the endpoint isn't actually known
 # ---------------------------------------------------------------------------
@@ -210,6 +295,38 @@ def test_builder_decompose_then_to_absolute():
     # used to stay a Segment; to_absolute now converts it into an
     # AbsoluteHoldMove (cross-axis position + heading held absolute, free axis
     # driven until the sensor fires). No Segment survives.
+    assert not _segments(nodes, imp["Segment"])
+    holds = [
+        n.step
+        for n in nodes
+        if isinstance(n, imp["SideAction"]) and isinstance(n.step, AbsoluteHoldMove)
+    ]
+    assert len(holds) == 1
+
+
+@requires_libstp
+def test_builder_decompose_trailing_then_to_absolute():
+    # Trailing after_cm: on_black + after_cm(20).  decompose splits into a
+    # sensor leg (on_black, unknown endpoint) + a known 20 cm leg; to_absolute
+    # converts the known leg into a GotoWaypoints SideAction and the sensor leg
+    # into an AbsoluteHoldMove. No Segment survives.
+    from raccoon.step.motion import AbsoluteHoldMove, GotoWaypoints, optimize
+    from raccoon.step.motion.path.compiler import PathCompiler
+
+    imp = _imports()
+    sensor = _FakeIRSensor()
+    cond = imp["on_black"](sensor) + imp["after_cm"](20)
+
+    opt = optimize([imp["drive_forward"]().until(cond)]).to_absolute()
+    nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
+
+    # The trailing known (after_cm 20) leg became a GotoWaypoints SideAction.
+    goto_actions = [
+        n for n in nodes if isinstance(n, imp["SideAction"]) and isinstance(n.step, GotoWaypoints)
+    ]
+    assert len(goto_actions) == 1
+
+    # The on_black sensor leg became an AbsoluteHoldMove; no Segment survives.
     assert not _segments(nodes, imp["Segment"])
     holds = [
         n.step
