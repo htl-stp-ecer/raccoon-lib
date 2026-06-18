@@ -28,7 +28,13 @@ from ... import Step
 from .compiler import PathCompiler
 from .executor import PathExecutor
 from .ir import Segment, SideAction
-from .passes import CornerCutPass, KnownDistancePass, MergePass, flatten_steps
+from .passes import (
+    CornerCutPass,
+    KnownDistancePass,
+    MergePass,
+    ToAbsolutePass,
+    flatten_steps,
+)
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -179,6 +185,18 @@ class Optimizer(Step):
         segments (``KnownDistancePass``), unlocking downstream geometry passes.
         """
         return self._add(KnownDistancePass())
+
+    def to_absolute(self) -> "Optimizer":
+        """Convert known-endpoint relative runs into closed-loop ``goto_relative`` legs.
+
+        Replaces each maximal run of consecutive known-endpoint ``linear`` /
+        ``turn`` segments (no live condition) with inline navigate-to-pose
+        moves (``ToAbsolutePass``) — one ``goto_relative`` per linear endpoint,
+        regulated on the localization particle filter so they shrug off
+        odometry drift.  Run after ``known_distance()`` so ``.until(after_cm())``
+        legs qualify; non-qualifying nodes pass through untouched.
+        """
+        return self._add(ToAbsolutePass())
 
     def cut_corners(self, radius_cm: float) -> "Optimizer":
         """Replace ``linear+turn+linear`` corners with arcs (``CornerCutPass``).

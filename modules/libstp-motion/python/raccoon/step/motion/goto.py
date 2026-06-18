@@ -213,6 +213,202 @@ class Goto(MotionStep):
         return False
 
 
+def _anchor_to_world_target(
+    anchor_pose,
+    forward_m: float,
+    left_m: float,
+    dtheta_rad: float | None,
+) -> tuple[float, float, float | None]:
+    """Compose a body-frame delta onto an anchor pose → absolute world target.
+
+    Pure helper (no robot required). Given an ``anchor_pose`` (pose-like with
+    ``.position`` indexable x, y in metres and ``.heading`` in radians) and a
+    body-frame displacement ``(forward_m, left_m)`` plus an optional heading
+    change ``dtheta_rad``, returns the absolute world target
+    ``(x_m, y_m, theta_rad)``.
+
+    The body→world rotation uses the SAME convention as the spline integration
+    (``segments_to_spline_waypoints``) and the inverse of goto's
+    ``_world_to_body``: ``+forward`` is the anchor heading direction and
+    ``+left`` is 90° CCW of it::
+
+        dx = forward·cos(h) - left·sin(h)
+        dy = forward·sin(h) + left·cos(h)
+
+    The target heading is ``anchor.heading + dtheta_rad`` (or ``None`` when no
+    heading correction is requested).
+    """
+    h = float(anchor_pose.heading)
+    cos_h = math.cos(h)
+    sin_h = math.sin(h)
+    dx = forward_m * cos_h - left_m * sin_h
+    dy = forward_m * sin_h + left_m * cos_h
+    x_m = float(anchor_pose.position[0]) + dx
+    y_m = float(anchor_pose.position[1]) + dy
+    theta_rad = None if dtheta_rad is None else h + dtheta_rad
+    return (x_m, y_m, theta_rad)
+
+
+@dsl(hidden=True)
+class GotoRelative(MotionStep):
+    """Internal closed-loop navigate-to-RELATIVE-pose step.
+
+    Captures the localization pose at ``on_start`` as an anchor, composes the
+    body-frame delta ``(forward_m, left_m, dtheta_rad)`` onto it to obtain an
+    absolute world target, then runs the IDENTICAL proportional closed-loop as
+    :class:`Goto` (reusing :func:`_compute_body_velocity`).  Used by the
+    ``to_absolute`` optimizer pass to turn dead-reckoning relative legs into
+    feedback-regulated navigate-to-pose moves whose absolute target is unknown
+    at compile time but fixed at run time relative to the run-start pose.
+
+    Requires ``robot.localization`` (the particle filter); raises at start
+    otherwise.
+    """
+
+    def __init__(
+        self,
+        forward_m: float,
+        left_m: float,
+        dtheta_rad: float | None = None,
+        speed: float = 1.0,
+        pos_tol_m: float = 0.02,
+        heading_tol_rad: float = math.radians(3.0),
+    ) -> None:
+        super().__init__()
+        if not isinstance(speed, int | float):
+            msg = f"speed must be a number, got {type(speed).__name__}"
+            raise TypeError(msg)
+        if not (0.0 < speed <= 1.0):
+            msg = f"speed must be in (0.0, 1.0], got {speed}"
+            raise ValueError(msg)
+        if pos_tol_m <= 0.0:
+            msg = f"pos_tol_m must be > 0, got {pos_tol_m}"
+            raise ValueError(msg)
+        if heading_tol_rad <= 0.0:
+            msg = f"heading_tol_rad must be > 0, got {heading_tol_rad}"
+            raise ValueError(msg)
+        self._forward_m = forward_m
+        self._left_m = left_m
+        self._dtheta_rad = dtheta_rad
+        self._speed = speed
+        self._pos_tol_m = pos_tol_m
+        self._heading_tol_rad = heading_tol_rad
+        # Resolved at on_start once the anchor pose is known.
+        self._target: _Target | None = None
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive", "localization"})
+
+    def _generate_signature(self) -> str:
+        dtheta = "None" if self._dtheta_rad is None else f"{math.degrees(self._dtheta_rad):.1f}"
+        return (
+            f"GotoRelative(fwd={self._forward_m:.2f}, " f"left={self._left_m:.2f}, dtheta={dtheta})"
+        )
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        if getattr(robot, "localization", None) is None:
+            msg = "goto_relative() requires robot.localization (the particle filter)"
+            raise RuntimeError(msg)
+        anchor = robot.localization.get_pose()
+        x_m, y_m, theta_rad = _anchor_to_world_target(
+            anchor, self._forward_m, self._left_m, self._dtheta_rad
+        )
+        self._target = _Target(x_m=x_m, y_m=y_m, theta_rad=theta_rad)
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        pose = robot.localization.get_pose()
+        cmd = _compute_body_velocity(
+            pose,
+            self._target,
+            self._speed,
+            pos_tol_m=self._pos_tol_m,
+            heading_tol_rad=self._heading_tol_rad,
+        )
+        if cmd.reached:
+            return True
+
+        cfg = robot.motion_pid_config
+        robot.drive.set_velocity(
+            ChassisVelocity(
+                _clamp(cmd.vx, cfg.linear.max_velocity),
+                _clamp(cmd.vy, cfg.lateral.max_velocity),
+                _clamp(cmd.wz, cfg.angular.max_velocity),
+            )
+        )
+        robot.drive.update(dt)
+        return False
+
+
+@dsl(tags=["motion", "drive"])
+def goto_relative(
+    forward_cm: float,
+    left_cm: float = 0.0,
+    dtheta_deg: float | None = None,
+    speed: float = 1.0,
+    pos_tol_cm: float = 2.0,
+    heading_tol_deg: float = 3.0,
+) -> GotoRelative:
+    """Drive to a pose given as a body-frame delta from the run-start pose.
+
+    Closed-loop *navigate-to-pose by delta*: at start the step captures the
+    live localization pose as an anchor, composes the body-frame displacement
+    ``(forward_cm, left_cm)`` and optional heading change ``dtheta_deg`` onto
+    it to obtain an absolute world target, then regulates onto that target with
+    the IDENTICAL proportional controller as :func:`goto` (reading
+    ``robot.localization.get_pose()`` each tick). Unlike the dead-reckoning
+    ``drive_forward`` / ``strafe_*`` steps, it converges on the computed target
+    pose regardless of accumulated odometry drift.
+
+    The absolute target is not known at construction time — it equals
+    ``anchor ⊕ delta`` and is fixed only once the anchor pose is sampled at
+    ``on_start``. This is what lets the ``to_absolute`` optimizer pass convert a
+    run of relative legs into closed-loop moves with no executor changes.
+
+    Sign convention (matches :func:`goto` / the HAL ``ChassisVelocity``):
+    ``+forward_cm`` is the anchor heading direction, ``+left_cm`` is 90° CCW
+    (to the robot's left), ``+dtheta_deg`` is counter-clockwise.
+
+    Prerequisites:
+        - ``robot.localization`` (the particle filter) must be available;
+          the step raises ``RuntimeError`` at start if it is missing.
+        - A mecanum / omni-wheel drivetrain for full 2-D translation.
+
+    Args:
+        forward_cm: Body-forward displacement from the anchor, centimetres.
+        left_cm: Body-left displacement from the anchor, centimetres
+            (default ``0.0``).
+        dtheta_deg: Heading change relative to the anchor heading, degrees,
+            or ``None`` (default) to leave heading uncorrected.
+        speed: Velocity scale in ``(0.0, 1.0]`` (default ``1.0``).
+        pos_tol_cm: Position tolerance in centimetres (default ``2.0``).
+        heading_tol_deg: Heading tolerance in degrees (default ``3.0``); only
+            used when ``dtheta_deg`` is given.
+
+    Returns:
+        :class:`GotoRelative` — a ``MotionStep`` running the closed-loop
+        controller against the anchor-relative target.
+
+    Raises:
+        RuntimeError: at start, if ``robot.localization`` is unavailable.
+
+    Example::
+
+        from raccoon.step.motion import goto_relative
+
+        goto_relative(50)  # drive 0.5 m forward (closed-loop)
+        goto_relative(50, dtheta_deg=90)  # 0.5 m forward, end 90° CCW
+        goto_relative(30, left_cm=20)  # 0.3 m forward + 0.2 m left
+    """
+    return GotoRelative(
+        forward_m=forward_cm / 100.0,
+        left_m=left_cm / 100.0,
+        dtheta_rad=None if dtheta_deg is None else math.radians(dtheta_deg),
+        speed=speed,
+        pos_tol_m=pos_tol_cm / 100.0,
+        heading_tol_rad=math.radians(heading_tol_deg),
+    )
+
+
 @dsl(tags=["motion", "drive"])
 def goto(
     x_cm: float,
@@ -284,4 +480,4 @@ def goto(
     )
 
 
-__all__ = ["Goto", "goto"]
+__all__ = ["Goto", "GotoRelative", "goto", "goto_relative"]
