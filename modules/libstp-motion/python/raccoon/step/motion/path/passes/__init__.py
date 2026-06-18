@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..ir import PathNode
+from .contract import Representation
 from .lowering import (
     extract_segment,
     resolve_step,
@@ -31,6 +32,8 @@ from .to_absolute import ToAbsolutePass
 from .absolute_heading import AbsoluteHeadingPass
 
 __all__ = [
+    # Contract
+    "Representation",
     # Lowering
     "extract_segment",
     "resolve_step",

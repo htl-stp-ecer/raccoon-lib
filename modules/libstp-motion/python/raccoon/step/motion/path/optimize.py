@@ -5,23 +5,27 @@ Where ``smooth_path()`` exposes optimization as boolean flags, ``optimize()``
 exposes it as a chain of explicit passes — Java-stream style::
 
     optimize([drive_forward(50), turn_right(90), drive_forward(30)])
-        .merge()
         .cut_corners(5)
 
 The builder is itself a ``Step``: it compiles its raw steps through
 ``PathCompiler`` and runs the result through ``PathExecutor``, mirroring the
 non-absolute, non-spline execution wiring of ``SmoothPath``.
 
-A small compile-time state machine validates pass composition.  Each pass may
-optionally declare the segment representation it ``requires`` / ``produces``
-and whether it is ``terminal``; passes that don't declare these (the existing
-``MergePass`` / ``CornerCutPass``) default to ``EITHER`` / ``SAME`` /
-non-terminal and keep working unchanged.
+``DecomposePass`` then ``MergePass`` are ALWAYS-ON — prepended to every
+compiled pipeline before the user's chained passes — because both are
+behavior-preserving.  Use ``seq()`` instead of ``optimize()`` if you want
+neither.
+
+A small compile-time state machine validates composition of the CHAINED
+passes.  Each pass may optionally declare the segment representation it
+``requires`` / ``produces`` and whether it is ``terminal`` (see
+``passes/contract.py`` for :class:`Representation` and the defaults); passes
+that don't declare these (``MergePass`` / ``CornerCutPass``) default to
+``EITHER`` / ``SAME`` / non-terminal and keep working unchanged.
 """
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import TYPE_CHECKING
 
 from ... import Step
@@ -33,9 +37,15 @@ from .passes import (
     CornerCutPass,
     DecomposePass,
     MergePass,
+    Representation,
     SplinifyPass,
     ToAbsolutePass,
     flatten_steps,
+)
+from .passes.contract import (
+    DEFAULT_PRODUCES,
+    DEFAULT_REQUIRES,
+    DEFAULT_TERMINAL,
 )
 
 if TYPE_CHECKING:
@@ -45,30 +55,11 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Pass contract extension
 # ---------------------------------------------------------------------------
-
-
-class Representation(Enum):
-    """Segment representation a pass consumes or produces.
-
-    - ``RELATIVE`` — body-frame deltas (the default stream representation).
-    - ``ABSOLUTE`` — world-frame waypoints.
-    - ``EITHER``   — a pass that accepts whatever representation is current.
-    - ``SAME``     — a pass that leaves the representation unchanged.
-    """
-
-    RELATIVE = "relative"
-    ABSOLUTE = "absolute"
-    EITHER = "either"
-    SAME = "same"
-
-
-# Module-level defaults for the (optional) extended pass contract.  A pass may
-# declare ``requires`` / ``produces`` / ``terminal`` as class attributes; if it
-# doesn't, these defaults apply.  Existing passes therefore behave as
-# EITHER / SAME / non-terminal.
-DEFAULT_REQUIRES = Representation.EITHER
-DEFAULT_PRODUCES = Representation.SAME
-DEFAULT_TERMINAL = False
+#
+# ``Representation`` and the ``DEFAULT_*`` constants live in
+# ``path/passes/contract.py`` (a neutral module) so passes can declare
+# ``requires`` / ``produces`` / ``terminal`` against them without a circular
+# import back into this module.  They are re-imported above.
 
 
 def _pass_requires(p) -> Representation:
@@ -131,11 +122,20 @@ def _render_nodes(nodes) -> str:
 class Optimizer(Step):
     """Fluent path optimizer — compiles motion steps through opt-in passes.
 
-    Built via the ``optimize()`` factory.  Chain ``.merge()``,
-    ``.cut_corners()`` or ``.apply(custom_pass)`` to append compiler passes;
-    each returns ``self`` so calls compose Java-stream style.  Execution
-    compiles the raw steps through ``PathCompiler`` and runs the result on
-    ``PathExecutor`` (relative, non-spline path).
+    Built via the ``optimize()`` factory.  Chain ``.cut_corners()``,
+    ``.to_absolute()``, ``.splinify()``, ``.absolute_heading()`` or
+    ``.apply(custom_pass)`` to append compiler passes; each returns ``self`` so
+    calls compose Java-stream style.  Execution compiles the raw steps through
+    ``PathCompiler`` and runs the result on ``PathExecutor`` (relative,
+    non-spline path).
+
+    Two passes are ALWAYS-ON and run before any user pass: ``DecomposePass``
+    (splits ``after_cm + sensor`` legs in time) then ``MergePass`` (collapses
+    adjacent same-type legs).  Both are behavior-preserving RELATIVE→RELATIVE
+    transforms, so they are prepended to the compiled pipeline without going
+    through ``_add`` (they don't affect the representation state the user's
+    passes are validated against).  If you want neither, use ``seq()`` rather
+    than ``optimize()``.
     """
 
     hz: int = 100
@@ -173,32 +173,18 @@ class Optimizer(Step):
 
         return self
 
-    # -- public chain methods ----------------------------------------------
+    def _effective_passes(self) -> list:
+        """The full compiled pass pipeline: always-on prepends + user passes.
 
-    def merge(self) -> "Optimizer":
-        """Collapse adjacent same-type/same-direction segments (``MergePass``)."""
-        return self._add(MergePass())
-
-    def decompose(self) -> "Optimizer":
-        """Split ``after_cm + sensor`` legs so the known part is optimizable.
-
-        For each ``linear`` / ``follow_line`` leg whose stop condition is a
-        sequential ``_Then`` led by a bare relative ``after_cm`` (e.g.
-        ``.until(after_cm(12) + over_line(sensor))``), ``DecomposePass`` splits
-        the single drive into TWO segments in time: a known-distance leg (the
-        ``after_cm`` distance, recovered into ``distance_m`` /
-        ``has_known_endpoint``) followed by the remaining-condition leg (still
-        unknown-endpoint).  A chain
-        ``after_cm(a) + after_cm(b) + sensor`` peels into
-        ``[a-known, b-known, sensor-unknown]`` — each ``after_cm`` measures from
-        its own segment start, so each becomes a real known distance.
-
-        The split-out known leg now qualifies for ``.to_absolute()`` /
-        ``.splinify()``, which otherwise skip the whole leg because the combined
-        ``_Then`` condition may stop early.  Run this BEFORE ``.to_absolute()``
-        or ``.splinify()``.
+        ``DecomposePass`` then ``MergePass`` always run first (both are
+        behavior-preserving RELATIVE→RELATIVE transforms), followed by the
+        user's opt-in passes in the order they were chained.  decompose runs
+        before merge — and both before user passes — which also yields the
+        canonical "merge before cut_corners" ordering for free.
         """
-        return self._add(DecomposePass())
+        return [DecomposePass(), MergePass(), *self._passes]
+
+    # -- public chain methods ----------------------------------------------
 
     def to_absolute(self) -> "Optimizer":
         """Convert known-endpoint relative runs into closed-loop navigate-to-pose.
@@ -265,11 +251,13 @@ class Optimizer(Step):
         return frozenset(result)
 
     def _generate_signature(self) -> str:
-        return f"Optimize(passes={[p.name for p in self._passes]})"
+        # Show the effective pipeline (always-on decompose+merge prepended)
+        # so the signature reflects what actually runs at compile time.
+        return f"Optimize(passes={[p.name for p in self._effective_passes()]})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """Compile the raw steps and run the plan via the path executor."""
-        plan = PathCompiler(self._passes).compile(self._raw_steps)
+        plan = PathCompiler(self._effective_passes()).compile(self._raw_steps)
         executor = PathExecutor(
             nodes=plan.nodes,
             deferred=plan.deferred,
@@ -290,7 +278,8 @@ class Optimizer(Step):
 
         lines: list[str] = ["Optimize.explain():", "raw (lowering):", _render_nodes(nodes)]
 
-        for p in self._passes:
+        effective = self._effective_passes()
+        for p in effective:
             nodes = p.run(nodes)
             lines.append(f"after {p.name}:")
             lines.append(_render_nodes(nodes))
@@ -301,7 +290,7 @@ class Optimizer(Step):
         lines.append(
             f"summary: {len(nodes)} nodes "
             f"({seg_count} segment(s), {action_count} side action(s), "
-            f"{deferred_count} deferred); passes=[{', '.join(p.name for p in self._passes)}]"
+            f"{deferred_count} deferred); passes=[{', '.join(p.name for p in effective)}]"
         )
         return "\n".join(lines)
 
@@ -320,28 +309,31 @@ def optimize(steps) -> Optimizer:
     returns the builder, Java-stream style::
 
         optimize([drive_forward(50), turn_right(90), drive_forward(30)])
-            .merge()
             .cut_corners(5)
 
-    With no passes appended it is a drop-in for ``seq(steps)`` — the executor
-    runs the lowered segments back-to-back with its normal warm-start loop.
+    ``decompose`` then ``merge`` ALWAYS run first (before any chained pass):
+    both are behavior-preserving, so ``optimize()`` always splits
+    ``after_cm + sensor`` legs and collapses adjacent same-type legs.  If you
+    want neither, use ``seq(steps)`` instead.
 
-    A compile-time state machine validates pass order: a pass may declare the
-    segment ``Representation`` it requires/produces and whether it is terminal.
-    Composing passes that disagree (e.g. an absolute-only pass on a relative
-    stream, or any pass after a terminal one) raises ``PathBuildError`` at
-    build time.
+    A compile-time state machine validates the order of the CHAINED passes: a
+    pass may declare the segment ``Representation`` it requires/produces and
+    whether it is terminal.  Composing passes that disagree (e.g. an
+    absolute-only pass on a relative stream, or any pass after a terminal one)
+    raises ``PathBuildError`` at build time.
 
-    Available passes:
+    Available chained passes:
 
-    - ``.merge()`` — collapse adjacent same-type, same-direction segments
-      (``drive(30)+drive(20)`` → ``drive(50)``).
     - ``.cut_corners(radius_cm)`` — replace ``linear+turn+linear`` corners
       with a circular arc, trimming ``radius_cm`` from each straight leg.
+    - ``.to_absolute()`` — convert known-endpoint relative runs into one
+      closed-loop navigate-to-pose move.
+    - ``.absolute_heading()`` — pin every straight leg to one integrated heading.
+    - ``.splinify()`` — collapse the relative run into one spline (terminal).
     - ``.apply(pass)`` — append any custom ``CompilerPass``.
 
-    Use ``.explain()`` to dump the IR node list after each pass without
-    executing anything.
+    Use ``.explain()`` to dump the IR node list after each pass (including the
+    always-on decompose + merge) without executing anything.
 
     Prerequisites:
         ``calibrate_distance()`` if any segment uses distance-based mode.
@@ -365,7 +357,7 @@ def optimize(steps) -> Optimizer:
                 turn_right(90),
                 drive_forward(40),
             ]
-        ).merge().cut_corners(5)
+        ).cut_corners(5)
     """
     raw = list(steps) if isinstance(steps, list | tuple) else [steps]
     return Optimizer(raw)

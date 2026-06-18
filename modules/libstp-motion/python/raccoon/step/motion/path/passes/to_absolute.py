@@ -37,10 +37,10 @@ Best-effort: segments that don't qualify are left untouched; the pass never
 crashes.  ``.until(after_cm)`` legs qualify automatically — their distance is
 recovered at lowering time.
 
-Representation declaration is intentionally left undeclared (defaults to
-``EITHER`` / ``SAME`` / non-terminal) for v1 — see ``optimize.py`` for the
-contract.  Declaring ``requires = Representation.RELATIVE`` from here would
-introduce a circular import with ``optimize.py``, so it is omitted.
+This pass declares ``produces = Representation.ABSOLUTE`` (imported from the
+neutral ``.contract`` module — no circular import): once a run is converted to
+a closed-loop ``GotoWaypoints``, the stream is in world-frame absolute terms, so
+a downstream RELATIVE-only pass (e.g. ``splinify``) is rejected at build time.
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ import math
 from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
+from .contract import Representation
 
 _RUN_KINDS = ("linear", "turn", "diagonal")
 
@@ -153,11 +154,12 @@ class ToAbsolutePass:
     through unchanged.  ``.until(after_cm())`` legs qualify automatically — their
     distance is recovered at lowering time.
 
-    Representation/terminal contract left undeclared (defaults to
-    ``EITHER`` / ``SAME`` / non-terminal) for v1.
+    Declares ``produces = Representation.ABSOLUTE`` so the optimizer's state
+    machine knows the stream is world-frame after this pass.
     """
 
     name = "to_absolute"
+    produces = Representation.ABSOLUTE
 
     def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
         from ...goto import GotoWaypoints  # deferred to avoid import cycle

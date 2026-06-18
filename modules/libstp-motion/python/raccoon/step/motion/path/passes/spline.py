@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
+from .contract import Representation
 
 if TYPE_CHECKING:
     from ...spline_path import SplinePath
@@ -68,35 +69,34 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
     for node in nodes:
         if node is None:
             msg = (
-                "smooth_path(spline=True) cannot contain Defer steps — "
+                "splinify() cannot contain Defer steps — "
                 "waypoints must be fully known at construction time"
             )
             raise ValueError(msg)
         if isinstance(node, SideAction):
             msg = (
-                "smooth_path(spline=True) cannot contain side actions "
-                "(background(), Run, or non-drive steps)"
+                "splinify() cannot contain side actions " "(background(), Run, or non-drive steps)"
             )
             raise ValueError(msg)
         if isinstance(node, Segment):
             if node.condition is not None:
                 msg = (
-                    "smooth_path(spline=True) cannot contain condition-based "
+                    "splinify() cannot contain condition-based "
                     "segments (.until()) — endpoint must be known"
                 )
                 raise ValueError(msg)
             if not node.has_known_endpoint:
-                msg = "smooth_path(spline=True) requires all segments to have " "known endpoints"
+                msg = "splinify() requires all segments to have " "known endpoints"
                 raise ValueError(msg)
             if node.kind == "arc":
                 msg = (
-                    "smooth_path(spline=True) cannot contain arc segments — "
+                    "splinify() cannot contain arc segments — "
                     "use corner_cut_cm instead, or remove the arc"
                 )
                 raise ValueError(msg)
             if node.kind in ("follow_line", "spline"):
                 msg = (
-                    f"smooth_path(spline=True) cannot contain "
+                    f"splinify() cannot contain "
                     f"{node.kind} segments — endpoint must be a simple "
                     f"linear/turn sequence"
                 )
@@ -106,7 +106,7 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
     linear_count = sum(1 for s in segs if s.kind == "linear")
     if linear_count < 2:
         msg = (
-            "smooth_path(spline=True) requires at least 2 linear segments "
+            "splinify() requires at least 2 linear segments "
             f"to form a valid spline (found {linear_count})"
         )
         raise ValueError(msg)
@@ -132,6 +132,7 @@ class SplinifyPass:
     """
 
     name = "splinify"
+    requires = Representation.RELATIVE
     terminal = True
 
     def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:

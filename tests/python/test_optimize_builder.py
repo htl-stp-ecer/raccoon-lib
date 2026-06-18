@@ -89,28 +89,37 @@ class TestBuildAndCompile:
 
 
 # ---------------------------------------------------------------------------
-# merge()
+# merge — now ALWAYS-ON (no .merge() method); _compiled_nodes drives the
+# effective pipeline (decompose + merge prepended) since it compiles
+# opt._effective_passes() below.
 # ---------------------------------------------------------------------------
+
+
+def _effective_compiled_nodes(opt):
+    """Compile through the effective (always-on prepended) pipeline."""
+    from raccoon.step.motion.path.compiler import PathCompiler
+
+    return PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
 
 
 class TestMerge:
     @requires_libstp
-    def test_merge_appends_pass(self):
+    def test_merge_is_always_on(self):
+        """Two adjacent drives merge with NO .merge() call (merge is always-on)."""
         imp = _imports()
         opt = imp["optimize"]([imp["drive_forward"](20), imp["drive_forward"](30)])
-        opt.merge()
-        assert len(opt._passes) == 1
-        assert isinstance(opt._passes[0], imp["MergePass"])
+        # No user passes were chained.
+        assert opt._passes == []
+        # But the effective pipeline prepends decompose + merge.
+        names = [p.name for p in opt._effective_passes()]
+        assert names[:2] == ["decompose", "merge"]
 
     @requires_libstp
     def test_merge_collapses_two_adjacent_drives(self):
         imp = _imports()
-        base = imp["optimize"]([imp["drive_forward"](20), imp["drive_forward"](30)])
-        before = [n for n in _compiled_nodes(base) if isinstance(n, imp["Segment"])]
-        assert len(before) == 2
-
-        merged = imp["optimize"]([imp["drive_forward"](20), imp["drive_forward"](30)]).merge()
-        after = [n for n in _compiled_nodes(merged) if isinstance(n, imp["Segment"])]
+        opt = imp["optimize"]([imp["drive_forward"](20), imp["drive_forward"](30)])
+        after = [n for n in _effective_compiled_nodes(opt) if isinstance(n, imp["Segment"])]
+        # ONE merged linear (0.50 m) even though no .merge() was called.
         assert len(after) == 1
         assert abs(after[0].distance_m - 0.5) < 1e-6
 
@@ -198,17 +207,24 @@ class TestExplain:
     @requires_libstp
     def test_explain_contains_each_pass_name_and_linear(self):
         imp = _imports()
-        opt = (
-            imp["optimize"](
-                [imp["drive_forward"](50), imp["turn_right"](90), imp["drive_forward"](40)]
-            )
-            .merge()
-            .cut_corners(5)
-        )
+        opt = imp["optimize"](
+            [imp["drive_forward"](50), imp["turn_right"](90), imp["drive_forward"](40)]
+        ).cut_corners(5)
         text = opt.explain()
-        assert "merge" in text
+        # Always-on stages are rendered.
+        assert "after decompose" in text
+        assert "after merge" in text
+        # The chained pass is rendered too.
         assert "corner_cut" in text
         assert "linear" in text
+
+    @requires_libstp
+    def test_explain_shows_always_on_without_user_passes(self):
+        imp = _imports()
+        opt = imp["optimize"]([imp["drive_forward"](20), imp["drive_forward"](30)])
+        text = opt.explain()
+        assert "after decompose" in text
+        assert "after merge" in text
 
 
 # ---------------------------------------------------------------------------
@@ -233,3 +249,81 @@ class TestDropIn:
         compiled = _compiled_nodes(opt)
         flat, _ = imp["flatten_steps"](list(steps))
         assert compiled == flat
+
+
+# ---------------------------------------------------------------------------
+# Representation guard + splinify message hygiene (the bug fix)
+# ---------------------------------------------------------------------------
+
+
+class _FakeIRSensor:
+    """Minimal IRSensor stand-in for ``over_line``."""
+
+    def probabilityOfBlack(self) -> float:
+        return 0.0
+
+    def probabilityOfWhite(self) -> float:
+        return 1.0
+
+
+class TestRepresentationGuard:
+    @requires_libstp
+    def test_to_absolute_then_splinify_raises_build_error(self):
+        """to_absolute() produces ABSOLUTE; splinify() requires RELATIVE.
+
+        The guard fires at BUILD time with a clean PathBuildError, not a raw
+        ValueError from build_spline_step.
+        """
+        imp = _imports()
+        opt = imp["optimize"]([imp["drive_forward"](50), imp["drive_forward"](30)]).to_absolute()
+        with pytest.raises(imp["PathBuildError"]) as excinfo:
+            opt.splinify()
+        msg = str(excinfo.value)
+        assert "splinify" in msg
+        assert "RELATIVE" in msg
+        assert "ABSOLUTE" in msg
+
+    @requires_libstp
+    def test_cut_corners_then_splinify_value_error_message(self):
+        """cut_corners() stays RELATIVE, so splinify() reaches compile and the
+        ValueError from build_spline_step must name splinify(), not smooth_path.
+        """
+        from raccoon.step.motion.path.compiler import PathCompiler
+
+        imp = _imports()
+        opt = (
+            imp["optimize"](
+                [imp["drive_forward"](50), imp["turn_right"](90), imp["drive_forward"](40)]
+            )
+            .cut_corners(5)
+            .splinify()
+        )
+        with pytest.raises(ValueError) as excinfo:
+            PathCompiler(opt._effective_passes()).compile(opt._raw_steps)
+        msg = str(excinfo.value)
+        assert "splinify()" in msg
+        assert "smooth_path" not in msg
+
+
+# ---------------------------------------------------------------------------
+# Always-on decompose (no .decompose() method)
+# ---------------------------------------------------------------------------
+
+
+class TestAlwaysOnDecompose:
+    @requires_libstp
+    def test_after_cm_plus_sensor_split_without_decompose(self):
+        """An after_cm + sensor leg splits into TWO segments with no .decompose()."""
+        from raccoon.step.condition import after_cm, over_line
+
+        imp = _imports()
+        sensor = _FakeIRSensor()
+        cond = after_cm(12) + over_line(sensor)
+        opt = imp["optimize"]([imp["drive_forward"]().until(cond)])
+        nodes = _effective_compiled_nodes(opt)
+        segs = [n for n in nodes if isinstance(n, imp["Segment"])]
+        assert len(segs) == 2
+        known, rest = segs
+        assert known.has_known_endpoint is True
+        assert abs(known.distance_m - 0.12) < 1e-9
+        assert rest.has_known_endpoint is False

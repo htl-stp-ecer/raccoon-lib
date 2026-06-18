@@ -195,8 +195,10 @@ def test_builder_decompose_then_to_absolute():
     sensor = _FakeIRSensor()
     cond = imp["after_cm"](12) + imp["over_line"](sensor)
 
-    opt = optimize([imp["drive_forward"]().until(cond)]).decompose().to_absolute()
-    nodes = PathCompiler(opt._passes).compile(opt._raw_steps).nodes
+    # decompose is ALWAYS-ON, so we only chain to_absolute(); the effective
+    # pipeline (decompose + merge prepended) still splits the leg first.
+    opt = optimize([imp["drive_forward"]().until(cond)]).to_absolute()
+    nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
 
     # The known leg became a GotoWaypoints SideAction.
     goto_actions = [
