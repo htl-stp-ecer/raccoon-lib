@@ -31,6 +31,7 @@ from .ir import Segment, SideAction
 from .passes import (
     AbsoluteHeadingPass,
     CornerCutPass,
+    DecomposePass,
     MergePass,
     SplinifyPass,
     ToAbsolutePass,
@@ -158,7 +159,7 @@ class Optimizer(Step):
 
         req = _pass_requires(p)
         if req not in (self._repr, Representation.EITHER):
-            msg = f"{p.name}() needs {req.name} segments, stream is " f"{self._repr.name} — reorder"
+            msg = f"{p.name}() needs {req.name} segments, stream is {self._repr.name} — reorder"
             raise PathBuildError(msg)
 
         self._passes.append(p)
@@ -177,6 +178,27 @@ class Optimizer(Step):
     def merge(self) -> "Optimizer":
         """Collapse adjacent same-type/same-direction segments (``MergePass``)."""
         return self._add(MergePass())
+
+    def decompose(self) -> "Optimizer":
+        """Split ``after_cm + sensor`` legs so the known part is optimizable.
+
+        For each ``linear`` / ``follow_line`` leg whose stop condition is a
+        sequential ``_Then`` led by a bare relative ``after_cm`` (e.g.
+        ``.until(after_cm(12) + over_line(sensor))``), ``DecomposePass`` splits
+        the single drive into TWO segments in time: a known-distance leg (the
+        ``after_cm`` distance, recovered into ``distance_m`` /
+        ``has_known_endpoint``) followed by the remaining-condition leg (still
+        unknown-endpoint).  A chain
+        ``after_cm(a) + after_cm(b) + sensor`` peels into
+        ``[a-known, b-known, sensor-unknown]`` — each ``after_cm`` measures from
+        its own segment start, so each becomes a real known distance.
+
+        The split-out known leg now qualifies for ``.to_absolute()`` /
+        ``.splinify()``, which otherwise skip the whole leg because the combined
+        ``_Then`` condition may stop early.  Run this BEFORE ``.to_absolute()``
+        or ``.splinify()``.
+        """
+        return self._add(DecomposePass())
 
     def to_absolute(self) -> "Optimizer":
         """Convert known-endpoint relative runs into closed-loop navigate-to-pose.

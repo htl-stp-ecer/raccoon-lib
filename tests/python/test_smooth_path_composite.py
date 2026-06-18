@@ -275,13 +275,21 @@ class TestConstructionTimeValidation:
         with pytest.raises(ValueError, match="requires at least one motion step"):
             SmoothPath([ServoStub()])
 
-    def test_unsupported_drive_step_raises(self):
-        from raccoon.step.motion.smooth_path import SmoothPath
+    def test_unsupported_drive_step_becomes_barrier(self):
+        """A drive-resource step that doesn't lower runs unoptimized as an
+        opaque inline barrier (never crashes the optimizer)."""
+        from raccoon.step.motion.drive_dsl import drive_forward
+        from raccoon.step.motion.smooth_path import SmoothPath, _SideAction
 
         _, UnsupportedDriveStep = _make_stubs()
 
-        with pytest.raises(TypeError, match="does not support UnsupportedDriveStep"):
-            SmoothPath([UnsupportedDriveStep()])
+        # Pair it with a real motion step so SmoothPath has a motion spine.
+        sp = SmoothPath([drive_forward(cm=10.0), UnsupportedDriveStep()])
+
+        side_actions = [n for n in sp._nodes if isinstance(n, _SideAction)]
+        assert len(side_actions) == 1
+        assert side_actions[0].is_background is False
+        assert isinstance(side_actions[0].step, UnsupportedDriveStep)
 
     def test_deferred_only_does_not_raise(self):
         """A path with only Defer should be accepted at construction."""

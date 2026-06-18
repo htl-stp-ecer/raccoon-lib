@@ -24,6 +24,7 @@ from .lowering import (
 )
 from .merge import can_merge, merge_two, run_merge, MergePass
 from .known_distance import recover_known_distance
+from .decompose import DecomposePass
 from .corner_cut import try_corner_arc, run_corner_cut, CornerCutPass
 from .spline import segments_to_spline_waypoints, build_spline_step, SplinifyPass
 from .to_absolute import ToAbsolutePass
@@ -44,6 +45,8 @@ __all__ = [
     "MergePass",
     # Known distance (applied at lowering time, not a pass)
     "recover_known_distance",
+    # Decompose
+    "DecomposePass",
     # Corner cut
     "try_corner_arc",
     "run_corner_cut",

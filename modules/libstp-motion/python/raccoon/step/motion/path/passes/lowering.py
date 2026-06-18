@@ -12,6 +12,7 @@ identifies the motion spine inside parallel branches, and produces:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
@@ -22,6 +23,8 @@ from .known_distance import recover_known_distance
 if TYPE_CHECKING:
     from .... import Step
     from ....logic.defer import Defer
+
+_log = logging.getLogger(__name__)
 
 
 def extract_segment(step: "Step") -> Segment:
@@ -92,6 +95,7 @@ def flatten_one(
     from ....logic.defer import Defer, Run
     from ....parallel import Parallel
     from ....sequential import Sequential
+    from ....timeout_or import TimeoutOr
 
     # 1. Resolve builder (e.g., drive_forward(30) or defer(...) returns a
     #    builder). Must happen before the isinstance checks below so that
@@ -126,7 +130,14 @@ def flatten_one(
         nodes.append(SideAction(step=step, is_background=False))
         return
 
-    # 7. Try to extract as a motion segment.
+    # 7. TimeoutOr — time-bounded race wrapping a (possibly drive) branch.
+    #    It's a legitimate opaque composite, not unsupported negligence, so it
+    #    runs unoptimized as an inline barrier WITHOUT a drive-step warning.
+    if isinstance(step, TimeoutOr):
+        nodes.append(SideAction(step=step, is_background=False))
+        return
+
+    # 8. Try to extract as a motion segment.
     try:
         seg = extract_segment(step)
         nodes.append(seg)
@@ -134,17 +145,20 @@ def flatten_one(
     except TypeError:
         pass
 
-    # 8. Non-motion step — check if it uses the drive resource.
+    # 9. Step lowered to no segments — run it unoptimized as an opaque inline
+    #    barrier. A step that uses the drive resource but can't describe its
+    #    motion is a yellow flag (drive step running unoptimized), so emit a
+    #    one-time warning naming it.
     resources = step.collected_resources()
     if "drive" in resources:
-        msg = (
-            f"smooth_path() does not support {type(step).__name__} — "
-            f"it uses the drive resource but is not a supported motion step. "
-            f"Supported: drive, turn, arc, follow_line, follow_line_single, spline."
+        _log.warning(
+            "smooth_path(): %s uses the drive resource but does not lower to "
+            "motion segments — running it unoptimized as an opaque barrier. "
+            "Supported motion steps: drive, turn, arc, follow_line, "
+            "follow_line_single, spline.",
+            type(step).__name__,
         )
-        raise TypeError(msg)
 
-    # 9. Non-drive step — treat as inline side action.
     nodes.append(SideAction(step=step, is_background=False))
 
 
