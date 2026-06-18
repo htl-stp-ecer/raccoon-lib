@@ -33,6 +33,12 @@ from .abs_factory import (
     action,
 )
 from .compiler import CompilerPass, CompiledPlan, PathCompiler
+from .optimize import (
+    Optimizer,
+    Representation,
+    PathBuildError,
+    optimize,
+)
 from .abs_compiler import CompiledAbsolutePlan, compile_plan
 from .abs_desugar import (
     IntendedPose,
@@ -71,6 +77,11 @@ __all__ = [
     "CompilerPass",
     "CompiledPlan",
     "PathCompiler",
+    # Fluent optimizer builder
+    "Optimizer",
+    "Representation",
+    "PathBuildError",
+    "optimize",
     # Compilation (absolute, Phase 3)
     "CompiledAbsolutePlan",
     "compile_plan",

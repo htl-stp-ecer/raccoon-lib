@@ -146,6 +146,7 @@ from .drive_to_analog_target_dsl import drive_to_analog_target
 from .custom_velocity import CustomVelocity
 from .custom_velocity_dsl import CustomVelocityBuilder, custom_velocity
 from .smooth_path import SmoothPath, smooth_path
+from .path.optimize import Optimizer, PathBuildError, optimize
 from .spline_path import SplinePath, spline
 from .set_odometry_source import SetOdometrySource
 from .set_odometry_source_dsl import set_odometry_source
@@ -232,6 +233,10 @@ __all__ = [
     "set_speed_mode",
     # Smooth path
     "smooth_path",
+    # Fluent path optimizer
+    "Optimizer",
+    "PathBuildError",
+    "optimize",
     # Spline path
     "spline",
     "stop",
