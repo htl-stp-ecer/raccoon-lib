@@ -569,11 +569,15 @@ class CalibrateDistance(UIStep):
                 self.warn("No motors were calibrated due to insufficient movement")
                 continue
 
-            # Calculate average scale factor
+            # Average distance-correction factor (requested / measured): > 1
+            # when the robot drove short. This is the multiplier a later drive
+            # needs to hit the target — the inverse of the per-wheel
+            # ticks_to_rad change applied above (old / new == requested /
+            # measured).
             scale_factors = [
-                r.new_ticks_to_rad / r.old_ticks_to_rad
+                r.old_ticks_to_rad / r.new_ticks_to_rad
                 for r in self.per_wheel_results
-                if r.old_ticks_to_rad > 0
+                if r.new_ticks_to_rad > 0
             ]
             avg_scale_factor = sum(scale_factors) / len(scale_factors) if scale_factors else 1.0
 

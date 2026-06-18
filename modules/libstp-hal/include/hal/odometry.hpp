@@ -35,11 +35,15 @@ namespace libstp::odometry
     /**
      * @brief Which sensor source currently backs the primary pose estimate.
      *
-     * The wombat platform automatically switches to the external calibration
-     * board when it is detected, because its optical-flow + IMU fusion is far
-     * more accurate than the cheap on-board dead reckoning. The internal
-     * estimate stays available through the `getInternal*()` accessors so it can
-     * be tuned against the external reference.
+     * The wombat platform can fuse an external calibration board (optical-flow
+     * + IMU), which is far more accurate than the cheap on-board dead
+     * reckoning. It only backs the primary pose when explicitly requested via
+     * setPreferredSource(CalibrationBoard) AND the board is connected;
+     * otherwise the internal estimate stays active. The internal estimate is
+     * always available through the `getInternal*()` accessors, and any source
+     * can be read passively via getPoseFromSource() — so the internal model can
+     * be tuned against the external reference without re-routing the motion
+     * system.
      */
     enum class OdometrySource
     {
@@ -159,6 +163,45 @@ namespace libstp::odometry
         [[nodiscard]] virtual OdometrySource getActiveSource() const
         {
             return OdometrySource::Internal;
+        }
+
+        /**
+         * Read a specific source's pose directly, regardless of the preferred
+         * or active source.
+         *
+         * This lets callers passively sample an alternate source (for example
+         * the external calibration board) to compare against the one currently
+         * driving the motion system, WITHOUT switching the preferred source —
+         * which would re-route the whole motion system and hard-reset the
+         * odometry frame. Use this for tuning/measurement; use
+         * setPreferredSource() only when the motion system should actually
+         * follow the other source.
+         *
+         * Implementations with no external reference return getInternalPose()
+         * for any source.
+         *
+         * @param source Source to read.
+         * @return Pose from that source in world coordinates (meters / radians).
+         */
+        [[nodiscard]] virtual foundation::Pose getPoseFromSource(OdometrySource source) const
+        {
+            (void)source;
+            return getInternalPose();
+        }
+
+        /**
+         * Whether a given source is currently connected and usable as a
+         * reference, independent of which source is preferred or active.
+         *
+         * Implementations with no external reference report true only for
+         * ::Internal.
+         *
+         * @param source Source to query.
+         * @return True if the source can currently be read.
+         */
+        [[nodiscard]] virtual bool isSourceAvailable(OdometrySource source) const
+        {
+            return source == OdometrySource::Internal;
         }
 
         /**

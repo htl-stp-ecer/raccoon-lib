@@ -8,6 +8,14 @@ from .loop_dsl import loop_forever, loop_for
 from .defer import Defer, Run
 from .defer_dsl import defer, run
 from .background import Background, WaitForBackground, background, wait_for_background
+from .run_if_env import (
+    RunIfEnv,
+    run_if_env,
+    run_unless_no_calibrate,
+    run_unless_no_checkpoints,
+    run_if_debug,
+    run_if_dev,
+)
 
 __all__ = [
     "DoWhileActive",
@@ -26,4 +34,10 @@ __all__ = [
     "WaitForBackground",
     "background",
     "wait_for_background",
+    "RunIfEnv",
+    "run_if_env",
+    "run_unless_no_calibrate",
+    "run_unless_no_checkpoints",
+    "run_if_debug",
+    "run_if_dev",
 ]

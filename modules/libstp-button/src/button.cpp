@@ -18,10 +18,10 @@ namespace libstp::button
 
     void Button::setDigital(int port)
     {
-        digital_sensor_ = std::make_unique<hal::digital::DigitalSensor>(port);
+        digital_sensor_ = std::make_shared<hal::digital::DigitalSensor>(port);
     }
 
-    void Button::setDigital(std::unique_ptr<hal::digital::DigitalSensor> sensor)
+    void Button::setDigital(std::shared_ptr<hal::digital::DigitalSensor> sensor)
     {
         digital_sensor_ = std::move(sensor);
     }

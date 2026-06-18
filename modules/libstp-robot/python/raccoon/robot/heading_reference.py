@@ -19,7 +19,14 @@ def _normalize_angle(angle: float) -> float:
 
 
 def _world_heading(robot: "GenericRobot") -> float:
-    """Read the current heading from odometry, with localization as override."""
+    """Read the current heading, preferring odometry over localization.
+
+    The motion controllers (``LinearMotion``/``TurnMotion``) close their heading
+    loop on ``odometry().getHeading()``. To keep the reference, the turn-delta
+    computation and the executed feedback in a single frame, all heading math
+    here must use the same source — odometry. Localization is only a fallback
+    when no odometry source is enabled.
+    """
     odom = getattr(robot, "odometry", None)
     loc = getattr(robot, "localization", None)
     if odom is None and loc is None:
@@ -28,11 +35,9 @@ def _world_heading(robot: "GenericRobot") -> float:
             "(at least one heading source must be enabled)."
         )
         raise RuntimeError(msg)
-    if loc is None:
-        return float(odom.get_pose().heading)
     if odom is None:
         return float(loc.get_pose().heading)
-    return float(loc.get_pose().heading)
+    return float(odom.get_pose().heading)
 
 
 class HeadingReferenceService(RobotService):
@@ -76,6 +81,23 @@ class HeadingReferenceService(RobotService):
             return None
         return math.degrees(self._reference_rad)
 
+    def current_relative_deg(self) -> float:
+        """The current world heading in degrees relative to the reference.
+
+        Uses the same positive-direction convention as :meth:`compute_turn`
+        (``"left"`` → CCW positive). Useful for logging "where we are now"
+        before a heading turn.
+
+        Raises:
+            RuntimeError: If no reference has been marked yet.
+        """
+        if self._reference_rad is None:
+            msg = "No heading reference set. Call mark_heading_reference() first."
+            raise RuntimeError(msg)
+        sign = 1.0 if self._positive_direction == "left" else -1.0
+        current_absolute = _world_heading(self.robot)
+        return math.degrees(sign * _normalize_angle(current_absolute - self._reference_rad))
+
     def target_absolute_rad(self, target_deg: float) -> float:
         """Convert a relative target (degrees from reference) to absolute IMU radians.
 
@@ -100,8 +122,9 @@ class HeadingReferenceService(RobotService):
     ) -> float:
         """Compute the signed relative turn angle to reach *target_deg* from reference.
 
-        Reads the current world heading from ``robot.localization`` (the
-        absolute-motion plan's first-class world-pose source).
+        Reads the current world heading via :func:`_world_heading` (odometry,
+        the same source the motion controllers regulate on), so the computed
+        turn delta and the executed feedback share one frame.
 
         Args:
             target_deg: Desired heading in degrees relative to the reference.

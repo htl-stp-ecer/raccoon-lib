@@ -3,7 +3,11 @@
 #include <numeric>
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
+#include <string>
 #include "Kmeans.hpp"
+#include "CalibrationStore.hpp"
+#include "CalibrationType.hpp"
 #include "foundation/logging.hpp"
 #include "spdlog/spdlog.h"
 
@@ -13,19 +17,59 @@ IRSensor::IRSensor(const int &port)
     : AnalogSensor(port),
       whiteThreshold(0),
       blackThreshold(0){
+    loadStoredCalibration();
+}
+
+void IRSensor::loadStoredCalibration() {
+    const std::string set_name = "default_port" + std::to_string(port);
+    const auto& store = libstp::calibration_store::CalibrationStore::instance();
+
+    if (store.hasReadings(libstp::calibration_store::IR_SENSOR, set_name)) {
+        // getReadings returns {white_tresh, black_tresh}.
+        const auto readings = store.getReadings(libstp::calibration_store::IR_SENSOR, set_name);
+        setCalibration(readings[1], readings[0]);
+        LIBSTP_LOG_DEBUG(
+            "IRSensor port " + std::to_string(port) +
+            ": applied stored calibration (white=" + std::to_string(whiteThreshold) +
+            ", black=" + std::to_string(blackThreshold) + ")."
+        );
+    } else {
+        LIBSTP_LOG_DEBUG(
+            "IRSensor port " + std::to_string(port) +
+            ": no stored calibration found (set '" + set_name +
+            "'); sensor stays uncalibrated until calibrated."
+        );
+    }
+}
+
+bool IRSensor::isCalibrated() const {
+    return calibrated;
+}
+
+void IRSensor::ensureCalibrated(const char* query) const {
+    if (!calibrated) {
+        throw std::runtime_error(
+            "IRSensor port " + std::to_string(port) +
+            " is not calibrated; cannot answer " + query +
+            ". Calibrate the sensor or store calibration first."
+        );
+    }
 }
 
 void IRSensor::setCalibration(const float newBlackThreshold,
                               const float newWhiteThreshold) {
     blackThreshold = newBlackThreshold;
     whiteThreshold = newWhiteThreshold;
+    calibrated = true;
 }
 
 bool IRSensor::isOnWhite() const {
+    ensureCalibrated("isOnWhite");
     return read() < whiteThreshold;
 }
 
 bool IRSensor::isOnBlack() {
+    ensureCalibrated("isOnBlack");
     return read() > blackThreshold;
 }
 
@@ -101,6 +145,7 @@ bool IRSensor::calibrate(const std::vector<float>& values) {
 
     this->whiteThreshold = white;
     this->blackThreshold = black;
+    this->calibrated = true;
 
     LIBSTP_LOG_INFO(
         "Calibration successful (port " + std::to_string(port) + "): whiteThreshold=" +
@@ -117,6 +162,7 @@ bool IRSensor::calibrate(const std::vector<float>& values) {
 }
 
 float IRSensor::probabilityOfBlack() const {
+    ensureCalibrated("probabilityOfBlack");
     const float value = read();
 
     if (value <= whiteThreshold) return 0.0f;
@@ -127,5 +173,6 @@ float IRSensor::probabilityOfBlack() const {
 }
 
 float IRSensor::probabilityOfWhite() const {
+    ensureCalibrated("probabilityOfWhite");
     return 1.0f - probabilityOfBlack();
 }
