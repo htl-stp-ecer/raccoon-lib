@@ -27,7 +27,12 @@ from .merge import can_merge, merge_two, run_merge, MergePass
 from .known_distance import recover_known_distance
 from .decompose import DecomposePass
 from .corner_cut import try_corner_arc, run_corner_cut, CornerCutPass
-from .spline import segments_to_spline_waypoints, build_spline_step, SplinifyPass
+from .spline import (
+    segments_to_spline_waypoints,
+    build_spline_step,
+    sample_centripetal_catmull_rom,
+    SplinifyPass,
+)
 from .to_absolute import ToAbsolutePass
 from .absolute_heading import AbsoluteHeadingPass
 
@@ -57,6 +62,7 @@ __all__ = [
     # Spline
     "segments_to_spline_waypoints",
     "build_spline_step",
+    "sample_centripetal_catmull_rom",
     "SplinifyPass",
     # To absolute
     "ToAbsolutePass",

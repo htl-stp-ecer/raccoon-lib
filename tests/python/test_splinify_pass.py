@@ -1,9 +1,11 @@
 """Tests for the terminal ``SplinifyPass`` optimizer pass.
 
 ``SplinifyPass`` collapses a relative linear/turn path into a single
-``Segment(kind="spline")`` node by reusing ``build_spline_step`` (validate +
-build the ``SplinePath``) and ``SplinePath.lower_to_segments`` (produce the
-single spline segment the unified executor drives).
+ABSOLUTE ``SideAction(GotoWaypoints)`` node: it reuses ``build_spline_step``
+(validate + obtain the control waypoints), densely samples the centripetal
+Catmull-Rom curve through them, and emits one closed-loop ``GotoWaypoints``
+side-action.  The validation/rejection behaviour is unchanged; only the OUTPUT
+node type changed (was ``Segment(kind="spline")``).
 """
 
 from __future__ import annotations
@@ -24,12 +26,14 @@ requires_libstp = pytest.mark.skipif(
 
 
 @requires_libstp
-def test_splinify_collapses_to_single_spline_segment():
+def test_splinify_collapses_to_single_gotowaypoints_side_action():
+    # CHANGED: SplinifyPass now emits ONE SideAction(GotoWaypoints) (absolute,
+    # closed-loop) instead of a relative Segment(kind="spline").
     from raccoon.step.motion.drive_dsl import drive_forward
-    from raccoon.step.motion.path.ir import Segment
+    from raccoon.step.motion.goto import GotoWaypoints
+    from raccoon.step.motion.path.ir import Segment, SideAction
     from raccoon.step.motion.path.passes.lowering import flatten_steps
     from raccoon.step.motion.path.passes.spline import SplinifyPass
-    from raccoon.step.motion.spline_path import SplinePath
     from raccoon.step.motion.turn_dsl import turn_right
 
     nodes, _deferred = flatten_steps([drive_forward(50), turn_right(90), drive_forward(30)])
@@ -37,15 +41,20 @@ def test_splinify_collapses_to_single_spline_segment():
     result = SplinifyPass().run(nodes)
 
     assert len(result) == 1
-    seg = result[0]
-    assert isinstance(seg, Segment)
-    assert seg.kind == "spline"
-    assert seg.has_known_endpoint is True
-    assert isinstance(seg.opaque_step, SplinePath)
+    side = result[0]
+    assert isinstance(side, SideAction)
+    assert side.is_background is False
+    assert isinstance(side.step, GotoWaypoints)
+    assert not any(isinstance(n, Segment) for n in result)
 
 
 @requires_libstp
-def test_splinify_waypoints_match_segments_to_spline_waypoints():
+def test_splinify_dense_samples_span_control_waypoints():
+    # CHANGED: the output is now GotoWaypoints carrying DENSE Catmull-Rom samples
+    # (metres, +fwd/+left) rather than a SplinePath carrying the raw control
+    # waypoints (centimetres). The dense samples span the control waypoints.
+    import math
+
     from raccoon.step.motion.drive_dsl import drive_forward
     from raccoon.step.motion.path.ir import Segment
     from raccoon.step.motion.path.passes.lowering import flatten_steps
@@ -58,14 +67,20 @@ def test_splinify_waypoints_match_segments_to_spline_waypoints():
     nodes, _deferred = flatten_steps([drive_forward(50), turn_right(90), drive_forward(30)])
 
     segs = [n for n in nodes if isinstance(n, Segment)]
-    expected = segments_to_spline_waypoints(segs)
+    control_cm = segments_to_spline_waypoints(segs)
+    # Sanity: the run actually involved a turn, so the spline curves.
+    assert len(control_cm) == 2
+    control_m = [(fwd / 100.0, left / 100.0) for (fwd, left) in control_cm]
 
     result = SplinifyPass().run(nodes)
-    spline_path = result[0].opaque_step
+    wps = result[0].step._waypoints  # (fwd_m, left_m, dtheta) dense samples
+    assert len(wps) >= 10
 
-    assert spline_path._waypoints == expected
-    # Sanity: the run actually involved a turn, so the spline curves.
-    assert len(expected) == 2
+    # First/last dense sample coincide with the first/last control waypoint.
+    assert math.isclose(wps[0][0], control_m[0][0], abs_tol=1e-6)
+    assert math.isclose(wps[0][1], control_m[0][1], abs_tol=1e-6)
+    assert math.isclose(wps[-1][0], control_m[-1][0], abs_tol=1e-6)
+    assert math.isclose(wps[-1][1], control_m[-1][1], abs_tol=1e-6)
 
 
 @requires_libstp
