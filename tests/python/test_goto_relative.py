@@ -49,6 +49,14 @@ def anchor_to_world_target():
     return mod._anchor_to_world_target
 
 
+@pytest.fixture(scope="module")
+def waypoints_to_world_targets():
+    import importlib
+
+    mod = importlib.import_module("raccoon.step.motion.goto")
+    return mod._waypoints_to_world_targets
+
+
 # ---------------------------------------------------------------------------
 # Pure composition tests
 # ---------------------------------------------------------------------------
@@ -151,3 +159,90 @@ def test_goto_relative_rejects_bad_speed():
         goto_relative(30, speed=0.0)
     with pytest.raises(ValueError):
         goto_relative(30, speed=1.5)
+
+
+# ---------------------------------------------------------------------------
+# GotoWaypoints — pure _waypoints_to_world_targets composition
+# ---------------------------------------------------------------------------
+
+
+def test_waypoints_origin_forward_maps_to_plus_x(waypoints_to_world_targets):
+    # Anchor at origin facing +X: a forward waypoint maps to +x world.
+    anchor = FakePose(0.0, 0.0, 0.0)
+    targets = waypoints_to_world_targets(anchor, [(1.0, 0.0, None)])
+    assert len(targets) == 1
+    x, y, theta = targets[0]
+    assert x == pytest.approx(1.0)
+    assert y == pytest.approx(0.0, abs=1e-9)
+    assert theta is None
+
+
+def test_waypoints_rotated_90_forward_maps_to_plus_y(waypoints_to_world_targets):
+    # Anchor rotated 90°: a forward waypoint maps to +y world.
+    anchor = FakePose(0.0, 0.0, math.radians(90.0))
+    targets = waypoints_to_world_targets(anchor, [(1.0, 0.0, None)])
+    x, y, _ = targets[0]
+    assert x == pytest.approx(0.0, abs=1e-9)
+    assert y == pytest.approx(1.0)
+
+
+def test_waypoints_all_share_one_anchor_not_chained(waypoints_to_world_targets):
+    # Two waypoints, each expressed in the run-start frame (not chained). The
+    # second waypoint (0.5 fwd, -0.3 left, -90°) resolves against the SAME
+    # origin anchor — not relative to the first target.
+    anchor = FakePose(0.0, 0.0, 0.0)
+    targets = waypoints_to_world_targets(
+        anchor,
+        [(0.5, 0.0, 0.0), (0.5, -0.3, math.radians(-90.0))],
+    )
+    assert len(targets) == 2
+    assert targets[0][0] == pytest.approx(0.5)
+    assert targets[0][1] == pytest.approx(0.0, abs=1e-9)
+    # Second: world (0.5 + 0.0, 0.0 + (-0.3 left rotated by 0 heading)) =
+    # x = 0.5*1 - (-0.3)*0 = 0.5 ; y = 0.5*0 + (-0.3)*1 = -0.3.
+    assert targets[1][0] == pytest.approx(0.5)
+    assert targets[1][1] == pytest.approx(-0.3)
+    assert targets[1][2] == pytest.approx(math.radians(-90.0))
+
+
+def test_waypoints_offset_anchor_applies_to_each(waypoints_to_world_targets):
+    anchor = FakePose(2.0, 3.0, 0.0)
+    targets = waypoints_to_world_targets(anchor, [(1.0, 0.0, None), (2.0, 0.0, None)])
+    assert targets[0][0] == pytest.approx(3.0)
+    assert targets[1][0] == pytest.approx(4.0)
+    assert targets[0][1] == pytest.approx(3.0)
+
+
+# ---------------------------------------------------------------------------
+# GotoWaypoints — construction / signature
+# ---------------------------------------------------------------------------
+
+
+@requires_libstp
+def test_goto_waypoints_builds_and_signature():
+    from raccoon.step.motion import GotoWaypoints
+
+    step = GotoWaypoints([(0.5, 0.0, 0.0), (0.5, -0.3, math.radians(-90.0))])
+    assert len(step._waypoints) == 2
+    assert "localization" in step.required_resources()
+    sig = step._generate_signature()
+    assert sig.startswith("GotoWaypoints(n=2")
+    assert "fwd=0.50" in sig
+
+
+@requires_libstp
+def test_goto_waypoints_rejects_empty():
+    from raccoon.step.motion import GotoWaypoints
+
+    with pytest.raises(ValueError):
+        GotoWaypoints([])
+
+
+@requires_libstp
+def test_goto_waypoints_rejects_bad_speed():
+    from raccoon.step.motion import GotoWaypoints
+
+    with pytest.raises(ValueError):
+        GotoWaypoints([(0.5, 0.0, None)], speed=0.0)
+    with pytest.raises(ValueError):
+        GotoWaypoints([(0.5, 0.0, None)], speed=1.5)

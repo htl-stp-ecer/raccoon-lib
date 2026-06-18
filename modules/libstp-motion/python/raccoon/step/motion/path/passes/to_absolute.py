@@ -1,17 +1,21 @@
-"""``to_absolute`` pass — turn dead-reckoning relative runs into closed-loop legs.
+"""``to_absolute`` pass — turn dead-reckoning relative runs into ONE navigate-to-pose.
 
-A run of consecutive known-endpoint ``linear`` / ``turn`` segments (no live
-condition) is converted into a series of ``goto_relative`` navigate-to-pose
-moves.  Each ``goto_relative`` leg captures the localization pose at start and
-regulates onto ``run_start_pose ⊕ delta`` using the particle filter as
-feedback — so the open-loop dead-reckoning legs become closed-loop moves that
-shrug off odometry drift.
+A contiguous run of consecutive known-endpoint ``linear`` / ``turn`` segments
+(no live condition) is converted into a SINGLE ``GotoWaypoints`` navigate-to-pose
+move.  ``GotoWaypoints`` captures the localization pose ONCE at the run start
+(its ``on_start``) as a single anchor, precomputes the ABSOLUTE world target for
+each of the run's waypoints (fixed geometry, known at compile time), then
+regulates onto each target in sequence using the particle filter as feedback —
+so the open-loop dead-reckoning legs become one closed-loop run that shrugs off
+odometry drift.  Anchor scope is PER RUN: each contiguous run captures its own
+anchor at its first leg, and every waypoint within the run is relative to that
+ONE anchor (not chained leg-to-leg), so drift does NOT accumulate across legs.
 
-Crucially this requires ZERO executor changes: the replacement nodes are inline
-(blocking) ``SideAction``s, and the executor already runs inline side actions
-via ``await step.run_step(robot)``.  ``goto_relative`` is a ``MotionStep``, whose
+Crucially this requires ZERO executor changes: the replacement node is an inline
+(blocking) ``SideAction``, and the executor already runs inline side actions via
+``await step.run_step(robot)``.  ``GotoWaypoints`` is a ``MotionStep``, whose
 ``run_step`` drives its full ``on_start`` / ``on_update`` / ``on_stop`` loop to
-completion — so each leg runs its closed-loop controller to the target.
+completion — so the run drives its closed-loop controller through every target.
 
 Run-detection: a MAXIMAL run is a stretch of consecutive ``Segment`` nodes that
 are ALL ``kind in ("linear", "turn")``, ``has_known_endpoint is True`` and whose
@@ -22,10 +26,10 @@ stop is kept but the geometric endpoint is exact).  Anything else — a ``SideAc
 segment, a segment with a live (early-stopping / sensor / absolute) condition or
 an unknown endpoint — BREAKS the run and passes through unchanged.  Body-frame pose is integrated from ``(x=0, y=0, heading=0)`` at the
 run start, reusing the SAME forward/left integration as
-``segments_to_spline_waypoints`` (in ``spline.py``).  ONE ``goto_relative`` is
-emitted per LINEAR segment endpoint (preserving the path shape — no corner
+``segments_to_spline_waypoints`` (in ``spline.py``).  ONE waypoint is
+collected per LINEAR segment endpoint (preserving the path shape — no corner
 cutting); turns between linears fold into the following waypoint's target
-heading.
+heading.  All the run's waypoints feed ONE emitted ``GotoWaypoints``.
 
 Best-effort: segments that don't qualify are left untouched; the pass never
 crashes.  ``.until(after_cm)`` legs qualify automatically — their distance is
@@ -81,23 +85,29 @@ def _segment_qualifies(node) -> bool:
     )
 
 
-def _run_to_goto_legs(run: list[Segment]) -> list[Segment]:
-    """Integrate a run into one ``goto_relative`` leg per linear segment.
+def _run_to_waypoints(run: list[Segment]) -> tuple[list[tuple[float, float, float]], float]:
+    """Integrate a run into one body-frame waypoint per linear segment.
 
     Body-frame pose starts at ``(x=0, y=0, heading=0)``; ``+x`` is forward
     (run-start heading), ``+y`` is left (90° CCW), heading is CCW-positive —
     the SAME convention as ``segments_to_spline_waypoints``.  Each ``linear``
-    advances ``(x, y)`` and emits a leg carrying the body-frame delta from the
-    run start to that waypoint plus the heading there; each ``turn`` only
-    updates the running heading (folding into the next leg's target heading).
-    """
-    from ...goto import goto_relative  # deferred to avoid import cycle
+    advances ``(x, y)`` and emits a waypoint carrying the body-frame delta from
+    the run start to that point plus the heading there; each ``turn`` only
+    updates the running heading (folding into the next waypoint's heading).
 
+    All waypoints are expressed relative to the SINGLE run-start frame (NOT
+    chained leg-to-leg), so a downstream ``GotoWaypoints`` resolves them against
+    one anchor.  Returns ``(waypoints, speed)`` where each waypoint is
+    ``(forward_m, left_m, dtheta_rad)`` and ``speed`` is the run speed scale
+    (the first linear segment's, since the single step carries one speed).
+    """
     x = 0.0  # metres, forward from run start
     y = 0.0  # metres, left from run start
     heading = 0.0  # radians, CCW positive
 
-    legs: list[Segment] = []
+    waypoints: list[tuple[float, float, float]] = []
+    speed = 1.0
+    speed_set = False
     for seg in run:
         if seg.kind == "linear":
             d = seg.distance_m or 0.0
@@ -107,25 +117,25 @@ def _run_to_goto_legs(run: list[Segment]) -> list[Segment]:
             else:  # Lateral
                 x += d * (-math.sin(heading))
                 y += d * math.cos(heading)
-            step = goto_relative(
-                forward_cm=x * 100.0,
-                left_cm=y * 100.0,
-                dtheta_deg=math.degrees(heading),
-                speed=seg.speed_scale,
-            )
-            legs.append(step)
+            waypoints.append((x, y, heading))
+            if not speed_set:
+                speed = seg.speed_scale
+                speed_set = True
         elif seg.kind == "turn":
             heading += seg.angle_rad or 0.0
-    return legs
+    return waypoints, speed
 
 
 class ToAbsolutePass:
-    """Convert known-endpoint relative runs into closed-loop ``goto_relative`` legs.
+    """Convert each known-endpoint relative run into ONE closed-loop ``GotoWaypoints``.
 
     Pure node→node pass.  Replaces each maximal run of qualifying
-    ``linear`` / ``turn`` segments with inline ``SideAction(goto_relative)``
-    nodes — one per linear endpoint.  Non-qualifying nodes pass through
-    unchanged.  ``.until(after_cm())`` legs qualify automatically — their
+    ``linear`` / ``turn`` segments with a SINGLE inline
+    ``SideAction(GotoWaypoints)`` node carrying all the run's body-frame
+    waypoints — one per linear endpoint.  The ``GotoWaypoints`` captures one
+    anchor per run at start and drives to the resulting ABSOLUTE world targets
+    in sequence (so drift does not chain leg-to-leg).  Non-qualifying nodes pass
+    through unchanged.  ``.until(after_cm())`` legs qualify automatically — their
     distance is recovered at lowering time.
 
     Representation/terminal contract left undeclared (defaults to
@@ -135,6 +145,8 @@ class ToAbsolutePass:
     name = "to_absolute"
 
     def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
+        from ...goto import GotoWaypoints  # deferred to avoid import cycle
+
         result: list[PathNode | None] = []
         i = 0
         n = len(nodes)
@@ -151,10 +163,10 @@ class ToAbsolutePass:
                 run.append(nodes[j])  # type: ignore[arg-type]
                 j += 1
 
-            legs = _run_to_goto_legs(run)
-            if legs:
-                for step in legs:
-                    result.append(SideAction(step=step, is_background=False))
+            waypoints, speed = _run_to_waypoints(run)
+            if waypoints:
+                step = GotoWaypoints(waypoints=waypoints, speed=speed)
+                result.append(SideAction(step=step, is_background=False))
             else:
                 # Run had no linear segments (e.g. turn-only) — nothing to
                 # convert; pass the original nodes through untouched.

@@ -339,6 +339,131 @@ class GotoRelative(MotionStep):
         return False
 
 
+def _waypoints_to_world_targets(
+    anchor_pose,
+    waypoints: list[tuple[float, float, float | None]],
+) -> list[tuple[float, float, float | None]]:
+    """Compose a list of body-frame waypoints onto an anchor → absolute targets.
+
+    Pure helper (no robot required). Each waypoint is a body-frame displacement
+    ``(forward_m, left_m, dtheta_rad)`` expressed in the SAME run-start frame
+    (i.e. all relative to the single ``anchor_pose``, NOT chained leg-to-leg).
+    Returns the list of absolute world targets ``(x_m, y_m, theta_rad)``, one
+    per waypoint, each computed via :func:`_anchor_to_world_target`.
+
+    Because every waypoint shares the one anchor, drift in the live pose does
+    not accumulate across legs — leg N always aims at a fixed world point.
+    """
+    return [
+        _anchor_to_world_target(anchor_pose, forward_m, left_m, dtheta_rad)
+        for (forward_m, left_m, dtheta_rad) in waypoints
+    ]
+
+
+@dsl(hidden=True)
+class GotoWaypoints(MotionStep):
+    """Internal closed-loop navigate through a sequence of ABSOLUTE waypoints.
+
+    Holds a list of body-frame waypoints ``[(forward_m, left_m, dtheta_rad|None),
+    ...]`` expressed in the run-start frame (all relative to ONE anchor — the
+    pose captured at ``on_start`` — not chained leg-to-leg).  At ``on_start`` it
+    captures the localization pose ONCE and precomputes the ABSOLUTE world
+    target for every waypoint via :func:`_waypoints_to_world_targets`.  It then
+    runs the IDENTICAL proportional closed-loop as :class:`Goto` /
+    :class:`GotoRelative` (reusing :func:`_compute_body_velocity`) toward the
+    current target; when that target is reached it advances to the next, and the
+    step finishes once the LAST target is reached.
+
+    Because all targets are fixed at run start relative to a single anchor,
+    leg N drives to a fixed world point — accumulated drift does NOT chain from
+    one leg to the next (unlike emitting one re-anchoring :class:`GotoRelative`
+    per leg).  Used by the ``to_absolute`` optimizer pass: it collects a whole
+    contiguous run's relative waypoints and emits ONE ``GotoWaypoints``.
+
+    Requires ``robot.localization`` (the particle filter); raises at start
+    otherwise.
+    """
+
+    def __init__(
+        self,
+        waypoints: list[tuple[float, float, float | None]],
+        speed: float = 1.0,
+        pos_tol_m: float = 0.02,
+        heading_tol_rad: float = math.radians(3.0),
+    ) -> None:
+        super().__init__()
+        if not isinstance(speed, int | float):
+            msg = f"speed must be a number, got {type(speed).__name__}"
+            raise TypeError(msg)
+        if not (0.0 < speed <= 1.0):
+            msg = f"speed must be in (0.0, 1.0], got {speed}"
+            raise ValueError(msg)
+        if pos_tol_m <= 0.0:
+            msg = f"pos_tol_m must be > 0, got {pos_tol_m}"
+            raise ValueError(msg)
+        if heading_tol_rad <= 0.0:
+            msg = f"heading_tol_rad must be > 0, got {heading_tol_rad}"
+            raise ValueError(msg)
+        if not waypoints:
+            msg = "GotoWaypoints requires at least one waypoint"
+            raise ValueError(msg)
+        self._waypoints: list[tuple[float, float, float | None]] = list(waypoints)
+        self._speed = speed
+        self._pos_tol_m = pos_tol_m
+        self._heading_tol_rad = heading_tol_rad
+        # Resolved at on_start once the anchor pose is known.
+        self._targets: list[_Target] = []
+        self._index = 0
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive", "localization"})
+
+    def _generate_signature(self) -> str:
+        parts = []
+        for forward_m, left_m, dtheta_rad in self._waypoints:
+            dtheta = "None" if dtheta_rad is None else f"{math.degrees(dtheta_rad):.1f}"
+            parts.append(f"(fwd={forward_m:.2f}, left={left_m:.2f}, dtheta={dtheta})")
+        return f"GotoWaypoints(n={len(self._waypoints)}: {', '.join(parts)})"
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        if getattr(robot, "localization", None) is None:
+            msg = "goto waypoints require robot.localization (the particle filter)"
+            raise RuntimeError(msg)
+        anchor = robot.localization.get_pose()
+        self._targets = [
+            _Target(x_m=x_m, y_m=y_m, theta_rad=theta_rad)
+            for (x_m, y_m, theta_rad) in _waypoints_to_world_targets(anchor, self._waypoints)
+        ]
+        self._index = 0
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        pose = robot.localization.get_pose()
+        target = self._targets[self._index]
+        cmd = _compute_body_velocity(
+            pose,
+            target,
+            self._speed,
+            pos_tol_m=self._pos_tol_m,
+            heading_tol_rad=self._heading_tol_rad,
+        )
+        if cmd.reached:
+            if self._index >= len(self._targets) - 1:
+                return True
+            self._index += 1
+            return False
+
+        cfg = robot.motion_pid_config
+        robot.drive.set_velocity(
+            ChassisVelocity(
+                _clamp(cmd.vx, cfg.linear.max_velocity),
+                _clamp(cmd.vy, cfg.lateral.max_velocity),
+                _clamp(cmd.wz, cfg.angular.max_velocity),
+            )
+        )
+        robot.drive.update(dt)
+        return False
+
+
 @dsl(tags=["motion", "drive"])
 def goto_relative(
     forward_cm: float,
@@ -480,4 +605,4 @@ def goto(
     )
 
 
-__all__ = ["Goto", "GotoRelative", "goto", "goto_relative"]
+__all__ = ["Goto", "GotoRelative", "GotoWaypoints", "goto", "goto_relative"]
