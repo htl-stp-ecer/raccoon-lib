@@ -25,7 +25,7 @@ from .lowering import (
 from .merge import can_merge, merge_two, run_merge, MergePass
 from .known_distance import recover_known_distance
 from .corner_cut import try_corner_arc, run_corner_cut, CornerCutPass
-from .spline import segments_to_spline_waypoints, build_spline_step
+from .spline import segments_to_spline_waypoints, build_spline_step, SplinifyPass
 from .to_absolute import ToAbsolutePass
 
 __all__ = [
@@ -50,6 +50,7 @@ __all__ = [
     # Spline
     "segments_to_spline_waypoints",
     "build_spline_step",
+    "SplinifyPass",
     # To absolute
     "ToAbsolutePass",
     # Orchestrator

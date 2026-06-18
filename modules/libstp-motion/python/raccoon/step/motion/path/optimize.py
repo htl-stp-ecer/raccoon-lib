@@ -31,6 +31,7 @@ from .ir import Segment, SideAction
 from .passes import (
     CornerCutPass,
     MergePass,
+    SplinifyPass,
     ToAbsolutePass,
     flatten_steps,
 )
@@ -195,6 +196,16 @@ class Optimizer(Step):
         centimeters; converted to meters for ``CornerCutPass`` here.
         """
         return self._add(CornerCutPass(radius_cm / 100.0))
+
+    def splinify(self) -> "Optimizer":
+        """Replace the whole relative run with one Catmull-Rom spline (terminal).
+
+        Collapses the linear/turn path into a single ``spline`` segment driven
+        through its waypoints (``SplinifyPass``).  Terminal — nothing may follow.
+        Raises ``ValueError`` at compile time if the path can't be splinified
+        (side actions, arcs, conditions, deferred steps, or < 2 waypoints).
+        """
+        return self._add(SplinifyPass())
 
     def apply(self, p) -> "Optimizer":
         """Append a user-supplied compiler pass."""

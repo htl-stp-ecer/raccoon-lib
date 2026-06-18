@@ -114,3 +114,26 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
     waypoints = segments_to_spline_waypoints(segs)
     speed = min((s.speed_scale for s in segs if s.kind == "linear"), default=1.0)
     return SplinePath(waypoints, speed=speed)
+
+
+class SplinifyPass:
+    """Terminal pass that collapses a relative path into one spline segment.
+
+    Validates and builds a :class:`SplinePath` from the entire node list via
+    :func:`build_spline_step` (which raises ``ValueError`` for anything that
+    can't be splinified — defers, side actions, arcs, conditions, or fewer
+    than 2 linear segments), then replaces the whole run with the single
+    ``Segment(kind="spline")`` node produced by
+    :meth:`SplinePath.lower_to_segments`.  The unified executor main loop
+    drives that node like any other opaque segment.
+
+    This is a *terminal* pass: it replaces the path wholesale, so nothing
+    may run after it in a pipeline.
+    """
+
+    name = "splinify"
+    terminal = True
+
+    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
+        spline_path = build_spline_step(nodes)
+        return spline_path.lower_to_segments()
