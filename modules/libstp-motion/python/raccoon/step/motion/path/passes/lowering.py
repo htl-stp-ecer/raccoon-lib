@@ -70,6 +70,10 @@ def is_same_type(a: Segment, b: Segment) -> bool:
     if a.kind == "spline" or b.kind == "spline":
         return False
 
+    # Diagonal never warm-starts (DiagonalMotion warm-start isn't guaranteed).
+    if a.kind == "diagonal" or b.kind == "diagonal":
+        return False
+
     def _effective(seg: Segment) -> tuple:
         if seg.kind == "follow_line":
             return ("linear", LinearAxis.Forward)

@@ -14,9 +14,9 @@ object with the uniform motion-controller interface:
 For ``linear`` / ``turn`` / ``arc`` kinds, this is the corresponding C++
 ``LinearMotion`` / ``TurnMotion`` / ``ArcMotion`` class directly.
 
-For ``follow_line`` / ``spline`` kinds, the Python step is wrapped in an
-adapter that translates the ``MotionStep`` lifecycle (``on_start``,
-``on_update(robot, dt)``) to the uniform interface.
+For ``follow_line`` / ``spline`` / ``diagonal`` kinds, the Python step is
+wrapped in an adapter that translates the ``MotionStep`` lifecycle
+(``on_start``, ``on_update(robot, dt)``) to the uniform interface.
 """
 
 from __future__ import annotations
@@ -92,6 +92,49 @@ class LineFollowAdapter:
     def has_reached_distance(self) -> bool:
         if self._step._motion is not None:
             return self._step._motion.has_reached_distance()
+        return self._done
+
+    def get_filtered_velocity(self) -> float:
+        if self._step._motion is not None:
+            return self._step._motion.get_filtered_velocity()
+        return 0.0
+
+    def set_suppress_hard_stop(self, val: bool) -> None:
+        if self._step._motion is not None:
+            self._step._motion.set_suppress_hard_stop(val)
+
+
+class DriveAngleAdapter:
+    """Adapts a DriveAngle (true diagonal) step to the C++ motion API.
+
+    Delegates to the step's ``on_start``/``on_update`` lifecycle. The
+    underlying ``DiagonalMotion`` has no guaranteed warm-start, so every
+    transition into a diagonal uses a cold start.
+    """
+
+    def __init__(self, step, robot: "GenericRobot") -> None:
+        self._step = step
+        self._robot = robot
+        self._done = False
+
+    def start(self) -> None:
+        self._step.on_start(self._robot)
+        self._done = False
+
+    def start_warm(self, offset: float, velocity: float) -> None:
+        # DiagonalMotion warm-start isn't guaranteed; treat like cold start.
+        self._step.on_start(self._robot)
+        self._done = False
+
+    def update(self, dt: float) -> None:
+        result = self._step.on_update(self._robot, dt)
+        if result:
+            self._done = True
+
+    def is_finished(self) -> bool:
+        return self._done
+
+    def has_reached_distance(self) -> bool:
         return self._done
 
     def get_filtered_velocity(self) -> float:
@@ -306,5 +349,7 @@ def create_motion(
         return LineFollowAdapter(seg.opaque_step, robot)
     if seg.kind == "spline":
         return SplineAdapter(seg.opaque_step, robot)
+    if seg.kind == "diagonal":
+        return DriveAngleAdapter(seg.opaque_step, robot)
     msg = f"Unknown segment kind: {seg.kind}"
     raise ValueError(msg)

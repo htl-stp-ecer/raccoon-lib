@@ -1,7 +1,8 @@
 """``to_absolute`` pass — turn dead-reckoning relative runs into ONE navigate-to-pose.
 
-A contiguous run of consecutive known-endpoint ``linear`` / ``turn`` segments
-(no live condition) is converted into a SINGLE ``GotoWaypoints`` navigate-to-pose
+A contiguous run of consecutive known-endpoint ``linear`` / ``turn`` /
+``diagonal`` segments (no live condition) is converted into a SINGLE
+``GotoWaypoints`` navigate-to-pose
 move.  ``GotoWaypoints`` captures the localization pose ONCE at the run start
 (its ``on_start``) as a single anchor, precomputes the ABSOLUTE world target for
 each of the run's waypoints (fixed geometry, known at compile time), then
@@ -18,7 +19,8 @@ Crucially this requires ZERO executor changes: the replacement node is an inline
 completion — so the run drives its closed-loop controller through every target.
 
 Run-detection: a MAXIMAL run is a stretch of consecutive ``Segment`` nodes that
-are ALL ``kind in ("linear", "turn")``, ``has_known_endpoint is True`` and whose
+are ALL ``kind in ("linear", "turn", "diagonal")``, ``has_known_endpoint is
+True`` and whose
 condition is "baked" — i.e. ``None``, or a bare relative ``after_cm`` whose
 distance is folded into ``distance_m`` at lowering time (the runtime odometer
 stop is kept but the geometric endpoint is exact).  Anything else — a ``SideAction``, a
@@ -49,7 +51,7 @@ from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
 
-_RUN_KINDS = ("linear", "turn")
+_RUN_KINDS = ("linear", "turn", "diagonal")
 
 
 def _condition_is_baked(seg: Segment) -> bool:
@@ -92,8 +94,10 @@ def _run_to_waypoints(run: list[Segment]) -> tuple[list[tuple[float, float, floa
     (run-start heading), ``+y`` is left (90° CCW), heading is CCW-positive —
     the SAME convention as ``segments_to_spline_waypoints``.  Each ``linear``
     advances ``(x, y)`` and emits a waypoint carrying the body-frame delta from
-    the run start to that point plus the heading there; each ``turn`` only
-    updates the running heading (folding into the next waypoint's heading).
+    the run start to that point plus the heading there; each ``diagonal`` holds
+    heading and advances ``(x, y)`` by its known body-frame displacement,
+    emitting a waypoint; each ``turn`` only updates the running heading (folding
+    into the next waypoint's heading).
 
     All waypoints are expressed relative to the SINGLE run-start frame (NOT
     chained leg-to-leg), so a downstream ``GotoWaypoints`` resolves them against
@@ -117,6 +121,17 @@ def _run_to_waypoints(run: list[Segment]) -> tuple[list[tuple[float, float, floa
             else:  # Lateral
                 x += d * (-math.sin(heading))
                 y += d * math.cos(heading)
+            waypoints.append((x, y, heading))
+            if not speed_set:
+                speed = seg.speed_scale
+                speed_set = True
+        elif seg.kind == "diagonal":
+            # A diagonal holds heading and translates by a known body-frame
+            # displacement (+forward / +left). Rotate it into the world frame.
+            fwd = seg.forward_m or 0.0
+            left = seg.left_m or 0.0
+            x += fwd * math.cos(heading) - left * math.sin(heading)
+            y += fwd * math.sin(heading) + left * math.cos(heading)
             waypoints.append((x, y, heading))
             if not speed_set:
                 speed = seg.speed_scale

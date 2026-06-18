@@ -93,7 +93,10 @@ class DriveAngle(MotionStep):
         return self._motion.is_finished()
 
     def lower_to_segments(self) -> "list":
-        """Lower an axis-aligned drive-angle into a single ``linear`` segment.
+        """Lower a drive-angle into a single segment.
+
+        Axis-aligned angles (0 / ±180 / ±90) lower to a ``linear`` segment;
+        true diagonals lower to a ``diagonal`` segment (see below).
 
         ``DriveAngle`` holds the robot's heading fixed while translating the
         chassis along a vector at ``angle_deg`` relative to that heading. The
@@ -108,9 +111,11 @@ class DriveAngle(MotionStep):
         - ``-90``      → left     (``Lateral`` axis, -sign)
 
         Any other angle is a true diagonal (simultaneous vx+vy at a held
-        heading). Integrating it as a pure Forward/Lateral leg would mis-place
-        the endpoint, so those cases return ``None`` (opaque) and the lowering
-        layer runs the step unoptimized as a safe inline barrier.
+        heading). A single Forward/Lateral linear axis can't express it, so it
+        lowers to a ``"diagonal"`` segment carrying the known body-frame
+        displacement (``forward_m`` / ``left_m``). That segment runs via an
+        opaque adapter (this step's own lifecycle) and ``to_absolute`` integrates
+        the body-frame displacement into a waypoint.
 
         The held heading is intentionally NOT stamped onto ``heading_deg``:
         ``angle_deg`` is robot-centric (relative to the current heading), not an
@@ -135,10 +140,26 @@ class DriveAngle(MotionStep):
         elif abs(angle + 90.0) < tol:
             axis, sign = LinearAxis.Lateral, -1.0
         else:
-            # True diagonal — not representable by the Forward/Lateral linear
-            # IR. Return None so the step runs as an opaque barrier instead of
-            # being lowered to a geometrically wrong leg.
-            return None
+            # True diagonal — not representable by a single Forward/Lateral
+            # linear axis. Lower to a "diagonal" segment carrying the known
+            # body-frame displacement; it runs via an opaque adapter and
+            # to_absolute integrates it.
+            theta = math.radians(self._angle_deg)
+            d = self._cm / 100.0 if self._cm is not None else None
+            fwd = d * math.cos(theta) if d is not None else None
+            left = -d * math.sin(theta) if d is not None else None  # right=+sin → left=-sin
+            return [
+                Segment(
+                    kind="diagonal",
+                    forward_m=fwd,
+                    left_m=left,
+                    distance_m=d,
+                    speed_scale=self._speed,
+                    condition=self._until,
+                    has_known_endpoint=self._cm is not None,
+                    opaque_step=self,
+                )
+            ]
 
         cm = self._cm
         return [

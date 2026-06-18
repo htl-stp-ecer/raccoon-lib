@@ -115,7 +115,7 @@ def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
     if seg.kind == "follow_line":
         # Always forward-axis, same as LinearAxis.Forward.
         return robot.odometry.get_distance_from_origin().forward
-    # "spline": not used for warm-start (splines always cold-start).
+    # "spline" / "diagonal": not used for warm-start (always cold-start).
     return 0.0
 
 
@@ -366,7 +366,7 @@ class PathExecutor:
                         )
 
                 # Opaque steps: adapter signals completion via is_finished().
-                if not transition and seg.kind in ("follow_line", "spline"):
+                if not transition and seg.kind in ("follow_line", "spline", "diagonal"):
                     transition = motion.is_finished()
 
                 if transition:

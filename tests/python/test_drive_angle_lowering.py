@@ -5,7 +5,8 @@ vector at ``angle_deg``. The path IR ``linear`` segment can only express travel
 along the ``Forward`` or ``Lateral`` axis, so:
 
 - axis-aligned angles (0 / 180 / +90 / -90) lower to a single ``linear`` segment,
-- any true diagonal returns ``None`` (opaque → safe inline barrier).
+- any true diagonal lowers to a single ``diagonal`` segment carrying the known
+  body-frame displacement (it runs via an opaque adapter, not a barrier).
 
 This is the regression guard for the m070 crash where ``drive_angle(...)``
 flowed through the optimizer with no ``lower_to_segments`` and broke flattening.
@@ -99,16 +100,26 @@ def test_drive_angle_speed_is_carried():
 
 
 # ---------------------------------------------------------------------------
-# True diagonal angles are opaque (None)
+# True diagonal angles lower to a "diagonal" segment
 # ---------------------------------------------------------------------------
 
 
 @requires_libstp
 @pytest.mark.parametrize("angle", [45, -45, 30, 135, -120])
-def test_drive_angle_diagonal_is_opaque(angle):
+def test_drive_angle_diagonal_lowers_to_diagonal_segment(angle):
+    import math
+
     from raccoon.step.motion.drive_angle_dsl import drive_angle
 
-    assert _resolve(drive_angle(angle_deg=angle, cm=30)).lower_to_segments() is None
+    segs = _resolve(drive_angle(angle_deg=angle, cm=30)).lower_to_segments()
+    assert isinstance(segs, list) and len(segs) == 1
+    seg = segs[0]
+    assert seg.kind == "diagonal"
+    theta = math.radians(angle)
+    assert seg.forward_m == pytest.approx(0.30 * math.cos(theta))
+    assert seg.left_m == pytest.approx(-0.30 * math.sin(theta))
+    assert seg.distance_m == pytest.approx(0.30)
+    assert seg.has_known_endpoint is True
 
 
 # ---------------------------------------------------------------------------
@@ -156,16 +167,17 @@ def test_flatten_axis_aligned_drive_angle_yields_segment():
 
 
 @requires_libstp
-def test_flatten_diagonal_drive_angle_falls_back_to_side_action():
+def test_flatten_diagonal_drive_angle_yields_diagonal_segment():
     from raccoon.step.motion.drive_angle_dsl import drive_angle
-    from raccoon.step.motion.path.ir import SideAction
+    from raccoon.step.motion.path.ir import Segment
     from raccoon.step.motion.path.passes.lowering import flatten_steps
 
-    # A true diagonal is opaque: it must not crash, it degrades to a barrier.
+    # A true diagonal lowers to a "diagonal" Segment (not a barrier), no crash.
     nodes, deferred = flatten_steps([drive_angle(angle_deg=45, cm=20)])
     assert deferred == []
     assert len(nodes) == 1
-    assert isinstance(nodes[0], SideAction)
+    assert isinstance(nodes[0], Segment)
+    assert nodes[0].kind == "diagonal"
 
 
 @requires_libstp
