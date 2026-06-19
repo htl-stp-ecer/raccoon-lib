@@ -345,23 +345,37 @@ class GotoRelative(MotionStep):
 
 def _waypoints_to_world_targets(
     anchor_pose,
-    waypoints: list[tuple[float, float, float | None]],
-) -> list[tuple[float, float, float | None]]:
-    """Compose a list of body-frame waypoints onto an anchor → absolute targets.
+    waypoints: list[tuple[float, float, float, float, str, float]],
+) -> list[tuple[float, float, float]]:
+    """Compose COMPILE-TIME GotoWaypoints legs onto one anchor → world targets.
 
-    Pure helper (no robot required). Each waypoint is a body-frame displacement
-    ``(forward_m, left_m, dtheta_rad)`` expressed in the SAME run-start frame
-    (i.e. all relative to the single ``anchor_pose``, NOT chained leg-to-leg).
-    Returns the list of absolute world targets ``(x_m, y_m, theta_rad)``, one
-    per waypoint, each computed via :func:`_anchor_to_world_target`.
+    Pure helper (no robot required). Each leg is
+    ``(rel_forward_m, rel_left_m, abs_dx_m, abs_dy_m, heading_kind, heading_value)``:
 
-    Because every waypoint shares the one anchor, drift in the live pose does
-    not accumulate across legs — leg N always aims at a fixed world point.
+    - the RELATIVE part ``(rel_forward, rel_left)`` is a run-start body-frame
+      displacement, rotated by the anchor heading (``+forward`` = anchor heading,
+      ``+left`` = 90° CCW);
+    - the ABSOLUTE part ``(abs_dx, abs_dy)`` is already in the localization frame
+      (a heading-reference-anchored leg, resolved at compile time) and added
+      directly;
+    - the heading is anchor-relative (``heading_kind == "rel"`` → ``anchor.heading
+      + heading_value``) or absolute (``"abs"`` → ``heading_value``).
+
+    All legs share the ONE anchor, so drift does not accumulate across legs.
+    Returns ``[(x_m, y_m, theta_rad), ...]``.
     """
-    return [
-        _anchor_to_world_target(anchor_pose, forward_m, left_m, dtheta_rad)
-        for (forward_m, left_m, dtheta_rad) in waypoints
-    ]
+    ax = float(anchor_pose.position[0])
+    ay = float(anchor_pose.position[1])
+    ah = float(anchor_pose.heading)
+    cos_h = math.cos(ah)
+    sin_h = math.sin(ah)
+    targets: list[tuple[float, float, float]] = []
+    for rel_forward, rel_left, abs_dx, abs_dy, heading_kind, heading_value in waypoints:
+        x_m = ax + (rel_forward * cos_h - rel_left * sin_h) + abs_dx
+        y_m = ay + (rel_forward * sin_h + rel_left * cos_h) + abs_dy
+        theta_rad = ah + heading_value if heading_kind == "rel" else heading_value
+        targets.append((x_m, y_m, theta_rad))
+    return targets
 
 
 @dsl(hidden=True)
@@ -390,7 +404,7 @@ class GotoWaypoints(MotionStep):
 
     def __init__(
         self,
-        waypoints: list[tuple[float, float, float | None]],
+        waypoints: list[tuple[float, float, float, float, str, float]],
         speed: float = 1.0,
         pos_tol_m: float = 0.02,
         heading_tol_rad: float = math.radians(3.0),
@@ -411,7 +425,11 @@ class GotoWaypoints(MotionStep):
         if not waypoints:
             msg = "GotoWaypoints requires at least one waypoint"
             raise ValueError(msg)
-        self._waypoints: list[tuple[float, float, float | None]] = list(waypoints)
+        # Each waypoint is a COMPILE-TIME-resolved leg
+        # (rel_forward_m, rel_left_m, abs_dx_m, abs_dy_m, heading_kind, heading_value);
+        # see ToAbsolutePass.Waypoint. Relative parts rotate by the anchor heading,
+        # absolute parts are already in the localization frame.
+        self._waypoints: list[tuple[float, float, float, float, str, float]] = list(waypoints)
         self._speed = speed
         self._pos_tol_m = pos_tol_m
         self._heading_tol_rad = heading_tol_rad
@@ -423,16 +441,17 @@ class GotoWaypoints(MotionStep):
         return frozenset({"drive", "localization"})
 
     def _generate_signature(self) -> str:
-        parts = []
-        for forward_m, left_m, dtheta_rad in self._waypoints:
-            dtheta = "None" if dtheta_rad is None else f"{math.degrees(dtheta_rad):.1f}"
-            parts.append(f"(fwd={forward_m:.2f}, left={left_m:.2f}, dtheta={dtheta})")
-        return f"GotoWaypoints(n={len(self._waypoints)}: {', '.join(parts)})"
+        n_abs = sum(1 for wp in self._waypoints if wp[4] == "abs")
+        return f"GotoWaypoints(n={len(self._waypoints)}, abs={n_abs})"
 
     def on_start(self, robot: "GenericRobot") -> None:
         if getattr(robot, "localization", None) is None:
             msg = "goto waypoints require robot.localization (the particle filter)"
             raise RuntimeError(msg)
+        # Compose each compile-time leg against the single run anchor: relative
+        # parts rotate by the anchor heading; absolute parts are already in the
+        # localization frame (the heading reference is aligned to it via the
+        # compile-time mark offset). No runtime integration or service read.
         anchor = robot.localization.get_pose()
         self._targets = [
             _Target(x_m=x_m, y_m=y_m, theta_rad=theta_rad)

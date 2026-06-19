@@ -114,83 +114,140 @@ def _is_sensor_linear_leg(node) -> bool:
 
 
 def _segment_qualifies(node) -> bool:
-    """Is ``node`` a run-eligible known-endpoint linear/turn?
+    """Is ``node`` a run-eligible known-endpoint linear/turn/diagonal?
 
     Requires a known endpoint and either no condition or a bare relative
     ``after_cm`` whose distance is already baked into ``distance_m`` (so the
     geometric endpoint is exact).
 
-    A ``turn`` qualifies ONLY when it is a RELATIVE turn — ``opaque_step is
-    None`` and ``angle_rad is not None``.  A heading turn (``TurnToHeading``,
-    carried as an ``opaque_step`` with ``angle_rad is None``) targets an
-    ABSOLUTE reference heading, not a per-run relative delta, so folding it via
-    ``heading += angle_rad`` would corrupt the run (and crash on ``None``).  It
-    therefore BREAKS the run and passes through as a plain ``Segment`` that the
-    executor runs absolute via the adapter; the GotoWaypoints before/after
-    re-anchor.
+    A heading turn (``TurnToHeading``, carried as an ``opaque_step``) and a
+    heading-HOLDING drive (a ``linear`` with ``heading_deg``) DO qualify — both
+    target the heading reference, an ABSOLUTE frame whose offset to the
+    localization frame (the mark offset ``O``) is known at COMPILE time, so
+    ``_run_to_waypoints`` integrates them into the same run.
     """
-    if not (
+    return (
         isinstance(node, Segment)
         and node.kind in _RUN_KINDS
         and node.has_known_endpoint
         and _condition_is_baked(node)
-    ):
-        return False
-    # A heading turn (opaque_step set / angle_rad None) is NOT run-eligible.
-    return not (node.kind == "turn" and (node.opaque_step is not None or node.angle_rad is None))
+    )
 
 
-def _run_to_waypoints(run: list[Segment]) -> tuple[list[tuple[float, float, float]], float]:
-    """Integrate a run into one body-frame waypoint per linear segment.
+Waypoint = tuple[float, float, float, float, str, float]
+"""One GotoWaypoints leg, fully resolved at COMPILE time:
+``(rel_forward_m, rel_left_m, abs_dx_m, abs_dy_m, heading_kind, heading_value)``.
 
-    Body-frame pose starts at ``(x=0, y=0, heading=0)``; ``+x`` is forward
-    (run-start heading), ``+y`` is left (90° CCW), heading is CCW-positive —
-    the SAME convention as ``segments_to_spline_waypoints``.  Each ``linear``
-    advances ``(x, y)`` and emits a waypoint carrying the body-frame delta from
-    the run start to that point plus the heading there; each ``diagonal`` holds
-    heading and advances ``(x, y)`` by its known body-frame displacement,
-    emitting a waypoint; each ``turn`` only updates the running heading (folding
-    into the next waypoint's heading).
+GotoWaypoints composes it against the single run anchor as::
 
-    All waypoints are expressed relative to the SINGLE run-start frame (NOT
-    chained leg-to-leg), so a downstream ``GotoWaypoints`` resolves them against
-    one anchor.  Returns ``(waypoints, speed)`` where each waypoint is
-    ``(forward_m, left_m, dtheta_rad)`` and ``speed`` is the run speed scale
-    (the first linear segment's, since the single step carries one speed).
+    world = anchor.pos + Rot(anchor.heading)·(rel_forward, rel_left) + (abs_dx, abs_dy)
+    theta = anchor.heading + heading_value   if heading_kind == "rel"
+            heading_value                     if heading_kind == "abs"
+"""
+
+
+def _abs_heading_rad(r_deg: float, o_rad: float, sign: float) -> float:
+    """Reference-relative degrees ``r`` → absolute heading in the LOCALIZATION frame.
+
+    Localization 0° = the start heading; the heading reference sits ``O`` =
+    ``mark`` ``origin_offset_deg`` away from it (the compile-time offset).  The
+    service computes ``target_absolute_rad(r) = reference_rad + sign·radians(r)``
+    in the odometry frame; expressed in the localization frame the runtime start
+    heading cancels and only the compile-time constants remain::
+
+        θ_localization = radians(O) + sign·radians(r)
+
+    so a turn_to_heading / heading-holding drive resolves to a fixed heading at
+    COMPILE time, with NO runtime service read or frame bridge.
     """
-    x = 0.0  # metres, forward from run start
-    y = 0.0  # metres, left from run start
-    heading = 0.0  # radians, CCW positive
+    return o_rad + sign * math.radians(r_deg)
 
-    waypoints: list[tuple[float, float, float]] = []
+
+def _run_has_absolute(run: list[Segment]) -> bool:
+    """Does the run contain a heading-reference-anchored leg?"""
+    return any(
+        (s.kind == "turn" and s.opaque_step is not None)
+        or (s.kind == "linear" and s.heading_deg is not None)
+        for s in run
+    )
+
+
+def _run_to_waypoints(
+    run: list[Segment], o_rad: float = 0.0, sign: float = 1.0
+) -> tuple[list[Waypoint], float]:
+    """Integrate a run into GotoWaypoints legs — entirely at COMPILE time.
+
+    Two frames, both compile-resolved (``o_rad`` / ``sign`` come from the active
+    ``mark_heading_reference``):
+
+    - RELATIVE legs (plain drive/turn/strafe, no held heading) integrate in the
+      run-start body frame (heading starts at 0); carried as a body-frame delta
+      that GotoWaypoints rotates by the runtime anchor heading.
+    - ABSOLUTE legs (``turn_to_heading``, or a drive/strafe with ``heading=``)
+      target a heading fixed to the reference — known in the localization frame
+      as ``radians(O) + sign·r`` (see :func:`_abs_heading_rad`).  Once an
+      absolute leg appears, the running heading is known absolutely, so every
+      following leg integrates in the localization frame directly.
+
+    A ``turn`` only updates the running heading (folds into the next translating
+    leg's heading); a trailing ``turn`` emits a rotate-in-place waypoint so the
+    final heading is still regulated.  Returns ``(waypoints, speed)``.
+    """
+    rel_x = rel_y = 0.0  # body-frame accumulation (relative phase)
+    rel_h = 0.0  # heading delta from run start (relative phase)
+    abs_x = abs_y = 0.0  # localization-frame accumulation (absolute phase)
+    abs_h = 0.0  # localization-frame heading (absolute phase)
+    abs_active = False
+
+    waypoints: list[Waypoint] = []
     speed = 1.0
     speed_set = False
+
     for seg in run:
+        if seg.kind == "turn":
+            if seg.opaque_step is not None:  # turn_to_heading → absolute target
+                abs_h = _abs_heading_rad(seg.opaque_step._target_deg, o_rad, sign)
+                abs_active = True
+            elif abs_active:
+                abs_h += seg.angle_rad or 0.0
+            else:
+                rel_h += seg.angle_rad or 0.0
+            continue  # pure rotation — folds into the next translating leg
+
+        # Translating leg (linear or diagonal): compute its body displacement.
         if seg.kind == "linear":
             d = seg.distance_m or 0.0
+            if seg.heading_deg is not None:  # heading hold → absolute target
+                abs_h = _abs_heading_rad(seg.heading_deg, o_rad, sign)
+                abs_active = True
             if seg.axis == LinearAxis.Forward:
-                x += d * math.cos(heading)
-                y += d * math.sin(heading)
-            else:  # Lateral
-                x += d * (-math.sin(heading))
-                y += d * math.cos(heading)
-            waypoints.append((x, y, heading))
-            if not speed_set:
-                speed = seg.speed_scale
-                speed_set = True
-        elif seg.kind == "diagonal":
-            # A diagonal holds heading and translates by a known body-frame
-            # displacement (+forward / +left). Rotate it into the world frame.
-            fwd = seg.forward_m or 0.0
-            left = seg.left_m or 0.0
-            x += fwd * math.cos(heading) - left * math.sin(heading)
-            y += fwd * math.sin(heading) + left * math.cos(heading)
-            waypoints.append((x, y, heading))
-            if not speed_set:
-                speed = seg.speed_scale
-                speed_set = True
-        elif seg.kind == "turn":
-            heading += seg.angle_rad or 0.0
+                lf, ll = d, 0.0
+            else:  # Lateral (+left), distance_m already signed
+                lf, ll = 0.0, d
+        else:  # diagonal — holds heading, known body-frame displacement
+            lf, ll = seg.forward_m or 0.0, seg.left_m or 0.0
+
+        if abs_active:
+            abs_x += lf * math.cos(abs_h) - ll * math.sin(abs_h)
+            abs_y += lf * math.sin(abs_h) + ll * math.cos(abs_h)
+            waypoints.append((rel_x, rel_y, abs_x, abs_y, "abs", abs_h))
+        else:
+            rel_x += lf * math.cos(rel_h) - ll * math.sin(rel_h)
+            rel_y += lf * math.sin(rel_h) + ll * math.cos(rel_h)
+            waypoints.append((rel_x, rel_y, 0.0, 0.0, "rel", rel_h))
+
+        if not speed_set:
+            speed = seg.speed_scale
+            speed_set = True
+
+    # Trailing pure rotation (run ends on a turn / turn_to_heading): emit a
+    # rotate-in-place waypoint so the final heading is still regulated.
+    if run and run[-1].kind == "turn":
+        if abs_active:
+            waypoints.append((rel_x, rel_y, abs_x, abs_y, "abs", abs_h))
+        else:
+            waypoints.append((rel_x, rel_y, 0.0, 0.0, "rel", rel_h))
+
     return waypoints, speed
 
 
@@ -229,11 +286,24 @@ class ToAbsolutePass:
 
     def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
         from ...goto import AbsoluteHoldMove, GotoWaypoints  # deferred (import cycle)
+        from ...heading_reference import MarkHeadingReference  # deferred (import cycle)
+
+        # The active heading reference (compile-time offset + sign) as set by the
+        # most recent mark_heading_reference() seen while walking the nodes. Used
+        # to resolve turn_to_heading / heading-holding legs into the localization
+        # frame at COMPILE time (no runtime service read).
+        active_mark: tuple[float, float] | None = None
 
         result: list[PathNode | None] = []
         i = 0
         n = len(nodes)
         while i < n:
+            node_i = nodes[i]
+            if isinstance(node_i, SideAction) and isinstance(node_i.step, MarkHeadingReference):
+                active_mark = (
+                    math.radians(node_i.step._origin_offset_deg),
+                    1.0 if node_i.step._positive_direction == "left" else -1.0,
+                )
             if not _segment_qualifies(nodes[i]):
                 node = nodes[i]
                 if _is_sensor_linear_leg(node):
@@ -266,7 +336,20 @@ class ToAbsolutePass:
                 run.append(nodes[j])  # type: ignore[arg-type]
                 j += 1
 
-            waypoints, speed = _run_to_waypoints(run)
+            if _run_has_absolute(run):
+                if active_mark is None:
+                    msg = (
+                        "to_absolute(): a turn_to_heading / heading-holding drive in this "
+                        "run targets the heading reference, but no mark_heading_reference() "
+                        "was found earlier in the optimized steps — the offset that aligns "
+                        "the reference with localization can't be resolved at compile time. "
+                        "Include mark_heading_reference(...) in the optimize([...]) steps."
+                    )
+                    raise ValueError(msg)
+                o_rad, sign = active_mark
+            else:
+                o_rad, sign = 0.0, 1.0  # no absolute legs — values unused
+            waypoints, speed = _run_to_waypoints(run, o_rad, sign)
             if waypoints:
                 step = GotoWaypoints(waypoints=waypoints, speed=speed)
                 result.append(SideAction(step=step, is_background=False))

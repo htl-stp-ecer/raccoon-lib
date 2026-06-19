@@ -163,11 +163,15 @@ def test_diagonal_converts_to_goto_waypoint():
     assert len(gotos) == 1
     wps = gotos[0]._waypoints
     assert len(wps) == 1
-    forward, left, dtheta = wps[0]
-    # heading unchanged by a diagonal -> body == world delta.
-    assert forward == pytest.approx(0.2121, abs=1e-4)
-    assert left == pytest.approx(-0.2121, abs=1e-4)
-    assert dtheta == pytest.approx(0.0, abs=1e-9)
+    rel_forward, rel_left, abs_dx, abs_dy, hkind, hval = wps[0]
+    # A relative diagonal (no held heading): body delta in the relative slot,
+    # no absolute component, heading unchanged.
+    assert hkind == "rel"
+    assert rel_forward == pytest.approx(0.2121, abs=1e-4)
+    assert rel_left == pytest.approx(-0.2121, abs=1e-4)
+    assert abs_dx == pytest.approx(0.0, abs=1e-9)
+    assert abs_dy == pytest.approx(0.0, abs=1e-9)
+    assert hval == pytest.approx(0.0, abs=1e-9)
 
 
 # ---------------------------------------------------------------------------

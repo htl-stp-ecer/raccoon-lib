@@ -131,18 +131,26 @@ class TestRunWithTurn:
         wps = steps[0]._waypoints
         assert len(wps) == 2
 
+        # Relative run (no mark): each waypoint is
+        # (rel_forward, rel_left, abs_dx, abs_dy, "rel", heading).
         # Waypoint 1: 0.5 m forward, heading still 0.
-        assert wps[0][0] == pytest.approx(0.5)
-        assert wps[0][1] == pytest.approx(0.0, abs=1e-9)
-        assert wps[0][2] == pytest.approx(0.0, abs=1e-9)
+        rf0, rl0, adx0, ady0, hk0, hv0 = wps[0]
+        assert hk0 == "rel"
+        assert rf0 == pytest.approx(0.5)
+        assert rl0 == pytest.approx(0.0, abs=1e-9)
+        assert hv0 == pytest.approx(0.0, abs=1e-9)
+        assert (adx0, ady0) == (0.0, 0.0)
 
         # turn_right(90) -> heading -90° (CW). The second 0.3 m forward leg is
         # the post-turn displacement: 0.5 m forward + 0.3 m along the -90°
         # direction (= 0.3 m to the right, i.e. body-left = -0.3 m), measured
         # from the SINGLE run-start anchor (not chained).
-        assert wps[1][0] == pytest.approx(0.5)
-        assert wps[1][1] == pytest.approx(-0.3)
-        assert wps[1][2] == pytest.approx(math.radians(-90.0))
+        rf1, rl1, adx1, ady1, hk1, hv1 = wps[1]
+        assert hk1 == "rel"
+        assert rf1 == pytest.approx(0.5)
+        assert rl1 == pytest.approx(-0.3)
+        assert hv1 == pytest.approx(math.radians(-90.0))
+        assert (adx1, ady1) == (0.0, 0.0)
 
 
 # ---------------------------------------------------------------------------
