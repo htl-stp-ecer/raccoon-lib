@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Literal
 
+from raccoon.motion import TurnConfig, TurnMotion
 from raccoon.robot.heading_reference import HeadingReferenceService
 
 from .. import Step, dsl
 from ..annotation import dsl_step
-from ..logic.defer import Defer, Run
-from .turn_dsl import turn_left, turn_right
+from ._heading_utils import get_world_heading_rad
+from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -88,32 +90,113 @@ class MarkHeadingReference(Step):
         )
 
 
-def _build_heading_turn(
-    robot: "GenericRobot",
-    target_deg: float,
-    speed: float,
-    force_direction: str | None,
-) -> Step:
-    """Shared logic for heading turn steps."""
-    service = robot.get_service(HeadingReferenceService)
-    current_deg = service.current_relative_deg()
-    relative_deg = service.compute_turn(target_deg, force_direction=force_direction)
-    angle = abs(relative_deg)
+class TurnToHeading(MotionStep):
+    """Turn to an absolute heading defined relative to the heading reference.
 
-    direction = "left" if relative_deg > 0 else "right"
-    service.debug(
-        f"turn_to_heading: compensating {abs(relative_deg):.1f}° {direction} "
-        f"(from {current_deg:.1f}° → to {target_deg:.1f}°, "
-        f"delta={relative_deg:+.1f}°)"
-    )
+    This is a KNOWN-endpoint turn: it targets an absolute world heading
+    derived from the :class:`HeadingReferenceService`, NOT an opaque
+    runtime-deferred angle.  At ``on_start`` it asks the reference service
+    for the signed shortest-path delta (``compute_turn``) from the current
+    heading to ``target_deg`` (reference-relative, CCW-positive), then turns
+    to the resulting ABSOLUTE world heading.
 
-    if angle < 0.1:
-        service.debug(f"Already at target heading (error={angle:.3f}°) — skipping turn")
-        return Run(lambda _robot: None)
+    Because the target is absolute, the underlying :class:`TurnMotion`
+    regulates onto a fixed world heading (drift-corrected) rather than
+    integrating a pre-computed relative angle.  Behaviour for plain ``seq()``
+    use matches the historical step: it resolves the shortest-path turn to the
+    reference heading; the only change is that the turn now holds the absolute
+    target instead of a one-shot relative angle.
 
-    if relative_deg > 0:
-        return turn_left(angle, speed=speed)
-    return turn_right(angle, speed=speed)
+    Users normally go through :func:`turn_to_heading_right` /
+    :func:`turn_to_heading_left`.
+
+    Args:
+        target_deg: Target heading in degrees relative to the reference,
+            CCW-positive (``turn_to_heading_right(d)`` passes ``-d``;
+            ``turn_to_heading_left(d)`` passes ``+d``).
+        speed: Fraction of max angular speed, 0.0 to 1.0.
+        force_direction: ``"left"`` / ``"right"`` to force the physical turn
+            direction, or ``None`` for shortest path.
+    """
+
+    def __init__(
+        self,
+        target_deg: float,
+        speed: float = 1.0,
+        force_direction: Literal["left", "right"] | None = None,
+    ) -> None:
+        super().__init__()
+        self._target_deg = target_deg
+        self._speed = speed
+        self._force_direction = force_direction
+        self._motion: TurnMotion | None = None
+        self._done = False
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({"drive"})
+
+    def _generate_signature(self) -> str:
+        return f"TurnToHeading(target={self._target_deg:.1f}°)"
+
+    def on_start(self, robot: "GenericRobot") -> None:
+        self._motion = None
+        self._done = False
+
+        service = robot.get_service(HeadingReferenceService)
+        current_deg = service.current_relative_deg()
+        relative_deg = service.compute_turn(self._target_deg, force_direction=self._force_direction)
+
+        direction = "left" if relative_deg > 0 else "right"
+        service.debug(
+            f"turn_to_heading: compensating {abs(relative_deg):.1f}° {direction} "
+            f"(from {current_deg:.1f}° → to {self._target_deg:.1f}°, "
+            f"delta={relative_deg:+.1f}°)"
+        )
+
+        if abs(relative_deg) < 0.1:
+            service.debug(
+                f"Already at target heading (error={abs(relative_deg):.3f}°) — skipping turn"
+            )
+            self._done = True
+            return
+
+        # Absolute world target heading: regulate onto a fixed heading so the
+        # turn is drift-corrected, instead of integrating a relative angle.
+        target_heading_rad = get_world_heading_rad(robot) + math.radians(relative_deg)
+
+        current_world = get_world_heading_rad(robot)
+        config = TurnConfig()
+        config.target_angle_rad = math.remainder(target_heading_rad - current_world, 2.0 * math.pi)
+        config.has_angle_target = True
+        config.speed_scale = self._speed
+        self._motion = TurnMotion(
+            robot.drive,
+            robot.odometry,
+            robot.motion_pid_config,
+            config,
+        )
+        self._motion.start()
+
+    def on_update(self, robot: "GenericRobot", dt: float) -> bool:
+        if self._done:
+            return True
+        if self._motion is None:
+            return True
+        self._motion.update(dt)
+        return self._motion.is_finished()
+
+    def lower_to_segments(self) -> "list":
+        from .path.ir import Segment
+
+        return [
+            Segment(
+                kind="turn",
+                opaque_step=self,
+                has_known_endpoint=True,
+                angle_rad=None,
+                speed_scale=self._speed,
+            )
+        ]
 
 
 @dsl(tags=["motion", "turn"])
@@ -121,7 +204,7 @@ def turn_to_heading_right(
     degrees: float,
     speed: float = 1.0,
     force_direction: Literal["left", "right"] | None = None,
-) -> Defer:
+) -> TurnToHeading:
     """Turn to face a heading measured clockwise from the origin.
 
     Computes the absolute target heading as ``origin - degrees`` (since
@@ -146,7 +229,8 @@ def turn_to_heading_right(
             (default) for automatic shortest-path selection.
 
     Returns:
-        A deferred step that computes and executes the turn at runtime.
+        A :class:`TurnToHeading` step that resolves the shortest-path turn
+        to the absolute reference heading at start time.
 
     Raises:
         RuntimeError: If no heading reference has been set.
@@ -169,11 +253,7 @@ def turn_to_heading_right(
         # Return to origin heading
         turn_to_heading_right(0)
     """
-
-    def _build(robot: "GenericRobot") -> Step:
-        return _build_heading_turn(robot, -degrees, speed, force_direction)
-
-    return Defer(_build)
+    return TurnToHeading(-degrees, speed=speed, force_direction=force_direction)
 
 
 @dsl(tags=["motion", "turn"])
@@ -181,7 +261,7 @@ def turn_to_heading_left(
     degrees: float,
     speed: float = 1.0,
     force_direction: Literal["left", "right"] | None = None,
-) -> Defer:
+) -> TurnToHeading:
     """Turn to face a heading measured counter-clockwise from the origin.
 
     Computes the absolute target heading as ``origin + degrees`` (since
@@ -206,7 +286,8 @@ def turn_to_heading_left(
             (default) for automatic shortest-path selection.
 
     Returns:
-        A deferred step that computes and executes the turn at runtime.
+        A :class:`TurnToHeading` step that resolves the shortest-path turn
+        to the absolute reference heading at start time.
 
     Raises:
         RuntimeError: If no heading reference has been set.
@@ -229,8 +310,4 @@ def turn_to_heading_left(
         # Return to origin heading
         turn_to_heading_left(0)
     """
-
-    def _build(robot: "GenericRobot") -> Step:
-        return _build_heading_turn(robot, degrees, speed, force_direction)
-
-    return Defer(_build)
+    return TurnToHeading(degrees, speed=speed, force_direction=force_direction)

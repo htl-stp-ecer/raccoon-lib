@@ -45,9 +45,14 @@ class Segment:
                           (the original LineFollow step). Adapter delegates
                           lifecycle to the step's ``on_start``/``on_update``.
     - ``"spline"``      — ``opaque_step`` (the SplinePath step). No warm-start.
+    - ``"diagonal"``    — ``opaque_step`` (the DriveAngle step) plus the known
+                          body-frame displacement ``forward_m`` / ``left_m`` and
+                          ``distance_m``. Same opaque shape as a step; the travel
+                          direction is decoupled from the held heading. No
+                          warm-start.
     """
 
-    kind: str  # "linear" | "turn" | "arc" | "follow_line" | "spline"
+    kind: str  # "linear" | "turn" | "arc" | "follow_line" | "spline" | "diagonal"
 
     # Linear params
     axis: LinearAxis | None = None
@@ -64,6 +69,12 @@ class Segment:
     radius_m: float | None = None
     arc_angle_rad: float | None = None
     lateral: bool = False
+
+    # Diagonal params (kind == "diagonal"): known body-frame displacement,
+    # +forward / +left (90° CCW). The travel direction is decoupled from the
+    # held heading, which a single linear axis can't express.
+    forward_m: float | None = None
+    left_m: float | None = None
 
     # Common
     condition: "StopCondition" | None = None

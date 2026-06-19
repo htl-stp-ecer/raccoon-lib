@@ -38,7 +38,6 @@ def _prefer_workspace_motion_python() -> None:
         "raccoon.step.motion.path.executor",
         "raccoon.step.motion.path.compiler",
         "raccoon.step.motion.path.motion_factory",
-        "raccoon.step.motion.path.abs_desugar",
         "raccoon.step.motion.path",
         "raccoon.step.motion.smooth_path",
     ):

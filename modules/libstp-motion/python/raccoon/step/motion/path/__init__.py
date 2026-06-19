@@ -19,28 +19,13 @@ from .ir import (
     PathNode,
     SENTINEL_DISTANCE_M,
 )
-from .abs_ir import (
-    Goto,
-    TurnTo,
-    Resync,
-    Action,
-    AbsoluteNode,
-)
-from .abs_factory import (
-    goto,
-    turn_to,
-    resync,
-    action,
-)
 from .compiler import CompilerPass, CompiledPlan, PathCompiler
-from .abs_compiler import CompiledAbsolutePlan, compile_plan
-from .abs_desugar import (
-    IntendedPose,
-    absolute_to_relative_nodes,
-    compile_relative_to_absolute,
-    nodes_to_absolute,
+from .optimize import (
+    Optimizer,
+    Representation,
+    PathBuildError,
+    optimize,
 )
-from .abs_passes import CompileError, fold_implicit_turns, validate_reachable
 from .executor import PathExecutor
 from .motion_factory import (
     create_motion,
@@ -56,31 +41,15 @@ __all__ = [
     "SideAction",
     "PathNode",
     "SENTINEL_DISTANCE_M",
-    # IR (absolute, Phase 3)
-    "Goto",
-    "TurnTo",
-    "Resync",
-    "Action",
-    "AbsoluteNode",
-    # IR factories (absolute, cm/deg)
-    "goto",
-    "turn_to",
-    "resync",
-    "action",
     # Compilation
     "CompilerPass",
     "CompiledPlan",
     "PathCompiler",
-    # Compilation (absolute, Phase 3)
-    "CompiledAbsolutePlan",
-    "compile_plan",
-    "CompileError",
-    "IntendedPose",
-    "absolute_to_relative_nodes",
-    "compile_relative_to_absolute",
-    "nodes_to_absolute",
-    "fold_implicit_turns",
-    "validate_reachable",
+    # Fluent optimizer builder
+    "Optimizer",
+    "Representation",
+    "PathBuildError",
+    "optimize",
     # Executor
     "PathExecutor",
     # Motion factory

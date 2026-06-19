@@ -126,6 +126,23 @@ class _ConditionalDrive(MotionStep):
         self._motion.update(dt)
         return self._motion.is_finished()
 
+    def lower_to_segments(self) -> "list":
+        from .path.ir import Segment
+
+        cm = self._cm
+        return [
+            Segment(
+                kind="linear",
+                axis=self._axis,
+                sign=self._sign,
+                distance_m=self._sign * cm / 100.0 if cm is not None else None,
+                speed_scale=self._speed,
+                heading_deg=self._heading_deg,
+                condition=self._until,
+                has_known_endpoint=cm is not None,
+            )
+        ]
+
 
 @dsl_step(tags=["motion", "drive"])
 class DriveForward(_ConditionalDrive):

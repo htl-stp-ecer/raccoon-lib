@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..ir import PathNode
+from .contract import Representation
 from .lowering import (
     extract_segment,
     resolve_step,
@@ -23,10 +24,21 @@ from .lowering import (
     flatten_steps,
 )
 from .merge import can_merge, merge_two, run_merge, MergePass
+from .known_distance import recover_known_distance
+from .decompose import DecomposePass
 from .corner_cut import try_corner_arc, run_corner_cut, CornerCutPass
-from .spline import segments_to_spline_waypoints, build_spline_step
+from .spline import (
+    segments_to_spline_waypoints,
+    build_spline_step,
+    sample_centripetal_catmull_rom,
+    SplinifyPass,
+)
+from .to_absolute import ToAbsolutePass
+from .absolute_heading import AbsoluteHeadingPass
 
 __all__ = [
+    # Contract
+    "Representation",
     # Lowering
     "extract_segment",
     "resolve_step",
@@ -39,6 +51,10 @@ __all__ = [
     "merge_two",
     "run_merge",
     "MergePass",
+    # Known distance (applied at lowering time, not a pass)
+    "recover_known_distance",
+    # Decompose
+    "DecomposePass",
     # Corner cut
     "try_corner_arc",
     "run_corner_cut",
@@ -46,6 +62,12 @@ __all__ = [
     # Spline
     "segments_to_spline_waypoints",
     "build_spline_step",
+    "sample_centripetal_catmull_rom",
+    "SplinifyPass",
+    # To absolute
+    "ToAbsolutePass",
+    # Absolute heading
+    "AbsoluteHeadingPass",
     # Orchestrator
     "optimize_nodes",
 ]

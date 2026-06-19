@@ -413,15 +413,20 @@ class TestSmoothPathConstruction:
         assert action_count == 1
 
     @requires_libstp
-    def test_spline_true_stores_spline_step(self):
+    def test_spline_true_yields_single_spline_segment_node(self):
+        # Spline mode now collapses the path into a single Segment(kind="spline")
+        # node in the executor's node list (no separate _spline_step attribute).
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
         from raccoon.step.motion.spline_path import SplinePath
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
-        assert step._spline_step is not None
-        assert isinstance(step._spline_step, SplinePath)
+        assert not hasattr(step, "_spline_step")
+        assert len(step._nodes) == 1
+        seg = step._nodes[0]
+        assert seg.kind == "spline"
+        assert isinstance(seg.opaque_step, SplinePath)
 
     @requires_libstp
     def test_spline_waypoints_correct(self):
@@ -431,7 +436,7 @@ class TestSmoothPathConstruction:
         from raccoon.step.motion.turn_dsl import turn_right
 
         step = smooth_path(drive_forward(50), turn_right(90), drive_forward(30), spline=True)
-        wps = step._spline_step._waypoints
+        wps = step._nodes[0].opaque_step._waypoints
         assert len(wps) == 2
         # First WP: end of drive(50) — 50cm forward, 0 lateral
         assert abs(wps[0][0] - 50.0) < 1e-4
@@ -460,7 +465,10 @@ class TestSmoothPathConstruction:
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
 
-        with pytest.raises(ValueError, match="at least 2 linear"):
+        # CHANGED: the count check is now on resulting control waypoints (an arc
+        # alone can yield enough), so a single linear (1 waypoint) is rejected
+        # with the new "at least 2 control waypoints" message.
+        with pytest.raises(ValueError, match="at least 2 control waypoints"):
             smooth_path(drive_forward(50), spline=True)
 
     @requires_libstp
@@ -509,18 +517,20 @@ class TestSmoothPathConstruction:
             )
 
     @requires_libstp
-    def test_spline_rejects_arc_segments(self):
+    def test_spline_accepts_arc_segments(self):
+        # CHANGED: arcs are now incorporated into the single Catmull-Rom spline
+        # (sampled along their curvature) rather than rejected.
         from raccoon.step.motion.arc import DriveArcRight
         from raccoon.step.motion.drive_dsl import drive_forward
         from raccoon.step.motion.smooth_path import smooth_path
 
-        with pytest.raises(ValueError, match="arc segments"):
-            smooth_path(
-                drive_forward(30),
-                DriveArcRight(radius_cm=10, degrees=45),
-                drive_forward(30),
-                spline=True,
-            )
+        # Should build without raising.
+        smooth_path(
+            drive_forward(30),
+            DriveArcRight(radius_cm=10, degrees=45),
+            drive_forward(30),
+            spline=True,
+        )
 
     @requires_libstp
     def test_signature_reflects_flags(self):
@@ -548,73 +558,3 @@ class TestSmoothPathConstruction:
             spline=True,
         )._generate_signature()
         assert "spline" in sig_spline
-
-    @requires_libstp
-    def test_smooth_path_prefers_absolute_desugar_for_simple_paths(self):
-        from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.motion.smooth_path import smooth_path
-        from raccoon.step.motion.turn_dsl import turn_left
-
-        step = smooth_path(turn_left(90), drive_forward(30))
-
-        assert step._absolute_plan is not None
-        assert step._absolute_bridge_fallback_reason is None
-        assert step._plan.passes_applied[:2] == [
-            "absolute:relative_desugar",
-            "absolute:validate_reachable",
-        ]
-
-    @requires_libstp
-    def test_smooth_path_falls_back_for_defer_steps(self):
-        from raccoon.step.motion import turn_to_heading_right
-        from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.motion.smooth_path import smooth_path
-
-        step = smooth_path(turn_to_heading_right(90), drive_forward(30))
-
-        assert step._absolute_plan is None
-        assert step._absolute_bridge_fallback_reason is not None
-        assert "Defer" in step._absolute_bridge_fallback_reason
-        assert step._plan.passes_applied == ["lowering"]
-
-    @requires_libstp
-    def test_smooth_path_keeps_absolute_runtime_for_arc_segments(self):
-        from raccoon.step.motion.arc_dsl import drive_arc_left
-        from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.motion.smooth_path import smooth_path
-
-        step = smooth_path(drive_forward(20), drive_arc_left(radius_cm=20, degrees=90))
-
-        assert step._absolute_plan is not None
-        assert step._absolute_bridge_fallback_reason is None
-
-    @requires_libstp
-    def test_smooth_path_corner_cut_still_produces_absolute_runtime_plan(self):
-        from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.motion.smooth_path import smooth_path
-        from raccoon.step.motion.turn_dsl import turn_left
-
-        step = smooth_path(
-            drive_forward(30),
-            turn_left(90),
-            drive_forward(30),
-            corner_cut_cm=5.0,
-        )
-
-        assert step._absolute_plan is not None
-        assert step._absolute_bridge_fallback_reason is None
-
-    @requires_libstp
-    def test_smooth_path_falls_back_for_follow_line_segments(self):
-        from raccoon.step.motion import follow_line_single
-        from raccoon.step.motion.drive_dsl import drive_forward
-        from raccoon.step.motion.smooth_path import smooth_path
-
-        step = smooth_path(
-            drive_forward(20),
-            follow_line_single(None, distance_cm=20),
-        )
-
-        assert step._absolute_plan is None
-        assert step._absolute_bridge_fallback_reason is not None
-        assert "follow_line" in step._absolute_bridge_fallback_reason

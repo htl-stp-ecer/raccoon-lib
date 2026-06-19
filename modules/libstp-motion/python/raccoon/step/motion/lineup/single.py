@@ -20,7 +20,7 @@ from raccoon.foundation import ChassisVelocity
 from raccoon.sensor_ir import IRSensor
 from raccoon.step import Sequential, defer, seq
 
-from ... import SimulationStep, SimulationStepDelta, dsl
+from ... import dsl
 from .._odometry_snapshot import PoseSnapshot
 from ..motion_step import MotionStep
 from ..turn_dsl import turn_left, turn_right
@@ -92,15 +92,6 @@ class SingleSensorCrossing(MotionStep):
         return (
             f"SingleSensorCrossing({direction}, " f"line_width={self.config.line_width_cm:.1f}cm)"
         )
-
-    def to_simulation_step(self) -> SimulationStep:
-        base = super().to_simulation_step()
-        base.delta = SimulationStepDelta(
-            forward=0.1 if self.config.forward_speed > 0 else -0.1,
-            strafe=0.0,
-            angular=0.0,
-        )
-        return base
 
     def on_start(self, robot: "GenericRobot") -> None:
         self._phase = 0

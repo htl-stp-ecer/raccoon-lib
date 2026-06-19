@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from raccoon.motion import DiagonalMotion, DiagonalMotionConfig
 
-from .. import SimulationStep, SimulationStepDelta
 from ..annotation import dsl_step
 from ..condition import StopCondition
 from .motion_step import MotionStep
@@ -66,20 +65,8 @@ class DriveAngle(MotionStep):
     def _generate_signature(self) -> str:
         mode = f"{self._cm:.1f}cm" if self._cm else "until"
         return (
-            f"DriveAngle(angle={self._angle_deg:.1f}\u00b0, mode={mode}, "
-            f"speed={self._speed:.2f})"
+            f"DriveAngle(angle={self._angle_deg:.1f}\u00b0, mode={mode}, speed={self._speed:.2f})"
         )
-
-    def to_simulation_step(self) -> SimulationStep:
-        angle_rad = math.radians(self._angle_deg)
-        distance_m = self._cm / 100.0 if self._cm is not None else 0.0
-        base = super().to_simulation_step()
-        base.delta = SimulationStepDelta(
-            forward=distance_m * math.cos(angle_rad),
-            strafe=distance_m * math.sin(angle_rad),
-            angular=0.0,
-        )
-        return base
 
     def on_start(self, robot: "GenericRobot") -> None:
         from ._heading_utils import get_world_heading_rad
@@ -104,6 +91,88 @@ class DriveAngle(MotionStep):
             return True
         self._motion.update(dt)
         return self._motion.is_finished()
+
+    def lower_to_segments(self) -> "list":
+        """Lower a drive-angle into a single segment.
+
+        Axis-aligned angles (0 / ±180 / ±90) lower to a ``linear`` segment;
+        true diagonals lower to a ``diagonal`` segment (see below).
+
+        ``DriveAngle`` holds the robot's heading fixed while translating the
+        chassis along a vector at ``angle_deg`` relative to that heading. The
+        path IR's ``linear`` segment can only express travel along the
+        ``Forward`` or ``Lateral`` axis (travel direction == held heading, or
+        90° off it) — it has no field to decouple the travel direction from the
+        held heading. So only the axis-aligned angles map cleanly:
+
+        - ``0``        → forward  (``Forward`` axis, +sign)
+        - ``180``/``-180`` → backward (``Forward`` axis, -sign)
+        - ``90``       → right    (``Lateral`` axis, +sign)
+        - ``-90``      → left     (``Lateral`` axis, -sign)
+
+        Any other angle is a true diagonal (simultaneous vx+vy at a held
+        heading). A single Forward/Lateral linear axis can't express it, so it
+        lowers to a ``"diagonal"`` segment carrying the known body-frame
+        displacement (``forward_m`` / ``left_m``). That segment runs via an
+        opaque adapter (this step's own lifecycle) and ``to_absolute`` integrates
+        the body-frame displacement into a waypoint.
+
+        The held heading is intentionally NOT stamped onto ``heading_deg``:
+        ``angle_deg`` is robot-centric (relative to the current heading), not an
+        absolute heading-reference angle, so emitting it as ``heading_deg``
+        would mis-bind it through ``HeadingReferenceService``. Leaving heading
+        unset makes the segment hold the current world heading at execution —
+        matching ``on_start``'s ``target_heading_rad = get_world_heading_rad``.
+        """
+        from raccoon.motion import LinearAxis
+
+        from .path.ir import Segment
+
+        # Normalise to (-180, 180] so 180/-180 both map to backward.
+        angle = ((self._angle_deg + 180.0) % 360.0) - 180.0
+        tol = 1e-6
+        if abs(angle) < tol:
+            axis, sign = LinearAxis.Forward, 1.0
+        elif abs(abs(angle) - 180.0) < tol:
+            axis, sign = LinearAxis.Forward, -1.0
+        elif abs(angle - 90.0) < tol:
+            axis, sign = LinearAxis.Lateral, 1.0
+        elif abs(angle + 90.0) < tol:
+            axis, sign = LinearAxis.Lateral, -1.0
+        else:
+            # True diagonal — not representable by a single Forward/Lateral
+            # linear axis. Lower to a "diagonal" segment carrying the known
+            # body-frame displacement; it runs via an opaque adapter and
+            # to_absolute integrates it.
+            theta = math.radians(self._angle_deg)
+            d = self._cm / 100.0 if self._cm is not None else None
+            fwd = d * math.cos(theta) if d is not None else None
+            left = -d * math.sin(theta) if d is not None else None  # right=+sin → left=-sin
+            return [
+                Segment(
+                    kind="diagonal",
+                    forward_m=fwd,
+                    left_m=left,
+                    distance_m=d,
+                    speed_scale=self._speed,
+                    condition=self._until,
+                    has_known_endpoint=self._cm is not None,
+                    opaque_step=self,
+                )
+            ]
+
+        cm = self._cm
+        return [
+            Segment(
+                kind="linear",
+                axis=axis,
+                sign=sign,
+                distance_m=sign * cm / 100.0 if cm is not None else None,
+                speed_scale=self._speed,
+                condition=self._until,
+                has_known_endpoint=cm is not None,
+            )
+        ]
 
 
 @dsl_step(tags=["motion", "drive"])

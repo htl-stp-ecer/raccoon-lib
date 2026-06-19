@@ -12,8 +12,6 @@ Package exports from `libstp.step` implemented in this module:
 
 - `Step`
 - `StepProtocol`
-- `SimulationStep`
-- `SimulationStepDelta`
 - `DslMeta`
 - `dsl`
 - `Sequential`
@@ -65,7 +63,6 @@ Public classes also live below the package surface but are not re-exported throu
 Timing persistence lives in `libstp-timing`, but every `Step` participates through two hooks:
 
 - `_generate_signature()` decides which executions share timing history. Override it whenever constructor parameters materially change runtime.
-- `to_simulation_step()` uses timing history only when it can synchronously query the timing database. If it is called while an event loop is already running, the base implementation falls back to default duration values unless a subclass overrides it.
 
 ## Calibration Notes
 
@@ -102,6 +99,6 @@ That means step construction should stay cheap and side-effect free. Hardware ac
 
 - Subclass `Step` and implement `_execute_step(robot)`.
 - Override `_generate_signature()` for parameterized steps so timing history stays useful.
-- Override `to_simulation_step()` if the step changes robot pose or has deterministic duration data.
+- Override `lower_to_segments()` on a motion step so the path optimizer can lower it into IR segments; leave it returning `None` to stay opaque to the optimizer.
 - Wrap public factories and classes in `@dsl(...)` so they carry UI/discovery metadata.
 - Follow the existing UI calibration steps when handling screen dismissal or navigation pop events; those flows explicitly abort to avoid reopening stale screens.

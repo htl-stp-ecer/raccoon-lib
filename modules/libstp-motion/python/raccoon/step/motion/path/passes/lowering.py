@@ -12,92 +12,43 @@ identifies the motion spine inside parallel branches, and produces:
 
 from __future__ import annotations
 
-import math
+import logging
 from typing import TYPE_CHECKING
 
 from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
+from .known_distance import recover_known_distance
 
 if TYPE_CHECKING:
     from .... import Step
     from ....logic.defer import Defer
 
+_log = logging.getLogger(__name__)
+
 
 def extract_segment(step: "Step") -> Segment:
-    """Extract motion parameters from a resolved step into a ``Segment``."""
-    # Local imports to avoid circular dependencies at module load time.
-    # Path: step/motion/path/passes/lowering.py — `...` = step/motion/.
-    from ...arc import Arc
-    from ...drive import _ConditionalDrive
-    from ...line_follow import LineFollow, SingleSensorLineFollow
-    from ...spline_path import SplinePath
-    from ...turn import _ConditionalTurn
+    """Extract motion IR from a resolved step via its ``lower_to_segments()``.
 
-    if isinstance(step, _ConditionalDrive):
-        cm = step._cm
-        return Segment(
-            kind="linear",
-            axis=step._axis,
-            sign=step._sign,
-            distance_m=step._sign * cm / 100.0 if cm is not None else None,
-            speed_scale=step._speed,
-            heading_deg=step._heading_deg,
-            condition=step._until,
-            has_known_endpoint=cm is not None,
+    A step that is not optimizer-supported returns ``None`` and is rejected
+    here with ``TypeError`` so ``flatten_one`` can treat it as a side action.
+    """
+    segs = step.lower_to_segments()
+    if not segs:
+        msg = (
+            f"smooth_path() does not support {type(step).__name__} as a motion "
+            f"step. Supported motion steps: drive, turn, arc, follow_line, "
+            f"follow_line_single, spline."
         )
-
-    if isinstance(step, _ConditionalTurn):
-        degrees = step._degrees
-        return Segment(
-            kind="turn",
-            sign=step._sign,
-            angle_rad=step._sign * math.radians(degrees) if degrees is not None else None,
-            speed_scale=step._speed,
-            condition=step._until,
-            has_known_endpoint=degrees is not None,
-        )
-
-    if isinstance(step, Arc):
-        cfg = step.config
-        return Segment(
-            kind="arc",
-            radius_m=cfg.radius_m,
-            arc_angle_rad=cfg.arc_angle_rad,
-            speed_scale=cfg.speed_scale,
-            lateral=cfg.lateral,
-            has_known_endpoint=True,
-        )
-
-    if isinstance(step, LineFollow | SingleSensorLineFollow):
-        cfg = step.config
-        return Segment(
-            kind="follow_line",
-            axis=LinearAxis.Forward,
-            sign=1.0,
-            distance_m=cfg.distance_cm / 100.0 if cfg.distance_cm is not None else None,
-            speed_scale=cfg.speed_scale,
-            # Condition is handled internally by on_update; not exposed here
-            # to avoid double-starting it.  Completion is detected via
-            # adapter.is_finished().
-            condition=None,
-            has_known_endpoint=cfg.distance_cm is not None,
-            opaque_step=step,
-        )
-
-    if isinstance(step, SplinePath):
-        return Segment(
-            kind="spline",
-            has_known_endpoint=True,
-            opaque_step=step,
-        )
-
-    msg = (
-        f"smooth_path() does not support {type(step).__name__} as a motion "
-        f"step. Supported motion steps: drive, turn, arc, follow_line, "
-        f"follow_line_single, spline."
-    )
-    raise TypeError(msg)
+        raise TypeError(msg)
+    if len(segs) != 1:
+        # Current pipeline assumes one segment per leaf step; multi-segment
+        # lowering is a future extension.
+        msg = f"{type(step).__name__}.lower_to_segments() returned {len(segs)} segments; expected 1"
+        raise TypeError(msg)
+    # Always recover a known travel distance hidden in a bare after_cm
+    # condition — there is no reason the optimizer should see it as unknown.
+    return recover_known_distance(segs[0])
 
 
 def resolve_step(step) -> "Step":
@@ -117,6 +68,17 @@ def is_same_type(a: Segment, b: Segment) -> bool:
     """
     # Spline never warm-starts (SplineMotion has no start_warm).
     if a.kind == "spline" or b.kind == "spline":
+        return False
+
+    # Diagonal never warm-starts (DiagonalMotion warm-start isn't guaranteed).
+    if a.kind == "diagonal" or b.kind == "diagonal":
+        return False
+
+    # A heading turn (TurnToHeading, carried as an opaque turn) resolves its own
+    # absolute target at on_start and never warm-starts.
+    if (a.kind == "turn" and a.opaque_step is not None) or (
+        b.kind == "turn" and b.opaque_step is not None
+    ):
         return False
 
     def _effective(seg: Segment) -> tuple:
@@ -144,15 +106,19 @@ def flatten_one(
     from ....logic.defer import Defer, Run
     from ....parallel import Parallel
     from ....sequential import Sequential
+    from ....timeout_or import TimeoutOr
 
-    # 1. Defer — placeholder for runtime resolution.
+    # 1. Resolve builder (e.g., drive_forward(30) or defer(...) returns a
+    #    builder). Must happen before the isinstance checks below so that
+    #    builder factories such as defer() are matched as their concrete
+    #    step type (e.g. Defer) rather than slipping through as side actions.
+    step = resolve_step(step)
+
+    # 2. Defer — placeholder for runtime resolution.
     if isinstance(step, Defer):
         deferred.append((len(nodes), step))
         nodes.append(None)
         return
-
-    # 2. Resolve builder (e.g., drive_forward(30) returns a builder).
-    step = resolve_step(step)
 
     # 3. Sequential — flatten children recursively.
     if isinstance(step, Sequential):
@@ -175,7 +141,14 @@ def flatten_one(
         nodes.append(SideAction(step=step, is_background=False))
         return
 
-    # 7. Try to extract as a motion segment.
+    # 7. TimeoutOr — time-bounded race wrapping a (possibly drive) branch.
+    #    It's a legitimate opaque composite, not unsupported negligence, so it
+    #    runs unoptimized as an inline barrier WITHOUT a drive-step warning.
+    if isinstance(step, TimeoutOr):
+        nodes.append(SideAction(step=step, is_background=False))
+        return
+
+    # 8. Try to extract as a motion segment.
     try:
         seg = extract_segment(step)
         nodes.append(seg)
@@ -183,17 +156,20 @@ def flatten_one(
     except TypeError:
         pass
 
-    # 8. Non-motion step — check if it uses the drive resource.
+    # 9. Step lowered to no segments — run it unoptimized as an opaque inline
+    #    barrier. A step that uses the drive resource but can't describe its
+    #    motion is a yellow flag (drive step running unoptimized), so emit a
+    #    one-time warning naming it.
     resources = step.collected_resources()
     if "drive" in resources:
-        msg = (
-            f"smooth_path() does not support {type(step).__name__} — "
-            f"it uses the drive resource but is not a supported motion step. "
-            f"Supported: drive, turn, arc, follow_line, follow_line_single, spline."
+        _log.warning(
+            "smooth_path(): %s uses the drive resource but does not lower to "
+            "motion segments — running it unoptimized as an opaque barrier. "
+            "Supported motion steps: drive, turn, arc, follow_line, "
+            "follow_line_single, spline.",
+            type(step).__name__,
         )
-        raise TypeError(msg)
 
-    # 9. Non-drive step — treat as inline side action.
     nodes.append(SideAction(step=step, is_background=False))
 
 
