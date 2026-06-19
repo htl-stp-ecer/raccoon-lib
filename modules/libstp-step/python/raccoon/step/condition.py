@@ -231,32 +231,58 @@ class after_cm(StopCondition):
 
 
 class _AxisDisplacementCondition(StopCondition):
-    """Shared base: signed displacement along an axis fixed at ``start()``.
+    """Shared base: signed displacement along a single reference axis.
 
-    In **relative** mode (default), ``start()`` snapshots the robot's
-    world-frame pose *and* heading. Each ``check()`` then projects the
-    displacement-since-snapshot onto that snapshot heading — so
-    "forward"/"lateral" always mean forward/lateral *from where and how
-    the robot was pointing when this condition began*, regardless of any
-    turning that happens afterwards.
+    The condition measures how far the robot has travelled *along one fixed
+    line*, the reference axis. ``after_forward_cm`` projects onto the
+    forward direction of that axis, ``after_lateral_cm`` onto the lateral
+    direction.
+
+    The reference axis is the heading frozen when the condition starts. It
+    does **not** follow the robot as it turns: this is deliberate.
+    ``.until(...)`` says "drive 20 cm along *this* line". A line-follow
+    corrects *around* that reference, so its slightly diagonal travel
+    contributes a little less forward per centimetre of path — which is
+    correct. If the robot turns away from the reference and drives off at an
+    angle it makes less forward progress along the line, and at 90° it can
+    never reach the target at all.
+
+    Which heading defines that reference line:
+
+    * default — the robot's **current** heading at ``start()``. Use this
+      when the robot is already aligned with the line it is about to drive.
+    * ``heading=<deg>`` — a **targeted absolute** heading (degrees from the
+      ``HeadingReferenceService`` reference, same convention as
+      ``strafe_left(heading=...)`` / ``turn_to_heading``). Use this when the
+      robot may be crooked at ``start()`` — e.g. the line-follow is still
+      correcting onto the line — so the reference is the line you *intend*
+      to drive, not whatever angle the robot happened to sit at when the
+      condition started.
 
     In **absolute** mode, the condition reads
-    ``get_distance_from_origin().forward / .lateral`` directly — axes
-    fixed to the odometry origin heading (last ``reset()``).
+    ``get_distance_from_origin().forward / .lateral`` directly — axes fixed
+    to the odometry origin heading (last ``reset()``).
     """
 
     # Sign of the projection: +1 for forward, -1 means "use lateral".
     # Concrete subclasses override _project().
     _axis_name = ""  # for error messages
 
-    def __init__(self, cm: float, *, absolute: bool = False):
+    def __init__(self, cm: float, *, heading: float | None = None, absolute: bool = False):
         if not isinstance(cm, int | float):
             msg = f"cm must be a number, got {type(cm).__name__}"
             raise TypeError(msg)
         if cm == 0:
             msg = f"cm must be nonzero, got {cm}"
             raise ValueError(msg)
+        if heading is not None and not isinstance(heading, int | float):
+            msg = f"heading must be a number or None, got {type(heading).__name__}"
+            raise TypeError(msg)
+        if heading is not None and absolute:
+            msg = "heading= and absolute=True are mutually exclusive"
+            raise ValueError(msg)
         self._target_m = cm / 100.0
+        self._heading_deg = heading
         self._absolute = absolute
         self._origin_x_m: float = 0.0
         self._origin_y_m: float = 0.0
@@ -264,12 +290,24 @@ class _AxisDisplacementCondition(StopCondition):
         self._sin_h: float = 0.0
         self._started = False
 
+    def _reference_heading_rad(self, robot: "GenericRobot") -> float:
+        """Resolve the frozen reference heading (radians) at ``start()``."""
+        if self._heading_deg is None:
+            return float(robot.odometry.get_pose().heading)
+        # Targeted absolute heading: resolve through the same reference the
+        # motion controllers hold their heading against, so "heading=0" means
+        # the same line for the drive and for this stop condition.
+        from raccoon.robot.heading_reference import HeadingReferenceService
+
+        service = robot.get_service(HeadingReferenceService)
+        return float(service.target_absolute_rad(self._heading_deg))
+
     def start(self, robot: "GenericRobot") -> None:
         if not self._absolute:
             pose = robot.odometry.get_pose()
             self._origin_x_m = float(pose.position[0])
             self._origin_y_m = float(pose.position[1])
-            heading = float(pose.heading)
+            heading = self._reference_heading_rad(robot)
             self._cos_h = math.cos(heading)
             self._sin_h = math.sin(heading)
         self._started = True
@@ -298,21 +336,30 @@ class _AxisDisplacementCondition(StopCondition):
 
 
 class after_forward_cm(_AxisDisplacementCondition):
-    """Stop after traveling a forward/backward displacement.
+    """Stop after a forward/backward displacement along the reference line.
 
     Unlike :class:`after_cm` (which uses cumulative path length), this
-    measures the *signed forward component* of displacement relative to
-    the robot's heading at the moment this condition started. Any
-    turning that happens *after* ``start()`` does not rotate the axis —
-    it stays pinned to the original heading.
+    measures the *signed forward component* of displacement relative to the
+    reference axis — the robot's heading at the moment this condition
+    started. Any turning that happens *after* ``start()`` does not rotate
+    the axis: it stays pinned to the original heading, so "20 cm forward"
+    means 20 cm along *that* line. A line-follow correcting around the
+    reference therefore needs slightly more path to reach the target, and a
+    robot that turns 90° off the reference can never reach it.
 
-    A positive ``cm`` triggers after the robot has moved that far
-    forward of its baseline pose; a negative ``cm`` triggers after
+    A positive ``cm`` triggers after the robot has moved that far forward of
+    its baseline along the reference; a negative ``cm`` triggers after
     moving that far backward.
 
-    In absolute mode (``absolute=True``) the displacement is read
-    directly from ``get_distance_from_origin().forward`` — i.e. measured
-    from the odometry origin, projected onto the origin heading.
+    By default the reference line is the robot's heading at ``start()``.
+    Pass ``heading=<deg>`` to pin it to a targeted absolute heading instead
+    — e.g. ``after_forward_cm(20, heading=0)`` means "20 cm along the
+    heading-0 line", robust to the robot being crooked when the condition
+    starts.
+
+    In absolute mode (``absolute=True``) the displacement is read directly
+    from ``get_distance_from_origin().forward`` — i.e. measured from the
+    odometry origin, projected onto the origin heading.
     """
 
     def _project(self, dx: float, dy: float) -> float:
@@ -323,21 +370,21 @@ class after_forward_cm(_AxisDisplacementCondition):
 
 
 class after_lateral_cm(_AxisDisplacementCondition):
-    """Stop after traveling a lateral (sideways) displacement.
+    """Stop after a lateral (sideways) displacement along the reference line.
 
-    Measures the *signed lateral component* of displacement relative to
-    the robot's heading at the moment this condition started. Sign
-    convention matches ``DistanceFromOrigin.lateral``: positive values
-    point along the +lateral axis as defined there.
+    Measures the *signed lateral component* of displacement relative to the
+    reference axis — the robot's heading at the moment this condition
+    started. Sign convention matches ``DistanceFromOrigin.lateral``:
+    positive values point along the +lateral axis as defined there.
 
     Only meaningful on drivetrains that support lateral motion (e.g.
-    mecanum / omni). On a differential drive this will stay near zero
-    unless the robot rotates and then drives forward — in which case
-    the world-frame displacement has a component sideways of the
-    original heading.
+    mecanum / omni). On a differential drive this will stay near zero unless
+    the robot rotates and then drives forward — in which case the
+    world-frame displacement has a component sideways of the original
+    heading.
 
-    In absolute mode (``absolute=True``) the displacement is read
-    directly from ``get_distance_from_origin().lateral``.
+    In absolute mode (``absolute=True``) the displacement is read directly
+    from ``get_distance_from_origin().lateral``.
     """
 
     def _project(self, dx: float, dy: float) -> float:
@@ -350,9 +397,10 @@ class after_lateral_cm(_AxisDisplacementCondition):
 class after_degrees(StopCondition):
     """Stop after turning a given angle (degrees).
 
-    Reads the world heading from ``robot.localization.get_pose().heading``
-    so it is unaffected by odometry resets. Tracks total unsigned rotation —
-    works regardless of turn direction.
+    Reads the heading from ``robot.odometry.get_pose().heading`` — the same
+    source the motion controllers regulate on — so the measured rotation and
+    the executed feedback share one frame. Tracks total unsigned rotation,
+    so it works regardless of turn direction.
     """
 
     def __init__(self, degrees: float):
@@ -367,14 +415,14 @@ class after_degrees(StopCondition):
 
     @staticmethod
     def _world_heading(robot: "GenericRobot") -> float:
-        loc = getattr(robot, "localization", None)
-        if loc is None:
+        odom = getattr(robot, "odometry", None)
+        if odom is None:
             msg = (
-                "after_degrees requires robot.localization "
-                "(world heading is read from localization.get_pose().heading)."
+                "after_degrees requires robot.odometry "
+                "(heading is read from odometry.get_pose().heading)."
             )
             raise RuntimeError(msg)
-        return float(loc.get_pose().heading)
+        return float(odom.get_pose().heading)
 
     def start(self, robot: "GenericRobot") -> None:
         self._start_heading = self._world_heading(robot)

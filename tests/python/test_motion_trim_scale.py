@@ -206,6 +206,70 @@ class TestMotionTrimServiceApplication:
 
 
 # --------------------------------------------------------------------------- #
+# 2b. Re-calibration must COMPOSE with an already-applied scale factor.        #
+# --------------------------------------------------------------------------- #
+class TestTrimCalibrationComposesWithExistingScale:
+    """A fresh calibration drive runs *through* the already-applied trim.
+
+    ``drive.py`` scales every commanded distance by the current axis factor
+    (``scale_distance_m`` -> ``distance_m * axis_scale``). So when the robot
+    performs a calibration drive while a non-identity factor is already active,
+    the physical distance it travels is ``requested * current_scale``, and the
+    fresh correction ``requested / measured`` is *relative to that*, not to the
+    raw command. Storing ``requested / measured`` therefore **discards** the
+    existing factor; the new factor must compose:
+
+        new_scale = current_scale * (requested / measured)
+    """
+
+    def test_recalibration_composes_with_existing_scale(self):
+        svc = _make_trim_service()
+
+        # A previous calibration already established a 1.2x forward trim.
+        current_scale = 1.2
+        svc.set_axis_scale("forward", current_scale)
+
+        # The drivetrain is now mechanically perfect: commanding a physical
+        # distance D actually travels D (gain == 1.0). A 0.30 m calibration
+        # drive is scaled to 0.30 * 1.2 = 0.36 m physical and travels 0.36 m.
+        requested_m = 0.30
+        gain = 1.0
+        commanded_physical = svc.scale_distance_m("forward", requested_m)
+        measured_m = commanded_physical * gain  # == 0.36
+
+        # Apply the fresh measurement back to the trim axis.
+        svc.calibrate_axis("forward", requested_m, measured_m)
+
+        # With a perfect drivetrain the existing 1.2x is exactly the error, so
+        # the corrected factor must be 1.0 — NOT the naive 0.30/0.36 == 0.833,
+        # which would throw away the already-applied scale.
+        assert svc.get_axis_scale("forward") == pytest.approx(1.0)
+
+        # And the round-trip holds: a subsequent 0.30 m drive lands on target.
+        next_commanded = svc.scale_distance_m("forward", requested_m)
+        assert next_commanded * gain == pytest.approx(requested_m)
+
+    def test_recalibration_round_trips_with_existing_scale_and_real_gain(self):
+        svc = _make_trim_service()
+
+        # Start from an arbitrary already-applied factor and a real (lossy)
+        # transfer gain. After composing the fresh correction, commanding the
+        # target must travel the target.
+        current_scale = 0.9
+        svc.set_axis_scale("forward", current_scale)
+
+        requested_m = 0.50
+        gain = 0.8  # commanding X physically travels 0.8 * X
+        commanded_physical = svc.scale_distance_m("forward", requested_m)
+        measured_m = commanded_physical * gain
+
+        svc.calibrate_axis("forward", requested_m, measured_m)
+
+        next_commanded = svc.scale_distance_m("forward", requested_m)
+        assert next_commanded * gain == pytest.approx(requested_m)
+
+
+# --------------------------------------------------------------------------- #
 # 3. DistanceConfirmScreen.scale_factor convention (real installed code).      #
 # --------------------------------------------------------------------------- #
 class TestDistanceConfirmScaleFactorConvention:

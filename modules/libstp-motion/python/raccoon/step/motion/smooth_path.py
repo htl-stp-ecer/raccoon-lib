@@ -264,7 +264,8 @@ def smooth_path(
     never reorders across side actions, preserving the execution contract.
 
     Prerequisites:
-        ``calibrate_distance()`` if any segment uses distance-based mode.
+        Distance calibration (a setup mission with ``calibration_gate()``) if
+        any segment uses distance-based mode.
         ``mark_heading_reference()`` if any segment uses heading hold.
 
     Args:

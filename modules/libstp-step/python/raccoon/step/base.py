@@ -34,6 +34,9 @@ class Step(ClassNameLogger):
     def __init__(self) -> None:
         self._skip_timing: bool = False
         self._anomaly_callback: StepAnomalyCallback | None = None
+        # Guard so the live watchdog and the post-execution check never both
+        # fire the callback for a single run. Reset at the start of run_step.
+        self._anomaly_fired: bool = False
 
     def required_resources(self) -> frozenset[str]:
         """Return the hardware resources this step requires exclusive access to.
@@ -81,6 +84,8 @@ class Step(ClassNameLogger):
         elapsed time exceeds the anomaly upper bound — even while the step
         is still running.
         """
+        self._anomaly_fired = False
+
         if not self._composite:
             path = _step_path.get()
             prefix = " > ".join(path) + ": " if path else ""
@@ -153,11 +158,8 @@ class Step(ClassNameLogger):
                 duration = time.perf_counter() - start_time
                 try:
                     anomaly = await tracker.record_execution(signature, duration)
-                    if anomaly and self._anomaly_callback:
-                        try:
-                            await self._anomaly_callback(self, robot)
-                        except Exception as exc:
-                            self.error(f"Step anomaly callback error: {exc}")
+                    if anomaly:
+                        await self._fire_anomaly_callback(robot, source="Step")
                 except asyncio.CancelledError:
                     self.debug("Timing recording cancelled - skipping")
                     raise
@@ -178,12 +180,23 @@ class Step(ClassNameLogger):
         remaining = upper_bound - (time.perf_counter() - start_time)
         if remaining > 0:
             await asyncio.sleep(remaining)
-        # Step is still running — fire the callback
-        assert self._anomaly_callback is not None
+        # Step is still running — fire the callback (at most once per run)
+        await self._fire_anomaly_callback(robot, source="Live")
+
+    async def _fire_anomaly_callback(self, robot: "GenericRobot", *, source: str) -> None:
+        """Fire the per-step anomaly callback, but at most once per ``run_step``.
+
+        The live watchdog and the post-execution check are independent paths
+        that can both trigger for a single slow step.  This guard ensures the
+        user-supplied ``.on_anomaly()`` handler runs exactly once.
+        """
+        if self._anomaly_fired or self._anomaly_callback is None:
+            return
+        self._anomaly_fired = True
         try:
             await self._anomaly_callback(self, robot)
         except Exception as exc:
-            self.error(f"Live anomaly callback error: {exc}")
+            self.error(f"{source} anomaly callback error: {exc}")
 
     def _generate_signature(self) -> str:
         """

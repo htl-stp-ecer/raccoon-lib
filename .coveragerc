@@ -1,0 +1,40 @@
+# Coverage configuration for the raccoon Python sources.
+#
+# Used by `scripts/coverage.sh` (which drives pytest-cov) and by any direct
+# `coverage run`/`coverage report` invocation. The HTML/XML/JSON output
+# locations are passed on the command line so this file only describes *what*
+# to measure, not *where* to write the artifacts.
+
+[run]
+# Branch coverage gives a far more honest signal than line coverage alone —
+# an `if` whose else-branch is never taken still counts as a gap.
+branch = True
+
+# Measure the whole installed `raccoon` package, including files that were
+# never imported by a test (they show up as 0 %), so the denominator reflects
+# the real surface area we could be testing — not just what got loaded.
+source_pkgs = raccoon
+
+omit =
+    # Test code itself.
+    */tests/*
+    # In-house test/sim infrastructure (pytest plugin, mock project loader,
+    # sim harness) — support code, not library surface we ship to users.
+    */raccoon/testing/*
+    # Static scene data shipped as a package, not executable library code.
+    */raccoon/scenes/*
+    # Compiled extension shims and bytecode caches.
+    */__pycache__/*
+
+[report]
+# Treat these as non-code so they don't drag the percentage down.
+exclude_also =
+    if TYPE_CHECKING:
+    if typing\.TYPE_CHECKING:
+    raise NotImplementedError
+    @(abc\.)?abstractmethod
+    if __name__ == .__main__.:
+    ^\s*\.\.\.\s*$
+    @overload
+precision = 1
+skip_empty = True

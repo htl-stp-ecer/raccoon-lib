@@ -1,19 +1,28 @@
 from __future__ import annotations
 from .calibrate_step import CalibrateStep
 from .store import CalibrationStore
-from .calibrate import Calibrate
-from .calibrate_dsl import calibrate
 from .calibrate_wfl import CalibrateWaitForLight
 from .calibrate_wfl_dsl import calibrate_wait_for_light
-from .calibrate_distance import (
-    CalibrateDistance,
+from .state import (
     CalibrationRequiredError,
-    PerWheelCalibration,
     is_distance_calibrated,
+    set_distance_calibrated,
     check_distance_calibration,
     reset_distance_calibration,
+    load_stored_ir_calibration,
 )
-from .calibrate_distance_dsl import calibrate_distance
+from .setup import (
+    CalibrationAxis,
+    CalibrationGate,
+    CollectDrive,
+    CollectIrSet,
+    DriveCalibrationSample,
+    IrCalibrationSet,
+    SetupCalibrationSession,
+    calibration_gate,
+    collect_drive,
+    collect_ir_set,
+)
 from .deadzone import (
     calibrate_deadzone,
     CalibrateDeadzone,
@@ -36,17 +45,24 @@ from .calibrate_analog_sensor_dsl import calibrate_analog_sensor
 __all__ = [
     "CalibrateStep",
     "CalibrationStore",
-    "calibrate",
-    "Calibrate",
     "calibrate_wait_for_light",
     "CalibrateWaitForLight",
-    "calibrate_distance",
-    "CalibrateDistance",
     "CalibrationRequiredError",
-    "PerWheelCalibration",
     "is_distance_calibrated",
+    "set_distance_calibrated",
     "check_distance_calibration",
     "reset_distance_calibration",
+    "load_stored_ir_calibration",
+    "CalibrationAxis",
+    "CalibrationGate",
+    "CollectDrive",
+    "CollectIrSet",
+    "DriveCalibrationSample",
+    "IrCalibrationSet",
+    "SetupCalibrationSession",
+    "calibration_gate",
+    "collect_drive",
+    "collect_ir_set",
     "calibrate_deadzone",
     "CalibrateDeadzone",
     "DeadzoneCalibrationResult",

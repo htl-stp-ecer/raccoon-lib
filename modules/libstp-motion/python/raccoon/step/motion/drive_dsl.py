@@ -65,7 +65,8 @@ def drive_forward(
     of the heading at start, preventing drift accumulation across
     consecutive drives.
 
-    Requires ``calibrate_distance()`` for distance-based mode.
+    Requires distance calibration (a setup mission with ``calibration_gate()``)
+    for distance-based mode.
     Requires ``mark_heading_reference()`` when using ``heading``.
 
     Args:
@@ -140,7 +141,8 @@ def drive_backward(
     motion control while maintaining heading via IMU feedback. Supports
     the same ``heading`` parameter for absolute heading hold.
 
-    Requires ``calibrate_distance()`` for distance-based mode.
+    Requires distance calibration (a setup mission with ``calibration_gate()``)
+    for distance-based mode.
     Requires ``mark_heading_reference()`` when using ``heading``.
 
     Args:

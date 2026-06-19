@@ -237,6 +237,7 @@ isort.known-first-party = ["raccoon", "raccoon_cli", "raccoon_transport"]
 # subprocess. Keep ruff useful but don't lint scripts as if they were
 # library code.
 "tools/**" = ["T20", "EXE001", "EXE002"]
+"scripts/**" = ["T20", "EXE001", "EXE002"]
 "install.py" = ["T20", "EXE001", "PTH207"]
 "deploy.sh" = ["T20", "EXE001", "EXE002"]
 # UI/screen modules use `from raccoon.ui import *` to pull in the widget

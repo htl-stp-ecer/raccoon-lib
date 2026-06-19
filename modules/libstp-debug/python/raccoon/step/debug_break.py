@@ -11,8 +11,8 @@ if TYPE_CHECKING:
 
 
 @dsl(hidden=True)
-class BreakpointStep(UIStep):
-    """Step-level breakpoint marker.
+class DebugBreakStep(UIStep):
+    """Step-level debug-break marker.
 
     Behaviour depends on the global ``--debug`` flag
     (``LIBSTP_DEBUG=1``, set by ``raccoon run --debug``):
@@ -25,7 +25,7 @@ class BreakpointStep(UIStep):
 
     def __init__(self, label: str | None = None) -> None:
         """
-        Initialize a lightweight breakpoint marker step.
+        Initialize a lightweight debug-break marker step.
 
         Args:
             label: Optional label used for the runtime log message and
@@ -35,7 +35,7 @@ class BreakpointStep(UIStep):
         self._label = label
 
     def _generate_signature(self) -> str:
-        return f"BreakpointStep(label={self._label!r})"
+        return f"DebugBreakStep(label={self._label!r})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """
@@ -47,25 +47,25 @@ class BreakpointStep(UIStep):
         label_suffix = f" ({self._label})" if self._label else ""
 
         if not is_debug():
-            self.info(f"Breakpoint reached{label_suffix} (debug off, skipping)")
+            self.info(f"Debug break reached{label_suffix} (debug off, skipping)")
             return
 
-        self.info(f"Breakpoint reached{label_suffix} — waiting for button press")
-        prompt = f"Breakpoint: {self._label}" if self._label else "Breakpoint reached"
+        self.info(f"Debug break reached{label_suffix} — waiting for button press")
+        prompt = f"Debug break: {self._label}" if self._label else "Debug break reached"
         await self.wait_for_button(f"{prompt}\nPress button to continue")
 
 
 @dsl(hidden=True)
-def breakpoint(label: str | None = None) -> BreakpointStep:
+def debug_break(label: str | None = None) -> DebugBreakStep:
     """
-    Create a breakpoint marker step.
+    Create a debug-break marker step.
 
     In debug mode (``raccoon run --debug``) the step pauses the mission
     and waits for a hardware button press. Without ``--debug`` it logs a
     line and returns immediately.
 
     Args:
-        label: Optional label included in the breakpoint log message and
+        label: Optional label included in the debug-break log message and
             the on-screen prompt.
     """
-    return BreakpointStep(label=label)
+    return DebugBreakStep(label=label)

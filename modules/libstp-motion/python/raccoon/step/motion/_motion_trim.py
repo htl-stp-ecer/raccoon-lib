@@ -68,6 +68,36 @@ class MotionTrimService:
         self._axis_scale[axis] = float(scale)
         self._persist()
 
+    def calibrate_axis(self, axis: str, requested_m: float, measured_m: float) -> float:
+        """Fold a fresh calibration measurement into the axis scale factor.
+
+        A calibration drive runs *through* the trim layer: commanding
+        ``requested_m`` actually targets ``requested_m * current_scale`` of
+        physical distance (see :meth:`scale_distance_m`). The raw correction
+        ``requested_m / measured_m`` is therefore relative to the already-scaled
+        command, so it must be *composed* with the current factor rather than
+        replacing it — otherwise the previously-applied scale is silently
+        discarded::
+
+            new_scale = current_scale * (requested_m / measured_m)
+
+        Args:
+            axis: Trim axis, ``"forward"`` or ``"lateral"``.
+            requested_m: Distance requested for the calibration drive (metres),
+                before the trim scale was applied.
+            measured_m: Distance the robot actually travelled (metres).
+
+        Returns:
+            The newly stored, composed scale factor for ``axis``.
+        """
+        if not (measured_m > 0.0):
+            msg = f"measured distance must be > 0, got {measured_m}"
+            raise ValueError(msg)
+        correction = requested_m / measured_m
+        new_scale = self.get_axis_scale(axis) * correction
+        self.set_axis_scale(axis, new_scale)
+        return new_scale
+
     def _persist(self) -> None:
         """Write the current scale factors to the calibration store."""
         self._store.store(TRIM_STORE_SECTION, dict(self._axis_scale))

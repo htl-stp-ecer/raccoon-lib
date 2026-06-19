@@ -138,7 +138,8 @@ class DriveForward(_ConditionalDrive):
     of the heading at start, preventing drift accumulation across
     consecutive drives.
 
-    Requires ``calibrate_distance()`` for distance-based mode.
+    Requires distance calibration (a setup mission with ``calibration_gate()``)
+    for distance-based mode.
     Requires ``mark_heading_reference()`` when using ``heading``.
 
     Args:
@@ -174,7 +175,8 @@ class DriveBackward(_ConditionalDrive):
     motion control while maintaining heading via IMU feedback. Supports
     the same ``heading`` parameter for absolute heading hold.
 
-    Requires ``calibrate_distance()`` for distance-based mode.
+    Requires distance calibration (a setup mission with ``calibration_gate()``)
+    for distance-based mode.
     Requires ``mark_heading_reference()`` when using ``heading``.
 
     Args:
@@ -275,8 +277,8 @@ class StrafeRight(_ConditionalDrive):
 def _drive_forward_uncalibrated(cm: float, speed: float = 1.0) -> DriveForward:
     """Internal: drive forward without calibration check.
 
-    Used by ``calibrate_distance()`` to perform the calibration drive
-    before calibration data exists.
+    Used by the setup ``CalibrationGate`` fallback drives to move before any
+    distance calibration data exists.
     """
     step = DriveForward(cm=cm, speed=speed)
     step._skip_calibration = True

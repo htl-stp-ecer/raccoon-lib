@@ -84,7 +84,18 @@ class StepTimingTracker(ClassNameLogger):
         stats = self._compute_statistics(durations)
         if stats is None:
             return None
-        return stats.mean + self.config.threshold_multiplier * stats.stddev
+        effective_stddev = self._effective_stddev(stats.mean, stats.stddev)
+        return stats.mean + self.config.threshold_multiplier * effective_stddev
+
+    def _effective_stddev(self, mean: float, stddev: float) -> float:
+        """Floor the measured stddev so the anomaly band never collapses.
+
+        Steps with very consistent runtimes drive the rolling stddev toward
+        zero, which would shrink the ``mean +/- threshold * stddev`` band to
+        nothing and flag ordinary jitter as an anomaly. We floor it to a
+        fraction of the mean so the band scales with the step's duration.
+        """
+        return max(stddev, self.config.min_relative_stddev * abs(mean))
 
     def _log_baseline_progress(self, signature: str, prior_samples: int) -> None:
         """Emit cold-start info while collecting the first few samples."""
@@ -103,16 +114,19 @@ class StepTimingTracker(ClassNameLogger):
             return None
 
         threshold = self.config.threshold_multiplier
+        effective_stddev = self._effective_stddev(stats.mean, stats.stddev)
 
-        if stats.stddev == 0:
+        if effective_stddev == 0:
+            # Degenerate baseline (mean and stddev both zero) -- only an exact
+            # match is "normal"; anything else is infinitely far out.
             if duration == stats.mean:
                 return None
             deviation_sigma = float("inf")
         else:
-            deviation_sigma = abs(duration - stats.mean) / stats.stddev
+            deviation_sigma = abs(duration - stats.mean) / effective_stddev
 
-        lower_bound = stats.mean - (threshold * stats.stddev)
-        upper_bound = stats.mean + (threshold * stats.stddev)
+        lower_bound = stats.mean - (threshold * effective_stddev)
+        upper_bound = stats.mean + (threshold * effective_stddev)
 
         if duration < lower_bound or duration > upper_bound:
             return AnomalyDetection(
