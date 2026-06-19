@@ -119,13 +119,25 @@ def _segment_qualifies(node) -> bool:
     Requires a known endpoint and either no condition or a bare relative
     ``after_cm`` whose distance is already baked into ``distance_m`` (so the
     geometric endpoint is exact).
+
+    A ``turn`` qualifies ONLY when it is a RELATIVE turn — ``opaque_step is
+    None`` and ``angle_rad is not None``.  A heading turn (``TurnToHeading``,
+    carried as an ``opaque_step`` with ``angle_rad is None``) targets an
+    ABSOLUTE reference heading, not a per-run relative delta, so folding it via
+    ``heading += angle_rad`` would corrupt the run (and crash on ``None``).  It
+    therefore BREAKS the run and passes through as a plain ``Segment`` that the
+    executor runs absolute via the adapter; the GotoWaypoints before/after
+    re-anchor.
     """
-    return (
+    if not (
         isinstance(node, Segment)
         and node.kind in _RUN_KINDS
         and node.has_known_endpoint
         and _condition_is_baked(node)
-    )
+    ):
+        return False
+    # A heading turn (opaque_step set / angle_rad None) is NOT run-eligible.
+    return not (node.kind == "turn" and (node.opaque_step is not None or node.angle_rad is None))
 
 
 def _run_to_waypoints(run: list[Segment]) -> tuple[list[tuple[float, float, float]], float]:

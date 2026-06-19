@@ -74,6 +74,13 @@ def is_same_type(a: Segment, b: Segment) -> bool:
     if a.kind == "diagonal" or b.kind == "diagonal":
         return False
 
+    # A heading turn (TurnToHeading, carried as an opaque turn) resolves its own
+    # absolute target at on_start and never warm-starts.
+    if (a.kind == "turn" and a.opaque_step is not None) or (
+        b.kind == "turn" and b.opaque_step is not None
+    ):
+        return False
+
     def _effective(seg: Segment) -> tuple:
         if seg.kind == "follow_line":
             return ("linear", LinearAxis.Forward)

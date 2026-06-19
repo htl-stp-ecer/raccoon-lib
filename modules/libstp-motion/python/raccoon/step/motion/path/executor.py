@@ -351,8 +351,18 @@ class PathExecutor:
                 # Always update the motion controller this cycle.
                 motion.update(dt)
 
-                # Distance/angle completion?
-                if not transition and seg.has_known_endpoint:
+                # Opaque adapters (follow_line / spline / diagonal, and a
+                # heading TurnToHeading carried as an opaque turn) have no
+                # measurable distance/angle target — they signal completion only
+                # via is_finished(), so the geometric distance/angle checks must
+                # NOT run for them (a heading turn has angle_rad=None, which the
+                # non-last _check_segment_reached can't evaluate).
+                is_opaque = seg.kind in ("follow_line", "spline", "diagonal") or (
+                    seg.kind == "turn" and seg.opaque_step is not None
+                )
+
+                # Distance/angle completion (geometric segments only).
+                if not transition and seg.has_known_endpoint and not is_opaque:
                     if is_last:
                         # Profile decelerates naturally to the real target.
                         transition = _has_reached_target(motion, seg)
@@ -366,7 +376,7 @@ class PathExecutor:
                         )
 
                 # Opaque steps: adapter signals completion via is_finished().
-                if not transition and seg.kind in ("follow_line", "spline", "diagonal"):
+                if not transition and is_opaque:
                     transition = motion.is_finished()
 
                 if transition:

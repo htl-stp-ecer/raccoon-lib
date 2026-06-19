@@ -317,6 +317,16 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
                     f"linear/turn sequence"
                 )
                 raise ValueError(msg)
+            if node.kind == "turn" and (node.opaque_step is not None or node.angle_rad is None):
+                # A heading turn (TurnToHeading) targets an ABSOLUTE reference
+                # heading, not a relative delta, so it cannot be folded into the
+                # curve (``heading += angle_rad`` would crash on a None angle).
+                msg = (
+                    "splinify() cannot contain turn_to_heading_* turns — they "
+                    "target an absolute reference heading, not a relative angle, "
+                    "so they cannot be folded into a spline"
+                )
+                raise ValueError(msg)
 
     segs = [n for n in nodes if isinstance(n, Segment)]
     waypoints = segments_to_spline_waypoints(segs)
