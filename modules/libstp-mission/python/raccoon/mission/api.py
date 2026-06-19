@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from abc import abstractmethod
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
@@ -17,6 +18,24 @@ class MissionProtocol(Protocol):
     async def run(self, robot: "GenericRobot") -> None:
         """Execute the mission on the given robot."""
         ...
+
+
+# A robot program runs many missions (setup → main missions → shutdown) in one
+# process. Each ``Mission.run`` builds its own profiler from the same env, so a
+# single fixed trace path would have every mission clobber the previous one —
+# you'd only ever keep the last (usually the empty shutdown). Disambiguate the
+# trace file per mission, keeping a per-name counter for missions that repeat.
+_profile_run_counts: "dict[str, int]" = {}
+
+
+def _per_mission_trace_path(trace_path: str, mission_name: str) -> str:
+    from pathlib import Path
+
+    n = _profile_run_counts.get(mission_name, 0)
+    _profile_run_counts[mission_name] = n + 1
+    tag = mission_name if n == 0 else f"{mission_name}-{n}"
+    p = Path(trace_path)
+    return str(p.with_name(f"{p.stem}.{tag}{p.suffix}"))
 
 
 class Mission(ClassNameLogger, MissionProtocol):
@@ -38,9 +57,56 @@ class Mission(ClassNameLogger, MissionProtocol):
         return self.__class__.__name__
 
     async def run(self, robot):
-        """Build the mission sequence and execute it on the provided robot."""
+        """Build the mission sequence and execute it on the provided robot.
+
+        Set the ``RACCOON_PROFILE`` environment variable to deep-profile the run
+        (per-step phase breakdown + event-loop lag + a ``chrome://tracing``
+        timeline) with zero code changes. Use ``1`` for the defaults, or a path
+        to control where the trace lands::
+
+            RACCOON_PROFILE=1 uv run raccoon run
+            RACCOON_PROFILE=/tmp/mission.json uv run raccoon run
+
+        Every knob is tunable via ``RACCOON_PROFILE_*`` env vars — see
+        :meth:`raccoon.profiling.StepProfiler.from_env`.
+        """
         self.info(f"Starting mission: {self.__class__.__name__}")
-        await self.sequence().resolve().run_step(robot)
+        root = self.sequence().resolve()
+
+        # Profiling is an optional add-on living in a separate package
+        # (``raccoon.profiling``, shipped with libstp-step). Only touch it when
+        # the user actually asked for it, and degrade gracefully if the package
+        # isn't installed on this target — a missing add-on must never crash a
+        # mission run.
+        profiler = None
+        if os.environ.get("RACCOON_PROFILE"):
+            try:
+                from raccoon.profiling import StepProfiler
+            except ImportError:
+                self.warn(
+                    "RACCOON_PROFILE is set but raccoon.profiling is not "
+                    "installed — skipping profiling for this run"
+                )
+            else:
+                profiler = StepProfiler.from_env()
+
+        if profiler is not None:
+            if profiler.trace_path:
+                profiler.trace_path = _per_mission_trace_path(
+                    profiler.trace_path, self.__class__.__name__
+                )
+            dest = profiler.trace_path or "(report only)"
+            self.info(f"RACCOON_PROFILE set — profiling enabled, output → {dest}")
+            async with profiler:
+                await root.run_step(robot)
+            done = (
+                f"trace written to {profiler.trace_path}"
+                if profiler.trace_path
+                else "report printed"
+            )
+            self.info(f"Profiling finished — {done}")
+        else:
+            await root.run_step(robot)
         self.info(f"Completed mission: {self.__class__.__name__}")
 
     @abstractmethod
