@@ -133,7 +133,6 @@ jobs:
             echo '::group::Run fast Python tests (skip sim + known-broken)'
             python -m pytest tests/python \
               --ignore=tests/python/sim \
-              --ignore=tests/python/test_calibrate_distance.py \
               --ignore=tests/python/test_input_validation.py \
               --ignore=tests/python/test_resource_conflicts.py \
               --ignore=tests/python/test_watchdog.py \

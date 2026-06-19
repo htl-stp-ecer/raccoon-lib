@@ -187,12 +187,12 @@ class CalibrateSensors(UIStep):
 
         if is_no_calibrate():
             self.info("--no-calibrate: skipping sensor calibration, loading stored values")
-            from raccoon.step.calibration.calibrate_distance import _load_stored_ir_calibration
+            from raccoon.step.calibration.state import load_stored_ir_calibration
 
             ir_sensors_nc: list[IRSensor] = [
                 s for s in robot.defs.analog_sensors if isinstance(s, IRSensor)
             ]
-            _load_stored_ir_calibration(ir_sensors_nc, self.calibration_sets, self.debug, self.warn)
+            load_stored_ir_calibration(ir_sensors_nc, self.calibration_sets, self.debug, self.warn)
             return
 
         sensors = robot.defs.analog_sensors

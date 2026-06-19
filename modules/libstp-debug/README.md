@@ -2,29 +2,28 @@
 
 ## Purpose
 
-`libstp-debug` is currently a very small companion module that adds a breakpoint marker step to the step DSL.
+`libstp-debug` is currently a very small companion module that adds a debug-break marker step to the step DSL.
 
 ## Public Python APIs
 
-Implemented in `libstp.step.breakpoint`:
+Implemented in `raccoon.step.debug_break`:
 
-- `BreakpointStep`
-- `breakpoint`
+- `DebugBreakStep`
+- `debug_break`
 
 ## Control Flow Model
 
-- `BreakpointStep` is a normal `Step`.
-- At runtime it only logs that the breakpoint was reached and then returns immediately.
-- There is no interactive pause or remote unblock mechanism yet. The file still contains a TODO for that behavior.
+- `DebugBreakStep` is a normal `Step`.
+- With `--debug` (`LIBSTP_DEBUG=1`) it pauses the mission and waits for a hardware button press; without it the step only logs that the debug break was reached and returns immediately.
 
 ## Timing Database And Tracker Relationship
 
-- Because it is a normal `Step`, breakpoint execution is timed by `libstp-step` the same way as any other step when timing is enabled.
-- `BreakpointStep` does not override `_generate_signature()`, so all breakpoint instances share the same timing signature regardless of label.
+- Because it is a normal `Step`, debug-break execution is timed by `libstp-step` the same way as any other step when timing is enabled.
+- `DebugBreakStep` does not override `_generate_signature()`, so all debug-break instances share the same timing signature regardless of label.
 
 ## Mission Lifecycle Relationship
 
-- Breakpoints are only useful when inserted inside a mission step sequence.
+- Debug breaks are only useful when inserted inside a mission step sequence.
 - They can be placed in setup, main, or shutdown mission flows, but they do not alter mission scheduling on their own.
 
 ## Debugging Hooks
@@ -35,9 +34,9 @@ Implemented in `libstp.step.breakpoint`:
 ## Tests
 
 - There are no tests inside `modules/libstp-debug`.
-- I did not find separate automated coverage for the breakpoint marker.
+- I did not find separate automated coverage for the debug-break marker.
 
 ## Extension Points
 
-- If this module grows beyond logging, keep the blocking/unblocking transport isolated in `BreakpointStep._execute_step()`.
+- If this module grows beyond logging, keep the blocking/unblocking transport isolated in `DebugBreakStep._execute_step()`.
 - If labels need separate timing baselines or analytics, override `_generate_signature()` to include them explicitly.

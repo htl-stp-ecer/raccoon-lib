@@ -2,7 +2,7 @@
 Global ``--debug`` flag.
 
 When active, debugging aids that are otherwise no-ops become live. In
-particular ``breakpoint()`` steps pause the mission and wait for a
+particular ``debug_break()`` steps pause the mission and wait for a
 hardware button press instead of returning immediately.
 
 Activated by the ``LIBSTP_DEBUG=1`` environment variable, which is set

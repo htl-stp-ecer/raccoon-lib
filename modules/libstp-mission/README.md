@@ -43,7 +43,7 @@ Contributor implication:
 ## Debugging Hooks
 
 - `Mission` inherits `ClassNameLogger`, so mission boundaries are logged.
-- Step-level debugging is done inside the returned sequence, including breakpoint markers from `libstp-debug`.
+- Step-level debugging is done inside the returned sequence, including debug-break markers from `libstp-debug`.
 
 ## Tests
 

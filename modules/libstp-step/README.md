@@ -86,7 +86,7 @@ That means step construction should stay cheap and side-effect free. Hardware ac
 
 - Every step inherits `ClassNameLogger`, so debug/info/warn/error logging is available inside `_execute_step()`.
 - `@dsl(...)` attaches discovery metadata used by higher-level tooling. `hidden=True` keeps helper/composite steps out of discovery.
-- The sibling `libstp-debug` module provides `breakpoint()` as a step-level marker that can be inserted into any sequence.
+- The sibling `libstp-debug` module provides `debug_break()` as a step-level marker that can be inserted into any sequence.
 
 ## Tests
 

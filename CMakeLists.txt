@@ -106,6 +106,28 @@ if(LIBSTP_BUILD_TESTS)
   include(GoogleTest)
 endif()
 
+# ---------- C++ coverage instrumentation ----------
+#
+# When ON, compile/link every target defined after this point (the module
+# libraries and the test binaries) with gcov/llvm-cov instrumentation. The
+# `.gcno`/`.gcda` files land next to the objects in the build dir and are
+# harvested by `scripts/coverage.sh` via gcovr. OFF by default so normal and
+# release builds stay un-instrumented; the coverage script flips it on in a
+# throwaway build dir. GNU/Clang only — MSVC has no --coverage.
+option(LIBSTP_COVERAGE "Instrument C++ targets for coverage (gcov/llvm-cov)"
+       OFF)
+if(LIBSTP_COVERAGE)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(STATUS "C++ coverage instrumentation ENABLED (--coverage)")
+    add_compile_options(--coverage -O0 -g -fprofile-update=atomic)
+    add_link_options(--coverage)
+  else()
+    message(
+      WARNING "LIBSTP_COVERAGE requested but ${CMAKE_CXX_COMPILER_ID} "
+              "has no --coverage support; building without instrumentation")
+  endif()
+endif()
+
 # ---------- Runtime-switchable platform bundles ----------
 #
 # When ON, the build does NOT static-link a single platform driver into every
