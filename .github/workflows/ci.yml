@@ -582,6 +582,50 @@ jobs:
         with:
           packages-dir: dist
 
+      # Build the documentation bundle the Hugo docs site consumes. The DSL
+      # step catalog (dsl-steps.json) is the most important artifact here — the
+      # docs site renders its interactive, searchable step index from it — so we
+      # generate it first and refuse to publish a release with an empty catalog.
+      # Sphinx (autoapi) + Doxygen produce the /api reference the catalog cards
+      # link to. Catalog generation is pure AST parsing (no compiled extension
+      # needed), so it runs on the plain ubuntu runner without installing the
+      # wheel.
+      - name: Build documentation bundle
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends doxygen graphviz zip
+          python -m pip install --quiet -r docs/requirements.txt
+
+          rm -rf docs/_build docs-site
+
+          # DSL step catalog first — this is the critical artifact.
+          python3 docs/generate_dsl_catalog.py
+          STEP_COUNT=$(python3 -c "import json,sys; sys.stdout.write(str(len(json.load(open('docs/_build/dsl-steps.json')))))")
+          if [ "${STEP_COUNT}" -lt 1 ]; then
+            echo "::error::DSL step catalog is empty — refusing to publish docs without steps."
+            exit 1
+          fi
+          echo "DSL catalog: ${STEP_COUNT} public steps"
+
+          cd docs
+          mkdir -p _build/doxygen
+          doxygen Doxyfile
+          echo "Doxygen: $(find _build/doxygen/html -name '*.html' | wc -l) HTML files"
+          make html
+          echo "Sphinx: $(find _build/html -name '*.html' | wc -l) HTML files"
+          cd ..
+
+          mkdir -p docs-site
+          cp -R docs/_build/html/. docs-site/
+          mkdir -p docs-site/doxygen
+          cp -R docs/_build/doxygen/html/. docs-site/doxygen/
+          cp docs/_build/dsl-steps.json docs-site/
+          (cd docs-site && zip -r "../raccoon-docs-1.0.${{ github.run_number }}.zip" .)
+          # Also expose the catalog as a standalone asset so the docs site can
+          # fetch it directly without unzipping the whole bundle.
+          cp docs/_build/dsl-steps.json "dsl-steps.json"
+
       - name: Create GitHub Release with wheels
         uses: softprops/action-gh-release@v3
         with:
@@ -600,4 +644,17 @@ jobs:
             ```bash
             pip install raccoon_library-1.0.${{ github.run_number }}-*.whl
             ```
-          files: dist/*.whl
+          files: |
+            dist/*.whl
+            raccoon-docs-1.0.${{ github.run_number }}.zip
+            dsl-steps.json
+
+      # Tell the Hugo docs site (htl-stp-ecer/documentation) that a new library
+      # build is available so it rebuilds against the latest DSL catalog.
+      - name: Trigger documentation rebuild
+        run: |
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
+            -d '{"event_type":"library-release","client_payload":{"version":"1.0.${{ github.run_number }}"}}'
