@@ -92,10 +92,19 @@ class SideAction:
 
     ``is_background=True``  → fired as an asyncio task and not awaited inline.
     ``is_background=False`` → awaited inline before the next segment starts.
+
+    ``ephemeral=True`` marks a background task SCOPED to a parallel() spine — a
+    non-spine branch of ``parallel(motion_spine, branch)``. It runs concurrently
+    with the spine but is JOINED at the next transition point (when the spine
+    ends), preserving parallel()'s await-all semantics instead of leaking past
+    its scope (which would, e.g., hold a servo while a later step tries to use
+    it). A plain ``background()`` step is non-ephemeral — it persists until the
+    path ends. Only meaningful together with ``is_background``.
     """
 
     step: "Step"
     is_background: bool
+    ephemeral: bool = False
 
 
 # A concrete node in the compiled path.  Deferred steps are modelled as

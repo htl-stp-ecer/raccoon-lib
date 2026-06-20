@@ -198,10 +198,13 @@ def flatten_parallel(
         nodes.append(SideAction(step=par, is_background=False))
         return
 
-    # Side-effect branches: launch as background tasks at this point.
+    # Side-effect branches: launch as background tasks at this point, but mark
+    # them EPHEMERAL so the executor joins them when the spine ends (parallel()
+    # awaits all branches — they must not leak past the spine and clobber a
+    # resource a later step needs).
     for i, branch in enumerate(par.steps):
         if i != spine_idx:
-            nodes.append(SideAction(step=branch, is_background=True))
+            nodes.append(SideAction(step=branch, is_background=True, ephemeral=True))
 
     # Flatten the motion spine branch.
     spine_branch = par.steps[spine_idx]

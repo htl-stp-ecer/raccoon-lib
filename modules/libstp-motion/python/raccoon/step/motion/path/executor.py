@@ -213,12 +213,25 @@ async def _advance_past_side_actions(
     start_idx: int,
     bg_tasks: list[asyncio.Task],
     deferred_map: dict[int, "Defer"],
+    ephemeral_tasks: list[asyncio.Task],
 ) -> int:
     """Execute consecutive side actions from ``start_idx``.
 
     Resolves any Defer placeholders encountered along the way.  Returns
     the index of the next ``Segment`` node (or ``len(nodes)``).
+
+    This is called at every segment transition, so it is also the join point
+    for parallel() branches: any EPHEMERAL background task launched for a
+    previous spine is awaited here (the spine that scoped it has now ended)
+    before the next side actions / segment run — restoring parallel()'s
+    await-all semantics so a branch can't leak past its scope.
     """
+    # Join the previous spine's ephemeral parallel branches before proceeding.
+    if ephemeral_tasks:
+        pending = list(ephemeral_tasks)
+        ephemeral_tasks.clear()
+        await asyncio.gather(*pending, return_exceptions=True)
+
     idx = start_idx
     while idx < len(nodes):
         if nodes[idx] is None and idx in deferred_map:
@@ -229,6 +242,8 @@ async def _advance_past_side_actions(
         if node.is_background:
             task = asyncio.create_task(node.step.run_step(robot))
             bg_tasks.append(task)
+            if node.ephemeral:
+                ephemeral_tasks.append(task)
         else:
             await node.step.run_step(robot)
         idx += 1
@@ -290,6 +305,9 @@ class PathExecutor:
 
         # 3. Execute the path.
         bg_tasks: list[asyncio.Task] = []
+        # Ephemeral parallel-branch tasks awaiting their join at the next
+        # transition (see _advance_past_side_actions).
+        ephemeral_tasks: list[asyncio.Task] = []
 
         try:
             node_idx = 0
@@ -301,6 +319,7 @@ class PathExecutor:
                 node_idx,
                 bg_tasks,
                 deferred_map,
+                ephemeral_tasks,
             )
             if node_idx >= len(nodes):
                 return  # path was only side actions
@@ -405,6 +424,7 @@ class PathExecutor:
                         node_idx,
                         bg_tasks,
                         deferred_map,
+                        ephemeral_tasks,
                     )
                     if node_idx >= len(nodes):
                         break
@@ -426,6 +446,7 @@ class PathExecutor:
                         node_idx,
                         bg_tasks,
                         deferred_map,
+                        ephemeral_tasks,
                     )
                     if node_idx >= len(nodes):
                         break
