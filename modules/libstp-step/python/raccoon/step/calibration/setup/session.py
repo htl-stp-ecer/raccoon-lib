@@ -56,23 +56,28 @@ class DriveCalibrationSample:
     source: str
 
     @property
-    def factor(self) -> float:
-        """Distance-trim correction factor for ``MotionTrimService.calibrate_axis``.
+    def scale(self) -> float:
+        """Absolute distance-trim scale this sample implies (``odom / ground_truth``).
 
-        The trim is applied as ``commanded * scale`` and ``calibrate_axis``
-        composes ``S_new = S_current * (requested / measured)`` with
-        ``requested = odom_distance`` and ``measured = ground_truth``. So the
-        per-sample factor is ``odom / ground_truth``: when the robot physically
-        travelled *less* than the internal odometry believed
-        (``ground_truth < odom``) the factor is ``> 1`` and lengthens the next
-        drive.
+        The trim is applied as ``commanded * scale`` and the gate assigns this
+        value directly via ``MotionTrimService.set_axis_scale`` (it is the target
+        scale, not a delta — so it is set, never composed; composing would diverge
+        geometrically on repeated calibration). ``odom_distance`` and
+        ``ground_truth`` are measured over the same physical drive, so the ratio is
+        independent of whatever scale was active during the drive.
+
+        Direction: the internal odometry regulates the drive, so when it
+        over-reports (``odom > ground_truth``, e.g. 56.7cm odom for 53.0cm actually
+        travelled) a commanded distance under-shoots physically. The scale is then
+        ``> 1`` to lengthen the commanded target back onto the real distance — this
+        is verified against hardware (a ``< 1`` scale here drives the robot SHORT).
 
         A distance trim is a magnitude correction, so it is inherently positive.
         Absolute distances are used because the calibration board's pose frame
         has a constant 180° mounting offset — its projected displacement may
         carry the opposite sign of the internal odometry even though both
         measure the same forward travel, and a signed ratio would yield a bogus
-        negative factor.
+        negative scale.
         """
         if abs(self.ground_truth_distance_m) < 1e-9:
             return 1.0
@@ -163,16 +168,16 @@ class SetupCalibrationSession:
     def finish_gate(self) -> None:
         self._gate_completed = True
 
-    def median_axis_factor(self, axis: CalibrationAxis) -> float:
-        """Median distance-trim factor across this axis' samples (1.0 if none)."""
+    def median_axis_scale(self, axis: CalibrationAxis) -> float:
+        """Median distance-trim scale across this axis' samples (1.0 if none)."""
         samples = self._drive_samples[axis]
         if not samples:
             return 1.0
-        factors = sorted(sample.factor for sample in samples)
-        mid = len(factors) // 2
-        if len(factors) % 2 == 1:
-            return float(factors[mid])
-        return float((factors[mid - 1] + factors[mid]) / 2.0)
+        scales = sorted(sample.scale for sample in samples)
+        mid = len(scales) // 2
+        if len(scales) % 2 == 1:
+            return float(scales[mid])
+        return float((scales[mid - 1] + scales[mid]) / 2.0)
 
     def ensure_board_probe(self, robot: "GenericRobot", log_step) -> None:
         # Probe whether the calibration board is connected so it can be read as
@@ -191,9 +196,9 @@ class SetupCalibrationSession:
         if self._board_available:
             log_step.info("Setup calibration: calibration board detected (ground-truth reference)")
         else:
-            log_step.warning(
-                "Setup calibration: calibration board unavailable; collect_drive skips "
-                "ground-truth sampling (the calibration gate forces a measured fallback drive)"
+            log_step.warn(  # noqa: G010 — ClassNameLogger method is named warn, not warning
+                "Setup calibration: calibration board unavailable; collect_drive will "
+                "ask for a manual distance measurement"
             )
 
     @staticmethod

@@ -411,7 +411,8 @@ class after_degrees(StopCondition):
             msg = f"degrees must be > 0, got {degrees}"
             raise ValueError(msg)
         self._target_rad = math.radians(abs(degrees))
-        self._start_heading: float = 0.0
+        self._last_heading: float = 0.0
+        self._accumulated_rad: float = 0.0
 
     @staticmethod
     def _world_heading(robot: "GenericRobot") -> float:
@@ -425,14 +426,20 @@ class after_degrees(StopCondition):
         return float(odom.get_pose().heading)
 
     def start(self, robot: "GenericRobot") -> None:
-        self._start_heading = self._world_heading(robot)
+        self._last_heading = self._world_heading(robot)
+        self._accumulated_rad = 0.0
 
     def check(self, robot: "GenericRobot") -> bool:
+        # Accumulate the TOTAL rotation by summing the per-tick heading step.
+        # Each step is wrapped to (-pi, pi] so the heading discontinuity at
+        # +/-pi never corrupts the running total, and abs() makes it direction-
+        # agnostic. This lets targets > 180 deg (e.g. a 270 deg turn) fire — the
+        # old shortest-arc difference saturated at 180 deg and never could.
         current = self._world_heading(robot)
-        delta = abs(current - self._start_heading)
-        if delta > math.pi:
-            delta = 2 * math.pi - delta
-        return delta >= self._target_rad
+        step = (current - self._last_heading + math.pi) % (2 * math.pi) - math.pi
+        self._last_heading = current
+        self._accumulated_rad += abs(step)
+        return self._accumulated_rad >= self._target_rad
 
 
 class on_digital(StopCondition):

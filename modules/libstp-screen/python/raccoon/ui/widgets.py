@@ -282,11 +282,18 @@ class CalibrationChart(Widget):
     """
     Static scatter/line chart for calibration data.
 
-    Shows collected sample points with horizontal threshold lines.
+    Single dataset: pass ``samples`` (drawn as dots) plus optional horizontal
+    ``thresholds``. Multiple datasets at once (e.g. every IR sensor in a
+    calibration set): pass ``series`` as a list of
+    ``{"label": str, "color": str, "samples": [float, ...]}`` dicts — each series
+    is plotted in its own color with a legend. ``series`` takes precedence over
+    ``samples`` when both are given.
     """
 
     samples: list[float] = field(default_factory=list)
     thresholds: list[tuple] = field(default_factory=list)  # [(value, label, color), ...]
+    # [{"label": str, "color": str, "samples": [float, ...]}, ...]
+    series: list[dict] = field(default_factory=list)
     height: int = 200
 
 

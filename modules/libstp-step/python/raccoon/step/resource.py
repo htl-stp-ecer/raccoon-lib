@@ -114,40 +114,95 @@ class ResourceManager:
     """Non-blocking, fail-fast resource lock attached to the robot instance.
 
     Since all steps run in a single asyncio event loop (cooperative
-    multitasking), no real lock is needed — a simple dict suffices.
+    multitasking), no real lock is needed — a dict suffices.
+
+    Acquisition is **re-entrant within the same asyncio task**: a composite
+    motion step (``smooth_path`` / ``optimize``) acquires ``"drive"`` and then,
+    inline in the SAME task, runs sub-steps that also need ``"drive"`` (e.g. a
+    ``GotoWaypoints`` emitted by ``to_absolute``). Those nested acquires are
+    sequential, not concurrent, so they nest via a depth counter rather than
+    conflicting. Concurrent claims from a DIFFERENT task — parallel branches
+    and ``background()`` steps run under ``asyncio.create_task`` — still
+    conflict, which is the property the guard exists to enforce.
     """
 
     def __init__(self) -> None:
-        self._held: dict[str, str] = {}  # resource_id → holder label
+        # resource_id → (holder_label, owner_task, depth)
+        self._held: dict[str, tuple[str, object | None, int]] = {}
+
+    @staticmethod
+    def _current_task() -> object | None:
+        import asyncio
+
+        try:
+            return asyncio.current_task()
+        except RuntimeError:  # no running loop
+            return None
+
+    def _conflict(self, res: str, task: object | None) -> tuple[str, str] | None:
+        """Return ``(held_res, holder)`` if *res* clashes with a DIFFERENT task.
+
+        A resource held by the SAME task is re-entrant — no conflict.
+        """
+
+        def held_by_other(key: str) -> tuple[str, str] | None:
+            entry = self._held.get(key)
+            if entry is None:
+                return None
+            holder, owner, _depth = entry
+            if owner is task and task is not None:
+                return None  # same task — re-entrant
+            return (key, holder)
+
+        # Direct conflict
+        hit = held_by_other(res)
+        if hit is not None:
+            return hit
+        # This res is a wildcard covering held "prefix:N"
+        if res.endswith(":*"):
+            prefix = res.rsplit(":", 1)[0] + ":"
+            for held_res in self._held:
+                if held_res.startswith(prefix):
+                    hit = held_by_other(held_res)
+                    if hit is not None:
+                        return hit
+        else:
+            # A held wildcard covers this res
+            parts = res.rsplit(":", 1)
+            if len(parts) == 2:
+                hit = held_by_other(parts[0] + ":*")
+                if hit is not None:
+                    return (res, hit[1])
+        return None
 
     def acquire(self, resources: frozenset[str], holder: str) -> None:
-        """Claim *resources* for *holder*.  Raises on conflict."""
+        """Claim *resources* for *holder*.  Raises on cross-task conflict."""
+        task = self._current_task()
         for res in resources:
-            # Check direct conflict
-            if res in self._held:
-                raise ResourceConflictError(res, self._held[res], holder)
-            # Check wildcard conflict
-            if res.endswith(":*"):
-                prefix = res.rsplit(":", 1)[0] + ":"
-                for held_res, held_holder in self._held.items():
-                    if held_res.startswith(prefix):
-                        raise ResourceConflictError(held_res, held_holder, holder)
-            else:
-                # Check if a wildcard is already held that covers this resource
-                parts = res.rsplit(":", 1)
-                if len(parts) == 2:
-                    wildcard = parts[0] + ":*"
-                    if wildcard in self._held:
-                        raise ResourceConflictError(res, self._held[wildcard], holder)
+            conflict = self._conflict(res, task)
+            if conflict is not None:
+                held_res, held_holder = conflict
+                raise ResourceConflictError(held_res, held_holder, holder)
 
-        # All clear — register
+        # All clear — register (nesting within the same task bumps depth).
         for res in resources:
-            self._held[res] = holder
+            entry = self._held.get(res)
+            if entry is not None and entry[1] is task and task is not None:
+                self._held[res] = (entry[0], task, entry[2] + 1)
+            else:
+                self._held[res] = (holder, task, 1)
 
     def release(self, resources: frozenset[str]) -> None:
-        """Release previously acquired resources."""
+        """Release previously acquired resources (depth-aware)."""
         for res in resources:
-            self._held.pop(res, None)
+            entry = self._held.get(res)
+            if entry is None:
+                continue
+            holder, owner, depth = entry
+            if depth > 1:
+                self._held[res] = (holder, owner, depth - 1)
+            else:
+                self._held.pop(res, None)
 
 
 def get_resource_manager(robot: object) -> ResourceManager:

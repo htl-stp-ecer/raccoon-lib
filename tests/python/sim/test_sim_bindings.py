@@ -109,10 +109,10 @@ def test_line_sensor_sampling(sim_module, default_robot, default_motors):
     world.attach_line_sensor(analog_port=2, forward_cm=0.0, strafe_cm=0.0, name="center")
 
     world.set_pose(sim_module.Pose2D(100.0, 50.0, 0.0))
-    assert world.read_analog(2) == 0  # over the black line
+    assert world.read_analog(2) == 1023  # over the black line (HIGH = black)
 
     world.set_pose(sim_module.Pose2D(50.0, 50.0, 0.0))
-    assert world.read_analog(2) == 1023  # white surface
+    assert world.read_analog(2) == 0  # white surface (LOW = white)
 
 
 def test_distance_sensor_reads_wall(sim_module, default_robot, default_motors):

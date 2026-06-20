@@ -138,14 +138,14 @@ def test_mock_line_sensor_through_hal(sim_module, mock):
     _configure(sim_module, mock, scene_name="single_line.ftmap", start_x=100.0, start_y=50.0)
     mock.attach_line_sensor(2, 0.0, 0.0, "center")
 
-    # Centered on the horizontal line (y=50, runs x=50..150) → sensor = 0.
-    assert mock.read_analog(2) == 0
+    # Centered on the horizontal line (y=50, runs x=50..150) → black = HIGH.
+    assert mock.read_analog(2) == 1023
 
     # Move off the line (change pose by setting motor command and ticking).
     # Simpler: reconfigure at a different pose.
     _configure(sim_module, mock, scene_name="single_line.ftmap", start_x=100.0, start_y=20.0)
     mock.attach_line_sensor(2, 0.0, 0.0, "center")
-    assert mock.read_analog(2) == 1023
+    assert mock.read_analog(2) == 0  # white surface = LOW
 
 
 def test_mock_auto_tick_advances_sim_without_manual_tick(sim_module, mock):

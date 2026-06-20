@@ -4,7 +4,7 @@ The setup mission scatters :func:`collect_drive` / :func:`collect_ir_set` wrappe
 around its motions to gather ground-truth distance and IR samples without any
 dedicated calibration drives. A single :func:`calibration_gate` then folds that
 evidence into the persisted compensation layers — distance trim via
-``MotionTrimService.calibrate_axis`` and IR thresholds via the calibration store —
+``MotionTrimService.set_axis_scale`` and IR thresholds via the calibration store —
 falling back to a measured drive (and manual measurement) only for axes/sets that
 never accumulated enough samples.
 """

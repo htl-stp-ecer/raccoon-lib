@@ -303,6 +303,32 @@ quote would re-introduce the circular import the pattern works around.
 
 ## Testing
 
+### Test principles — and an explicit NON-GOAL: no prose-pinning
+
+Tests must assert **behaviour and contracts**, never the exact **wording** of
+human-facing prose (log/debug lines, exception *messages*, `_generate_signature()`
+strings). Pinning prose is an explicit **non-goal**: it produces brittle tests
+that break on a harmless reword, and it inflates mutation scores by "killing"
+string-literal mutants that have no behavioural effect.
+
+Concretely:
+
+- **Do** assert: the exception *type*, a stable *key token* in the message
+  (`pytest.raises(ValueError, match="must be > 0")` — `match=` is a substring
+  search, which is the right tool), numeric/semantic values the message carries
+  (a `delta:` value, a coordinate, a scale factor), which control-flow branch
+  ran, returned state, and enum *values* (these are API contracts, not prose).
+- **Don't** assert: full exact message strings (`str(exc) == "Expected a
+  StopCondition, got int"`), exact log-line equality including punctuation/labels,
+  or exact `_generate_signature()` formatting. Assert the *value* inside, not the
+  surrounding words.
+
+Consequence for mutation testing: a surviving mutant that **only alters a string
+literal** in a log/exception/signature is **expected and acceptable** — it is not
+a coverage gap and must not be "fixed" by adding an exact-string assertion. The
+mutation harnesses (`scripts/mutation_py.sh`, `scripts/mutation_cpp_mull.sh`)
+will report such survivors; treat string-literal-only survivors as out of scope.
+
 ### C++ (Google Test)
 
 ```bash
@@ -320,6 +346,41 @@ pytest tests/python/
 ```
 
 Requires the wheel installed. Deploy to the Pi first.
+
+### Coverage (Python + C++)
+
+`scripts/coverage.sh` is the single entry point for measuring how much of the
+library the tests exercise, in both languages, and for gating on it:
+
+```bash
+bash scripts/coverage.sh                    # both languages, report only
+bash scripts/coverage.sh --python-only      # fast: just the pytest suite
+bash scripts/coverage.sh --cpp-only         # instrument + ctest + gcovr
+bash scripts/coverage.sh --fail-under 50    # gate Python at 50 % lines
+bash scripts/coverage.sh --cpp-fail-under 40
+bash scripts/coverage.sh --show-files       # also list least-covered files
+bash scripts/coverage.sh -- tests/python/test_line_follow.py   # subset
+```
+
+- **Python** runs under `pytest-cov` (config in `.coveragerc`) and the result is
+  re-mapped from the installed `raccoon` package back onto the split source tree
+  (`modules/libstp-*/python` + `python/`) by `scripts/coverage_report.py`, which
+  prints a per-module table of **line / branch / function** coverage. The gate
+  (`--fail-under` / `--fail-under-module`) is enforced on **line** coverage;
+  branch and function percentages are shown for insight only.
+  On a local dev wheel (no mock sim bundle) it auto-detects "local mode",
+  disables the `raccoon_testing` plugin and tolerates the mock-sim/asyncio test
+  files that cannot collect — so you still get a number from the pure-Python
+  tests. CI (mock bundle present) runs the full suite.
+- **C++** configures a throwaway `build-coverage/` with `-DLIBSTP_COVERAGE=ON`
+  (gcov/llvm-cov instrumentation; GNU/Clang only), runs `ctest`, and harvests
+  with `gcovr`. The first run is a full instrumented build; pass `--no-build` to
+  re-harvest an existing `build-coverage/`.
+
+Artifacts (HTML/XML/JSON) land under `build/coverage/`. `coverage` /
+`pytest-cov` / `gcovr` are installed on demand into the active venv. The
+thresholds default to 0 (report only) so the gate can be ratcheted up once a
+baseline is agreed.
 
 ---
 

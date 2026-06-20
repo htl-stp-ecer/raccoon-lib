@@ -4,48 +4,64 @@ from raccoon.ui import *
 
 from .dataclasses import IRDashboardResult, SensorCalibrationData
 
+# Distinct per-sensor series colors (cycled). Kept in sync with the colors the
+# botui CalibrationChart widget knows how to parse.
+_SERIES_COLORS = ["blue", "green", "amber", "red", "purple", "cyan", "orange", "pink"]
+
+
+def _series_color(index: int) -> str:
+    return _SERIES_COLORS[index % len(_SERIES_COLORS)]
+
 
 class IRResultsDashboardScreen(UIScreen[IRDashboardResult]):
     """
-    Calibration results dashboard with sensor list and detail view.
+    Calibration-set results: a status overview plus one combined graph.
 
-    Left panel: sensor list (clickable) + dashboard summary button.
-    Right panel: dashboard overview or per-sensor detail with graph.
+    Top row: a short status overview (overall icon + per-sensor badges).
+    Below: a single chart plotting every sensor's samples at once, each sensor
+    drawn in its own color so the whole calibration set is visible in one view.
     Bottom: retry + done buttons.
     """
 
     title = "IR Sensor Calibration"
     _primary_button_id = "done"
 
-    def __init__(self, sensors: list[SensorCalibrationData]):
+    def __init__(
+        self,
+        sensors: list[SensorCalibrationData],
+        set_name: str | None = None,
+    ):
         super().__init__()
         self.sensors = sensors
-        self.selected_port: int | None = None  # None = dashboard view
+        self.set_name = set_name
+        if set_name:
+            self.title = f"IR Sensor Calibration: {set_name.upper()}"
 
     @property
     def all_good(self) -> bool:
         return all(s.is_good for s in self.sensors)
 
-    def _selected_sensor(self) -> SensorCalibrationData | None:
-        if self.selected_port is None:
-            return None
-        return next((s for s in self.sensors if s.port == self.selected_port), None)
+    @property
+    def _num_good(self) -> int:
+        return sum(1 for s in self.sensors if s.is_good)
 
     # ------------------------------------------------------------------
     # Build
     # ------------------------------------------------------------------
 
     def build(self) -> Widget:
-        return Column(
-            children=[
-                Expanded(
-                    child=Split(
-                        left=self._build_sensor_list(),
-                        right=self._build_content(),
-                        ratio=(1, 3),
-                    )
-                ),
-                Spacer(8),
+        children: list[Widget] = []
+        if self.set_name:
+            children.append(
+                Text(f"Calibration set: {self.set_name.upper()}", size="large", bold=True)
+            )
+            children.append(Spacer(8))
+        children.extend(
+            [
+                self._build_status_row(),
+                Spacer(12),
+                self._build_chart(),
+                Spacer(12),
                 Row(
                     children=[
                         Button("retry", "Retry", style="secondary", icon="refresh"),
@@ -61,224 +77,59 @@ class IRResultsDashboardScreen(UIScreen[IRDashboardResult]):
                 ),
             ]
         )
+        return Column(children=children)
 
-    def _build_sensor_list(self) -> list[Widget]:
-        items: list[Widget] = []
-
-        # Dashboard button
-        items.append(
-            Button(
-                "nav_dashboard",
-                "Dashboard",
-                style="primary" if self.selected_port is None else "secondary",
-                icon="dashboard",
-            )
-        )
-        items.append(Spacer(4))
-        items.append(Divider())
-        items.append(Spacer(4))
-
-        # Per-sensor buttons
-        for sensor in self.sensors:
-            icon = "check_circle" if sensor.is_good else "warning"
-            style = "success" if (self.selected_port == sensor.port) else "secondary"
-            label = f"Port {sensor.port}"
-            if not sensor.is_good:
-                label += " !"
-
-            items.append(
-                Button(
-                    f"nav_sensor_{sensor.port}",
-                    label,
-                    style=style,
-                    icon=icon,
+    def _build_status_row(self) -> Widget:
+        # Per-sensor badge colored to match its graph series, so the status
+        # overview and the chart legend read as one. Failing sensors flip to red.
+        badges: list[Widget] = []
+        for index, sensor in enumerate(self.sensors):
+            status = "OK" if sensor.is_good else "LOW"
+            badges.append(
+                StatusBadge(
+                    text=f"P{sensor.port} · {status} · Δ{sensor.separation:.0f}",
+                    color=_series_color(index) if sensor.is_good else "red",
                 )
             )
 
-        return items
-
-    def _build_content(self) -> list[Widget]:
-        sensor = self._selected_sensor()
-        if sensor is None:
-            return self._build_dashboard()
-        return self._build_sensor_detail(sensor)
-
-    # ------------------------------------------------------------------
-    # Dashboard view
-    # ------------------------------------------------------------------
-
-    def _build_dashboard(self) -> list[Widget]:
-        widgets: list[Widget] = []
-
-        # Header
-        widgets.append(
-            Row(
-                children=[
-                    StatusIcon(
-                        icon="check" if self.all_good else "warning",
-                        color="green" if self.all_good else "orange",
-                    ),
-                    Spacer(8),
-                    Text(
-                        "All Sensors OK" if self.all_good else "Some Sensors Need Attention",
-                        size="large",
-                    ),
-                ],
-                align="center",
-            )
-        )
-        widgets.append(Spacer(8))
-
-        # Summary cards per sensor
-        for sensor in self.sensors:
-            status_color = "green" if sensor.is_good else "orange"
-            widgets.append(
-                Card(
-                    title=f"Port {sensor.port}",
-                    children=[
-                        Row(
-                            children=[
-                                StatusIcon(
-                                    icon="check" if sensor.is_good else "warning",
-                                    color=status_color,
-                                ),
-                                Spacer(8),
-                                Column(
-                                    children=[
-                                        Row(
-                                            children=[
-                                                Text("Black: ", size="small", muted=True),
-                                                Text(
-                                                    f"{sensor.black_threshold:.0f}",
-                                                    size="small",
-                                                    bold=True,
-                                                ),
-                                                Spacer(12),
-                                                Text("White: ", size="small", muted=True),
-                                                Text(
-                                                    f"{sensor.white_threshold:.0f}",
-                                                    size="small",
-                                                    bold=True,
-                                                ),
-                                                Spacer(12),
-                                                Text("Sep: ", size="small", muted=True),
-                                                Text(
-                                                    f"{sensor.separation:.0f}",
-                                                    size="small",
-                                                    bold=True,
-                                                    color=status_color,
-                                                ),
-                                            ],
-                                            spacing=2,
-                                        ),
-                                    ],
-                                    spacing=2,
-                                ),
-                            ],
-                            align="center",
-                        ),
-                    ],
-                )
-            )
-            widgets.append(Spacer(4))
-
-        return widgets
-
-    # ------------------------------------------------------------------
-    # Sensor detail view
-    # ------------------------------------------------------------------
-
-    def _build_sensor_detail(self, sensor: SensorCalibrationData) -> list[Widget]:
-        widgets: list[Widget] = []
-
-        # Title row
-        widgets.append(
-            Row(
-                children=[
-                    StatusIcon(
-                        icon="check" if sensor.is_good else "warning",
-                        color="green" if sensor.is_good else "orange",
-                    ),
-                    Spacer(8),
-                    Text(f"Port {sensor.port}", size="large"),
-                    Spacer(8),
-                    StatusBadge(
-                        text="OK" if sensor.is_good else "LOW CONTRAST",
-                        color="green" if sensor.is_good else "orange",
-                    ),
-                ],
-                align="center",
-            )
-        )
-        widgets.append(Spacer(8))
-
-        # Chart with samples + threshold lines
-        if sensor.samples:
-            widgets.append(
-                CalibrationChart(
-                    samples=sensor.samples,
-                    thresholds=[
-                        (sensor.black_threshold, "Black", "grey"),
-                        (sensor.white_threshold, "White", "amber"),
-                    ],
-                    height=180,
-                )
-            )
-            widgets.append(Spacer(8))
-
-        # Threshold values + stats
-        widgets.append(
-            Row(
-                children=[
-                    Card(
-                        title="Black",
-                        children=[
-                            Text(f"{sensor.black_threshold:.0f}", size="large", bold=True),
-                            Text(
-                                f"mean={sensor.black_mean:.0f} std={sensor.black_std:.1f}",
-                                size="small",
-                                muted=True,
-                            ),
-                        ],
-                    ),
-                    Card(
-                        title="White",
-                        children=[
-                            Text(f"{sensor.white_threshold:.0f}", size="large", bold=True),
-                            Text(
-                                f"mean={sensor.white_mean:.0f} std={sensor.white_std:.1f}",
-                                size="small",
-                                muted=True,
-                            ),
-                        ],
-                    ),
-                    Card(
-                        title="Separation",
-                        children=[
-                            Text(
-                                f"{sensor.separation:.0f}",
-                                size="large",
-                                bold=True,
-                                color="green" if sensor.is_good else "orange",
-                            ),
-                            Text(f"{len(sensor.samples)} samples", size="small", muted=True),
-                        ],
-                    ),
-                ],
-                spacing=8,
-            )
+        return Row(
+            children=[
+                StatusIcon(
+                    icon="check" if self.all_good else "warning",
+                    color="green" if self.all_good else "orange",
+                ),
+                Spacer(8),
+                Text(
+                    f"{self._num_good}/{len(self.sensors)} sensors OK",
+                    size="large",
+                    bold=True,
+                ),
+                Spacer(16),
+                *badges,
+            ],
+            align="center",
+            spacing=8,
         )
 
-        return widgets
+    def _build_chart(self) -> Widget:
+        # One colored series per sensor, each carrying its own black/white
+        # thresholds — the chart draws them as dashed lines in the series color
+        # and lists the values in the legend.
+        series = [
+            {
+                "label": f"Port {sensor.port}",
+                "color": _series_color(index),
+                "samples": [float(v) for v in sensor.samples],
+                "black_threshold": float(sensor.black_threshold),
+                "white_threshold": float(sensor.white_threshold),
+            }
+            for index, sensor in enumerate(self.sensors)
+        ]
+        return CalibrationChart(series=series, height=320)
 
     # ------------------------------------------------------------------
     # Event handlers
     # ------------------------------------------------------------------
-
-    @on_click("nav_dashboard")
-    async def on_nav_dashboard(self):
-        self.selected_port = None
-        await self.refresh()
 
     @on_click("retry")
     async def on_retry(self):
@@ -287,15 +138,3 @@ class IRResultsDashboardScreen(UIScreen[IRDashboardResult]):
     @on_click("done")
     async def on_done(self):
         self.close(IRDashboardResult(confirmed=True, sensors=self.sensors))
-
-    async def _dispatch_event(self, event: dict) -> None:
-        """Handle sensor navigation clicks dynamically."""
-        await super()._dispatch_event(event)
-
-        action = event.get("_action")
-        button_id = event.get("button_id", "")
-
-        if action == "click" and button_id.startswith("nav_sensor_"):
-            port = int(button_id.replace("nav_sensor_", ""))
-            self.selected_port = port
-            await self.refresh()

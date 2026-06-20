@@ -130,7 +130,7 @@ class AutoTuneProgressScreen(UIScreen[None]):
         for key, label in self._phases:
             status = self.status.get(key, "pending")
             if status == "running":
-                glyph: Widget = ProgressSpinner(size="small", color="amber")
+                glyph: Widget = ProgressSpinner(size=20, color="amber")
             elif status == "done":
                 glyph = Text(text="✓", color="green")
             elif status == "failed":

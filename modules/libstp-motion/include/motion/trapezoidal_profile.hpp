@@ -64,6 +64,13 @@ namespace libstp::motion
             , constraints_(constraints)
         {
             constraints_.validate();
+            // Reject a degenerate zero-distance (or NaN) target at config time:
+            // compute_profile() would compute cruise_time_ = 0.0 / 0.0 = NaN, so
+            // getTotalTime() is NaN and isComplete() could never return true.
+            if (!(std::abs(target_ - initial_.position) > 0.0))
+                throw std::invalid_argument(
+                    "TrapezoidalProfile: target must differ from the initial "
+                    "position (zero-distance profile is undefined)");
             compute_profile();
         }
 

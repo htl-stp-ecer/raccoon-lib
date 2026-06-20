@@ -74,7 +74,12 @@ class DoWhileActive(Step):
         reference_step = asyncio.create_task(self.reference_step.run_step(robot))
         task = asyncio.create_task(self.task.run_step(robot))
 
-        await reference_step
-        task.cancel()
-        with contextlib.suppress(CancelledError):
-            await task
+        try:
+            await reference_step
+        finally:
+            # Cancel the concurrent task whether the reference completed normally
+            # OR raised — the docstring guarantees cancellation on both paths;
+            # without the finally, an exception here would orphan the running task.
+            task.cancel()
+            with contextlib.suppress(CancelledError):
+                await task

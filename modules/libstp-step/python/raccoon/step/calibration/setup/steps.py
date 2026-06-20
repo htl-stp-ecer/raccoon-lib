@@ -4,10 +4,10 @@
 it runs, record ground-truth distance and IR samples into the
 :class:`SetupCalibrationSession`. ``calibration_gate`` then folds that evidence
 into the persisted compensation layers — distance trim via
-``MotionTrimService.calibrate_axis`` (the *composing* setter, so an
-already-applied scale survives) and IR thresholds via the calibration store —
-running a measured fallback drive only for axes/sets that never gathered enough
-samples.
+``MotionTrimService.set_axis_scale`` (the measured scale is the absolute target,
+so it is assigned, not composed) and IR thresholds via the calibration
+store — running a measured fallback drive only for axes/sets that never gathered
+enough samples.
 """
 
 from __future__ import annotations
@@ -33,6 +33,10 @@ _FALLBACK_FORWARD_CM = 70.0
 _FALLBACK_LATERAL_CM = 50.0
 _FALLBACK_IR_DRIVE_CM = 50.0
 _FALLBACK_SPEED = 0.4
+# The distance fallback drive runs at full speed: a longer, faster drive gives a
+# better odom-vs-ground-truth ratio than a slow crawl, and there is nothing to
+# sample mid-drive (unlike the IR fallback, which stays slow at _FALLBACK_SPEED).
+_FALLBACK_DRIVE_SPEED = 1.0
 # Below this, a "ground truth" board reading is treated as a board failure
 # (the robot clearly drove, so a ~0cm reference means the board did not track)
 # and we fall back to manual measurement instead of recording a bogus sample.
@@ -88,18 +92,23 @@ class CollectDrive(UIStep):
     Runs the wrapped ``step`` unchanged. When a calibration board is connected,
     it captures the internal-odometry and board-ground-truth displacement across
     the drive, infers the driven axis from the dominant internal displacement,
-    and records a :class:`DriveCalibrationSample`. Without a board (or on a board
-    dropout / ~0cm reading) it skips silently — the :class:`CalibrationGate` is
-    the single place that forces a measured fallback when an axis ends up with no
-    samples. Users go through :func:`collect_drive`.
+    and records a :class:`DriveCalibrationSample`.
+
+    Without a usable board ground truth (no board, dropout, or ~0cm reading) the
+    behaviour depends on ``manual_measurement``: when ``True`` (default) it prompts
+    the operator to measure the travelled distance by hand and records that as the
+    sample; when ``False`` it rejects the drive and records nothing (the axis is
+    left for the :class:`CalibrationGate` to handle, or left untrimmed). Users go
+    through :func:`collect_drive`.
     """
 
-    def __init__(self, step) -> None:
+    def __init__(self, step, manual_measurement: bool = True) -> None:
         super().__init__()
         self._step = step
+        self._manual_measurement = manual_measurement
 
     def _generate_signature(self) -> str:
-        return f"CollectDrive(step={self._step})"
+        return f"CollectDrive(step={self._step}, manual={self._manual_measurement})"
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         if is_no_calibrate():
@@ -123,41 +132,67 @@ class CollectDrive(UIStep):
         session.require_axis(axis)
         odom_distance_m = session.axis_distance_m(internal_start, internal_end, axis)
 
-        # collect_drive only records a sample opportunistically: when the
-        # calibration board is connected and reports a usable ground truth.
-        # Without a board (or on a board dropout) it skips silently and shows no
-        # UI — the CalibrationGate is the single place that forces a measured
-        # fallback drive and the manual measure screen if an axis ends up with
-        # no samples at all.
-        if not session.board_available or reference_start is None:
-            self.debug(
-                f"No calibration board; skipping {_axis_name(axis)} drive sample "
-                f"(gate forces a measured fallback if this axis stays empty)"
-            )
-            return
-
-        reference_end = session.reference_pose(robot)
-        ground_truth_m = session.axis_distance_m(reference_start, reference_end, axis)
-        if abs(ground_truth_m) < _MIN_GROUND_TRUTH_M:
+        # Prefer the calibration board's ground truth when it tracked the drive.
+        if session.board_available and reference_start is not None:
+            reference_end = session.reference_pose(robot)
+            ground_truth_m = session.axis_distance_m(reference_start, reference_end, axis)
+            if abs(ground_truth_m) >= _MIN_GROUND_TRUTH_M:
+                session.add_drive_sample(
+                    DriveCalibrationSample(
+                        axis=axis,
+                        odom_distance_m=odom_distance_m,
+                        ground_truth_distance_m=ground_truth_m,
+                        source="calibration_board",
+                    )
+                )
+                self.info(
+                    f"Collected {_axis_name(axis)} drive sample: "
+                    f"odom={_axis_abs_cm(odom_distance_m):.1f}cm "
+                    f"ground_truth={_axis_abs_cm(ground_truth_m):.1f}cm"
+                )
+                return
             self.warn(
                 f"Calibration board reported ~0cm ground truth for a "
                 f"{_axis_abs_cm(odom_distance_m):.1f}cm {_axis_name(axis)} drive; "
-                f"skipping sample (gate forces a measured fallback if needed)"
+                f"no usable board reference"
+            )
+
+        # No usable board ground truth. Either ask the operator to measure by
+        # hand, or reject the drive entirely — controlled by manual_measurement.
+        if not self._manual_measurement:
+            self.debug(
+                f"No board ground truth for {_axis_name(axis)} drive; rejecting "
+                f"sample (manual_measurement disabled)"
             )
             return
 
+        measured_cm = await self.show(
+            DistanceMeasureScreen(
+                requested_distance=_axis_abs_cm(odom_distance_m),
+                default_value=_axis_abs_cm(odom_distance_m),
+            )
+        )
+        if measured_cm is None:
+            self.warn(f"Manual measurement dismissed for {_axis_name(axis)} drive; skipping sample")
+            return
+        # Preserve the travel direction so the axis projection stays consistent;
+        # the scale itself is computed from absolute distances.
+        sign = 1.0 if odom_distance_m >= 0.0 else -1.0
+        ground_truth_m = sign * (float(measured_cm) / 100.0)
+        if abs(ground_truth_m) < _MIN_GROUND_TRUTH_M:
+            self.warn(f"Manual measurement of ~0cm for {_axis_name(axis)} drive; skipping sample")
+            return
         session.add_drive_sample(
             DriveCalibrationSample(
                 axis=axis,
                 odom_distance_m=odom_distance_m,
                 ground_truth_distance_m=ground_truth_m,
-                source="calibration_board",
+                source="manual_entry",
             )
         )
         self.info(
-            f"Collected {_axis_name(axis)} drive sample: "
-            f"odom={_axis_abs_cm(odom_distance_m):.1f}cm "
-            f"ground_truth={_axis_abs_cm(ground_truth_m):.1f}cm"
+            f"Collected manual {_axis_name(axis)} sample: "
+            f"odom={_axis_abs_cm(odom_distance_m):.1f}cm measured={float(measured_cm):.1f}cm"
         )
 
 
@@ -198,13 +233,17 @@ class CollectIrSet(Step):
 class CalibrationGate(UIStep):
     """Finalize all accumulated setup-calibration evidence exactly once.
 
-    For each required drive axis it folds the median sample factor into the
-    distance trim via ``MotionTrimService.calibrate_axis`` (composing, so a
-    previously-applied scale is preserved), running a measured fallback drive
-    first if the axis gathered no samples. For each required IR set it applies
-    stored thresholds, driving a fallback sampling pass if needed. Idempotent:
-    once finalized it returns immediately until new evidence arrives. Under
-    ``--no-calibrate`` it is a no-op. Users go through :func:`calibration_gate`.
+    For each required drive axis it assigns the median sample scale as the
+    distance trim via ``MotionTrimService.set_axis_scale`` (it is the absolute
+    target scale, so composing it would diverge on repeat), running a
+    measured fallback drive first if the axis gathered no samples — using the
+    calibration board for
+    ground truth when present, otherwise prompting the operator to measure the
+    travelled distance by hand. For each required IR set it applies stored
+    thresholds, driving a fallback sampling pass if needed. Idempotent: once
+    finalized it returns immediately until new evidence arrives. Distance is only
+    marked calibrated when an axis was actually trimmed. Under ``--no-calibrate``
+    it is a no-op. Users go through :func:`calibration_gate`.
     """
 
     def __init__(
@@ -242,28 +281,37 @@ class CalibrationGate(UIStep):
             session.finish_gate()
             return
 
+        trimmed_axes = 0
         if axes:
             session.ensure_board_probe(robot, self)
-            await self._finalize_drive_axes(robot, session, axes)
+            trimmed_axes = await self._finalize_drive_axes(robot, session, axes)
 
         for set_name in ir_sets:
             await self._finalize_ir_set(robot, session, set_name)
 
         session.finish_gate()
-        from raccoon.step.calibration.state import set_distance_calibrated
 
-        set_distance_calibrated()
+        # Only advertise distance as calibrated when an axis was actually
+        # trimmed. If every axis was left untrimmed (e.g. the operator dismissed
+        # the fallback drive or its measurement), the distance data is still
+        # missing — keep the flag false so distance-based drives keep warning and
+        # a later setup run can finish the job.
+        if trimmed_axes:
+            from raccoon.step.calibration.state import set_distance_calibrated
+
+            set_distance_calibrated()
 
     async def _finalize_drive_axes(
         self,
         robot: "GenericRobot",
         session: SetupCalibrationSession,
         axes: list[CalibrationAxis],
-    ) -> None:
+    ) -> int:
         from raccoon.step.motion._motion_trim import MotionTrimService
 
         trim_svc = robot.get_service(MotionTrimService)
         supports_lateral = robot.drive.supports_lateral_motion()
+        trimmed = 0
         for axis in axes:
             # Only calibrate the lateral axis when the drivetrain can actually
             # strafe — otherwise the fallback strafe drive is meaningless.
@@ -271,18 +319,33 @@ class CalibrationGate(UIStep):
                 self.debug("Drivetrain has no lateral motion; skipping lateral trim calibration")
                 continue
             if not session.get_drive_samples(axis):
+                # The axis gathered no opportunistic samples, so drive a measured
+                # fallback to obtain ground truth. With a calibration board the
+                # board supplies it; without one the fallback prompts the operator
+                # to measure the travelled distance by hand.
                 await self._run_drive_fallback(robot, session, axis)
-            # Fold the median per-sample factor (odom / ground_truth) into the
-            # trim via the COMPOSING setter, so an already-applied scale is
-            # preserved instead of overwritten:
-            #   S_new = S_current * (requested / measured)
-            #         = S_current * (median_factor / 1.0)
-            factor = session.median_axis_factor(axis)
-            trim_svc.calibrate_axis(_axis_name(axis), requested_m=factor, measured_m=1.0)
+                if not session.get_drive_samples(axis):
+                    self.warn(
+                        f"No usable ground truth for the {_axis_name(axis)} fallback drive; "
+                        f"leaving axis untrimmed"
+                    )
+                    continue
+            # SET the trim to the measured scale (absolute), never compose it.
+            #
+            # The per-sample scale is odom / ground_truth, both measured over the
+            # SAME physical drive, so it is the absolute target scale and is
+            # INDEPENDENT of the currently-applied scale. Composing it
+            # (S_new = S_current * scale) would multiply the scale on every run and
+            # diverge geometrically (the robot drives further and further). Absolute
+            # assignment converges in one run and is idempotent.
+            scale = session.median_axis_scale(axis)
+            trim_svc.set_axis_scale(_axis_name(axis), scale)
+            trimmed += 1
             self.info(
-                f"Applied {_axis_name(axis)} trim factor x{factor:.5f} "
+                f"Applied {_axis_name(axis)} trim scale {scale:.5f} "
                 f"from {len(session.get_drive_samples(axis))} sample(s)"
             )
+        return trimmed
 
     async def _run_drive_fallback(
         self,
@@ -294,58 +357,72 @@ class CalibrationGate(UIStep):
             from raccoon import drive_forward
 
             target_cm = self._forward_fallback_cm
-            step = drive_forward(target_cm, speed=_FALLBACK_SPEED, heading=0)
+            # Do NOT pin an absolute heading: the gate may run before any
+            # mark_heading_reference(), so an absolute target would crash. Leaving
+            # it unset holds the current world heading, which is enough to measure
+            # the straight-line drive.
+            step = drive_forward(target_cm, speed=_FALLBACK_DRIVE_SPEED)
+            verb, direction = "drive", "forward"
         else:
             from raccoon import strafe_right
 
             target_cm = self._lateral_fallback_cm
-            step = strafe_right(target_cm, speed=_FALLBACK_SPEED, heading=0)
+            step = strafe_right(target_cm, speed=_FALLBACK_DRIVE_SPEED)
+            verb, direction = "strafe", "right"
 
-        await self.run_with_ui(
+        # Announce the motion before it starts: the robot is about to move on its
+        # own, so give the operator a chance to clear the path (or skip).
+        proceed = await self.confirm(
+            f"The robot will now {verb} {target_cm:.0f} cm {direction} to calibrate "
+            f"the {_axis_name(axis)} distance axis. Make sure it has a clear path, "
+            f"then start.",
+            title=f"{_axis_name(axis).capitalize()} Distance Calibration",
+            yes_label="Drive",
+            no_label="Skip",
+        )
+        if not proceed:
+            self.warn(
+                f"Operator skipped the {_axis_name(axis)} fallback drive; "
+                f"leaving axis untrimmed"
+            )
+            return
+
+        odom_distance_m, board_ground_truth_m = await self.run_with_ui(
             DistanceDrivingScreen(target_cm),
             self._collect_fallback_drive(robot, session, step, axis),
         )
 
-    async def _collect_fallback_drive(
-        self,
-        robot: "GenericRobot",
-        session: SetupCalibrationSession,
-        step,
-        axis: CalibrationAxis,
-    ) -> None:
-        internal_start = session.capture_internal_snapshot(robot)
-        reference_start = (
-            session.capture_reference_snapshot(robot) if session.board_available else None
-        )
-        await step.run_step(robot)
-        internal_end = robot.odometry.get_internal_pose()
-        odom_distance_m = session.axis_distance_m(internal_start, internal_end, axis)
-
-        ground_truth_m = None
-        if session.board_available and reference_start is not None:
-            reference_end = session.reference_pose(robot)
-            board_m = session.axis_distance_m(reference_start, reference_end, axis)
-            if abs(board_m) >= _MIN_GROUND_TRUTH_M:
-                ground_truth_m = board_m
-            else:
-                self.warn(
-                    f"Calibration board reported ~0cm ground truth for a "
-                    f"{_axis_abs_cm(odom_distance_m):.1f}cm {_axis_name(axis)} drive; "
-                    f"falling back to manual measurement"
-                )
-
-        if ground_truth_m is not None:
-            source = "calibration_board"
-        else:
+        ground_truth_m = board_ground_truth_m
+        source = "calibration_board"
+        if ground_truth_m is None:
+            # No calibration-board ground truth (no board, dropout, or ~0cm
+            # reading). Prompt the operator to measure the distance the robot
+            # actually travelled — that hand measurement becomes the ground truth.
+            # Default the entry to what the odometry believes so the operator only
+            # nudges it.
             measured_cm = await self.show(
                 DistanceMeasureScreen(
                     requested_distance=_axis_abs_cm(odom_distance_m),
                     default_value=_axis_abs_cm(odom_distance_m),
                 )
             )
+            if measured_cm is None:
+                self.warn(
+                    f"Manual measurement dismissed for the {_axis_name(axis)} fallback "
+                    f"drive; leaving axis untrimmed"
+                )
+                return
+            # Preserve the travel direction; the scale uses absolute distances.
             sign = 1.0 if odom_distance_m >= 0.0 else -1.0
             ground_truth_m = sign * (float(measured_cm) / 100.0)
+            if abs(ground_truth_m) < _MIN_GROUND_TRUTH_M:
+                self.warn(
+                    f"Manual measurement of ~0cm for the {_axis_name(axis)} fallback "
+                    f"drive; rejecting sample"
+                )
+                return
             source = "manual_entry"
+
         session.add_drive_sample(
             DriveCalibrationSample(
                 axis=axis,
@@ -354,6 +431,42 @@ class CalibrationGate(UIStep):
                 source=source,
             )
         )
+
+    async def _collect_fallback_drive(
+        self,
+        robot: "GenericRobot",
+        session: SetupCalibrationSession,
+        step,
+        axis: CalibrationAxis,
+    ) -> tuple[float, float | None]:
+        """Drive the fallback and return ``(odom_distance_m, board_ground_truth_m)``.
+
+        ``board_ground_truth_m`` is ``None`` when no calibration board is present
+        (or it dropped out / reported ~0cm); the caller then falls back to manual
+        measurement.
+        """
+        internal_start = session.capture_internal_snapshot(robot)
+        reference_start = (
+            session.capture_reference_snapshot(robot) if session.board_available else None
+        )
+        await step.run_step(robot)
+        internal_end = robot.odometry.get_internal_pose()
+        odom_distance_m = session.axis_distance_m(internal_start, internal_end, axis)
+
+        board_ground_truth_m = None
+        if session.board_available and reference_start is not None:
+            reference_end = session.reference_pose(robot)
+            board_m = session.axis_distance_m(reference_start, reference_end, axis)
+            if abs(board_m) >= _MIN_GROUND_TRUTH_M:
+                board_ground_truth_m = board_m
+            else:
+                self.warn(
+                    f"Calibration board reported ~0cm ground truth for a "
+                    f"{_axis_abs_cm(odom_distance_m):.1f}cm {_axis_name(axis)} drive; "
+                    f"falling back to manual measurement"
+                )
+
+        return odom_distance_m, board_ground_truth_m
 
     async def _finalize_ir_set(
         self,
@@ -446,7 +559,9 @@ class CalibrationGate(UIStep):
                     )
                 )
 
-            result = await self.show(IRResultsDashboardScreen(sensors=sensor_data))
+            result = await self.show(
+                IRResultsDashboardScreen(sensors=sensor_data, set_name=set_name)
+            )
             if result is None:
                 self.warn(f"IR calibration dashboard dismissed for set '{set_name}'")
                 return
@@ -472,21 +587,29 @@ class CalibrationGate(UIStep):
 
 
 @dsl(tags=["calibration", "setup"])
-def collect_drive(step) -> CollectDrive:
+def collect_drive(step, manual_measurement: bool = True) -> CollectDrive:
     """Wrap a setup motion to opportunistically record a distance sample.
 
     The wrapped ``step`` runs unchanged. While it executes, the calibration board
     (if connected) is read as ground truth alongside the internal odometry, and a
     per-axis distance sample is stored in the setup calibration session for the
-    :func:`calibration_gate` to fold into the distance trim. Without a board it is
-    a transparent pass-through.
+    :func:`calibration_gate` to fold into the distance trim.
+
+    Without a usable board ground truth, ``manual_measurement`` decides what
+    happens: when ``True`` (default) the operator is prompted to measure the
+    travelled distance by hand and that becomes the sample; when ``False`` the
+    drive is rejected and no sample is recorded (the axis is left for the gate
+    fallback, or left untrimmed).
 
     Prerequisites:
-        A calibration board for ground-truth sampling (optional — the gate forces
-        a measured fallback drive otherwise).
+        A calibration board for ground-truth sampling (optional — see
+        ``manual_measurement``).
 
     Args:
         step: Any step (e.g. a ``seq([...])``) whose motion should be measured.
+        manual_measurement: When no board ground truth is available, prompt the
+            operator to measure the distance by hand (``True``, default) instead of
+            rejecting the drive (``False``).
 
     Returns:
         CollectDrive: A step wrapping ``step``.
@@ -495,6 +618,7 @@ def collect_drive(step) -> CollectDrive:
 
         from raccoon.step.calibration.setup import collect_drive
 
+        # Ask for a manual measurement if no board is connected (default):
         collect_drive(
             seq(
                 [
@@ -503,8 +627,11 @@ def collect_drive(step) -> CollectDrive:
                 ]
             ),
         )
+
+        # Board-only: silently skip the sample when no board is present.
+        collect_drive(drive_forward().until(over_line(front.left)), manual_measurement=False)
     """
-    return CollectDrive(step)
+    return CollectDrive(step, manual_measurement=manual_measurement)
 
 
 @dsl(tags=["calibration", "setup"])
@@ -542,23 +669,29 @@ def collect_ir_set(
 def calibration_gate(
     require_axes: list[CalibrationAxis] | None = None,
     require_ir_sets: list[str] | None = None,
+    fallback_cm: float | None = None,
     forward_fallback_cm: float = _FALLBACK_FORWARD_CM,
     lateral_fallback_cm: float = _FALLBACK_LATERAL_CM,
 ) -> CalibrationGate:
     """Finalize the accumulated setup-calibration evidence exactly once.
 
-    Folds each required drive axis' median sample into the distance trim via the
-    composing ``MotionTrimService.calibrate_axis`` (preserving any already-applied
-    scale) and applies each required IR set's thresholds. Axes or IR sets that
-    never gathered enough samples trigger a measured fallback drive (and a manual
-    measurement screen if no calibration board is present). Idempotent and a no-op
-    under ``--no-calibrate``.
+    Assigns each required drive axis' median sample scale as the distance trim via
+    ``MotionTrimService.set_axis_scale`` (it is the absolute target scale, so it is
+    set, not composed — composing would diverge on repeated calibration) and
+    applies each required IR set's thresholds. A drive axis with no
+    samples triggers a measured fallback drive: with a calibration board the board
+    supplies the ground truth, otherwise the operator is prompted to measure the
+    travelled distance by hand. Idempotent and a no-op under ``--no-calibrate``.
 
     Args:
         require_axes: Drive axes that must be finalized. ``None`` finalizes every
             axis that accumulated a sample or was marked required by a collector.
         require_ir_sets: IR set names that must be finalized. ``None`` finalizes
             every set seen so far.
+        fallback_cm: Distance (cm) for the fallback drive, applied to *both* axes.
+            A convenience override — when given it replaces both
+            ``forward_fallback_cm`` and ``lateral_fallback_cm``. ``None`` keeps the
+            per-axis defaults.
         forward_fallback_cm: Distance (cm) of the forward fallback drive when the
             forward axis has no samples.
         lateral_fallback_cm: Distance (cm) of the lateral fallback strafe.
@@ -570,11 +703,18 @@ def calibration_gate(
 
         from raccoon.step.calibration.setup import CalibrationAxis, calibration_gate
 
+        # Default per-axis fallback distances:
         calibration_gate(
             require_axes=[CalibrationAxis.FORWARD],
             require_ir_sets=["default", "upper"],
         )
+
+        # Drive 80 cm for any fallback (both axes):
+        calibration_gate(require_axes=[CalibrationAxis.FORWARD], fallback_cm=80)
     """
+    if fallback_cm is not None:
+        forward_fallback_cm = float(fallback_cm)
+        lateral_fallback_cm = float(fallback_cm)
     return CalibrationGate(
         require_axes=require_axes,
         require_ir_sets=require_ir_sets,

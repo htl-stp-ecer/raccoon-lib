@@ -90,8 +90,10 @@ class LoopFor(Step):
             msg = f"Expected step to be a Step instance, got {type(step)}"
             raise TypeError(msg)
 
-        if not isinstance(iterations, int) or iterations <= 0:
-            msg = f"Iterations must be a positive integer, got {iterations}"
+        # bool is an int subclass; reject it explicitly so loop_for(step, True)
+        # is a clear error rather than silently looping once.
+        if isinstance(iterations, bool) or not isinstance(iterations, int) or iterations <= 0:
+            msg = f"Iterations must be a positive integer, got {iterations!r}"
             raise ValueError(msg)
 
         self.step = step.resolve()
