@@ -100,6 +100,13 @@ namespace libstp::sim
         void setMap(WorldMap map);
         const WorldMap& map() const noexcept { return m_map; }
 
+        /// Index of the table layer (plane) the robot is currently on. Line
+        /// sensors and collision resolve against this layer's segments; the
+        /// robot switches layers when it crosses a map transition (ramp). For
+        /// v1 (single-layer) maps this is always the ground layer (0).
+        int currentLayer() const noexcept { return m_currentLayer; }
+        void setCurrentLayer(int idx) noexcept { m_currentLayer = idx; }
+
         /// Register a line sensor on `analogPort`. Sampled by `readAnalog`:
         /// returns ~0 when the mount is over a black line, ~1023 otherwise.
         void attachLineSensor(uint8_t analogPort, float forwardCm, float strafeCm,
@@ -207,6 +214,7 @@ namespace libstp::sim
         RobotConfig m_robot{};
         SimMotorMap m_motors{};
         WorldMap m_map{};
+        int m_currentLayer{0};  // index of the plane the robot is on (ground = 0)
         Pose2D m_pose{};
         Pose2D m_odoPose{};  // dead-reckoned controller-facing odometry (see odometryPose())
 
@@ -216,6 +224,10 @@ namespace libstp::sim
         float m_yawRateRadS{0.0f};
         std::vector<Pose2D> m_trace;
         std::unordered_map<uint8_t, SensorEntry> m_sensors;
+
+        /// Switch m_currentLayer when the path prev→cur crosses a map
+        /// transition (ramp seam) of the current layer.
+        void applyLayerTransitions(const Pose2D& prev, const Pose2D& cur);
 
         float targetOmega(std::size_t wheelIndex) const;
         uint16_t sampleLineSensor(const SensorEntry&) const;

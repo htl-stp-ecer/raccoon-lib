@@ -130,6 +130,62 @@ namespace libstp::map
         return false;
     }
 
+    int WorldMap::layerIndex(const std::string& id) const noexcept
+    {
+        for (std::size_t i = 0; i < m_layers.size(); ++i)
+        {
+            if (m_layers[i].id == id) return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    const std::vector<MapSegment>& WorldMap::layerSegments(std::size_t idx) const noexcept
+    {
+        if (idx < m_layers.size())
+        {
+            return m_layers[idx].segments;
+        }
+        return m_segments;  // v1 / out-of-range → ground segments
+    }
+
+    bool WorldMap::isOnLine(float xCm, float yCm, std::size_t layerIdx) const
+    {
+        for (const auto& seg : layerSegments(layerIdx))
+        {
+            if (seg.kind != MapSegment::Kind::Line) continue;
+            const float threshold = std::max(kMinLineThresholdCm, seg.widthCm * 0.5f);
+            if (pointToSegmentDistance(xCm, yCm, seg) <= threshold)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool WorldMap::isOnWall(float xCm, float yCm, std::size_t layerIdx) const
+    {
+        for (const auto& seg : layerSegments(layerIdx))
+        {
+            if (seg.kind != MapSegment::Kind::Wall) continue;
+            const float threshold = std::max(kBorderWallToleranceCm, seg.widthCm * 0.5f);
+            if (pointToSegmentDistance(xCm, yCm, seg) <= threshold)
+            {
+                return true;
+            }
+        }
+        if (m_tableWidthCm > 0.0f && m_tableHeightCm > 0.0f)
+        {
+            for (const auto& edge : borderEdges(m_tableWidthCm, m_tableHeightCm))
+            {
+                if (pointToSegmentDistance(xCm, yCm, edge) <= kBorderWallToleranceCm)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     float WorldMap::distanceToNearestLine(float xCm, float yCm) const
     {
         float best = std::numeric_limits<float>::infinity();
@@ -228,9 +284,10 @@ namespace libstp::map
         }
 
         const auto version = root["version"];
-        if (!version || version.as<int>() != 1)
+        const int ver = version ? version.as<int>() : 0;
+        if (ver != 1 && ver != 2)
         {
-            throw FtmapParseError("ftmap version must be 1");
+            throw FtmapParseError("ftmap version must be 1 or 2");
         }
 
         const auto table = root["table"];
@@ -243,23 +300,14 @@ namespace libstp::map
         m_tableWidthCm = table["widthCm"].as<float>();
         m_tableHeightCm = table["heightCm"].as<float>();
 
-        const auto lines = root["lines"];
-        if (!lines)
-        {
-            return;
-        }
-        if (!lines.IsSequence())
-        {
-            throw FtmapParseError("ftmap.lines must be an array");
-        }
-
-        for (const auto& node : lines)
-        {
+        // Parse one line/wall node. ftmap stores Y top-down; we live bottom-up,
+        // so flip on ingest (shared by v1 lines[] and v2 layers[].lines[]).
+        const float h = m_tableHeightCm;
+        auto parseSegment = [h](const YAML::Node& node) -> MapSegment {
             if (!node.IsMap())
             {
                 throw FtmapParseError("ftmap.lines entry must be an object");
             }
-
             MapSegment seg{};
             const auto kind = node["kind"].as<std::string>();
             if (kind == "wall")
@@ -274,19 +322,93 @@ namespace libstp::map
             {
                 throw FtmapParseError("ftmap.lines.kind must be 'line' or 'wall'");
             }
-
-            // ftmap stores Y top-down; we live bottom-up. Flip on ingest so
-            // every downstream query uses the canonical bottom-left frame.
-            const float rawStartY = node["startY"].as<float>();
-            const float rawEndY = node["endY"].as<float>();
             seg.startX = node["startX"].as<float>();
-            seg.startY = m_tableHeightCm - rawStartY;
+            seg.startY = h - node["startY"].as<float>();
             seg.endX = node["endX"].as<float>();
-            seg.endY = m_tableHeightCm - rawEndY;
+            seg.endY = h - node["endY"].as<float>();
             seg.widthCm = node["widthCm"].as<float>();
+            return seg;
+        };
 
-            m_segments.push_back(seg);
+        if (ver == 2)
+        {
+            const auto layers = root["layers"];
+            if (!layers || !layers.IsSequence())
+            {
+                throw FtmapParseError("ftmap v2 requires a 'layers' array");
+            }
+            for (const auto& ln : layers)
+            {
+                if (!ln.IsMap())
+                {
+                    throw FtmapParseError("ftmap.layers entry must be an object");
+                }
+                MapLayer layer{};
+                layer.id = ln["id"] ? ln["id"].as<std::string>() : std::string{};
+                layer.name = ln["name"] ? ln["name"].as<std::string>() : layer.id;
+                layer.zCm = ln["zCm"] ? ln["zCm"].as<float>() : 0.0f;
+                if (const auto llines = ln["lines"]; llines && llines.IsSequence())
+                {
+                    for (const auto& node : llines)
+                    {
+                        layer.segments.push_back(parseSegment(node));
+                    }
+                }
+                m_layers.push_back(std::move(layer));
+            }
+
+            // The ground/active layer backs the legacy no-arg API + the particle
+            // filter. Prefer an explicit "ground" id, else the first layer.
+            std::size_t activeIdx = 0;
+            if (const int groundIdx = layerIndex("ground"); groundIdx >= 0)
+            {
+                activeIdx = static_cast<std::size_t>(groundIdx);
+            }
+            if (!m_layers.empty())
+            {
+                m_segments = m_layers[activeIdx].segments;
+            }
+
+            auto parseEdge = [h](const YAML::Node& e) -> TransitionEdge {
+                TransitionEdge te{};
+                te.startX = e["startX"].as<float>();
+                te.startY = h - e["startY"].as<float>();
+                te.endX = e["endX"].as<float>();
+                te.endY = h - e["endY"].as<float>();
+                return te;
+            };
+            if (const auto trans = root["transitions"]; trans && trans.IsSequence())
+            {
+                for (const auto& tn : trans)
+                {
+                    MapTransition t{};
+                    t.id = tn["id"] ? tn["id"].as<std::string>() : std::string{};
+                    t.name = tn["name"] ? tn["name"].as<std::string>() : std::string{};
+                    t.fromLayer = tn["fromLayer"].as<std::string>();
+                    t.toLayer = tn["toLayer"].as<std::string>();
+                    t.from = parseEdge(tn["from"]);
+                    t.to = parseEdge(tn["to"]);
+                    t.bidirectional = tn["bidirectional"] ? tn["bidirectional"].as<bool>() : true;
+                    t.widthCm = tn["widthCm"] ? tn["widthCm"].as<float>() : 0.0f;
+                    m_transitions.push_back(std::move(t));
+                }
+            }
+            return;
         }
+
+        // ---- v1: single implicit "ground" layer ----
+        if (const auto lines = root["lines"])
+        {
+            if (!lines.IsSequence())
+            {
+                throw FtmapParseError("ftmap.lines must be an array");
+            }
+            for (const auto& node : lines)
+            {
+                m_segments.push_back(parseSegment(node));
+            }
+        }
+        m_layers.push_back(MapLayer{"ground", "Ground", 0.0f, m_segments});
     }
 
     void WorldMap::loadFromDict(float tableWidthCm,
@@ -323,5 +445,6 @@ namespace libstp::map
             seg.widthCm = e.widthCm;
             m_segments.push_back(seg);
         }
+        m_layers.push_back(MapLayer{"ground", "Ground", 0.0f, m_segments});
     }
 }

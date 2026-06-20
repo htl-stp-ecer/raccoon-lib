@@ -141,6 +141,10 @@ PYBIND11_MODULE(sim, m)
         .def_property_readonly("map", &SimWorld::map, py::return_value_policy::reference_internal)
         .def("set_pose", &SimWorld::setPose, py::arg("pose"))
         .def_property_readonly("pose", &SimWorld::pose)
+        .def_property_readonly("current_layer", &SimWorld::currentLayer,
+            "Index of the table plane the robot is currently on (0 = ground). "
+            "Switches when the robot crosses a v2 map transition (ramp).")
+        .def("set_current_layer", &SimWorld::setCurrentLayer, py::arg("idx"))
         .def_property_readonly("yaw_rate_rad_s", &SimWorld::yawRateRadS)
         .def("set_motor_command", &SimWorld::setMotorCommand,
              py::arg("port"), py::arg("signed_percent"))

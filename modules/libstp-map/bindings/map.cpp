@@ -206,11 +206,35 @@ PYBIND11_MODULE(map, m)
              "Authored segments (lines + explicit walls), excluding the "
              "synthesized table-border walls.")
 
-        .def("is_on_line", &WorldMap::isOnLine, py::arg("x_cm"), py::arg("y_cm"))
+        .def("is_on_line",
+             [](const WorldMap& self, float x_cm, float y_cm) {
+                 return self.isOnLine(x_cm, y_cm);
+             },
+             py::arg("x_cm"), py::arg("y_cm"))
+        // ── Multi-layer (v2) access ──
+        .def_property_readonly("layer_count",
+             [](const WorldMap& self) { return self.layerCount(); })
+        .def("layer_index", &WorldMap::layerIndex, py::arg("id"),
+             "Index of the layer with this id, or -1 when absent.")
+        .def_property_readonly("transition_count",
+             [](const WorldMap& self) { return self.transitions().size(); })
+        .def("layer_segments",
+             [](const WorldMap& self, std::size_t idx) { return self.layerSegments(idx); },
+             py::arg("layer_idx"), "Authored segments of layer `layer_idx`.")
+        .def("is_on_line_layer",
+             [](const WorldMap& self, float x_cm, float y_cm, std::size_t layer_idx) {
+                 return self.isOnLine(x_cm, y_cm, layer_idx);
+             },
+             py::arg("x_cm"), py::arg("y_cm"), py::arg("layer_idx"),
+             "is_on_line resolved against a specific layer's segments.")
         .def("is_on_black_line", &WorldMap::isOnBlackLine,
              py::arg("x_cm"), py::arg("y_cm"),
              "Legacy alias for is_on_line, kept for libstp-sim compatibility.")
-        .def("is_on_wall", &WorldMap::isOnWall, py::arg("x_cm"), py::arg("y_cm"))
+        .def("is_on_wall",
+             [](const WorldMap& self, float x_cm, float y_cm) {
+                 return self.isOnWall(x_cm, y_cm);
+             },
+             py::arg("x_cm"), py::arg("y_cm"))
         .def("distance_to_nearest_line", &WorldMap::distanceToNearestLine,
              py::arg("x_cm"), py::arg("y_cm"))
         .def("distance_to_nearest_wall", &WorldMap::distanceToNearestWall,

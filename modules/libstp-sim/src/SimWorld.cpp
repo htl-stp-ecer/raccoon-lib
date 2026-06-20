@@ -32,6 +32,9 @@ namespace libstp::sim
         // The dead-reckoned odometry frame starts coincident with the physical
         // pose; it then integrates body velocities independently (see below).
         m_odoPose = pose;
+        // Re-seed onto the ground plane — a re-pose (use_scene start / reset)
+        // always places the robot on the floor; ramp transitions re-elevate it.
+        m_currentLayer = std::max(0, m_map.layerIndex("ground"));
         m_trace.clear();
         m_trace.push_back(m_pose);
     }
@@ -242,7 +245,8 @@ namespace libstp::sim
 
         const Pose2D target = applyLocalDelta(m_pose, dxLocalCm, dyLocalCm, dThetaRad);
 
-        const auto walls = collision::buildCollisionWalls(m_map);
+        const Pose2D prevPose = m_pose;
+        const auto walls = collision::buildCollisionWalls(m_map, static_cast<std::size_t>(m_currentLayer));
         if (walls.empty())
         {
             m_pose = target;
@@ -255,6 +259,8 @@ namespace libstp::sim
                 m_pose = path.back();
             }
         }
+        // Did this move cross a ramp seam? If so, switch the active plane.
+        applyLayerTransitions(prevPose, m_pose);
         m_trace.push_back(m_pose);
     }
 
@@ -269,7 +275,55 @@ namespace libstp::sim
     bool SimWorld::isSensorOnBlackLine(const SensorMount& mount) const
     {
         const Vec2 p = sensorWorldPosition(mount);
-        return m_map.isOnBlackLine(p.x, p.y);
+        // Resolve against the plane the robot is currently on, so a sensor on
+        // the raised ramp reads the ramp's lines, not the floor's.
+        return m_map.isOnLine(p.x, p.y, static_cast<std::size_t>(m_currentLayer));
+    }
+
+    void SimWorld::applyLayerTransitions(const Pose2D& prev, const Pose2D& cur)
+    {
+        const auto& transitions = m_map.transitions();
+        if (transitions.empty()) return;
+
+        // 2D segment-segment intersection (prev→cur path vs the seam edge).
+        auto crosses = [](float ax, float ay, float bx, float by,
+                          float cx, float cy, float dx, float dy) -> bool {
+            const float r1x = bx - ax, r1y = by - ay;
+            const float r2x = dx - cx, r2y = dy - cy;
+            const float denom = r1x * r2y - r1y * r2x;
+            if (std::fabs(denom) < 1e-9f) return false;  // parallel
+            const float t = ((cx - ax) * r2y - (cy - ay) * r2x) / denom;
+            const float u = ((cx - ax) * r1y - (cy - ay) * r1x) / denom;
+            return t >= 0.0f && t <= 1.0f && u >= 0.0f && u <= 1.0f;
+        };
+
+        for (const auto& tr : transitions)
+        {
+            const int fromIdx = m_map.layerIndex(tr.fromLayer);
+            const int toIdx = m_map.layerIndex(tr.toLayer);
+            const TransitionEdge* edge = nullptr;
+            int dest = -1;
+            if (m_currentLayer == fromIdx)
+            {
+                edge = &tr.from;
+                dest = toIdx;
+            }
+            else if (tr.bidirectional && m_currentLayer == toIdx)
+            {
+                edge = &tr.to;
+                dest = fromIdx;
+            }
+            if (edge == nullptr || dest < 0) continue;
+
+            if (crosses(prev.x, prev.y, cur.x, cur.y,
+                        edge->startX, edge->startY, edge->endX, edge->endY))
+            {
+                // Ramps are authored in the shared table (x, y) frame, so the
+                // crossing is a pure plane switch — position carries over.
+                m_currentLayer = dest;
+                return;  // at most one transition per tick
+            }
+        }
     }
 
     void SimWorld::attachLineSensor(uint8_t analogPort, float forwardCm, float strafeCm, std::string name)
@@ -332,7 +386,7 @@ namespace libstp::sim
         // World-frame aim = robot heading + mount angle.
         const float worldAngle = m_pose.theta + e.mountAngleRad;
 
-        const auto walls = collision::buildCollisionWalls(m_map);
+        const auto walls = collision::buildCollisionWalls(m_map, static_cast<std::size_t>(m_currentLayer));
         const float distanceCm = collision::raycastDistanceCm(
             origin.x, origin.y, worldAngle, e.maxRangeCm, walls);
 

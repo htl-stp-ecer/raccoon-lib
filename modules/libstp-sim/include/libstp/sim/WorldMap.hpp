@@ -11,5 +11,8 @@ namespace libstp::sim
 {
     using WorldMap = libstp::map::WorldMap;
     using MapSegment = libstp::map::MapSegment;
+    using MapLayer = libstp::map::MapLayer;
+    using TransitionEdge = libstp::map::TransitionEdge;
+    using MapTransition = libstp::map::MapTransition;
     using FtmapParseError = libstp::map::FtmapParseError;
 }

@@ -18,6 +18,45 @@ namespace libstp::map
         using std::runtime_error::runtime_error;
     };
 
+    /// One stacked 2D plane of the table (ground floor, raised ramp, …).
+    /// Mirrors TableMapFileV2.layers[] from the web-ide ftmap schema. Each
+    /// layer owns its line/wall segments in the shared table (x, y) frame at
+    /// elevation `zCm`.
+    struct MapLayer
+    {
+        std::string id;
+        std::string name;
+        float zCm{0.0f};
+        std::vector<MapSegment> segments;
+    };
+
+    /// Edge geometry of a transition portal on one layer (cm, bottom-up frame).
+    struct TransitionEdge
+    {
+        float startX{0.0f};
+        float startY{0.0f};
+        float endX{0.0f};
+        float endY{0.0f};
+    };
+
+    /// A transition (ramp/portal) connecting two layers along a seam line on
+    /// each. Crossing the `from` edge moves the robot onto `toLayer` (and back,
+    /// when bidirectional). The parameter t along the edge maps 1:1 between
+    /// layers; when the two edges are geometrically identical (a ramp drawn in
+    /// the same table coordinates as the floor it rises from) the crossing is a
+    /// pure layer switch with no position remap.
+    struct MapTransition
+    {
+        std::string id;
+        std::string name;
+        std::string fromLayer;
+        std::string toLayer;
+        TransitionEdge from;
+        TransitionEdge to;
+        bool bidirectional{true};
+        float widthCm{0.0f};
+    };
+
     /// Canonical Botball table map: bounds + line/wall segments + the
     /// geometric queries the particle filter and existing TableMap users
     /// need.
@@ -40,6 +79,30 @@ namespace libstp::map
         float tableWidthCm() const noexcept { return m_tableWidthCm; }
         float tableHeightCm() const noexcept { return m_tableHeightCm; }
         const std::vector<MapSegment>& segments() const noexcept { return m_segments; }
+
+        // ───────────── Multi-layer (v2) access ─────────────
+        // v1 maps load as a single "ground" layer; v2 maps load all authored
+        // layers. `segments()` and the no-arg queries always operate on the
+        // ground/active layer (m_segments) so the particle filter and every
+        // pre-v2 caller keep working unchanged. SimWorld uses the layer-indexed
+        // overloads with the plane the robot is currently on.
+
+        std::size_t layerCount() const noexcept { return m_layers.size(); }
+        const std::vector<MapLayer>& layers() const noexcept { return m_layers; }
+        const std::vector<MapTransition>& transitions() const noexcept { return m_transitions; }
+
+        /// Index of the layer with the given id, or -1 when absent.
+        int layerIndex(const std::string& id) const noexcept;
+
+        /// Segments of layer `idx`. Falls back to the ground segments when the
+        /// map has no explicit layers or `idx` is out of range.
+        const std::vector<MapSegment>& layerSegments(std::size_t idx) const noexcept;
+
+        /// Layer-scoped variants of the point queries. Same semantics as the
+        /// no-arg versions but against layer `idx`'s segments (table border
+        /// walls still apply to every layer).
+        bool isOnLine(float xCm, float yCm, std::size_t layerIdx) const;
+        bool isOnWall(float xCm, float yCm, std::size_t layerIdx) const;
 
         /// Subset of segments() with Kind::Line.
         std::vector<MapSegment> lines() const;
@@ -143,6 +206,8 @@ namespace libstp::map
         void clear() noexcept
         {
             m_segments.clear();
+            m_layers.clear();
+            m_transitions.clear();
             m_tableWidthCm = 0.0f;
             m_tableHeightCm = 0.0f;
         }
@@ -150,6 +215,10 @@ namespace libstp::map
     private:
         float m_tableWidthCm{0.0f};
         float m_tableHeightCm{0.0f};
+        // Ground/active layer segments — backs segments() and the no-arg
+        // queries. Mirrors m_layers[ground] so legacy callers are unaffected.
         std::vector<MapSegment> m_segments;
+        std::vector<MapLayer> m_layers;
+        std::vector<MapTransition> m_transitions;
     };
 }

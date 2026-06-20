@@ -10,8 +10,14 @@
 namespace libstp::sim::collision
 {
     /// Expand thick walls into 4-edge rectangles, append table borders.
-    /// Port of web-ide physics.ts buildCollisionWalls().
+    /// Port of web-ide physics.ts buildCollisionWalls(). Uses the ground/active
+    /// layer's walls.
     std::vector<MapSegment> buildCollisionWalls(const WorldMap& map);
+
+    /// Layer-scoped variant: collide against the walls of layer `layerIdx`
+    /// (plus the table border, which applies to every plane). Used by the sim
+    /// so a robot on the raised ramp respects that layer's geometry.
+    std::vector<MapSegment> buildCollisionWalls(const WorldMap& map, std::size_t layerIdx);
 
     struct CollisionInfo
     {

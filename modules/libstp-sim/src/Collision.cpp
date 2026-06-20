@@ -127,39 +127,50 @@ namespace libstp::sim::collision
         }
     }
 
+    namespace
+    {
+        std::vector<MapSegment> buildWallsFrom(const std::vector<MapSegment>& segments,
+                                               float w, float h)
+        {
+            std::vector<MapSegment> out;
+            for (const auto& seg : segments)
+            {
+                if (seg.kind != MapSegment::Kind::Wall) continue;
+                const float thickness = std::max(0.0f, seg.widthCm);
+                if (thickness < kMinWallThicknessCm)
+                {
+                    out.push_back({MapSegment::Kind::Wall, seg.startX, seg.startY, seg.endX, seg.endY, 0.0f});
+                    continue;
+                }
+                auto expanded = expandWallSegment(seg, thickness);
+                if (!expanded.empty())
+                {
+                    out.insert(out.end(), expanded.begin(), expanded.end());
+                }
+                else
+                {
+                    out.push_back({MapSegment::Kind::Wall, seg.startX, seg.startY, seg.endX, seg.endY, 0.0f});
+                }
+            }
+            if (w > 0.0f && h > 0.0f)
+            {
+                out.push_back({MapSegment::Kind::Wall, 0.0f, 0.0f, w, 0.0f, 0.0f});
+                out.push_back({MapSegment::Kind::Wall, w, 0.0f, w, h, 0.0f});
+                out.push_back({MapSegment::Kind::Wall, w, h, 0.0f, h, 0.0f});
+                out.push_back({MapSegment::Kind::Wall, 0.0f, h, 0.0f, 0.0f, 0.0f});
+            }
+            return out;
+        }
+    }
+
     std::vector<MapSegment> buildCollisionWalls(const WorldMap& map)
     {
-        std::vector<MapSegment> out;
-        for (const auto& seg : map.segments())
-        {
-            if (seg.kind != MapSegment::Kind::Wall) continue;
-            const float thickness = std::max(0.0f, seg.widthCm);
-            if (thickness < kMinWallThicknessCm)
-            {
-                out.push_back({MapSegment::Kind::Wall, seg.startX, seg.startY, seg.endX, seg.endY, 0.0f});
-                continue;
-            }
-            auto expanded = expandWallSegment(seg, thickness);
-            if (!expanded.empty())
-            {
-                out.insert(out.end(), expanded.begin(), expanded.end());
-            }
-            else
-            {
-                out.push_back({MapSegment::Kind::Wall, seg.startX, seg.startY, seg.endX, seg.endY, 0.0f});
-            }
-        }
+        return buildWallsFrom(map.segments(), map.tableWidthCm(), map.tableHeightCm());
+    }
 
-        const float w = map.tableWidthCm();
-        const float h = map.tableHeightCm();
-        if (w > 0.0f && h > 0.0f)
-        {
-            out.push_back({MapSegment::Kind::Wall, 0.0f, 0.0f, w, 0.0f, 0.0f});
-            out.push_back({MapSegment::Kind::Wall, w, 0.0f, w, h, 0.0f});
-            out.push_back({MapSegment::Kind::Wall, w, h, 0.0f, h, 0.0f});
-            out.push_back({MapSegment::Kind::Wall, 0.0f, h, 0.0f, 0.0f, 0.0f});
-        }
-        return out;
+    std::vector<MapSegment> buildCollisionWalls(const WorldMap& map, std::size_t layerIdx)
+    {
+        return buildWallsFrom(map.layerSegments(layerIdx), map.tableWidthCm(), map.tableHeightCm());
     }
 
     std::optional<CollisionInfo> findCollision(
