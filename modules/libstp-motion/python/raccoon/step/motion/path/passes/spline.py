@@ -275,19 +275,58 @@ def segments_to_spline_waypoints(
     return waypoints
 
 
+def _splinifiable_segment(node: "PathNode | None") -> bool:
+    """Can ``node`` be folded into a Catmull-Rom run?
+
+    True for a known-endpoint ``linear`` / ``diagonal`` / ``arc`` or a plain
+    relative ``turn`` (angle known, no opaque step) with no live condition.
+    False for everything that must stay a barrier: ``None`` (deferred), side
+    actions, condition-based segments, unknown endpoints, ``follow_line`` /
+    ``spline`` segments, and ``turn_to_heading`` (opaque absolute turns).
+    """
+    if not isinstance(node, Segment):
+        return False
+    if node.condition is not None or not node.has_known_endpoint:
+        return False
+    if node.kind in ("follow_line", "spline"):
+        return False
+    if node.kind == "turn" and (node.opaque_step is not None or node.angle_rad is None):
+        return False
+    return node.kind in ("linear", "diagonal", "arc", "turn")
+
+
+def _spline_path_from_segments(segments: list[Segment]) -> "SplinePath | None":
+    """Build a SplinePath from a run of splinifiable segments, or ``None``.
+
+    Returns ``None`` when the run yields fewer than 2 control waypoints (e.g. a
+    lone linear or a turn-only run) — the caller keeps such a run as raw
+    segments rather than collapsing it.
+    """
+    from ...spline_path import SplinePath  # deferred to avoid circular import
+
+    waypoints = segments_to_spline_waypoints(segments)
+    if len(waypoints) < 2:
+        return None
+    geom_kinds = ("linear", "diagonal", "arc")
+    speed = min((s.speed_scale for s in segments if s.kind in geom_kinds), default=1.0)
+    return SplinePath(waypoints, speed=speed)
+
+
 def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
     """Build a SplinePath from a fully-splinifiable node list.
 
-    Raises ``ValueError`` for any node that cannot be represented as a
-    waypoint: deferred placeholders, side actions, condition-based segments,
+    Strict, single-spline builder used by ``smooth_path(spline=True)``: raises
+    ``ValueError`` for any node that cannot be represented as a waypoint —
+    deferred placeholders, side actions, condition-based segments,
     ``follow_line`` / ``spline`` segments, or segments with unknown endpoints.
     Arcs and diagonals ARE accepted — they are integrated into control
     waypoints the Catmull-Rom traces (arcs are sampled along their curvature).
     A minimum of 2 control waypoints (after sampling) is required so the spline
     has at least 2 explicit control points.
-    """
-    from ...spline_path import SplinePath  # deferred to avoid circular import
 
+    The ``optimize().splinify()`` pass does NOT use this — it splits at barriers
+    instead (see :class:`SplinifyPass`).
+    """
     for node in nodes:
         if node is None:
             msg = (
@@ -329,37 +368,51 @@ def build_spline_step(nodes: list[PathNode | None]) -> "SplinePath":
                 raise ValueError(msg)
 
     segs = [n for n in nodes if isinstance(n, Segment)]
-    waypoints = segments_to_spline_waypoints(segs)
-    if len(waypoints) < 2:
+    spline_path = _spline_path_from_segments(segs)
+    if spline_path is None:
+        waypoints = segments_to_spline_waypoints(segs)
         msg = (
             "splinify() requires at least 2 control waypoints "
             f"to form a valid spline (found {len(waypoints)})"
         )
         raise ValueError(msg)
-
-    geom_kinds = ("linear", "diagonal", "arc")
-    speed = min((s.speed_scale for s in segs if s.kind in geom_kinds), default=1.0)
-    return SplinePath(waypoints, speed=speed)
+    return spline_path
 
 
 class SplinifyPass:
-    """Terminal pass that collapses the whole path into ONE continuous spline.
+    """Terminal pass that collapses each motion RUN into one continuous spline.
 
-    Validates the node list via :func:`build_spline_step` (raises ``ValueError``
-    for anything unsplinifiable — defers, side actions, conditions, or fewer than
-    2 control waypoints; arcs/diagonals ARE accepted and become control
-    waypoints — "everything is one spline") and reuses its control waypoints.
+    Rather than demanding the whole path be a single uninterrupted curve, the
+    pass SPLITS at barriers — exactly like ``merge`` / ``cut_corners`` /
+    ``to_absolute`` already do — so a path that mixes motion with side effects
+    still splinifies cleanly instead of raising:
+
+    - A **blocking** (inline) side action, a deferred (``None``) placeholder, a
+      condition-based / unknown-endpoint segment, a ``follow_line`` / ``spline``
+      segment, or a ``turn_to_heading`` BREAKS the run: it is passed through
+      unchanged and the motion on either side becomes a separate spline. (A
+      blocking side action must stop the robot anyway, so the velocity break at
+      that one point is unavoidable — the step still fires at the same place.)
+    - A **background** side action does NOT break the run: the spline flows
+      across it (velocity stays continuous) and the step is lifted to the run's
+      start, launched fire-and-forget so it overlaps the motion.
+
+    Each maximal run of splinifiable segments (``linear`` / ``diagonal`` /
+    ``arc`` / plain ``turn``) with ≥ 2 control waypoints becomes one spline; a
+    run too short to splinify (a lone linear, or turns only) is kept as its raw
+    segments.
 
     Two render modes, chosen by the builder from whether ``to_absolute()`` is on:
 
-    - **relative** (default) → ``Segment(kind="spline")``: the continuous,
-      odometry-driven C++ ``SplineMotion`` follows the centripetal Catmull-Rom.
-    - **absolute** → ``SideAction(SplineFollow)``: a continuous pure-pursuit
-      follower rides the SAME curve closed-loop on the localization particle
-      filter, correcting drift along the whole curve. Holonomic — heading held,
-      independent of the path tangent.
+    - **relative** (default) → ``Segment(kind="spline")`` per run: the
+      continuous, odometry-driven C++ ``SplineMotion`` follows the centripetal
+      Catmull-Rom.
+    - **absolute** → ``SideAction(SplineFollow)`` per run: a continuous
+      pure-pursuit follower rides the SAME curve closed-loop on the localization
+      particle filter, correcting drift along the whole curve. Holonomic —
+      heading held, independent of the path tangent.
 
-    Terminal: it replaces the path wholesale, so nothing may run after it.
+    Terminal: it replaces every motion run wholesale, so nothing may run after it.
     """
 
     name = "splinify"
@@ -370,27 +423,59 @@ class SplinifyPass:
         # ``absolute`` is set by the builder from whether to_absolute() is on.
         self.absolute = absolute
 
-    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
-        # Validate (propagating ValueErrors) and build the spline control points
-        # (arcs/diagonals already sampled into waypoints by build_spline_step).
-        spline_path = build_spline_step(nodes)
-
+    def _emit_run(self, run_segs: list[Segment], out: list) -> None:
+        """Collapse one splinifiable run into spline node(s), or keep it raw."""
+        if not run_segs:
+            return
+        spline_path = _spline_path_from_segments(run_segs)
+        if spline_path is None:
+            # Fewer than 2 control waypoints (lone linear / turns only): a spline
+            # would be degenerate, so keep the original segments.
+            out.extend(run_segs)
+            return
         if not self.absolute:
-            # Relative (default): the continuous odometry-driven C++ SplineMotion
-            # segment. Already smooth — no per-sample stepping.
-            return spline_path.lower_to_segments()
-
+            # Relative: the continuous odometry-driven C++ SplineMotion segment.
+            out.extend(spline_path.lower_to_segments())
+            return
         # Absolute: a continuous pure-pursuit follower rides the SAME centripetal
-        # Catmull-Rom curve closed-loop on the localization particle filter,
-        # correcting drift along the whole curve. Holonomic (heading held).
+        # Catmull-Rom curve closed-loop on the localization particle filter.
         from ...goto import SplineFollow  # deferred to avoid import cycle
 
         control_points_m = [
             (fwd_cm / 100.0, left_cm / 100.0) for (fwd_cm, left_cm) in spline_path._waypoints
         ]
-        step = SplineFollow(
-            waypoints=control_points_m,
-            speed=spline_path._speed,
-            heading_mode="hold",
+        out.append(
+            SideAction(
+                step=SplineFollow(
+                    waypoints=control_points_m,
+                    speed=spline_path._speed,
+                    heading_mode="hold",
+                ),
+                is_background=False,
+            )
         )
-        return [SideAction(step=step, is_background=False)]
+
+    def run(self, nodes: list[PathNode | None]) -> list[PathNode | None]:
+        out: list[PathNode | None] = []
+        run_segs: list[Segment] = []
+        pending_bg: list = []  # background side actions flowing across the run
+
+        def flush() -> None:
+            # Background actions launch at the run's start (fire-and-forget, so
+            # the spline velocity stays continuous across them); then the spline.
+            out.extend(pending_bg)
+            pending_bg.clear()
+            self._emit_run(run_segs, out)
+            run_segs.clear()
+
+        for node in nodes:
+            if _splinifiable_segment(node):
+                run_segs.append(node)  # type: ignore[arg-type]
+            elif isinstance(node, SideAction) and node.is_background:
+                pending_bg.append(node)  # flows across — lifted to run start
+            else:
+                # Hard barrier: blocking side action / deferred / opaque segment.
+                flush()
+                out.append(node)
+        flush()
+        return out

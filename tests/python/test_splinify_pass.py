@@ -80,19 +80,64 @@ def test_splinify_pass_is_terminal():
 
 
 @requires_libstp
-def test_splinify_rejects_side_action():
+def test_splinify_splits_at_blocking_side_action():
+    # A blocking (inline) side action is a barrier: splinify splits the motion
+    # into one spline on each side and keeps the side action in place — it no
+    # longer raises. (A blocking step must stop the robot anyway.)
     from raccoon.step.motion.drive_dsl import drive_forward
+    from raccoon.step.motion.path.ir import SideAction
     from raccoon.step.motion.path.passes.lowering import flatten_steps
     from raccoon.step.motion.path.passes.spline import SplinifyPass
     from raccoon.step.motion.turn_dsl import turn_right
     from raccoon.step.wait_for_seconds_dsl import wait_for_seconds
 
     nodes, _ = flatten_steps(
-        [drive_forward(50), wait_for_seconds(1), turn_right(90), drive_forward(30)]
+        [
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(40),
+            wait_for_seconds(1),
+            drive_forward(30),
+            turn_right(90),
+            drive_forward(20),
+        ]
     )
 
-    with pytest.raises(ValueError):
-        SplinifyPass().run(nodes)
+    result = SplinifyPass().run(nodes)
+
+    kinds = [
+        ("side", n.is_background) if isinstance(n, SideAction) else ("seg", n.kind) for n in result
+    ]
+    assert kinds == [("seg", "spline"), ("side", False), ("seg", "spline")]
+
+
+def test_splinify_flows_across_background_side_action():
+    # A background side action does NOT break the run: the spline flows across
+    # it (one continuous curve) and the bg step is lifted to the run's start.
+    from raccoon.step import background
+    from raccoon.step.motion.drive_dsl import drive_forward
+    from raccoon.step.motion.path.ir import Segment, SideAction
+    from raccoon.step.motion.path.passes.lowering import flatten_steps
+    from raccoon.step.motion.path.passes.spline import SplinifyPass
+    from raccoon.step.motion.turn_dsl import turn_right
+    from raccoon.step.wait_for_seconds_dsl import wait_for_seconds
+
+    nodes, _ = flatten_steps(
+        [
+            drive_forward(50),
+            turn_right(90),
+            drive_forward(40),
+            background(step=wait_for_seconds(1), name="bg"),
+            drive_forward(30),
+            turn_right(90),
+            drive_forward(20),
+        ]
+    )
+
+    result = SplinifyPass().run(nodes)
+
+    assert isinstance(result[0], SideAction) and result[0].is_background
+    assert sum(1 for n in result if isinstance(n, Segment) and n.kind == "spline") == 1
 
 
 @requires_libstp
@@ -117,12 +162,18 @@ def test_splinify_accepts_arc():
 
 
 @requires_libstp
-def test_splinify_rejects_single_linear():
+def test_splinify_keeps_single_linear_raw():
+    # A run too short to splinify (< 2 control waypoints) is kept as its raw
+    # segments rather than raising — there is simply nothing to curve.
     from raccoon.step.motion.drive_dsl import drive_forward
+    from raccoon.step.motion.path.ir import Segment
     from raccoon.step.motion.path.passes.lowering import flatten_steps
     from raccoon.step.motion.path.passes.spline import SplinifyPass
 
     nodes, _ = flatten_steps([drive_forward(50)])
 
-    with pytest.raises(ValueError):
-        SplinifyPass().run(nodes)
+    result = SplinifyPass().run(nodes)
+
+    assert len(result) == 1
+    assert isinstance(result[0], Segment)
+    assert result[0].kind == "linear"

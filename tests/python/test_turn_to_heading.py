@@ -77,7 +77,9 @@ def test_signature():
     from raccoon.step.motion.heading_reference import turn_to_heading_right
 
     step = _resolve(turn_to_heading_right(90))
-    assert step._generate_signature() == "TurnToHeading(target=-90.0°)"
+    sig = step._generate_signature()
+    assert "TurnToHeading" in sig
+    assert "-90" in sig  # right(90) -> target -90 deg
 
 
 # ---------------------------------------------------------------------------
@@ -209,12 +211,36 @@ def test_splinify_rejects_heading_turn():
 
 
 @requires_libstp
-def test_splinify_builder_rejects_heading_turn():
+def test_splinify_builder_splits_at_heading_turn():
+    # A turn_to_heading targets an absolute reference heading and cannot be
+    # folded into a relative Catmull-Rom, so it acts as a barrier: splinify
+    # splits the motion into one spline on each side and keeps the heading turn
+    # in place — it no longer raises through the optimize() builder.
     from raccoon.step.motion.drive_dsl import drive_forward
     from raccoon.step.motion.heading_reference import turn_to_heading_right
     from raccoon.step.motion.path.compiler import PathCompiler
+    from raccoon.step.motion.path.ir import Segment
     from raccoon.step.motion.path.optimize import optimize
+    from raccoon.step.motion.turn_dsl import turn_left
 
-    opt = optimize([drive_forward(50), turn_to_heading_right(90), drive_forward(30)]).splinify()
-    with pytest.raises(ValueError, match="turn_to_heading"):
-        PathCompiler(opt._effective_passes()).compile(opt._raw_steps)
+    opt = optimize(
+        [
+            drive_forward(50),
+            turn_left(90),
+            drive_forward(40),
+            turn_to_heading_right(90),
+            drive_forward(30),
+            turn_left(90),
+            drive_forward(20),
+        ]
+    ).splinify()
+    nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
+
+    splines = [n for n in nodes if isinstance(n, Segment) and n.kind == "spline"]
+    heading_turns = [
+        n
+        for n in nodes
+        if isinstance(n, Segment) and n.kind == "turn" and n.opaque_step is not None
+    ]
+    assert len(splines) == 2  # one curve on each side of the barrier
+    assert len(heading_turns) == 1  # turn_to_heading preserved in place

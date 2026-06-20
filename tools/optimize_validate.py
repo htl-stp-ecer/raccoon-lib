@@ -205,6 +205,9 @@ def main() -> None:
     os.environ.setdefault("LIBSTP_LOG_LEVEL", "error")
     os.environ.setdefault("LIBSTP_NO_CALIBRATE", "1")
     os.environ["LIBSTP_TIMING_ENABLED"] = "0"
+    import sim_fasttime
+
+    sim_fasttime.enable()  # virtual sim time when RACCOON_SIM_FASTTIME=1 (no-op otherwise)
     asyncio.run(_run(args.config, Path(args.out), solo=args.solo))
     sys.stdout.flush()
     os._exit(0)

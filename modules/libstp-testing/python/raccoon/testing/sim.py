@@ -25,6 +25,7 @@ path remains as a deprecation shim and will be removed in a future release.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -206,6 +207,12 @@ def configure(
             ds.max_range_cm,
             ds.name,
         )
+
+    # Under fast simulated-time (RACCOON_SIM_FASTTIME=1) the virtual-time event
+    # loop drives ticking itself (see tools/sim_fasttime.py); the C++ wall-clock
+    # auto-tick must stay OFF or it would double-count ~CPU wall-time on top.
+    if os.environ.get("RACCOON_SIM_FASTTIME") == "1":
+        auto_tick = False
 
     _mock.set_auto_tick_max_step(auto_tick_max_step_sec)
     _mock.enable_auto_tick(auto_tick)
