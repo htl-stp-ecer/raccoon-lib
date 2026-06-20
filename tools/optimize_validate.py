@@ -74,7 +74,7 @@ def _wrap(seq_steps, config, optimize):
     return opt, config
 
 
-async def _run(config: str, out_dir: Path) -> dict:
+async def _run(config: str, out_dir: Path, solo: str | None = None) -> dict:
     from _robot_builder import build_robot  # type: ignore[import-not-found]
 
     from raccoon.testing.sim import pose, use_scene
@@ -112,10 +112,14 @@ async def _run(config: str, out_dir: Path) -> dict:
     with use_scene(str(scene), robot=cfg, start=start):
         await asyncio.sleep(0.05)
         for nm, cls in missions:
-            # Build the mission, then wrap per config.
+            # Build the mission, then wrap per config. In --solo mode only the
+            # named mission is optimized (the rest run plain seq), so it starts
+            # from the correct baseline pose — isolating true per-mission drift
+            # from chain-compounding.
+            effective = config if (solo is None or solo in nm) else "baseline"
             try:
                 raw = cls().sequence()
-                step, note = _wrap(raw, config, optimize)
+                step, note = _wrap(raw, effective, optimize)
                 run_step = (step if step is not None else raw).resolve()
             except Exception as e:
                 # optimize() couldn't compile this path — fall back to plain seq.
@@ -141,9 +145,10 @@ async def _run(config: str, out_dir: Path) -> dict:
                 f"-> ({p.x:.1f},{p.y:.1f},{math.degrees(p.theta):.0f})"
             )
 
-    result = {"config": config, "segments": segments}
+    result = {"config": config, "solo": solo, "segments": segments}
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"{config}.json").write_text(json.dumps(result, indent=2))
+    fname = f"solo_{solo}_{config}.json" if solo else f"{config}.json"
+    (out_dir / fname).write_text(json.dumps(result, indent=2))
     return result
 
 
@@ -184,6 +189,12 @@ def main() -> None:
     ap.add_argument("--config", choices=CONFIGS)
     ap.add_argument("--out", default=str(REPO_ROOT / "opt_val"))
     ap.add_argument("--compare", metavar="OUTDIR")
+    ap.add_argument(
+        "--solo",
+        metavar="MISSION",
+        help="optimize ONLY this mission (substring match); run the rest plain "
+        "seq so it starts from the baseline pose — isolates per-mission drift.",
+    )
     args = ap.parse_args()
 
     if args.compare:
@@ -194,7 +205,7 @@ def main() -> None:
     os.environ.setdefault("LIBSTP_LOG_LEVEL", "error")
     os.environ.setdefault("LIBSTP_NO_CALIBRATE", "1")
     os.environ["LIBSTP_TIMING_ENABLED"] = "0"
-    asyncio.run(_run(args.config, Path(args.out)))
+    asyncio.run(_run(args.config, Path(args.out), solo=args.solo))
     sys.stdout.flush()
     os._exit(0)
 
