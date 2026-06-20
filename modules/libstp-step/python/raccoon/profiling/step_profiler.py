@@ -39,6 +39,7 @@ import asyncio
 import contextlib
 import contextvars
 import functools
+import inspect
 import json
 import os
 import statistics
@@ -85,6 +86,9 @@ class StepSample:
     acquire: float = 0.0  # resource-manager acquire
     motion_compute: float = 0.0  # cumulative on_update() compute (motion steps)
     motion_updates: int = 0  # number of on_update() cycles
+    hal: float = 0.0  # cumulative synchronous HAL/transport calls (set_position, ...)
+    hal_calls: int = 0  # number of HAL calls made inside the step body
+    sleep: float = 0.0  # cumulative deliberate ``asyncio.sleep`` waits inside the body
     phases: list[Phase] = field(default_factory=list)
 
     @property
@@ -96,6 +100,17 @@ class StepSample:
     def unattributed(self) -> float:
         """Overhead not explained by db/acquire (logging, signatures, asyncio)."""
         return max(self.overhead - self.db_read - self.db_write - self.acquire, 0.0)
+
+    @property
+    def body_compute(self) -> float:
+        """Step-body time that is neither a deliberate sleep nor a HAL call.
+
+        This is the "stands still but profiling shows no wait" budget: pure
+        Python compute *plus* any blocking that escaped attribution. ``hal`` is
+        a subset of ``execute`` (for motion steps it happens inside
+        ``on_update``), so it is subtracted here only to isolate the remainder.
+        """
+        return max(self.execute - self.sleep - self.hal, 0.0)
 
 
 @dataclass
@@ -128,6 +143,9 @@ class StepProfiler:
         lag_spike_ms: float = 5.0,
         print_report: bool = True,
         top: int = 25,
+        hal: bool = True,
+        sleep_track: bool = True,
+        hal_span_ms: float = 1.0,
     ) -> None:
         self.trace_path = trace_path
         self.loop_lag = loop_lag
@@ -135,17 +153,23 @@ class StepProfiler:
         self.lag_spike_ms = lag_spike_ms
         self.print_report = print_report
         self.top = top
+        self.hal = hal
+        self.sleep_track = sleep_track
+        self.hal_span_ms = hal_span_ms
 
         self.samples: list[StepSample] = []
         self.lag_spikes: list[LagSpike] = []
         self.lag_samples: list[tuple[float, float]] = []  # (ts, lag_ms) for the trace
         self.max_lag_ms: float = 0.0
+        # Per-HAL-method running aggregation: name -> [count, total_s, max_s].
+        self.hal_stats: dict[str, list[float]] = {}
 
         self._t0: float = 0.0
         self._patches: list[tuple[Any, str, Any]] = []
         self._patched_exec_classes: set[type] = set()
         self._patched_motion_classes: set[type] = set()
         self._scanned_motion_classes: set[type] = set()
+        self._hal_patched: set[type] = set()
         self._tids: dict[int, int] = {}
         self._next_tid: int = 0
         self._lag_task: asyncio.Task[None] | None = None
@@ -182,6 +206,18 @@ class StepProfiler:
         ``RACCOON_PROFILE_LAG_SPIKE_MS``      Spike threshold in ms (default 5).
         ``RACCOON_PROFILE_TOP``               Rows in the per-signature table
                                               (default 25).
+        ``RACCOON_PROFILE_HAL``               ``0``/``off`` to disable timing of
+                                              synchronous HAL/transport calls
+                                              (``set_position``, ``set_velocity``,
+                                              ...) made *inside* a step body
+                                              (default on).
+        ``RACCOON_PROFILE_SLEEP``             ``0``/``off`` to disable splitting
+                                              deliberate ``asyncio.sleep`` waits
+                                              out of the step body (default on).
+        ``RACCOON_PROFILE_HAL_SPAN_MS``       Only HAL calls at least this long
+                                              (ms) get an individual trace span
+                                              (the per-method totals always
+                                              accumulate). Default 1 ms.
         ====================================  ====================================
 
         Example::
@@ -224,6 +260,9 @@ class StepProfiler:
             lag_spike_ms=_num("RACCOON_PROFILE_LAG_SPIKE_MS", 5.0),
             print_report=_flag("RACCOON_PROFILE_REPORT", True),
             top=int(_num("RACCOON_PROFILE_TOP", 25)),
+            hal=_flag("RACCOON_PROFILE_HAL", True),
+            sleep_track=_flag("RACCOON_PROFILE_SLEEP", True),
+            hal_span_ms=_num("RACCOON_PROFILE_HAL_SPAN_MS", 1.0),
         )
 
     # -- relative clock -------------------------------------------------
@@ -295,6 +334,7 @@ class StepProfiler:
             setattr(owner, attr, original)
         self._patches.clear()
         self._patched_exec_classes.clear()
+        self._hal_patched.clear()
 
     def _install_patches(self) -> None:
         from raccoon.step.base import Step, _step_path  # local import: optional dep
@@ -363,6 +403,138 @@ class StepProfiler:
             )
         except Exception:
             pass
+
+        # Deep, *inside the step* instrumentation: deliberate sleeps and the
+        # synchronous HAL/transport calls that block the loop without showing up
+        # as a wait. These explain a step that "stands still" while the overhead
+        # and lag reports show nothing.
+        self._install_sleep_patch()
+        self._install_hal_patches()
+
+    # -- inside-step: deliberate sleeps ---------------------------------
+    def _install_sleep_patch(self) -> None:
+        """Wrap ``asyncio.sleep`` so deliberate waits split out of the body.
+
+        Step bodies call ``await asyncio.sleep(...)`` to wait for a servo/motor
+        move to physically finish. That time is real but *intended* — separating
+        it from the body leaves ``body_compute`` as the suspicious "stood still
+        for no reason" remainder. Attribution is via the live sample, so the
+        lag-monitor's own sleeps (sample is ``None``) are ignored.
+        """
+        if not self.sleep_track:
+            return
+        prof = self
+        original = asyncio.sleep
+
+        @functools.wraps(original)
+        async def sleep(delay: float, *args: Any, **kwargs: Any) -> Any:
+            sample = _current_sample.get()
+            start = time.perf_counter()
+            ts = prof._now()
+            try:
+                return await original(delay, *args, **kwargs)
+            finally:
+                dur = time.perf_counter() - start
+                if sample is not None:
+                    sample.sleep += dur
+                    if dur * 1000.0 >= prof.hal_span_ms:
+                        sample.phases.append(Phase("sleep", ts, dur))
+
+        self._patch(asyncio, "sleep", lambda _orig: sleep)
+
+    # -- inside-step: HAL / transport calls ----------------------------
+    def _install_hal_patches(self) -> None:
+        """Time every synchronous HAL/transport call made inside a step body.
+
+        These are the pybind-bound hardware methods — ``set_position``,
+        ``set_velocity``, ``move_to_position``, ``read``, ... — that cross into
+        C++ and the transport. If one blocks (e.g. a reliable publish waiting on
+        the bus) the loop stalls *without* an ``await``, so the existing
+        overhead/lag view can't see which call did it. Per-method totals always
+        accumulate; only calls >= ``hal_span_ms`` get an individual trace span,
+        so a 100 Hz ``get_position`` poll doesn't bloat the trace.
+        """
+        if not self.hal:
+            return
+        import importlib
+
+        targets = {
+            "raccoon.hal": [
+                "Servo",
+                "Motor",
+                "IMotor",
+                "IMU",
+                "AnalogSensor",
+                "DigitalSensor",
+                "ButtonGroup",
+                "IOdometry",
+            ],
+            "raccoon.drive": ["Drive", "VelocityController", "MotorAdapter"],
+        }
+        for mod_name, cls_names in targets.items():
+            try:
+                mod = importlib.import_module(mod_name)
+            except Exception:
+                continue
+            for cls_name in cls_names:
+                cls = getattr(mod, cls_name, None)
+                if not isinstance(cls, type) or cls in self._hal_patched:
+                    continue
+                self._hal_patched.add(cls)
+                for meth_name in dir(cls):
+                    if meth_name.startswith("_"):
+                        continue
+                    raw = getattr(cls, meth_name, None)
+                    # Skip properties / data descriptors and non-callables; only
+                    # the bound C++ instance methods are worth timing.
+                    if raw is None or isinstance(raw, property) or not callable(raw):
+                        continue
+                    # Skip static/class methods (e.g. Servo.fully_disable_all,
+                    # Motor.disable_all): they are called with no instance, so a
+                    # plain-function wrapper would break their call convention.
+                    static_kind = inspect.getattr_static(cls, meth_name, None)
+                    if isinstance(static_kind, staticmethod | classmethod):
+                        continue
+                    try:
+                        wrapper = self._wrap_hal_method(cls_name, meth_name, raw)
+                        setattr(cls, meth_name, wrapper)
+                    except (TypeError, AttributeError):
+                        continue
+                    self._patches.append((cls, meth_name, raw))
+
+    def _wrap_hal_method(
+        self, cls_name: str, meth_name: str, original: Callable[..., Any]
+    ) -> Callable[..., Any]:
+        prof = self
+        label = f"{cls_name}.{meth_name}"
+
+        # ``*args`` (not an explicit ``self``) so the wrapper binds correctly no
+        # matter how the method is invoked — as a bound instance method
+        # (``servo.set_position(x)`` -> args == (servo, x)) or explicitly via the
+        # class. Static/class methods are filtered out before we get here.
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            sample = _current_sample.get()
+            start = time.perf_counter()
+            ts = prof._now()
+            try:
+                return original(*args, **kwargs)
+            finally:
+                dur = time.perf_counter() - start
+                st = prof.hal_stats.get(label)
+                if st is None:
+                    prof.hal_stats[label] = [1.0, dur, dur]
+                else:
+                    st[0] += 1.0
+                    st[1] += dur
+                    st[2] = max(dur, st[2])
+                if sample is not None:
+                    sample.hal += dur
+                    sample.hal_calls += 1
+                    if dur * 1000.0 >= prof.hal_span_ms:
+                        sample.phases.append(Phase(f"hal:{label}", ts, dur))
+
+        wrapper.__name__ = meth_name
+        return wrapper
 
     def _ensure_execute_patched(self, cls: type) -> None:
         """Wrap the step body (``_execute_step``) once, to time it directly.
@@ -587,6 +759,43 @@ class StepProfiler:
                 f"   (avg {1000.0 * sum_mc / n_upd:.3f} ms/cycle)"
             )
 
+        # Inside the step body: split execute into deliberate sleeps, blocking
+        # HAL/transport calls, and the leftover compute (the "stands still but
+        # the wait reports show nothing" budget the user is chasing).
+        sum_sleep = sum(s.sleep for s in leaf)
+        sum_hal = sum(s.hal for s in leaf)
+        sum_body = sum(s.body_compute for s in leaf)
+        n_hal_calls = sum(s.hal_calls for s in leaf)
+        if sum_exec > 0:
+            w("")
+            w("  INSIDE THE STEP BODY (execute split: where does in-step time go?)")
+            w("  " + "-" * 74)
+            w(f"  deliberate sleep (awaits)   : {sum_sleep:8.3f} s   {pct(sum_sleep)}")
+            w(
+                f"  HAL/transport calls (block) : {sum_hal:8.3f} s   {pct(sum_hal)}"
+                f"   <- {n_hal_calls} synchronous hardware calls"
+            )
+            w(
+                f"  python compute / unattrib   : {sum_body:8.3f} s   {pct(sum_body)}"
+                f"   <- standstill w/o a visible wait"
+            )
+
+        # Per-HAL-method table: which hardware call eats the time / blocks.
+        if self.hal_stats:
+            hal_rows = sorted(
+                ((name, int(st[0]), st[1], st[2]) for name, st in self.hal_stats.items()),
+                key=lambda r: r[2],
+                reverse=True,
+            )
+            w("")
+            w("  TOP HAL / TRANSPORT CALLS (synchronous; a slow one blocks the loop)")
+            w("  " + "-" * 74)
+            w(f"  {'method':<34}{'n':>6}{'total':>10}{'mean_ms':>10}{'max_ms':>9}")
+            for name, n, tot, mx in hal_rows[: self.top]:
+                label = name if len(name) <= 33 else name[:30] + "..."
+                mean_ms = (tot / n * 1000.0) if n else 0.0
+                w(f"  {label:<34}{n:>6}{tot:>9.3f}s{mean_ms:>10.3f}{mx * 1000.0:>9.3f}")
+
         # Per-signature aggregation, sorted by total overhead (biggest standstills).
         agg: dict[str, list[StepSample]] = defaultdict(list)
         for s in leaf:
@@ -704,6 +913,10 @@ class StepProfiler:
                         "db_write_ms": round(s.db_write * 1e3, 3),
                         "db_read_ms": round(s.db_read * 1e3, 3),
                         "acquire_ms": round(s.acquire * 1e3, 3),
+                        "hal_ms": round(s.hal * 1e3, 3),
+                        "hal_calls": s.hal_calls,
+                        "sleep_ms": round(s.sleep * 1e3, 3),
+                        "body_compute_ms": round(s.body_compute * 1e3, 3),
                     },
                 }
             )

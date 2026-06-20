@@ -1,5 +1,7 @@
 #include "core/TransportWriter.hpp"
 
+#include "core/CommandTrace.hpp"
+
 #include <raccoon/Options.h>
 #include <chrono>
 
@@ -19,7 +21,10 @@ void TransportWriter::setMotor(uint8_t port, int valueData)
     raccoon::scalar_i32_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = valueData;
-    transport_.publish(Channels::motorPowerCommand(port), publishedValue);
+    const auto ch = Channels::motorPowerCommand(port);
+    transport_.publish(ch, publishedValue);
+    CommandTrace::instance().record("motor_power", ch, port, valueData, 0, 0, 1,
+                                    publishedValue.timestamp);
 }
 
 void TransportWriter::setMotorVelocity(uint8_t port, int32_t velocity)
@@ -27,7 +32,9 @@ void TransportWriter::setMotorVelocity(uint8_t port, int32_t velocity)
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = velocity;
-    transport_.publish(Channels::motorVelocityCommand(port), msg);
+    const auto ch = Channels::motorVelocityCommand(port);
+    transport_.publish(ch, msg);
+    CommandTrace::instance().record("motor_vel", ch, port, velocity, 0, 0, 1, msg.timestamp);
 }
 
 void TransportWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition)
@@ -37,7 +44,10 @@ void TransportWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t g
     msg.x = static_cast<float>(velocity);
     msg.y = static_cast<float>(goalPosition);
     msg.z = 0.0f;
-    transport_.publish(Channels::motorPositionCommand(port), msg, reliableOpts);
+    const auto ch = Channels::motorPositionCommand(port);
+    transport_.publish(ch, msg, reliableOpts);
+    CommandTrace::instance().record("motor_pos", ch, port, velocity, goalPosition, 0, 2,
+                                    msg.timestamp);
 }
 
 void TransportWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition)
@@ -47,7 +57,10 @@ void TransportWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t d
     msg.x = static_cast<float>(velocity);
     msg.y = static_cast<float>(deltaPosition);
     msg.z = 0.0f;
-    transport_.publish(Channels::motorRelativeCommand(port), msg, reliableOpts);
+    const auto ch = Channels::motorRelativeCommand(port);
+    transport_.publish(ch, msg, reliableOpts);
+    CommandTrace::instance().record("motor_rel", ch, port, velocity, deltaPosition, 0, 2,
+                                    msg.timestamp);
 }
 
 void TransportWriter::setServo(uint8_t port, float degrees)
@@ -55,7 +68,10 @@ void TransportWriter::setServo(uint8_t port, float degrees)
     raccoon::scalar_f_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = degrees;
-    transport_.publish(Channels::servoPositionCommand(port), publishedValue, reliableOpts);
+    const auto ch = Channels::servoPositionCommand(port);
+    transport_.publish(ch, publishedValue, reliableOpts);
+    CommandTrace::instance().record("servo_pos", ch, port, degrees, 0, 0, 1,
+                                    publishedValue.timestamp);
 }
 
 void TransportWriter::setSmoothServo(const uint8_t port, const float targetDeg,
@@ -66,7 +82,10 @@ void TransportWriter::setSmoothServo(const uint8_t port, const float targetDeg,
     msg.x = targetDeg;
     msg.y = speedDegPerSec;
     msg.z = static_cast<float>(easing);
-    transport_.publish(Channels::servoSmoothPositionCommand(port), msg, reliableOpts);
+    const auto ch = Channels::servoSmoothPositionCommand(port);
+    transport_.publish(ch, msg, reliableOpts);
+    CommandTrace::instance().record("servo_smooth", ch, port, targetDeg, speedDegPerSec, easing,
+                                    3, msg.timestamp);
 }
 
 void TransportWriter::setServoMode(uint8_t port, uint8_t mode)
@@ -77,7 +96,9 @@ void TransportWriter::setServoMode(uint8_t port, uint8_t mode)
     // Publish on the dedicated COMMAND channel so the reader doesn't
     // ping-pong with its own state publish on the formerly-shared
     // `servoMode` channel. State lives on `servoMode`; commands here.
-    transport_.publish(Channels::servoModeCommand(port), msg, reliableOpts);
+    const auto ch = Channels::servoModeCommand(port);
+    transport_.publish(ch, msg, reliableOpts);
+    CommandTrace::instance().record("servo_mode", ch, port, mode, 0, 0, 1, msg.timestamp);
 }
 
 void TransportWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
@@ -98,6 +119,8 @@ void TransportWriter::setChassisVelocity(float vx, float vy, float wz)
     msg.y = vy;
     msg.z = wz;
     transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg);
+    CommandTrace::instance().record("chassis_vel", Channels::CHASSIS_VELOCITY_CMD, -1, vx, vy, wz,
+                                    3, msg.timestamp);
 }
 
 void TransportWriter::resetMotorPosition(uint8_t port)
@@ -105,7 +128,9 @@ void TransportWriter::resetMotorPosition(uint8_t port)
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = 1;
-    transport_.publish(Channels::motorPositionResetCommand(port), msg, reliableOpts);
+    const auto ch = Channels::motorPositionResetCommand(port);
+    transport_.publish(ch, msg, reliableOpts);
+    CommandTrace::instance().record("motor_pos_reset", ch, port, 1, 0, 0, 1, msg.timestamp);
 }
 
 void TransportWriter::setMotorMode(uint8_t port, int mode)
@@ -113,7 +138,9 @@ void TransportWriter::setMotorMode(uint8_t port, int mode)
     raccoon::scalar_i32_t modeCmd{};
     modeCmd.timestamp = currentTimestampUsec();
     modeCmd.value = mode;
-    transport_.publish(Channels::motorModeCommand(port), modeCmd, reliableOpts);
+    const auto ch = Channels::motorModeCommand(port);
+    transport_.publish(ch, modeCmd, reliableOpts);
+    CommandTrace::instance().record("motor_mode", ch, port, mode, 0, 0, 1, modeCmd.timestamp);
 }
 
 void TransportWriter::setShutdown(bool enabled)

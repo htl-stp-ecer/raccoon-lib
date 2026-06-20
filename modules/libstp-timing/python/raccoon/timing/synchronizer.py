@@ -15,11 +15,11 @@ class Synchronizer:
 
     def start_recording(self):
         """Capture the current event-loop time as checkpoint zero."""
-        self.start_time = asyncio.get_event_loop().time()
+        self.start_time = asyncio.get_running_loop().time()
 
     def get_time(self):
         """Return seconds elapsed since ``start_recording()`` was called."""
-        return asyncio.get_event_loop().time() - self.start_time
+        return asyncio.get_running_loop().time() - self.start_time
 
     async def wait_until_checkpoint(self, checkpoint_seconds):
         """Sleep until the mission-relative checkpoint or log that it was missed."""
