@@ -265,6 +265,36 @@ def _is_last_segment(
     return True
 
 
+def _next_segment_warmstarts(
+    nodes: list[PathNode | None],
+    current_idx: int,
+    seg: Segment,
+) -> bool:
+    """Will the NEXT motion segment warm-start from ``seg`` (carry its velocity)?
+
+    Only then should ``seg`` cruise through its endpoint (inflated profile);
+    otherwise it must decelerate to its real target so a short move doesn't
+    overshoot. The next segment cold-starts — so NO warm continuation — when:
+      * there are no more segments (``seg`` is last),
+      * a blocking inline side action runs before it (robot stops while it runs,
+        then the next segment hard-stops + cold-starts),
+      * an unresolved Defer (``None``) sits in between (conservative), or
+      * the next segment is a different motion type (cross-type → cold start).
+    Background / ephemeral parallel-branch side actions do NOT block the spine,
+    so they are skipped over.
+    """
+    for i in range(current_idx + 1, len(nodes)):
+        node = nodes[i]
+        if node is None:
+            return False  # unresolved Defer — be conservative (decelerate)
+        if isinstance(node, SideAction):
+            if not node.is_background:
+                return False  # blocking inline side action → next cold-starts
+            continue  # background / ephemeral branch — doesn't stop the spine
+        return is_same_type(seg, node)  # next Segment: warm only if same type
+    return False  # no further segment
+
+
 # ---------------------------------------------------------------------------
 # Executor
 # ---------------------------------------------------------------------------
@@ -353,6 +383,7 @@ class PathExecutor:
                 seg,
                 is_last,
                 current_world_heading_rad=await _world_heading_for_seg(robot, seg),
+                inflate=_next_segment_warmstarts(nodes, node_idx, seg),
             )
             motion.start()
             seg_origin = _get_position_offset(robot, seg)
@@ -456,6 +487,7 @@ class PathExecutor:
                     is_last = _is_last_segment(nodes, node_idx)
 
                     next_world_heading = await _world_heading_for_seg(robot, seg)
+                    inflate = _next_segment_warmstarts(nodes, node_idx, seg)
                     if is_same_type(prev_seg, seg):
                         # Same type: warm start — carry velocity seamlessly.
                         offset = _get_position_offset(robot, prev_seg)
@@ -464,6 +496,7 @@ class PathExecutor:
                             seg,
                             is_last,
                             current_world_heading_rad=next_world_heading,
+                            inflate=inflate,
                         )
                         motion.start_warm(offset, current_vel)
                     else:
@@ -474,6 +507,7 @@ class PathExecutor:
                             seg,
                             is_last,
                             current_world_heading_rad=next_world_heading,
+                            inflate=inflate,
                         )
                         motion.start()
 

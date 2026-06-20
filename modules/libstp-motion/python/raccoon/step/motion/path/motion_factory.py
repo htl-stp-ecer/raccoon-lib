@@ -242,12 +242,20 @@ def _create_linear_motion(
     seg: Segment,
     is_last: bool,
     current_world_heading_rad: float | None = None,
+    inflate: bool | None = None,
 ) -> LinearMotion:
+    # Inflate (cruise through the endpoint) ONLY when the next segment will
+    # warm-start from this one. When the next leg cold-starts (cross-type, a
+    # blocking side action between, or this is the last segment) the profile
+    # must DECELERATE to the real target instead — otherwise a short move runs
+    # through its endpoint at cruise speed and overshoots (e.g. a 3 cm grab
+    # drive overshooting ~8 cm). Defaults to ``not is_last`` for back-compat.
+    do_inflate = (not is_last) if inflate is None else inflate
     config = LinearMotionConfig()
     config.axis = seg.axis
     actual = seg.distance_m if seg.distance_m is not None else seg.sign * SENTINEL_DISTANCE_M
 
-    if not is_last and seg.distance_m is not None:
+    if do_inflate and seg.distance_m is not None:
         # Inflate target so profile cruises through the actual endpoint.
         config.distance_m = actual + math.copysign(OVERSHOOT_M, actual)
     else:
@@ -292,7 +300,7 @@ def _create_linear_motion(
         robot.motion_pid_config,
         config,
     )
-    if not is_last:
+    if do_inflate:
         motion.set_suppress_hard_stop(True)
     return motion
 
@@ -302,7 +310,9 @@ def _create_turn_motion(
     seg: Segment,
     is_last: bool,
     current_world_heading_rad: float | None = None,
+    inflate: bool | None = None,
 ) -> TurnMotion:
+    do_inflate = (not is_last) if inflate is None else inflate
     config = TurnConfig()
     if seg.target_heading_rad is not None:
         if current_world_heading_rad is None:
@@ -319,7 +329,7 @@ def _create_turn_motion(
             else seg.sign * math.radians(180)  # sentinel for condition-based
         )
 
-    if not is_last:
+    if do_inflate:
         config.target_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)
     else:
         config.target_angle_rad = actual
@@ -336,7 +346,7 @@ def _create_turn_motion(
         robot.motion_pid_config,
         config,
     )
-    if not is_last:
+    if do_inflate:
         motion.set_suppress_hard_stop(True)
     return motion
 
@@ -346,12 +356,14 @@ def _create_arc_motion(
     seg: Segment,
     is_last: bool,
     current_world_heading_rad: float | None = None,  # noqa: ARG001 — ArcMotion is delta-based
+    inflate: bool | None = None,
 ) -> ArcMotion:
+    do_inflate = (not is_last) if inflate is None else inflate
     config = ArcMotionConfig()
     config.radius_m = seg.radius_m
     actual = seg.arc_angle_rad
 
-    if not is_last and actual is not None:
+    if do_inflate and actual is not None:
         config.arc_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)
     else:
         config.arc_angle_rad = actual
@@ -364,7 +376,7 @@ def _create_arc_motion(
         robot.motion_pid_config,
         config,
     )
-    if not is_last:
+    if do_inflate:
         motion.set_suppress_hard_stop(True)
     return motion
 
@@ -379,6 +391,7 @@ def create_motion(
     seg: Segment,
     is_last: bool,
     current_world_heading_rad: float | None = None,
+    inflate: bool | None = None,
 ):
     """Construct a controller for the given segment kind.
 
@@ -389,17 +402,24 @@ def create_motion(
     ``turn`` segments bridged from the Phase-5 plan IR. Ignored by
     ``arc`` and by the opaque ``follow_line`` / ``spline`` adapters
     (those steps fetch the heading themselves).
+
+    ``inflate`` controls profile-overshoot inflation: ``True`` cruises through
+    the endpoint (only correct when the next segment warm-starts from this
+    one), ``False`` decelerates to the real target (cross-type / blocked /
+    last). Defaults (``None``) to ``not is_last`` for back-compat. The executor
+    passes the look-ahead result so short moves before a direction change stop
+    on target instead of overshooting.
     """
     if seg.kind == "linear":
-        return _create_linear_motion(robot, seg, is_last, current_world_heading_rad)
+        return _create_linear_motion(robot, seg, is_last, current_world_heading_rad, inflate)
     if seg.kind == "turn":
         if seg.opaque_step is not None:
             # Opaque heading turn (TurnToHeading): the step resolves its own
             # absolute target heading and TurnMotion at on_start.
             return TurnHeadingAdapter(seg.opaque_step, robot)
-        return _create_turn_motion(robot, seg, is_last, current_world_heading_rad)
+        return _create_turn_motion(robot, seg, is_last, current_world_heading_rad, inflate)
     if seg.kind == "arc":
-        return _create_arc_motion(robot, seg, is_last, current_world_heading_rad)
+        return _create_arc_motion(robot, seg, is_last, current_world_heading_rad, inflate)
     if seg.kind == "follow_line":
         return LineFollowAdapter(seg.opaque_step, robot)
     if seg.kind == "spline":
