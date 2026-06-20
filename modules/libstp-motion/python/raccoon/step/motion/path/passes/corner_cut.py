@@ -15,9 +15,60 @@ from dataclasses import replace
 
 from raccoon.motion import LinearAxis
 
-from ..ir import PathNode, Segment
+from ..ir import PathNode, Segment, SideAction
 
 _log = logging.getLogger(__name__)
+
+
+def _match_corner(
+    nodes: list[PathNode | None],
+    i: int,
+) -> tuple[Segment, list[SideAction], Segment, list[SideAction], Segment, int] | None:
+    """Match ``lin1 [bg…] turn [bg…] lin2`` starting at index ``i``.
+
+    Background / ephemeral parallel-branch ``SideAction``s run CONCURRENTLY with
+    the motion (they don't stop the robot), so they must not break a corner —
+    a ``drive + background(arm) + turn + drive`` is still a geometric corner.
+    They are collected and re-emitted by the caller. A blocking (inline) side
+    action, a deferred placeholder (``None``), or the end of the list is a hard
+    barrier. This only does the STRUCTURAL match (three Segments in order);
+    ``try_corner_arc`` validates kinds/geometry.
+    """
+
+    def _seg_after_bg(start: int) -> tuple[list[SideAction], int] | None:
+        """Collect leading background side actions, return (bgs, idx-of-next-node)."""
+        bgs: list[SideAction] = []
+        j = start
+        while j < len(nodes):
+            node = nodes[j]
+            if isinstance(node, SideAction) and node.is_background:
+                bgs.append(node)
+                j += 1
+                continue
+            return bgs, j  # next non-background node (may be Segment / barrier)
+        return None  # ran off the end
+
+    if not isinstance(nodes[i], Segment):
+        return None
+    lin1 = nodes[i]
+
+    a = _seg_after_bg(i + 1)
+    if a is None:
+        return None
+    bgs_a, turn_idx = a
+    if not isinstance(nodes[turn_idx], Segment):
+        return None
+    turn = nodes[turn_idx]
+
+    b = _seg_after_bg(turn_idx + 1)
+    if b is None:
+        return None
+    bgs_b, lin2_idx = b
+    if not isinstance(nodes[lin2_idx], Segment):
+        return None
+    lin2 = nodes[lin2_idx]
+
+    return lin1, bgs_a, turn, bgs_b, lin2, lin2_idx + 1
 
 
 def try_corner_arc(
@@ -87,34 +138,41 @@ def run_corner_cut(
     nodes: list[PathNode | None],
     cut_m: float,
 ) -> list[PathNode | None]:
-    """Replace ``linear+turn+linear`` triples with ``linear+arc+linear``."""
+    """Replace ``linear+turn+linear`` triples with ``linear+arc+linear``.
+
+    Non-blocking (background / ephemeral) side actions between the legs are
+    skipped over for the match and re-emitted concurrently with the arc, so a
+    corner with a parallel arm move still cuts. Blocking side actions and
+    deferred placeholders are barriers.
+    """
     result: list[PathNode | None] = []
     i = 0
     while i < len(nodes):
-        # Peek ahead for a three-segment pattern.
-        if (
-            i + 2 < len(nodes)
-            and isinstance(nodes[i], Segment)
-            and isinstance(nodes[i + 1], Segment)
-            and isinstance(nodes[i + 2], Segment)
-        ):
-            cut = try_corner_arc(nodes[i], nodes[i + 1], nodes[i + 2], cut_m)  # type: ignore[arg-type]
+        match = _match_corner(nodes, i)
+        if match is not None:
+            lin1, bgs_a, turn, bgs_b, lin2, next_i = match
+            cut = try_corner_arc(lin1, turn, lin2, cut_m)
             if cut is not None:
                 new_lin1, arc_seg, new_lin2 = cut
                 if abs(new_lin1.distance_m) > 1e-4:  # type: ignore[arg-type]
                     result.append(new_lin1)
+                # Background side actions launched around the corner keep running
+                # through the arc — re-emit them before it (order preserved).
+                result.extend(bgs_a)
+                result.extend(bgs_b)
                 result.append(arc_seg)
                 if abs(new_lin2.distance_m) > 1e-4:  # type: ignore[arg-type]
                     result.append(new_lin2)
-                i += 3
                 _log.debug(
                     "path optimizer: corner cut at index %d "
-                    "(cut=%.3fm, radius=%.3fm, angle=%.1f°)",
-                    i - 3,
+                    "(cut=%.3fm, radius=%.3fm, angle=%.1f°, %d bg actions kept)",
+                    i,
                     cut_m,
                     arc_seg.radius_m or 0,
                     math.degrees(arc_seg.arc_angle_rad or 0),
+                    len(bgs_a) + len(bgs_b),
                 )
+                i = next_i
                 continue
         result.append(nodes[i])
         i += 1
