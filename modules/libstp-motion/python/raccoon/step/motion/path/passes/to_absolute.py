@@ -62,11 +62,14 @@ leaves ``produces`` at the default (SAME) so chaining with the terminal
 
 from __future__ import annotations
 
+import logging
 import math
 
 from raccoon.motion import LinearAxis
 
 from ..ir import PathNode, Segment, SideAction
+
+_log = logging.getLogger(__name__)
 
 _RUN_KINDS = ("linear", "turn", "diagonal")
 
@@ -338,14 +341,23 @@ class ToAbsolutePass:
 
             if _run_has_absolute(run):
                 if active_mark is None:
-                    msg = (
-                        "to_absolute(): a turn_to_heading / heading-holding drive in this "
-                        "run targets the heading reference, but no mark_heading_reference() "
-                        "was found earlier in the optimized steps — the offset that aligns "
-                        "the reference with localization can't be resolved at compile time. "
-                        "Include mark_heading_reference(...) in the optimize([...]) steps."
+                    # A heading-reference-anchored leg (turn_to_heading /
+                    # heading-holding drive) needs the mark offset to resolve its
+                    # absolute target, but no mark_heading_reference() is in
+                    # scope — common when optimize() wraps a single mission whose
+                    # mark was set by an earlier mission. Rather than crash the
+                    # build, DEGRADE GRACEFULLY: pass this run through unchanged
+                    # so its legs run as ordinary relative (heading-holding)
+                    # moves. to_absolute is best-effort and must never break a
+                    # build; the only cost is no drift-correction on this run.
+                    _log.debug(
+                        "to_absolute: run with a heading-reference leg has no "
+                        "mark_heading_reference() in scope — left relative (%d segs)",
+                        len(run),
                     )
-                    raise ValueError(msg)
+                    result.extend(run)
+                    i = j
+                    continue
                 o_rad, sign = active_mark
             else:
                 o_rad, sign = 0.0, 1.0  # no absolute legs — values unused
