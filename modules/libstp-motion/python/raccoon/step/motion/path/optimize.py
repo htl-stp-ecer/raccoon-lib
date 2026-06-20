@@ -40,6 +40,7 @@ from .passes import (
     Representation,
     SplinifyPass,
     ToAbsolutePass,
+    VelocityProfilePass,
     flatten_steps,
 )
 from .passes.contract import (
@@ -252,6 +253,32 @@ class Optimizer(Step):
         (side actions, arcs, conditions, deferred steps, or < 2 waypoints).
         """
         return self._add(SplinifyPass())
+
+    def time_optimal(
+        self,
+        max_speed_cmps: float = 100.0,
+        accel_cmps2: float = 60.0,
+        lateral_accel_cmps2: float = 50.0,
+    ) -> "Optimizer":
+        """Carry speed through the WHOLE path — the global generalisation of the
+        per-seam warm-start (``VelocityProfilePass``).
+
+        Runs a forward/backward sweep that stamps the fastest feasible entry/exit
+        speed on every leg, so the robot only decelerates for REAL stops (turns,
+        direction reversals, sensor-bounded leg ends, blocking side actions, the
+        final leg) and corner/curvature limits — instead of braking to a halt at
+        every segment seam. PATH-PRESERVING: changes only speed, never geometry,
+        so the endpoint matches the un-profiled path. Most effective after
+        ``cut_corners()`` (it carries speed through the arcs the corner-cut
+        introduced). Limits are in cm: ``max_speed_cmps`` cruise cap,
+        ``accel_cmps2`` accel/decel, ``lateral_accel_cmps2`` the arc curvature cap
+        (``v <= sqrt(a_lat * R)``).
+        """
+        return self._add(VelocityProfilePass(
+            max_speed_mps=max_speed_cmps / 100.0,
+            accel_mps2=accel_cmps2 / 100.0,
+            lateral_accel_mps2=lateral_accel_cmps2 / 100.0,
+        ))
 
     def apply(self, p) -> "Optimizer":
         """Append a user-supplied compiler pass."""

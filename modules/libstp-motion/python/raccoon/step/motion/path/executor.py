@@ -296,6 +296,61 @@ def _next_segment_warmstarts(
 
 
 # ---------------------------------------------------------------------------
+# Time-optimal velocity profile consumption
+#
+# When optimize(...).time_optimal() ran, every motion Segment carries a
+# VelocityProfilePass-stamped entry_speed_mps / exit_speed_mps (else None). The
+# executor then drives warm-start / inflate decisions from that GLOBAL profile
+# instead of the local same-type heuristic — carrying speed across the seams the
+# profile proved safe (including linear↔arc tangents) and stopping where it
+# proved a barrier. Strictly gated on the fields being set: an unprofiled path
+# (the common case) takes the original branches untouched.
+# ---------------------------------------------------------------------------
+
+_VEL_EPS = 1e-3
+
+
+def _is_profiled(seg) -> bool:
+    return isinstance(seg, Segment) and seg.entry_speed_mps is not None
+
+
+def _carries_out(seg) -> bool:
+    """Profiled segment exits carrying speed (next leg warm-starts / inflate)."""
+    return (seg.exit_speed_mps or 0.0) > _VEL_EPS
+
+
+def _carries_in(seg) -> bool:
+    """Profiled segment is entered warm (carries speed in)."""
+    return (seg.entry_speed_mps or 0.0) > _VEL_EPS
+
+
+def _warm_lookahead(nodes, idx, seg) -> bool:
+    """Will the NEXT leg warm-start from ``seg`` / should ``seg`` inflate?
+    Profile says so when stamped, else fall back to the local heuristic."""
+    if _is_profiled(seg):
+        return _carries_out(seg)
+    return _next_segment_warmstarts(nodes, idx, seg)
+
+
+def _warm_velocity(seg, fallback_mps: float) -> float:
+    """Seed velocity for ``seg.start_warm`` — the profile's prescribed entry
+    speed (converted to angular for arcs), else the measured carry velocity."""
+    if _is_profiled(seg) and _carries_in(seg):
+        v = seg.entry_speed_mps or 0.0
+        if seg.kind == "arc" and seg.radius_m:
+            return v / abs(seg.radius_m)
+        return v
+    return fallback_mps
+
+
+def _should_warm(prev_seg, seg) -> bool:
+    """Warm-start into ``seg``? Profile decides when stamped, else same-type."""
+    if _is_profiled(seg):
+        return _carries_in(seg)
+    return is_same_type(prev_seg, seg)
+
+
+# ---------------------------------------------------------------------------
 # Executor
 # ---------------------------------------------------------------------------
 
@@ -383,7 +438,7 @@ class PathExecutor:
                 seg,
                 is_last,
                 current_world_heading_rad=await _world_heading_for_seg(robot, seg),
-                inflate=_next_segment_warmstarts(nodes, node_idx, seg),
+                inflate=_warm_lookahead(nodes, node_idx, seg),
             )
             motion.start()
             seg_origin = _get_position_offset(robot, seg)
@@ -457,7 +512,7 @@ class PathExecutor:
                     # fires on a line then runs arm moves coasted ~10 cm past the
                     # line; a short distance leg's decel tail wasn't clamped.)
                     # Warm continuations intentionally keep moving.
-                    if not _next_segment_warmstarts(nodes, seg_idx, seg):
+                    if not _warm_lookahead(nodes, seg_idx, seg):
                         robot.drive.hard_stop()
 
                     # Side actions at this transition point.
@@ -499,10 +554,14 @@ class PathExecutor:
                     is_last = _is_last_segment(nodes, node_idx)
 
                     next_world_heading = await _world_heading_for_seg(robot, seg)
-                    inflate = _next_segment_warmstarts(nodes, node_idx, seg)
-                    if is_same_type(prev_seg, seg):
-                        # Same type: warm start — carry velocity seamlessly.
-                        offset = _get_position_offset(robot, prev_seg)
+                    inflate = _warm_lookahead(nodes, node_idx, seg)
+                    if _should_warm(prev_seg, seg):
+                        # Warm start — carry velocity seamlessly. The offset is
+                        # read in the NEW segment's frame for a profiled
+                        # cross-type carry (e.g. linear↔arc), else the prev
+                        # segment's (same-type, identical reading).
+                        warm_ref = seg if _is_profiled(seg) else prev_seg
+                        offset = _get_position_offset(robot, warm_ref)
                         motion = create_motion(
                             robot,
                             seg,
@@ -510,7 +569,7 @@ class PathExecutor:
                             current_world_heading_rad=next_world_heading,
                             inflate=inflate,
                         )
-                        motion.start_warm(offset, current_vel)
+                        motion.start_warm(offset, _warm_velocity(seg, current_vel))
                     else:
                         # Cross-type: cold start.
                         robot.drive.hard_stop()

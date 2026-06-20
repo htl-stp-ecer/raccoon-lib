@@ -80,6 +80,15 @@ class Segment:
     condition: "StopCondition" | None = None
     has_known_endpoint: bool = True
 
+    # Time-optimal velocity profile (stamped by VelocityProfilePass; None until
+    # the .time_optimal() pass runs). Feasible boundary speeds in m/s the robot
+    # may carry INTO / OUT OF this segment, computed by a global forward/backward
+    # sweep so speed is carried through the whole path and only dropped for real
+    # stops, reversals and corner/curvature limits. Excluded from equality so a
+    # profiled segment still compares equal to its unprofiled twin.
+    entry_speed_mps: float | None = field(default=None, compare=False)
+    exit_speed_mps: float | None = field(default=None, compare=False)
+
     # Opaque steps (follow_line, spline): store the step for adapter creation.
     # Excluded from equality so two segments with equivalent geometry compare
     # equal even if they originated from different opaque step instances.

@@ -35,6 +35,7 @@ from .spline import (
 )
 from .to_absolute import ToAbsolutePass
 from .absolute_heading import AbsoluteHeadingPass
+from .velocity_profile import run_velocity_profile, VelocityProfilePass
 
 __all__ = [
     # Contract
@@ -68,6 +69,9 @@ __all__ = [
     "ToAbsolutePass",
     # Absolute heading
     "AbsoluteHeadingPass",
+    # Time-optimal velocity profile
+    "run_velocity_profile",
+    "VelocityProfilePass",
     # Orchestrator
     "optimize_nodes",
 ]

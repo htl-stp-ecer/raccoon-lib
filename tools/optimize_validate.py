@@ -48,6 +48,8 @@ CONFIGS = [
     "absolute_heading",
     "splinify",
     "absolute_splinify",
+    "time_optimal",
+    "cut_corners_time_optimal",
 ]
 
 
@@ -68,6 +70,10 @@ def _wrap(seq_steps, config, optimize):
         opt = opt.splinify()
     elif config == "absolute_splinify":
         opt = opt.to_absolute().splinify()
+    elif config == "time_optimal":
+        opt = opt.time_optimal()
+    elif config == "cut_corners_time_optimal":
+        opt = opt.cut_corners(5.0).time_optimal()
     else:
         msg = f"unknown config {config}"
         raise ValueError(msg)
@@ -87,6 +93,11 @@ async def _run(config: str, out_dir: Path, solo: str | None = None) -> dict:
     project = Path(H.DEFAULT_PROJECT)
     sys.path.insert(0, str(project))
     real_scene = project / "config" / "2026-game-table.ftmap"
+    if not real_scene.exists():
+        # v1 map being hand-edited / retired → fall back to the v2 ramp map
+        # (its ground layer is the v1 geometry verbatim, so motion-dominant
+        # missions run identically; _sim_scene_path passes v2 through as-is).
+        real_scene = project / "config" / "2026-game-table-v2.ftmap"
     scene = H._sim_scene_path(real_scene)
 
     H._install_fake_transport()
@@ -125,6 +136,10 @@ async def _run(config: str, out_dir: Path, solo: str | None = None) -> dict:
                 # optimize() couldn't compile this path — fall back to plain seq.
                 note = f"fallback({type(e).__name__})"
                 run_step = cls().sequence().resolve()
+            # Robot TIME = elapsed event-loop time across the mission. Under
+            # FASTTIME the loop clock is VIRTUAL, so this is deterministic
+            # simulated robot-seconds — the metric the velocity profile cuts.
+            t0 = asyncio.get_event_loop().time()
             try:
                 await asyncio.wait_for(run_step.run_step(robot), timeout=TIMEOUT)
                 status = "completed"
@@ -132,17 +147,19 @@ async def _run(config: str, out_dir: Path, solo: str | None = None) -> dict:
                 status = "TIMEOUT"
             except Exception as e:
                 status = f"{type(e).__name__}: {str(e)[:70]}"
+            time_s = asyncio.get_event_loop().time() - t0
             p = pose()
             rec = {
                 "name": nm,
                 "note": note,
                 "status": status,
+                "time_s": round(time_s, 3),
                 "end": [round(p.x, 2), round(p.y, 2), round(math.degrees(p.theta), 1)],
             }
             segments.append(rec)
             print(
                 f"  [{config:18s}] {nm:34s} {note:22s} {status:12s} "
-                f"-> ({p.x:.1f},{p.y:.1f},{math.degrees(p.theta):.0f})"
+                f"-> ({p.x:.1f},{p.y:.1f},{math.degrees(p.theta):.0f})  {time_s:.1f}s"
             )
 
     result = {"config": config, "solo": solo, "segments": segments}
@@ -158,8 +175,9 @@ def _compare(out_dir: Path) -> None:
         print("no baseline.json — run --config baseline first")
         return
     base = {s["name"]: s for s in json.loads(base_f.read_text())["segments"]}
-    print(f"\n{'mission':34s} {'config':18s} {'note':20s} {'status':10s} {'Δend (cm, °)':>16s}")
-    print("-" * 110)
+    print(f"\n{'mission':34s} {'config':18s} {'status':10s} {'Δend (cm, °)':>13s} "
+          f"{'time (s)':>10s} {'vs base':>9s}")
+    print("-" * 104)
     for config in CONFIGS:
         if config == "baseline":
             continue
@@ -173,14 +191,16 @@ def _compare(out_dir: Path) -> None:
             be, se = b["end"], s["end"]
             dxy = math.hypot(se[0] - be[0], se[1] - be[1])
             dth = abs((se[2] - be[2] + 180) % 360 - 180)
+            t, bt = s.get("time_s", 0.0), b.get("time_s", 0.0)
+            dt_pct = (100.0 * (t - bt) / bt) if bt else 0.0
             flag = ""
             if s["status"] != "completed":
                 flag = "  <<< NOT COMPLETED"
             elif dxy > 8.0 or dth > 12.0:
                 flag = "  <<< ENDPOINT DRIFT"
             print(
-                f"{s['name']:34s} {config:18s} {s['note']:20s} {s['status']:10s} "
-                f"{dxy:7.1f}cm {dth:5.1f}°{flag}"
+                f"{s['name']:34s} {config:18s} {s['status']:10s} "
+                f"{dxy:6.1f}cm {dth:4.1f}° {t:8.1f}s {dt_pct:+7.1f}%{flag}"
             )
 
 
