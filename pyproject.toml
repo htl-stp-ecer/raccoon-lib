@@ -240,6 +240,9 @@ isort.known-first-party = ["raccoon", "raccoon_cli", "raccoon_transport"]
 "scripts/**" = ["T20", "EXE001", "EXE002"]
 "install.py" = ["T20", "EXE001", "PTH207"]
 "deploy.sh" = ["T20", "EXE001", "EXE002"]
+# Diagnostics tool: prints its report to stdout (T20) and uses lazy imports
+# (PLC0415) so instrumenting the core stays an optional, import-light add-on.
+"**/profiling/**" = ["T20", "PLC0415"]
 # UI/screen modules use `from raccoon.ui import *` to pull in the widget
 # vocabulary (Card, Row, Split, Text, ...). Star-import is the documented
 # layout pattern; don't lint the resulting "may be undefined" noise.

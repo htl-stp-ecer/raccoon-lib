@@ -82,10 +82,12 @@ if [[ "$RUN_PYTHON" -eq 1 ]]; then
   fi
 
   # Local dev wheels are built without the mock sim bundle, so the in-house
-  # `raccoon_testing` pytest plugin and several async tests cannot load. Detect
-  # that and fall back to a "local mode" that disables the plugin and drops the
-  # files that fail to even collect — so we still get a coverage number from the
-  # pure-Python tests. CI (mock bundle present) runs the full suite.
+  # `raccoon_testing` pytest plugin (a setuptools entrypoint) crashes on import
+  # and several async tests cannot load. Detect that and fall back to a "local
+  # mode" that blocks the plugin; collection errors from the remaining
+  # mock-sim/asyncio test files are tolerated via --continue-on-collection-errors
+  # so we still get a coverage number from the pure-Python tests. CI (mock bundle
+  # present) runs the full suite with no such errors.
   LOCAL_MODE=0
   "$PYTHON" -c "import raccoon.testing.sim" >/dev/null 2>&1 || LOCAL_MODE=1
 
@@ -105,23 +107,14 @@ if [[ "$RUN_PYTHON" -eq 1 ]]; then
     -o addopts=""
     -o filterwarnings=$'error\nignore::pytest.PytestAssertRewriteWarning'
     -p no:cacheprovider
+    --continue-on-collection-errors
+    --tb=line
+    -q
   )
   if [[ "$LOCAL_MODE" -eq 1 ]]; then
     echo "    local mode: mock sim bundle absent — disabling raccoon_testing plugin"
+    echo "    (mock-sim / asyncio test files will report collection errors and be skipped)"
     PYTEST_FLAGS+=(-p no:raccoon_testing)
-    # Probe collection and drop any file that errors (needs mock sim or the
-    # asyncio plugin). --continue-on-collection-errors lets the probe finish.
-    mapfile -t BROKEN < <(
-      "$PYTHON" -m pytest "${PYTEST_TARGETS[@]}" --collect-only -q \
-        "${PYTEST_FLAGS[@]}" --continue-on-collection-errors 2>&1 \
-        | sed -n 's/^ERROR \([^ ]*\).*/\1/p' | sort -u)
-    if [[ ${#BROKEN[@]} -gt 0 ]]; then
-      echo "    skipping ${#BROKEN[@]} uncollectable file(s) (need mock sim / asyncio):"
-      for f in "${BROKEN[@]}"; do
-        echo "      - $f"
-        PYTEST_FLAGS+=("--ignore=$f")
-      done
-    fi
   fi
 
   # Run the suite under coverage. Don't abort the script if tests fail — we
@@ -130,7 +123,6 @@ if [[ "$RUN_PYTHON" -eq 1 ]]; then
   "$PYTHON" -m pytest "${PYTEST_TARGETS[@]}" "${PYTEST_FLAGS[@]}" \
     --cov=raccoon --cov-branch \
     --cov-config="$REPO_ROOT/.coveragerc" \
-    --cov-report="term-missing:skip-covered" \
     --cov-report="html:$OUT_DIR/html" \
     --cov-report="xml:$OUT_DIR/coverage.xml" \
     --cov-report="json:$OUT_DIR/coverage.json"
@@ -186,7 +178,7 @@ if [[ "$RUN_CPP" -eq 1 ]]; then
   echo "    harvesting coverage with gcovr ..."
   # Measure only our own C++ sources: modules/*/{src,include} + the hal/platform
   # C++. Exclude fetched deps (gtest/eigen/pybind), generated code and tests.
-  GCOVR_COMMON=(
+  GCOVR_ARGS=(
     --root "$REPO_ROOT"
     --gcov-ignore-parse-errors
     --exclude-unreachable-branches
@@ -194,26 +186,26 @@ if [[ "$RUN_CPP" -eq 1 ]]; then
     --exclude ".*/tests/.*"
     --exclude ".*/_deps/.*"
     --exclude-directories ".*/_deps/.*"
+    --xml-pretty -o "$OUT_DIR/cpp-coverage.xml"
+    --html-details "$OUT_DIR/cpp-html/index.html"
+    --print-summary
   )
+  mkdir -p "$OUT_DIR/cpp-html"
+  # gcovr exits non-zero when --fail-under-line is set and not met — that is the
+  # gate. Without a threshold it only reports.
+  [[ "$CPP_FAIL_UNDER" != "0" ]] && GCOVR_ARGS+=(--fail-under-line "$CPP_FAIL_UNDER")
   set +e
-  "$PYTHON" -m gcovr "${GCOVR_COMMON[@]}" \
-    --xml-pretty -o "$OUT_DIR/cpp-coverage.xml" \
-    --html-details "$OUT_DIR/cpp-html/index.html" \
-    --print-summary "$CPP_BUILD_DIR"
-  GCOVR_STATUS=$?
+  "$PYTHON" -m gcovr "${GCOVR_ARGS[@]}" "$CPP_BUILD_DIR"
+  CPP_RC=$?
   set -e
-
-  if [[ "$GCOVR_STATUS" -eq 0 && "$CPP_FAIL_UNDER" != "0" ]]; then
-    set +e
-    "$PYTHON" -m gcovr "${GCOVR_COMMON[@]}" \
-      --fail-under-line "$CPP_FAIL_UNDER" "$CPP_BUILD_DIR" >/dev/null
-    CPP_RC=$?
-    set -e
+  if [[ "$CPP_FAIL_UNDER" != "0" ]]; then
     if [[ "$CPP_RC" -ne 0 ]]; then
       echo "    FAIL: C++ line coverage below required ${CPP_FAIL_UNDER}%" >&2
     else
       echo "    OK: C++ coverage gate passed."
     fi
+  else
+    CPP_RC=0  # report-only mode never fails the script
   fi
   echo "    HTML: $OUT_DIR/cpp-html/index.html   XML: $OUT_DIR/cpp-coverage.xml"
 fi

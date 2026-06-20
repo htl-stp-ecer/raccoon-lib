@@ -7,11 +7,12 @@ the fact that the sources actually live split across `modules/libstp-*/python`
 and `python/`. This script reads ``coverage.json``, rewrites every measured
 file to its canonical source path, merges any duplicates (e.g. a module that
 gets re-imported from the workspace by conftest), and prints a per-module
-table plus an overall total.
+table with **line, branch and function** coverage plus an overall total.
 
-It is the gate the project enforces: ``--fail-under N`` exits non-zero when the
-overall *line* coverage drops below ``N`` (and ``--fail-under-module N`` can
-gate the weakest module). Run via ``scripts/coverage.sh``.
+The gate is enforced on *line* coverage only (branches/functions are shown for
+insight): ``--fail-under N`` exits non-zero when overall line coverage drops
+below ``N`` and ``--fail-under-module N`` gates the weakest module. Run via
+``scripts/coverage.sh``.
 """
 
 from __future__ import annotations
@@ -34,8 +35,9 @@ def _source_roots() -> list[Path]:
 def _canonical(measured: str, roots: list[Path]) -> tuple[str, str]:
     """Map a measured file path to (canonical_source_path, owning_module).
 
-    Falls back to the measured path (and module ``"?"``) when no source file
-    matches — e.g. compiled extensions or files deleted from the tree.
+    Falls back to the measured tail (and module ``"(uninstalled source)"``)
+    when no source file matches — e.g. compiled extensions or files deleted
+    from the tree.
     """
     p = measured.replace("\\", "/")
     marker = "/raccoon/"
@@ -56,6 +58,15 @@ def _canonical(measured: str, roots: list[Path]) -> tuple[str, str]:
     return rel, "(uninstalled source)"
 
 
+def _pct(cov: int, tot: int) -> float:
+    return 100.0 * cov / tot if tot else 0.0
+
+
+def _fmt_pct(cov: int, tot: int) -> str:
+    """Percent cell — a dash when the metric does not apply (no branches/funcs)."""
+    return f"{_pct(cov, tot):>5.1f}%" if tot else "    —"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", required=True, type=Path, help="coverage.json path")
@@ -63,15 +74,19 @@ def main() -> int:
         "--fail-under",
         type=float,
         default=0.0,
-        help="fail if overall line coverage is below this percent",
+        help="fail if overall LINE coverage is below this percent",
     )
     ap.add_argument(
         "--fail-under-module",
         type=float,
         default=0.0,
-        help="fail if any single module is below this percent",
+        help="fail if any single module's LINE coverage is below this percent",
     )
-    ap.add_argument("--show-files", action="store_true", help="also list the least-covered files")
+    ap.add_argument(
+        "--show-files",
+        action="store_true",
+        help="also list the least line-covered files (with branch/func %)",
+    )
     args = ap.parse_args()
 
     if not args.json.exists():
@@ -82,57 +97,97 @@ def main() -> int:
     data = json.loads(args.json.read_text())
     roots = _source_roots()
 
-    # canonical path -> {"stmts": set[int], "covered": set[int], "module": str}
+    # canonical path -> merged metric sets
     files: dict[str, dict] = {}
     for measured, info in data.get("files", {}).items():
         canon, module = _canonical(measured, roots)
+        e = files.setdefault(
+            canon,
+            {
+                "module": module,
+                "stmts": set(),
+                "lhit": set(),  # line numbers: all / executed
+                "branch": set(),
+                "bhit": set(),  # branch arcs: all / executed
+                "funcs": {},  # qualified name -> hit (OR-merged)
+            },
+        )
+        if e["module"] in ("?", "(uninstalled source)"):
+            e["module"] = module
+
         executed = set(info.get("executed_lines", []))
         missing = set(info.get("missing_lines", []))
-        entry = files.setdefault(canon, {"stmts": set(), "covered": set(), "module": module})
-        entry["stmts"] |= executed | missing
-        entry["covered"] |= executed
-        if entry["module"] in ("?", "(uninstalled source)"):
-            entry["module"] = module
+        e["stmts"] |= executed | missing
+        e["lhit"] |= executed
 
-    # Aggregate per module.
-    modules: dict[str, list[int]] = {}  # module -> [covered, total]
-    per_file: list[tuple[float, str, int, int]] = []
+        eb = {tuple(a[:2]) for a in info.get("executed_branches", [])}
+        mb = {tuple(a[:2]) for a in info.get("missing_branches", [])}
+        e["branch"] |= eb | mb
+        e["bhit"] |= eb
+
+        for name, fd in info.get("functions", {}).items():
+            hit = (
+                bool(fd.get("executed_lines")) or fd.get("summary", {}).get("covered_lines", 0) > 0
+            )
+            e["funcs"][name] = e["funcs"].get(name, False) or hit
+
+    # module -> [lcov, ltot, bcov, btot, fcov, ftot]
+    modules: dict[str, list[int]] = {}
+    per_file: list[tuple] = []  # (line_pct, canon, lcov, ltot, bcov, btot, fcov, ftot)
     for canon, e in files.items():
-        total = len(e["stmts"])
-        covered = len(e["covered"] & e["stmts"])
-        if total == 0:
+        ltot = len(e["stmts"])
+        if ltot == 0:
             continue
-        agg = modules.setdefault(e["module"], [0, 0])
-        agg[0] += covered
-        agg[1] += total
-        per_file.append((100.0 * covered / total, canon, covered, total))
+        lcov = len(e["lhit"] & e["stmts"])
+        btot, bcov = len(e["branch"]), len(e["bhit"])
+        ftot = len(e["funcs"])
+        fcov = sum(1 for v in e["funcs"].values() if v)
+        agg = modules.setdefault(e["module"], [0, 0, 0, 0, 0, 0])
+        agg[0] += lcov
+        agg[1] += ltot
+        agg[2] += bcov
+        agg[3] += btot
+        agg[4] += fcov
+        agg[5] += ftot
+        per_file.append((_pct(lcov, ltot), canon, lcov, ltot, bcov, btot, fcov, ftot))
 
-    grand_cov = sum(v[0] for v in modules.values())
-    grand_tot = sum(v[1] for v in modules.values())
-    overall = 100.0 * grand_cov / grand_tot if grand_tot else 0.0
+    g = [sum(modules[m][i] for m in modules) for i in range(6)]
+    overall = _pct(g[0], g[1])
 
-    # ---- print module table ----
+    # ---- module table ----
     name_w = max((len(m) for m in modules), default=20)
     name_w = max(name_w, len("Module"))
     print()
-    print(f"{'Module':<{name_w}}  {'Stmts':>7}  {'Miss':>6}  {'Cover':>7}")
-    print("-" * (name_w + 26))
+    print(f"{'Module':<{name_w}}  {'Stmts':>6}  {'Lines':>6}  {'Branch':>6}  {'Funcs':>6}")
+    print("-" * (name_w + 34))
     weakest = (101.0, "")
     for module in sorted(modules):
-        cov, tot = modules[module]
-        pct = 100.0 * cov / tot if tot else 0.0
-        if pct < weakest[0]:
-            weakest = (pct, module)
-        print(f"{module:<{name_w}}  {tot:>7}  {tot - cov:>6}  {pct:>6.1f}%")
-    print("-" * (name_w + 26))
-    print(f"{'TOTAL':<{name_w}}  {grand_tot:>7}  {grand_tot - grand_cov:>6}  {overall:>6.1f}%")
+        lcov, ltot, bcov, btot, fcov, ftot = modules[module]
+        lpct = _pct(lcov, ltot)
+        if lpct < weakest[0]:
+            weakest = (lpct, module)
+        print(
+            f"{module:<{name_w}}  {ltot:>6}  {_fmt_pct(lcov, ltot)}  "
+            f"{_fmt_pct(bcov, btot)}  {_fmt_pct(fcov, ftot)}"
+        )
+    print("-" * (name_w + 34))
+    print(
+        f"{'TOTAL':<{name_w}}  {g[1]:>6}  {_fmt_pct(g[0], g[1])}  "
+        f"{_fmt_pct(g[2], g[3])}  {_fmt_pct(g[4], g[5])}"
+    )
+    print(f"\n  Lines:     {g[0]:>6}/{g[1]:<6} ({overall:.1f}%)   [gate metric]")
+    print(f"  Branches:  {g[2]:>6}/{g[3]:<6} ({_pct(g[2], g[3]):.1f}%)")
+    print(f"  Functions: {g[4]:>6}/{g[5]:<6} ({_pct(g[4], g[5]):.1f}%)")
 
     if args.show_files:
-        print("\nLeast-covered files:")
-        for pct, canon, cov, tot in sorted(per_file)[:25]:
-            print(f"  {pct:>5.1f}%  ({cov}/{tot})  {canon}")
+        print("\nLeast line-covered files:")
+        for lpct, canon, lcov, ltot, bcov, btot, fcov, ftot in sorted(per_file)[:25]:
+            print(
+                f"  L {lpct:>5.1f}% ({lcov}/{ltot})  "
+                f"B {_pct(bcov, btot):>5.1f}%  F {_pct(fcov, ftot):>5.1f}%  {canon}"
+            )
 
-    # ---- gate ----
+    # ---- gate (line coverage only) ----
     rc = 0
     if args.fail_under > 0 and overall < args.fail_under:
         print(
@@ -142,13 +197,13 @@ def main() -> int:
         rc = 1
     if args.fail_under_module > 0 and weakest[0] < args.fail_under_module:
         print(
-            f"FAIL: module '{weakest[1]}' at {weakest[0]:.1f}% "
+            f"FAIL: module '{weakest[1]}' at {weakest[0]:.1f}% line coverage "
             f"< required {args.fail_under_module:.1f}%",
             file=sys.stderr,
         )
         rc = 1
     if rc == 0 and (args.fail_under > 0 or args.fail_under_module > 0):
-        print(f"\nOK: coverage gate passed (overall {overall:.1f}%).")
+        print(f"\nOK: line-coverage gate passed (overall {overall:.1f}%).")
     return rc
 
 

@@ -1,0 +1,7 @@
+excludePaths:
+  - .*/tests/.*
+  - .*/_deps/.*
+  - .*/.cmake-cache.*
+  - .*/build-.*/.*
+includePaths:
+  - .*/diagonal_motion\.cpp$

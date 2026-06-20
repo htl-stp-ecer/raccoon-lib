@@ -128,6 +128,34 @@ if(LIBSTP_COVERAGE)
   endif()
 endif()
 
+# ---------- C++ mutation instrumentation (mull) ----------
+#
+# When ON, compile every target defined after this point with mull's LLVM IR
+# frontend pass plugin, which embeds mutations into the binary. `mull-runner-20`
+# then runs the test executable and toggles one mutant at a time. Clang only
+# (mull is an LLVM tool); requires the mull-20 package (LLVM 20.1.x must match
+# the clang used). Used by scripts/mutation_cpp_mull.sh in a dedicated clang
+# build dir. Deps declared earlier (gtest/pybind) are NOT instrumented — only
+# our modules + tests — and mull.yml scopes which files actually get mutated.
+option(LIBSTP_MUTATION
+       "Instrument C++ targets for mull mutation testing (clang only)" OFF)
+if(LIBSTP_MUTATION)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(
+      FATAL_ERROR
+        "LIBSTP_MUTATION requires Clang (got ${CMAKE_CXX_COMPILER_ID})")
+  endif()
+  if(NOT DEFINED MULL_PLUGIN)
+    set(MULL_PLUGIN "/usr/lib/mull-ir-frontend-20")
+  endif()
+  message(
+    STATUS "C++ mutation instrumentation ENABLED (mull plugin: ${MULL_PLUGIN})")
+  # NOTE: the actual -fpass-plugin flag is applied later (just before
+  # add_subdirectory(modules)) so it does NOT pollute the configure-time
+  # compiler checks of FetchContent deps like Eigen — the plugin breaks those
+  # try_compiles.
+endif()
+
 # ---------- Runtime-switchable platform bundles ----------
 #
 # When ON, the build does NOT static-link a single platform driver into every
@@ -241,6 +269,13 @@ endif()
 
 target_link_libraries(_core PRIVATE pybind11::headers spdlog::spdlog
                                     Eigen3::Eigen yaml-cpp::yaml-cpp)
+
+# Apply mull instrumentation here — to our modules + tests only — now that all
+# FetchContent deps (Eigen/gtest/spdlog/...) have finished their configure-time
+# compiler checks, which the -fpass-plugin breaks.
+if(LIBSTP_MUTATION)
+  add_compile_options(-fpass-plugin=${MULL_PLUGIN} -g -O0 -grecord-command-line)
+endif()
 
 add_subdirectory(modules)
 

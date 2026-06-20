@@ -1,9 +1,11 @@
-register_libstp_test(test_kinematics
-    SOURCES
-        test_differential_kinematics.cpp
-        test_mecanum_kinematics.cpp
-    LIBS
-        kinematics_differential
-        kinematics_mecanum
-        kinematics
-)
+register_libstp_test(
+  test_kinematics
+  SOURCES
+  test_differential_kinematics.cpp
+  test_mecanum_kinematics.cpp
+  test_differential_ik.cpp
+  test_mecanum_ik.cpp
+  LIBS
+  kinematics_differential
+  kinematics_mecanum
+  kinematics)
