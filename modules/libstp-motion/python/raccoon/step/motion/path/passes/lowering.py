@@ -58,6 +58,19 @@ def resolve_step(step) -> "Step":
     return step
 
 
+def _follow_heading_hold(seg: Segment) -> bool:
+    """Heading-hold flag of a ``follow_line`` segment's opaque step.
+
+    Reads ``config.heading_hold`` off the carried line-follow step (the
+    Directional[*]LineFollow family). Defaults to ``True`` (the builder default)
+    when the attribute is absent, so non-directional follows compare equal and
+    keep their existing warm-start behaviour.
+    """
+    step = seg.opaque_step
+    cfg = getattr(step, "config", None) or getattr(step, "_config", None)
+    return bool(getattr(cfg, "heading_hold", True))
+
+
 def is_same_type(a: Segment, b: Segment) -> bool:
     """Check if two segments can use warm-start (same motion type).
 
@@ -78,6 +91,20 @@ def is_same_type(a: Segment, b: Segment) -> bool:
     # absolute target at on_start and never warm-starts.
     if (a.kind == "turn" and a.opaque_step is not None) or (
         b.kind == "turn" and b.opaque_step is not None
+    ):
+        return False
+
+    # Two line-follows are NOT interchangeable for warm-start if their
+    # heading-hold behaviour differs. A hold-heading follow locks the chassis
+    # angle; a free-heading follow (correct_lateral(hold_heading=False)) rotates
+    # the robot to align with the line. Warm-starting straight from the former
+    # into the latter (no hard stop between) lets the free-heading leg swing the
+    # robot through up to 90° while it still carries the previous leg's forward
+    # velocity — M040 chained `_follow()` (hold) → parallel `align_line_follow`
+    # (free) and the robot curved from -180° to -90°, throwing every downstream
+    # sensor strafe off by ~50 cm. Force a cold start across that boundary.
+    if a.kind == "follow_line" and b.kind == "follow_line" and (
+        _follow_heading_hold(a) != _follow_heading_hold(b)
     ):
         return False
 
