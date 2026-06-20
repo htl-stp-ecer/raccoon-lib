@@ -171,6 +171,12 @@ def _sim_scene_path(real_scene: Path) -> Path:
     The real ftmap is left untouched (the real robot's localization uses it).
     """
     data = json.loads(real_scene.read_text())
+    if data.get("version") == 2:
+        # v2 maps model the ramp as a real LAYER (with a transition), not as
+        # phantom ground walls — the sim tracks which plane the robot is on, so
+        # there is nothing to strip. Use the map as authored.
+        print("    sim scene: v2 multi-layer map — used as-is (ramp is a layer)")
+        return real_scene
     segs = data.get("lines", [])
     kept = [s for s in segs if s.get("kind") != "wall"]
     dropped = len(segs) - len(kept)

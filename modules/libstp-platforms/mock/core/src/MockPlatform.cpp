@@ -327,6 +327,13 @@ namespace platform::mock::core
         return m_sim->pose();
     }
 
+    int MockPlatform::simCurrentLayer() const
+    {
+        std::lock_guard<std::mutex> simLock(m_simMutex);
+        if (!m_sim) return -1;
+        return m_sim->currentLayer();
+    }
+
     libstp::sim::Pose2D MockPlatform::simRelativePose() const
     {
         std::lock_guard<std::mutex> simLock(m_simMutex);

@@ -105,6 +105,12 @@ namespace platform::mock::core
         void resetSimOrigin();
 
         float simYawRate() const;
+
+        /// Index of the table plane (layer) the sim robot is currently on
+        /// (0 = ground). Switches when the robot crosses a v2 ramp transition.
+        /// Returns -1 when no sim is attached.
+        int simCurrentLayer() const;
+
         void tickSim(float dtSeconds);
 
         /// Auto-tick mode: when enabled, every call into the mock HAL that

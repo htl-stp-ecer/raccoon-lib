@@ -203,6 +203,11 @@ PYBIND11_MODULE(sim, m)
     mockMod.def("yaw_rate",
         [] { return platform::mock::core::MockPlatform::instance().simYawRate(); });
 
+    mockMod.def("current_layer",
+        [] { return platform::mock::core::MockPlatform::instance().simCurrentLayer(); },
+        "Index of the table plane the sim robot is on (0 = ground, -1 = no sim). "
+        "Switches when the robot crosses a v2 ramp transition.");
+
     mockMod.def("tick",
         [](float dt) { platform::mock::core::MockPlatform::instance().tickSim(dt); },
         py::arg("dt_seconds"),
