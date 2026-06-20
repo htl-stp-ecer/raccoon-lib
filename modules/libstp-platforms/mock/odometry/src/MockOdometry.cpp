@@ -123,7 +123,18 @@ namespace
                 return 0.0;
             }
             platform.autoTickIfEnabled();
-            return wrapAngle(static_cast<double>(platform.simPose().theta));
+            // Must share the SAME frame as getPose()/getHeading() (the
+            // dead-reckoned controller odometry), NOT the raw ground-truth
+            // simPose() heading. DiagonalMotion regulates yaw as
+            // `target_heading_rad - getAbsoluteHeading()`, where
+            // target_heading_rad comes from get_world_heading_rad() ==
+            // odometry.getPose().heading. On hardware those are one frame; if
+            // the mock returns the absolute simPose heading here it sits a full
+            // start-heading offset (e.g. 90°) away from the relative odometry
+            // frame, so the diagonal sees a constant phantom yaw error and
+            // spins instead of holding heading. (Arc/spline only use this as a
+            // self-delta, so they are unaffected by the change.)
+            return wrapAngle(static_cast<double>(platform.simOdometryRelativePose().theta));
         }
 
         [[nodiscard]] double getPathLength() const override
