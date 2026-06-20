@@ -77,8 +77,12 @@ class LineFollowAdapter:
 
     def start_warm(self, offset: float, velocity: float) -> None:
         self._step.on_start(self._robot)
-        if self._step._motion is not None:
-            self._step._motion.start_warm(offset, velocity)
+        motion = self._step._motion
+        # The unified C++ line-follow motion (DirectionalLineFollowMotion) does
+        # not expose start_warm — on_start above already cold-initialized it, so
+        # degrade gracefully to a cold start (correct, matches plain seq()).
+        if motion is not None and hasattr(motion, "start_warm"):
+            motion.start_warm(offset, velocity)
         self._done = False
 
     def update(self, dt: float) -> None:
@@ -95,8 +99,9 @@ class LineFollowAdapter:
         return self._done
 
     def get_filtered_velocity(self) -> float:
-        if self._step._motion is not None:
-            return self._step._motion.get_filtered_velocity()
+        motion = self._step._motion
+        if motion is not None and hasattr(motion, "get_filtered_velocity"):
+            return motion.get_filtered_velocity()
         return 0.0
 
     def set_suppress_hard_stop(self, val: bool) -> None:
@@ -181,8 +186,11 @@ class DriveAngleAdapter:
         return self._done
 
     def get_filtered_velocity(self) -> float:
-        if self._step._motion is not None:
-            return self._step._motion.get_filtered_velocity()
+        motion = self._step._motion
+        # DiagonalMotion does not expose get_filtered_velocity; the next leg
+        # cold-starts anyway (diagonal is never same-type), so 0.0 is correct.
+        if motion is not None and hasattr(motion, "get_filtered_velocity"):
+            return motion.get_filtered_velocity()
         return 0.0
 
     def set_suppress_hard_stop(self, val: bool) -> None:
