@@ -155,6 +155,10 @@ def _run_worker(
     os.environ["RACCOON_SIM"] = "1"
 
     scene = Path(scene_arg) if scene_arg else (project / H.DEFAULT_SCENE)
+    if not scene.exists():
+        # v1 map hand-edited / retired → fall back to the v2 ramp map (ground
+        # layer is the v1 geometry verbatim; _sim_scene_path passes v2 through).
+        scene = project / "config" / "2026-game-table-v2.ftmap"
     sim_scene = H._sim_scene_path(scene)
     sx, sy, sdeg = (float(v) for v in start_str.split(","))
     start = (sx, sy, math.radians(sdeg))
@@ -427,6 +431,8 @@ def main() -> None:
 
     project = Path(args.project).resolve()
     scene0 = Path(args.scene) if args.scene else (project / H.DEFAULT_SCENE)
+    if not scene0.exists():
+        scene0 = project / "config" / "2026-game-table-v2.ftmap"
     sys.path.insert(0, str(project))
     cwd = Path.cwd()
     os.chdir(project)
