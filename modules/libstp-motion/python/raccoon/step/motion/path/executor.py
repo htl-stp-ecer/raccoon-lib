@@ -446,7 +446,19 @@ class PathExecutor:
                     current_vel = motion.get_filtered_velocity()
                     prev_seg = seg
 
+                    seg_idx = node_idx
                     node_idx += 1
+
+                    # Stop NOW if the next segment won't warm-start from this
+                    # one — otherwise the robot keeps the just-finished
+                    # segment's velocity command and COASTS while the blocking
+                    # inline side actions at this transition run (await'd),
+                    # drifting past the endpoint. (A sensor-bounded strafe that
+                    # fires on a line then runs arm moves coasted ~10 cm past the
+                    # line; a short distance leg's decel tail wasn't clamped.)
+                    # Warm continuations intentionally keep moving.
+                    if not _next_segment_warmstarts(nodes, seg_idx, seg):
+                        robot.drive.hard_stop()
 
                     # Side actions at this transition point.
                     node_idx = await _advance_past_side_actions(
