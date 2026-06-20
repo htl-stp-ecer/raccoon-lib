@@ -50,6 +50,7 @@ CONFIGS = [
     "absolute_splinify",
     "time_optimal",
     "cut_corners_time_optimal",
+    "mega",
 ]
 
 
@@ -74,6 +75,12 @@ def _wrap(seq_steps, config, optimize):
         opt = opt.time_optimal()
     elif config == "cut_corners_time_optimal":
         opt = opt.cut_corners(5.0).time_optimal()
+    elif config == "mega":
+        # Every path-PRESERVING pass that applies to the cube-bot's sensor-driven
+        # style, stacked. cut_corners + splinify safely no-op (no fixed-geometry
+        # runs); absolute_heading (heading coherence) + time_optimal (speed carry)
+        # apply. Must stay ≤ baseline drift and complete on all missions.
+        opt = opt.cut_corners(5.0).absolute_heading().time_optimal()
     else:
         msg = f"unknown config {config}"
         raise ValueError(msg)
