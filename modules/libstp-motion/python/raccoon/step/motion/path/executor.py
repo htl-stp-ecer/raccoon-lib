@@ -100,16 +100,29 @@ def _has_reached_target(motion, seg: Segment) -> bool:
 
 
 def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
-    """Get the current odometry position to use as offset for warm-start."""
+    """Get the current odometry position to use as offset for warm-start.
+
+    For linear segments we project the world position onto the segment's
+    *travel direction* so the distance check tracks actual progress regardless
+    of how the robot is oriented relative to the odometry origin. The travel
+    direction is ``target_heading_rad`` when the segment pins an (absolute)
+    heading, otherwise the robot's current heading (relative / hold-current
+    mode — the motion holds this heading throughout the leg). Falling back to
+    ``get_distance_from_origin()`` was wrong whenever the leg drove along a
+    heading different from the odometry origin axis: a short fixed-distance
+    leg (e.g. a 3 cm grab drive) at a 90°-off heading then never registered as
+    reached and the robot ran away. Forward uses the heading axis; Lateral the
+    right-positive perpendicular.
+    """
     if seg.kind == "linear":
-        if seg.target_heading_rad is not None:
-            # Project world position onto the segment's heading direction so
-            # _check_segment_reached works correctly regardless of robot heading.
-            pos = robot.odometry.get_pose().position
-            h = seg.target_heading_rad
-            return float(pos[0]) * math.cos(h) + float(pos[1]) * math.sin(h)
-        info = robot.odometry.get_distance_from_origin()
-        return info.forward if seg.axis == LinearAxis.Forward else info.lateral
+        h = seg.target_heading_rad
+        if h is None:
+            h = float(robot.odometry.get_heading())
+        pos = robot.odometry.get_pose().position
+        x, y = float(pos[0]), float(pos[1])
+        if seg.axis == LinearAxis.Forward:
+            return x * math.cos(h) + y * math.sin(h)
+        return -x * math.sin(h) + y * math.cos(h)
     if seg.kind in ("turn", "arc"):
         return robot.odometry.get_heading()
     if seg.kind == "follow_line":
