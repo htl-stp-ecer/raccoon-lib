@@ -54,7 +54,7 @@ namespace
                 return;
             }
             platform.autoTickIfEnabled();
-            const auto rel = platform.simRelativePose();
+            const auto rel = platform.simOdometryRelativePose();
             const float x = rel.x * kCmToMeters;
             const float y = rel.y * kCmToMeters;
             if (path_initialized_)
@@ -80,7 +80,7 @@ namespace
                 return pose;
             }
             platform.autoTickIfEnabled();
-            const auto rel = platform.simRelativePose();
+            const auto rel = platform.simOdometryRelativePose();
             pose.position = Eigen::Vector3f(rel.x * kCmToMeters, rel.y * kCmToMeters, 0.0f);
             pose.heading = rel.theta;
             return pose;
@@ -112,7 +112,7 @@ namespace
                 return 0.0;
             }
             platform.autoTickIfEnabled();
-            return wrapAngle(static_cast<double>(platform.simRelativePose().theta));
+            return wrapAngle(static_cast<double>(platform.simOdometryRelativePose().theta));
         }
 
         [[nodiscard]] double getAbsoluteHeading() const override

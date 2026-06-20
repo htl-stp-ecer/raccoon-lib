@@ -302,6 +302,8 @@ namespace platform::mock::core
         // Default origin = the start pose, so a fresh sim starts at relative
         // (0, 0, 0). Subsequent odometry resets recapture the live pose.
         m_simOrigin = startPose;
+        // The dead-reckoned odometry starts coincident with the start pose too.
+        m_odoOrigin = m_sim->odometryPose();
     }
 
     void MockPlatform::detachSim()
@@ -341,11 +343,28 @@ namespace platform::mock::core
         return rel;
     }
 
+    libstp::sim::Pose2D MockPlatform::simOdometryRelativePose() const
+    {
+        std::lock_guard<std::mutex> simLock(m_simMutex);
+        if (!m_sim) return {};
+        const auto p = m_sim->odometryPose();
+        const float dx = p.x - m_odoOrigin.x;
+        const float dy = p.y - m_odoOrigin.y;
+        const float c = std::cos(m_odoOrigin.theta);
+        const float s = std::sin(m_odoOrigin.theta);
+        libstp::sim::Pose2D rel{};
+        rel.x = dx * c + dy * s;
+        rel.y = -dx * s + dy * c;
+        rel.theta = libstp::sim::normalizeAngle(p.theta - m_odoOrigin.theta);
+        return rel;
+    }
+
     void MockPlatform::resetSimOrigin()
     {
         std::lock_guard<std::mutex> simLock(m_simMutex);
         if (!m_sim) return;
         m_simOrigin = m_sim->pose();
+        m_odoOrigin = m_sim->odometryPose();
     }
 
     float MockPlatform::simYawRate() const

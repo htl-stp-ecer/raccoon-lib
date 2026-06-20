@@ -91,6 +91,14 @@ namespace platform::mock::core
         /// climbs from there. Returned pose is in centimeters / radians.
         libstp::sim::Pose2D simRelativePose() const;
 
+        /// Like `simRelativePose()` but backed by the sim's dead-reckoned
+        /// odometry pose (`SimWorld::odometryPose()`) instead of the
+        /// collision-clamped ground-truth pose. This is what the production
+        /// motion controllers (IOdometry) read: its lateral axis is sign-aligned
+        /// with the +vy command so closed-loop strafes converge. Zeroes on
+        /// `resetSimOrigin()` exactly like `simRelativePose()`.
+        libstp::sim::Pose2D simOdometryRelativePose() const;
+
         /// Capture the current ground-truth sim pose as the origin for
         /// `simRelativePose()`. Equivalent to telling the coprocessor to zero
         /// its integrator.
@@ -166,6 +174,7 @@ namespace platform::mock::core
         mutable std::mutex m_simMutex;
         std::unique_ptr<libstp::sim::SimWorld> m_sim;
         libstp::sim::Pose2D m_simOrigin{};
+        libstp::sim::Pose2D m_odoOrigin{};
         bool m_autoTick{false};
         ClockFn m_clock;
         double m_lastTickTime{0.0};

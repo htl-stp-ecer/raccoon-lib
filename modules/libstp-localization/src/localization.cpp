@@ -171,11 +171,31 @@ void Localization::predictLocked(const libstp::foundation::Pose& odomDelta) {
     std::normal_distribution<double> noiseY(0.0, std::max(sigmaXY, 1e-6));
     std::normal_distribution<double> noiseTheta(0.0, std::max(sigmaTheta, 1e-6));
 
+    // ``odomDelta`` is expressed in the odometry frame, whose orientation is
+    // ``m_lastOdom.heading``. The particles live in the world/map frame and
+    // may be rotated relative to the odom frame (e.g. after a heading-
+    // reference seed). Re-express the delta in the robot body frame (rotation
+    // invariant) and re-project it into each particle's world heading;
+    // otherwise a body strafe is added along the wrong world axis.
+    const double odomHeading = static_cast<double>(m_lastOdom.heading);
+    const double cosO = std::cos(odomHeading);
+    const double sinO = std::sin(odomHeading);
+    const double dx = static_cast<double>(odomDelta.position.x());
+    const double dy = static_cast<double>(odomDelta.position.y());
+    // Body-frame delta: rotate the odom-frame delta by -odomHeading.
+    const double bodyFwd = dx * cosO + dy * sinO;
+    const double bodyLeft = -dx * sinO + dy * cosO;
+
     for (auto& particle : m_particles) {
+        const double h = static_cast<double>(particle.pose.heading);
+        const double cosH = std::cos(h);
+        const double sinH = std::sin(h);
+        const double worldDx = bodyFwd * cosH - bodyLeft * sinH;
+        const double worldDy = bodyFwd * sinH + bodyLeft * cosH;
         particle.pose.position.x() +=
-            odomDelta.position.x() + static_cast<float>(noiseX(m_rng));
+            static_cast<float>(worldDx) + static_cast<float>(noiseX(m_rng));
         particle.pose.position.y() +=
-            odomDelta.position.y() + static_cast<float>(noiseY(m_rng));
+            static_cast<float>(worldDy) + static_cast<float>(noiseY(m_rng));
         particle.pose.heading = wrapAnglef(
             particle.pose.heading + odomDelta.heading + static_cast<float>(noiseTheta(m_rng)));
     }

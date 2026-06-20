@@ -125,6 +125,18 @@ namespace libstp::sim
         Pose2D pose() const noexcept { return m_pose; }
         float yawRateRadS() const noexcept { return m_yawRateRadS; }
 
+        /// Dead-reckoned odometry pose, integrated from the body-frame chassis
+        /// velocities (vx, vy, yawRate) the same way real wheel/IMU odometry is
+        /// — independent of the collision-clamped physical `pose()`. This is the
+        /// frame the production motion controllers read: by construction a +vx
+        /// command grows the forward projection, a +vy command grows the
+        /// "right-positive" lateral projection, and a +wz command grows the
+        /// heading, consistently at any heading. (The physical `pose()` stays in
+        /// the standard +y=left world frame used for rendering / sensors /
+        /// collision; the two intentionally differ on the lateral axis because
+        /// the sim integrates a +vy command as the robot's physical RIGHT.)
+        Pose2D odometryPose() const noexcept { return m_odoPose; }
+
         /// Signed motor command in the range [-100, 100]. Matches the scale
         /// used by HAL Motor::setSpeed.
         void setMotorCommand(uint8_t port, int signedPercent);
@@ -196,6 +208,7 @@ namespace libstp::sim
         SimMotorMap m_motors{};
         WorldMap m_map{};
         Pose2D m_pose{};
+        Pose2D m_odoPose{};  // dead-reckoned controller-facing odometry (see odometryPose())
 
         std::array<float, kNumMotorPorts> m_motorTargetOmega{};   // rad/s, signed
         std::array<float, kMaxWheels> m_wheelOmega{};             // rad/s

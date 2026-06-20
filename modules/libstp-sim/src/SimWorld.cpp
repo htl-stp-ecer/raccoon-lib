@@ -29,6 +29,9 @@ namespace libstp::sim
     void SimWorld::setPose(const Pose2D& pose)
     {
         m_pose = pose;
+        // The dead-reckoned odometry frame starts coincident with the physical
+        // pose; it then integrates body velocities independently (see below).
+        m_odoPose = pose;
         m_trace.clear();
         m_trace.push_back(m_pose);
     }
@@ -210,8 +213,31 @@ namespace libstp::sim
         }
         m_yawRateRadS = yawRate;
 
+        // Dead-reckon the controller-facing odometry from the body velocities,
+        // exactly the way real wheel/IMU odometry integrates — and crucially
+        // INDEPENDENT of the line-218 lateral negation applied to the physical
+        // pose below. `vyMps` is the production +vy command (= robot RIGHT, see
+        // MecanumKinematics), so integrating it with the standard body→world
+        // rotation makes the odometry's "right-positive" lateral projection
+        // (LinearMotion::projectBodyFrame) grow for a +vy command, while the
+        // forward projection grows for a +vx command and the heading grows for
+        // a +wz command — all consistently at any heading. This is what lets a
+        // fixed-distance strafe close its lateral loop instead of running away,
+        // without disturbing the forward / turn loops (which already worked).
+        {
+            const float co = std::cos(m_odoPose.theta);
+            const float so = std::sin(m_odoPose.theta);
+            m_odoPose.x += (vxMps * co - vyMps * so) * kMetersToCm * dt;
+            m_odoPose.y += (vxMps * so + vyMps * co) * kMetersToCm * dt;
+            m_odoPose.theta = normalizeAngle(m_odoPose.theta + yawRate * dt);
+        }
+
         const float dxLocalCm = vxMps * kMetersToCm * dt;
-        const float dyLocalCm = vyMps * kMetersToCm * dt;
+        // ChassisVelocity / MecanumKinematics convention is +y = RIGHT (see
+        // MecanumKinematics::applyCommand), but applyLocalDelta treats +dyLocal
+        // as the robot's LEFT (90 deg CCW). Negate so a +vy command moves the
+        // sim robot RIGHT, matching the production IK and the real robot.
+        const float dyLocalCm = -vyMps * kMetersToCm * dt;
         const float dThetaRad = yawRate * dt;
 
         const Pose2D target = applyLocalDelta(m_pose, dxLocalCm, dyLocalCm, dThetaRad);
@@ -290,10 +316,13 @@ namespace libstp::sim
 
     uint16_t SimWorld::sampleLineSensor(const SensorEntry& e) const
     {
-        // Real line sensors read HIGH on white, LOW on black — we mirror that
-        // with 1023 (white) / 0 (black). Noise/thresholds are the consumer's
-        // concern, not the sim's.
-        return isSensorOnBlackLine(e.mount) ? 0 : 1023;
+        // Real reflectance line sensors read LOW on white and HIGH on black —
+        // and IRSensor::probabilityOfBlack maps raw→black on exactly that
+        // convention (white = low threshold, black = high threshold; cf.
+        // cube-bot calibration white_tresh ~200-530, black_tresh ~3200+). Emit
+        // on the same 0..1023 analog scale the HAL exposes: 1023 (black) / 0
+        // (white). Noise/thresholds are the consumer's concern, not the sim's.
+        return isSensorOnBlackLine(e.mount) ? 1023 : 0;
     }
 
     uint16_t SimWorld::sampleDistanceSensor(const SensorEntry& e) const
