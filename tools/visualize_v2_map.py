@@ -100,15 +100,33 @@ def main():
                 label=f"transition {t.get('id','')}" if edge_key == "from" else None,
             )
 
-    # Optional trajectory overlay.
+    # Optional trajectory overlay, coloured by which plane the robot is on.
     if args.trajectory:
         traj = json.loads(Path(args.trajectory).read_text()).get("traj", [])
         if traj:
+            # Per-point scatter coloured by layer (0 = ground blue, 1 = ramp red),
+            # so you can SEE where the robot rides the ramp plane.
+            on_ground = [(p["x"], p["y"]) for p in traj if p.get("layer", 0) == 0]
+            on_ramp = [(p["x"], p["y"]) for p in traj if p.get("layer", 0) >= 1]
+            if on_ground:
+                ax.plot([p[0] for p in on_ground], [p[1] for p in on_ground],
+                        ".", color="#1f77b4", ms=3, alpha=0.6, zorder=5,
+                        label="robot path (ground plane)")
+            if on_ramp:
+                ax.plot([p[0] for p in on_ramp], [p[1] for p in on_ramp],
+                        ".", color="#d62728", ms=3.5, alpha=0.8, zorder=5,
+                        label="robot path (RAMP plane)")
+            # Faint connecting line for path order.
             ax.plot([p["x"] for p in traj], [p["y"] for p in traj],
-                    "-", color="#1f77b4", lw=1.2, alpha=0.7, zorder=5, label="sim trajectory")
+                    "-", color="#555", lw=0.5, alpha=0.35, zorder=4)
+            # Start + end markers.
+            ax.plot(traj[0]["x"], traj[0]["y"], "o", color="#2ca02c", ms=11,
+                    mec="black", mew=1.0, zorder=9, label="run start")
+            ax.plot(traj[-1]["x"], traj[-1]["y"], "s", color="#9467bd", ms=11,
+                    mec="black", mew=1.0, zorder=9, label="run end")
 
-    # Reference markers (where the robot drives in the flat sim today).
-    markers = list(DEFAULT_MARKERS)
+    # Reference markers (only when no real trajectory is overlaid).
+    markers = [] if args.trajectory else list(DEFAULT_MARKERS)
     for m in args.marker:
         x, y, *lbl = m.split(",")
         markers.append((float(x), float(y), lbl[0] if lbl else ""))
