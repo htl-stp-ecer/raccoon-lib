@@ -106,13 +106,26 @@ async def _main(config, target):
             below = False
     moving = sum(1 for v in speeds if v >= 2.0)
     print(f"{target} {config:12s} [{st}]  stop-events={stops}  moving={moving}/{len(speeds)} samples")
+    if _OUT:
+        import json
+
+        Path(_OUT).write_text(json.dumps({"config": config, "target": target,
+                                          "status": st, "speeds_cmps": speeds}))
+        print(f"  wrote {_OUT}")
+
+
+_OUT = None
 
 
 def main():
+    global _OUT  # noqa: PLW0603
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="baseline")
     ap.add_argument("--target", default="m050")
-    asyncio.run(_main(ap.parse_args().config, ap.parse_args().target))
+    ap.add_argument("--out", default=None, help="dump per-sample speed (cm/s) to JSON")
+    args = ap.parse_args()
+    _OUT = args.out
+    asyncio.run(_main(args.config, args.target))
     os._exit(0)
 
 

@@ -103,8 +103,10 @@ def is_same_type(a: Segment, b: Segment) -> bool:
     # velocity — M040 chained `_follow()` (hold) → parallel `align_line_follow`
     # (free) and the robot curved from -180° to -90°, throwing every downstream
     # sensor strafe off by ~50 cm. Force a cold start across that boundary.
-    if a.kind == "follow_line" and b.kind == "follow_line" and (
-        _follow_heading_hold(a) != _follow_heading_hold(b)
+    if (
+        a.kind == "follow_line"
+        and b.kind == "follow_line"
+        and (_follow_heading_hold(a) != _follow_heading_hold(b))
     ):
         return False
 
