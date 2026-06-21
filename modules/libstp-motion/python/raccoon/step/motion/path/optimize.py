@@ -259,25 +259,40 @@ class Optimizer(Step):
         max_speed_cmps: float = 100.0,
         accel_cmps2: float = 60.0,
         lateral_accel_cmps2: float = 50.0,
+        sensor_carry_cmps: float = float("inf"),
     ) -> "Optimizer":
         """Carry speed through the WHOLE path — the global generalisation of the
         per-seam warm-start (``VelocityProfilePass``).
 
         Runs a forward/backward sweep that stamps the fastest feasible entry/exit
         speed on every leg, so the robot only decelerates for REAL stops (turns,
-        direction reversals, sensor-bounded leg ends, blocking side actions, the
-        final leg) and corner/curvature limits — instead of braking to a halt at
-        every segment seam. PATH-PRESERVING: changes only speed, never geometry,
-        so the endpoint matches the un-profiled path. Most effective after
-        ``cut_corners()`` (it carries speed through the arcs the corner-cut
-        introduced). Limits are in cm: ``max_speed_cmps`` cruise cap,
-        ``accel_cmps2`` accel/decel, ``lateral_accel_cmps2`` the arc curvature cap
-        (``v <= sqrt(a_lat * R)``).
+        direction reversals, blocking side actions, the final leg) and
+        corner/curvature limits — instead of braking to a halt at every segment
+        seam.
+
+        ``sensor_carry_cmps`` is the "on steroids" knob for the sensor-driven
+        style: a leg that ends on a ``.until()`` SENSOR/time condition normally
+        forces a full stop, but when the NEXT leg continues in the same direction
+        the robot instead FLOWS THROUGH the sensor boundary rather than braking to
+        zero — far cleaner, faster motion on a robot that stops at every sensor.
+        It defaults to ``inf`` (the robot keeps its full cruise through the seam —
+        it is already at cruise when the sensor fires, so braking would only waste
+        time, and the same-direction flow adds no lateral overshoot). Lower it
+        (cm/s) to throttle the flow-through where a sensor needs dense sampling;
+        set 0 to brake at every sensor as before. Accuracy-preserving by
+        construction.
+
+        PATH-PRESERVING: changes only speed, never geometry, so the endpoint
+        matches the un-profiled path. Most effective after ``cut_corners()`` (it
+        carries speed through the arcs the corner-cut introduced). Limits are in
+        cm: ``max_speed_cmps`` cruise cap, ``accel_cmps2`` accel/decel,
+        ``lateral_accel_cmps2`` the arc curvature cap (``v <= sqrt(a_lat * R)``).
         """
         return self._add(VelocityProfilePass(
             max_speed_mps=max_speed_cmps / 100.0,
             accel_mps2=accel_cmps2 / 100.0,
             lateral_accel_mps2=lateral_accel_cmps2 / 100.0,
+            sensor_carry_mps=sensor_carry_cmps / 100.0,
         ))
 
     def apply(self, p) -> "Optimizer":

@@ -93,10 +93,40 @@ def test_arc_curvature_caps_through_speed():
     assert out[1].entry_speed_mps == pytest.approx(cap, abs=1e-3)
 
 
-def test_sensor_condition_leg_exits_at_rest():
-    out = _profile([_lin(2.0, condition=object()), _lin(2.0)])
-    # the conditioned leg's stopping point is unknown → it must be able to stop.
+def test_sensor_leg_carries_through_into_same_direction_successor():
+    # "On steroids": a sensor-bounded leg followed by a same-direction leg no
+    # longer brakes to zero — it FLOWS THROUGH at the sensor-carry cap.
+    out = _profile([_lin(2.0, condition=object()), _lin(2.0)], sensor_carry_mps=0.35)
+    assert out[0].exit_speed_mps == pytest.approx(0.35)
+    assert out[1].entry_speed_mps == pytest.approx(0.35)
+
+
+def test_sensor_carry_capped_not_full_cruise():
+    # The carry is throttled to the cap, never the full cruise, so the sensor is
+    # sampled densely and the post-trigger slip stays bounded.
+    out = _profile(
+        [_lin(5.0, condition=object()), _lin(5.0)],
+        max_speed_mps=1.0, accel_mps2=0.6, sensor_carry_mps=0.3,
+    )
+    assert out[0].exit_speed_mps == pytest.approx(0.3)
+
+
+def test_sensor_carry_zero_restores_brake_at_sensor():
+    # sensor_carry_mps=0 → the legacy behaviour: stop at every sensor boundary.
+    out = _profile([_lin(2.0, condition=object()), _lin(2.0)], sensor_carry_mps=0.0)
     assert out[0].exit_speed_mps == pytest.approx(0.0)
+
+
+def test_sensor_leg_stops_before_incompatible_successor():
+    # A sensor leg followed by a TURN or a direction reversal still stops — the
+    # seam is discontinuous, so the carry never applies.
+    out = _profile([_lin(2.0, condition=object()), _turn()], sensor_carry_mps=0.35)
+    assert out[0].exit_speed_mps == pytest.approx(0.0)
+    # forward sensor leg → backward leg (negative distance) is a reversal.
+    rev = _profile(
+        [_lin(2.0, condition=object()), _lin(-2.0, sign=-1.0)], sensor_carry_mps=0.35
+    )
+    assert rev[0].exit_speed_mps == pytest.approx(0.0)
 
 
 def test_blocking_side_action_breaks_the_carry():
