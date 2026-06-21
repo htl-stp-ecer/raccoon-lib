@@ -49,6 +49,14 @@ OPT_COLOR = "#ff7f0e"
 
 async def _simulate_variant(project: Path, scene: Path, start, timeout: float, config: str):
     """Run the full chain; wrap each mission in optimize(config) unless baseline."""
+    # CRITICAL: enable the deterministic fast-time clock BEFORE building the
+    # robot. Without it the mock sim never auto-ticks, so the robot stays frozen
+    # at the start pose for the whole run (every mission TIMEOUTs at rest) and
+    # this tool silently renders the PLANNED path instead of a real trajectory.
+    import sim_fasttime  # type: ignore[import-not-found]
+
+    sim_fasttime.enable()
+
     from _robot_builder import build_robot  # type: ignore[import-not-found]
 
     from raccoon.testing.sim import pose, use_scene
@@ -198,6 +206,24 @@ def _render(
     bsegs = base["segments"]
     osegs = {s["name"]: s for s in opt["segments"]}
 
+    # Coupling guard: the whole point of this tool is to show the REAL simulated
+    # trajectory. If the robot barely moved, the sim almost certainly never
+    # ticked (e.g. sim_fasttime.enable() not called) and we'd otherwise render a
+    # near-empty plot that looks like "optimize == baseline". Fail loud instead.
+    def _path_len(traj):
+        return sum(
+            math.hypot(traj[i]["x"] - traj[i - 1]["x"], traj[i]["y"] - traj[i - 1]["y"])
+            for i in range(1, len(traj))
+        )
+
+    blen, olen = _path_len(base["traj"]), _path_len(opt["traj"])
+    frozen = max(blen, olen) < 5.0  # cm — nothing meaningful moved
+    if frozen:
+        print(
+            f"  ⚠ ROBOT DID NOT MOVE (baseline path={blen:.1f}cm, optimize={olen:.1f}cm). "
+            "The sim never ticked — is sim_fasttime.enable() called before build_robot?"
+        )
+
     # --- combined overview ---
     fig, ax = plt.subplots(figsize=(15, 7.5))
     H._draw_table(ax, segs, table)
@@ -224,6 +250,14 @@ def _render(
     s = base["start"]
     ax.plot(s[0], s[1], "*", color="black", ms=15, label="start", zorder=7)
     ax.set_title(f"cube-bot chain — baseline vs optimize({config})", fontsize=13, fontweight="bold")
+    if frozen:
+        ax.text(
+            0.5, 0.5,
+            "⚠ ROBOT DID NOT MOVE\nsim never ticked — render is meaningless",
+            transform=ax.transAxes, ha="center", va="center",
+            fontsize=22, fontweight="bold", color="red",
+            bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "red"}, zorder=10,
+        )
     ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), fontsize=9)
     fig.tight_layout()
     out = out_dir / "overview.png"
