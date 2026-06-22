@@ -288,12 +288,14 @@ class Optimizer(Step):
         cm: ``max_speed_cmps`` cruise cap, ``accel_cmps2`` accel/decel,
         ``lateral_accel_cmps2`` the arc curvature cap (``v <= sqrt(a_lat * R)``).
         """
-        return self._add(VelocityProfilePass(
-            max_speed_mps=max_speed_cmps / 100.0,
-            accel_mps2=accel_cmps2 / 100.0,
-            lateral_accel_mps2=lateral_accel_cmps2 / 100.0,
-            sensor_carry_mps=sensor_carry_cmps / 100.0,
-        ))
+        return self._add(
+            VelocityProfilePass(
+                max_speed_mps=max_speed_cmps / 100.0,
+                accel_mps2=accel_cmps2 / 100.0,
+                lateral_accel_mps2=lateral_accel_cmps2 / 100.0,
+                sensor_carry_mps=sensor_carry_cmps / 100.0,
+            )
+        )
 
     def apply(self, p) -> "Optimizer":
         """Append a user-supplied compiler pass."""

@@ -64,8 +64,7 @@ def _dir_sign(seg: Segment) -> float:
 def _arc_tangent(a: Segment, b: Segment) -> bool:
     """An arc abuts its neighbouring straight/arc tangentially by construction
     (cut_corners emits linear+arc+linear tangent), so speed may carry across."""
-    return ("arc" in (a.kind, b.kind)
-            and a.kind in _TRANSLATIONAL and b.kind in _TRANSLATIONAL)
+    return "arc" in (a.kind, b.kind) and a.kind in _TRANSLATIONAL and b.kind in _TRANSLATIONAL
 
 
 def _is_continuous_seam(a: Segment, b: Segment) -> bool:
@@ -204,9 +203,7 @@ def run_velocity_profile(
 
     out = list(nodes)
     for k, i in enumerate(seg_idx):
-        out[i] = dataclasses.replace(
-            segs[k], entry_speed_mps=entry[k], exit_speed_mps=exit_[k]
-        )
+        out[i] = dataclasses.replace(segs[k], entry_speed_mps=entry[k], exit_speed_mps=exit_[k])
     return out
 
 
