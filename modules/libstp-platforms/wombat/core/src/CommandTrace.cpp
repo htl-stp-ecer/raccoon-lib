@@ -56,7 +56,10 @@ void CommandTrace::record(const char* kind, const std::string& channel, int port
     if (nvals > 2)
         out_ << ',' << v2;
     out_ << "]}\n";
-    // Flush per line: an out-of-order bug often precedes a crash/hang, and the
-    // trace is only enabled deliberately, so durability beats throughput here.
-    out_.flush();
+    // Flush periodically, NOT per line: this is called from the mission's
+    // asyncio loop thread, and a per-line flush on the Pi SD card can block it
+    // for hundreds of ms under write-back pressure. Every 64 records bounds
+    // loss on a crash to <64 lines while keeping the publish path off the disk.
+    if ((seq & 0x3F) == 0)
+        out_.flush();
 }

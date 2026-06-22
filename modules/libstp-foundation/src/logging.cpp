@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
+#include <spdlog/async.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/pattern_formatter.h>
@@ -269,9 +270,20 @@ namespace logging {
         console_sink->set_formatter(pattern_formatter->clone());
         file_sink->set_formatter(std::move(pattern_formatter));
 
-        // Single core logger, used as default for the whole app.
-        auto logger = std::make_shared<spdlog::logger>(
-            "core", spdlog::sinks_init_list{console_sink, file_sink}
+        // Single core ASYNC logger, used as default for the whole app.
+        //
+        // The actual sink writes — stdout (a pipe / journald on the Pi) and the
+        // rotating file on the SD card — must NOT run on the caller. Steps log
+        // their signature via self.info() *on the asyncio mission loop*; a
+        // synchronous write that blocks on an SD write-back or a log rotation
+        // would stall the entire mission loop (the same hot-path stall that hit
+        // the stm32-data-reader). A background worker drains a bounded queue;
+        // overrun_oldest drops the oldest line when the queue is full instead of
+        // blocking the caller — losing a log line beats stalling the robot.
+        spdlog::init_thread_pool(8192, 1);
+        auto logger = std::make_shared<spdlog::async_logger>(
+            "core", spdlog::sinks_init_list{console_sink, file_sink},
+            spdlog::thread_pool(), spdlog::async_overflow_policy::overrun_oldest
         );
 
         logger->set_level(spdlog::level::trace);
