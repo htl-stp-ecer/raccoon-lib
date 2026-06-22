@@ -31,7 +31,7 @@ from .path.passes.spline import sample_centripetal_catmull_rom
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
-    from ...condition import StopCondition
+    from raccoon.step.condition import StopCondition
 
 
 # Proportional gains. Output is a body-frame velocity in m/s and rad/s; the
