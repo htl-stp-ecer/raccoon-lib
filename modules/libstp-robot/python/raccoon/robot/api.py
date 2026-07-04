@@ -496,6 +496,33 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 f"after mission {mission} — consider using wait_for_background()"
             )
 
+    #: Run the continuous line-sensor → localization fusion loop during the main
+    #: missions. Always-on by default (real Monte-Carlo localization); set to
+    #: ``False`` on a robot subclass to fall back to dead-reckoning + resync-only.
+    enable_localization_fusion: bool = True
+
+    def _start_localization_fusion(self) -> "asyncio.Task[None] | None":
+        """Launch the always-on line-sensor → localization fuser, or ``None``.
+
+        No-ops (returns ``None``) when disabled, when localization has no table
+        map (nothing to correct against), or when the robot has no line sensors.
+        Never raises — a fusion-wiring problem must not abort the run."""
+        if not getattr(self, "enable_localization_fusion", True):
+            return None
+        try:
+            from raccoon.robot.localization_fusion import start_localization_fusion
+
+            # start_localization_fusion is a no-op (returns None) without line
+            # sensors; without a table map the C++ weighting is itself a cheap
+            # no-op, so no extra guard is needed here.
+            task = start_localization_fusion(self)
+            if task is not None:
+                self.info("Continuous localization fusion: ON (line sensors → particle filter)")
+            return task
+        except Exception as exc:  # pragma: no cover - defensive
+            self.warn(f"Could not start localization fusion: {exc!r}")
+            return None
+
     async def _drain_background_tasks(self) -> None:
         """Cancel all remaining background tasks and await their cleanup."""
         bg_mgr = getattr(self, "_background_manager", None)
@@ -625,6 +652,13 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         from raccoon.step.watchdog_manager import get_watchdog_manager
 
         wdt = get_watchdog_manager(self)
+
+        # Continuous, automatic line-sensor → localization fusion: an always-on
+        # background loop that corrects the particle filter against the table map
+        # every tick during the run, so localization is real Monte-Carlo
+        # localization rather than dead-reckoning between rare resync steps.
+        fusion_task = self._start_localization_fusion()
+
         main_task = asyncio.create_task(self._run_main_missions(missions))
         wdt.attach_main_task(main_task)
 
@@ -654,6 +688,10 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         finally:
             wdt.detach_main_task()
             await wdt.cancel_all()
+            if fusion_task is not None:
+                fusion_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await fusion_task
 
         # Cancel orphaned background tasks before shutdown mission
         await self._drain_background_tasks()

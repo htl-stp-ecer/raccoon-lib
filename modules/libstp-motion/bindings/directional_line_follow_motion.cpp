@@ -26,7 +26,9 @@ void init_directional_line_follow_motion(py::module_& m)
         .def_readwrite("kd", &DirectionalLineFollowMotionConfig::kd)
         .def_readwrite("correction_mode", &DirectionalLineFollowMotionConfig::correction_mode)
         .def_readwrite("heading_hold", &DirectionalLineFollowMotionConfig::heading_hold)
-        .def_readwrite("correction_sign", &DirectionalLineFollowMotionConfig::correction_sign);
+        .def_readwrite("correction_sign", &DirectionalLineFollowMotionConfig::correction_sign)
+        .def_readwrite("has_target_heading", &DirectionalLineFollowMotionConfig::has_target_heading)
+        .def_readwrite("target_heading_rad", &DirectionalLineFollowMotionConfig::target_heading_rad);
 
     py::class_<DirectionalLineFollowMotionTelemetry>(m, "DirectionalLineFollowMotionTelemetry")
         .def_readonly("time_s", &DirectionalLineFollowMotionTelemetry::time_s)

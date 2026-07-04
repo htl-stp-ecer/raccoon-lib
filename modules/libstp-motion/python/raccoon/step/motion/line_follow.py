@@ -566,6 +566,10 @@ class DirectionalLineFollowConfig:
     forward_correction: bool = False
     heading_hold: bool = True
     correction_sign: float = 1.0
+    # Absolute heading (degrees from the HeadingReferenceService origin) to hold
+    # while correcting. None = hold whatever heading the step starts at. Only
+    # consulted for heading-hold modes (lateral/forward correction).
+    heading_deg: float | None = None
 
 
 def _correction_mode_name(
@@ -581,6 +585,45 @@ def _correction_mode_name(
 def _forward_correction_sign_for_lateral_follow(strafe_speed: float) -> float:
     # For +vy (right), the travel-right normal is -vx; for -vy it is +vx.
     return -1.0 if strafe_speed >= 0.0 else 1.0
+
+
+def _apply_hold_heading(
+    step: "MotionStep",
+    motion_config: "DirectionalLineFollowMotionConfig",
+    heading_deg: float | None,
+    heading_hold: bool,
+    correction_mode: "LineFollowCorrectionMode",
+    robot: "GenericRobot",
+) -> None:
+    """Pin the heading-hold PID onto an absolute reference-relative heading.
+
+    When ``heading_deg`` is given it is resolved to an absolute world heading
+    via :class:`HeadingReferenceService` (same origin used by
+    ``turn_to_heading_*`` and ``drive_forward(heading=…)``) and written onto
+    the motion config. Absolute heading only takes effect in heading-hold modes
+    (lateral/forward correction); pairing it with angular correction or
+    ``heading_hold=False`` is a no-op, so we warn rather than fail.
+    """
+    if heading_deg is None:
+        return
+
+    if not heading_hold or correction_mode == LineFollowCorrectionMode.Angular:
+        step.debug(
+            f"heading_deg={heading_deg:.1f}° ignored: absolute heading only "
+            f"applies to heading-hold lateral/forward correction "
+            f"(correction={correction_mode}, heading_hold={heading_hold})"
+        )
+        return
+
+    from raccoon.robot.heading_reference import HeadingReferenceService
+
+    ref_svc = robot.get_service(HeadingReferenceService)
+    motion_config.has_target_heading = True
+    motion_config.target_heading_rad = ref_svc.target_absolute_rad(heading_deg)
+    step.debug(
+        f"holding absolute heading {heading_deg:.1f}° "
+        f"(target_heading_rad={motion_config.target_heading_rad:.3f})"
+    )
 
 
 @dsl(hidden=True)
@@ -669,6 +712,15 @@ class DirectionalLineFollow(MotionStep):
         else:
             motion_config.correction_mode = LineFollowCorrectionMode.Angular
 
+        _apply_hold_heading(
+            self,
+            motion_config,
+            cfg.heading_deg,
+            cfg.heading_hold,
+            motion_config.correction_mode,
+            robot,
+        )
+
         self._motion = DirectionalLineFollowMotion(
             robot.drive,
             robot.odometry,
@@ -706,10 +758,15 @@ class DirectionalLineFollow(MotionStep):
         self._motion.set_sensor_error(error)
         self._motion.update(dt)
         telemetry = self._motion.get_telemetry()
-        correction = telemetry[-1].correction if telemetry else 0.0
-        self.debug(
-            f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}"
-        )
+        t = telemetry[-1] if telemetry else None
+        if t is not None:
+            self.debug(
+                f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} corr={t.correction:.3f} "
+                f"-> vx={t.cmd_vx_mps:.3f} vy={t.cmd_vy_mps:.3f} wz={t.cmd_wz_radps:.3f} "
+                f"(hdg_err={t.heading_error_rad:.3f}rad, dt={dt:.4f})"
+            )
+        else:
+            self.debug(f"L={left_conf:.2f} R={right_conf:.2f} err={error:.2f} dt={dt:.4f}")
         return self._motion.is_finished()
 
 
@@ -739,6 +796,10 @@ class DirectionalSingleLineFollowConfig:
     forward_correction: bool = False
     heading_hold: bool = True
     correction_sign: float = 1.0
+    # Absolute heading (degrees from the HeadingReferenceService origin) to hold
+    # while correcting. None = hold whatever heading the step starts at. Only
+    # consulted for heading-hold modes (lateral/forward correction).
+    heading_deg: float | None = None
 
 
 @dsl(hidden=True)
@@ -824,6 +885,15 @@ class DirectionalSingleLineFollow(MotionStep):
         else:
             motion_config.correction_mode = LineFollowCorrectionMode.Angular
 
+        _apply_hold_heading(
+            self,
+            motion_config,
+            cfg.heading_deg,
+            cfg.heading_hold,
+            motion_config.correction_mode,
+            robot,
+        )
+
         self._motion = DirectionalLineFollowMotion(
             robot.drive,
             robot.odometry,
@@ -857,8 +927,15 @@ class DirectionalSingleLineFollow(MotionStep):
         self._motion.set_sensor_error(error)
         self._motion.update(dt)
         telemetry = self._motion.get_telemetry()
-        correction = telemetry[-1].correction if telemetry else 0.0
-        self.debug(f"black={reading:.2f} err={error:.2f} corr={correction:.3f} dt={dt:.4f}")
+        t = telemetry[-1] if telemetry else None
+        if t is not None:
+            self.debug(
+                f"black={reading:.2f} err={error:.2f} corr={t.correction:.3f} "
+                f"-> vx={t.cmd_vx_mps:.3f} vy={t.cmd_vy_mps:.3f} wz={t.cmd_wz_radps:.3f} "
+                f"(hdg_err={t.heading_error_rad:.3f}rad, dt={dt:.4f})"
+            )
+        else:
+            self.debug(f"black={reading:.2f} err={error:.2f} dt={dt:.4f}")
         return self._motion.is_finished()
 
 
@@ -1001,6 +1078,12 @@ class StrafeFollowLine(DirectionalLineFollow):
         kp: Proportional gain for lateral PID.  Default 0.75.
         ki: Integral gain for lateral PID.  Default 0.0.
         kd: Derivative gain for lateral PID.  Default 0.5.
+        heading_deg: Absolute heading to hold while correcting, in degrees
+            from the :func:`mark_heading_reference` origin (CCW-positive, same
+            convention as ``turn_to_heading_left`` and ``drive_forward(heading=…)``).
+            ``None`` (default) holds whatever heading the robot has when the
+            step starts.  Requires :func:`mark_heading_reference` earlier in the
+            mission when set.
         until: Composable stop condition. Can also be chained via the
             ``.until()`` builder method.
 
@@ -1017,6 +1100,9 @@ class StrafeFollowLine(DirectionalLineFollow):
 
         # Follow until both sensors see black
         strafe_follow_line(left, right, speed=0.4).until(on_black(left) & on_black(right))
+
+        # Hold the board-forward heading (0° from the marked reference)
+        strafe_follow_line(left, right, distance_cm=40, speed=0.4, heading_deg=0)
     """
 
     def __init__(
@@ -1028,6 +1114,7 @@ class StrafeFollowLine(DirectionalLineFollow):
         kp: float = 0.4,
         ki: float = 0.0,
         kd: float = 0.1,
+        heading_deg: float | None = None,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -1040,6 +1127,7 @@ class StrafeFollowLine(DirectionalLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
+        self._heading_deg = heading_deg
         super().__init__(
             DirectionalLineFollowConfig(
                 left_sensor=left_sensor,
@@ -1051,6 +1139,7 @@ class StrafeFollowLine(DirectionalLineFollow):
                 ki=ki,
                 kd=kd,
                 lateral_correction=True,
+                heading_deg=heading_deg,
             ),
             until=until,
         )
@@ -1091,6 +1180,10 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         kp: Proportional gain for lateral PID.  Default 1.0.
         ki: Integral gain for lateral PID.  Default 0.0.
         kd: Derivative gain for lateral PID.  Default 0.3.
+        heading_deg: Absolute heading to hold while correcting, in degrees
+            from the :func:`mark_heading_reference` origin (CCW-positive).
+            ``None`` (default) holds the heading captured at step start.
+            Requires :func:`mark_heading_reference` earlier when set.
         until: Composable stop condition. Can also be chained via the
             ``.until()`` builder method.
 
@@ -1107,6 +1200,9 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
 
         # Follow until stop sensor sees black
         strafe_follow_line_single(front_ir, speed=0.4).until(on_black(stop))
+
+        # Hold 0° (board forward) while correcting on the strafe axis
+        strafe_follow_line_single(front_ir, distance_cm=40, speed=0.4, heading_deg=0)
     """
 
     def __init__(
@@ -1118,6 +1214,7 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         kp: float = 0.4,
         ki: float = 0.0,
         kd: float = 0.1,
+        heading_deg: float | None = None,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -1130,6 +1227,7 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
+        self._heading_deg = heading_deg
         super().__init__(
             DirectionalSingleLineFollowConfig(
                 sensor=sensor,
@@ -1141,6 +1239,7 @@ class StrafeFollowLineSingle(DirectionalSingleLineFollow):
                 ki=ki,
                 kd=kd,
                 lateral_correction=True,
+                heading_deg=heading_deg,
             ),
             until=until,
         )
@@ -1187,6 +1286,10 @@ class LateralFollowLine(DirectionalLineFollow):
         kp: Proportional gain for cross-track PID.
         ki: Integral gain for cross-track PID.
         kd: Derivative gain for cross-track PID.
+        heading_deg: Absolute heading to hold while strafing, in degrees from
+            the :func:`mark_heading_reference` origin (CCW-positive). ``None``
+            (default) holds the heading captured at step start. Requires
+            :func:`mark_heading_reference` earlier when set.
         until: Composable stop condition. Can also be chained via the
             ``.until()`` builder method.
     """
@@ -1200,6 +1303,7 @@ class LateralFollowLine(DirectionalLineFollow):
         kp: float = 0.4,
         ki: float = 0.0,
         kd: float = 0.1,
+        heading_deg: float | None = None,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -1212,6 +1316,7 @@ class LateralFollowLine(DirectionalLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
+        self._heading_deg = heading_deg
         super().__init__(
             DirectionalLineFollowConfig(
                 left_sensor=left_sensor,
@@ -1224,6 +1329,7 @@ class LateralFollowLine(DirectionalLineFollow):
                 kd=kd,
                 forward_correction=True,
                 correction_sign=_forward_correction_sign_for_lateral_follow(speed),
+                heading_deg=heading_deg,
             ),
             until=until,
         )
@@ -1264,6 +1370,10 @@ class LateralFollowLineSingle(DirectionalSingleLineFollow):
         kp: Proportional gain for cross-track PID.
         ki: Integral gain for cross-track PID.
         kd: Derivative gain for cross-track PID.
+        heading_deg: Absolute heading to hold while strafing, in degrees from
+            the :func:`mark_heading_reference` origin (CCW-positive). ``None``
+            (default) holds the heading captured at step start. Requires
+            :func:`mark_heading_reference` earlier when set.
         until: Composable stop condition. Can also be chained via the
             ``.until()`` builder method.
     """
@@ -1277,6 +1387,7 @@ class LateralFollowLineSingle(DirectionalSingleLineFollow):
         kp: float = 0.4,
         ki: float = 0.0,
         kd: float = 0.1,
+        heading_deg: float | None = None,
         until: StopCondition | None = None,
     ) -> None:
         if distance_cm is None and until is None:
@@ -1289,6 +1400,7 @@ class LateralFollowLineSingle(DirectionalSingleLineFollow):
         self._kp = kp
         self._ki = ki
         self._kd = kd
+        self._heading_deg = heading_deg
         super().__init__(
             DirectionalSingleLineFollowConfig(
                 sensor=sensor,
@@ -1301,6 +1413,7 @@ class LateralFollowLineSingle(DirectionalSingleLineFollow):
                 kd=kd,
                 forward_correction=True,
                 correction_sign=_forward_correction_sign_for_lateral_follow(speed),
+                heading_deg=heading_deg,
             ),
             until=until,
         )

@@ -34,4 +34,7 @@ def error(message: str, *, _stacklevel: int = 1) -> None:
 
 
 def trace(message: str, *, _stacklevel: int = 1) -> None:
-    _log_filtered(Level.debug, _caller_filename(_stacklevel), f"[TRACE] {message}")
+    # Real TRACE level. The file sink's floor defaults to Level.trace so these
+    # land in libstp.log; the console policy (default Level.info) keeps them off
+    # stdout. The level column already renders "trace" — no prefix needed.
+    _log_filtered(Level.trace, _caller_filename(_stacklevel), message)

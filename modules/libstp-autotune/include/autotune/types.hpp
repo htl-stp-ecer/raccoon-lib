@@ -414,7 +414,10 @@ namespace libstp::autotune
     struct ToleranceConfig
     {
         double margin_factor{1.5};
-        double min_distance_tolerance_m{0.005};
+        // Floor kept at 2 mm so tolerance autotune can't clamp the completion
+        // band back above the uniform 2 mm target (motion_config.hpp /
+        // executor DISTANCE_TOL_M).
+        double min_distance_tolerance_m{0.002};
         double max_distance_tolerance_m{0.050};
         double min_angle_tolerance_rad{0.017};
         double max_angle_tolerance_rad{0.087};
@@ -426,7 +429,7 @@ namespace libstp::autotune
      */
     struct ToleranceResult
     {
-        double derived_distance_tolerance_m{0.01};
+        double derived_distance_tolerance_m{0.002};
         double derived_angle_tolerance_rad{0.035};
         bool   distance_updated{false};
         bool   angle_updated{false};

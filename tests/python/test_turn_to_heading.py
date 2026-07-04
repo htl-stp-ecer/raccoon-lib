@@ -179,18 +179,39 @@ def test_to_absolute_folds_heading_turn_into_one_goto():
 
 
 @requires_libstp
-def test_to_absolute_heading_turn_without_mark_raises():
+def test_to_absolute_heading_turn_without_mark_degrades_gracefully():
     """A heading turn needs the compile-time mark offset to align the reference
-    with localization — without a mark_heading_reference() in the steps, the
-    to_absolute fold raises a clear error."""
+    with localization. Without a ``mark_heading_reference()`` in the steps the
+    offset is unknown (common when ``optimize()`` wraps a single mission whose
+    mark was set earlier), so the fold DEGRADES GRACEFULLY: the run passes
+    through as ordinary relative legs instead of raising — to_absolute is
+    best-effort and must never break a build. The only cost is no
+    drift-correction on that run, so no absolute (``GotoWaypoints``) fold is
+    emitted for it."""
     from raccoon.step.motion.drive_dsl import drive_forward
     from raccoon.step.motion.heading_reference import turn_to_heading_right
     from raccoon.step.motion.path.compiler import PathCompiler
     from raccoon.step.motion.path.optimize import optimize
 
     opt = optimize([drive_forward(50), turn_to_heading_right(90), drive_forward(30)]).to_absolute()
-    with pytest.raises(ValueError, match="mark_heading_reference"):
-        PathCompiler(opt._effective_passes()).compile(opt._raw_steps)
+    # Must NOT raise — it compiles, degrading the unresolvable heading run.
+    plan = PathCompiler(opt._effective_passes()).compile(opt._raw_steps)
+    assert plan is not None
+    # No GotoWaypoints carrying an ABSOLUTE-heading waypoint was emitted (the
+    # run stayed relative). GotoWaypoints store waypoints whose 5th field is the
+    # heading kind ("rel"/"abs"); a degraded run produces none with "abs".
+    from raccoon.step.motion.goto import GotoWaypoints
+
+    def _iter_steps(p):
+        for node in getattr(p, "nodes", getattr(p, "steps", [])) or []:
+            yield getattr(node, "step", node)
+
+    abs_waypoints = [
+        s
+        for s in _iter_steps(plan)
+        if isinstance(s, GotoWaypoints) and any(wp[4] == "abs" for wp in s._waypoints)
+    ]
+    assert not abs_waypoints, "unresolvable heading run should degrade to relative, not fold to abs"
 
 
 # ---------------------------------------------------------------------------
@@ -244,3 +265,124 @@ def test_splinify_builder_splits_at_heading_turn():
     ]
     assert len(splines) == 2  # one curve on each side of the barrier
     assert len(heading_turns) == 1  # turn_to_heading preserved in place
+
+
+# ---------------------------------------------------------------------------
+# force_direction — enum, validation, and the on_start direction-preservation
+# regression (a forced direction must NOT be re-normalized to shortest path).
+# ---------------------------------------------------------------------------
+
+
+class _FakePose:
+    def __init__(self, heading: float) -> None:
+        self.heading = heading
+
+
+class _FakeOdometry:
+    def __init__(self, heading: float = 0.0) -> None:
+        self._heading = heading
+
+    def get_pose(self) -> _FakePose:
+        return _FakePose(self._heading)
+
+
+class _FakeRobot:
+    """Minimal robot exposing only what TurnToHeading.on_start touches."""
+
+    def __init__(self, heading: float = 0.0) -> None:
+        self.odometry = _FakeOdometry(heading)
+        self.localization = None
+        self.drive = object()
+        self.motion_pid_config = object()
+        self._service = None
+
+    def get_service(self, _cls):
+        return self._service
+
+
+def _robot_with_marked_reference(heading: float = 0.0):
+    from raccoon.robot.heading_reference import HeadingReferenceService
+
+    robot = _FakeRobot(heading=heading)
+    service = HeadingReferenceService(robot)
+    service.mark()  # reference == current heading, positive_direction="left"
+    robot._service = service
+    return robot, service
+
+
+@requires_libstp
+def test_turn_direction_enum_validates_and_coerces():
+    from raccoon.robot.heading_reference import TurnDirection
+
+    assert TurnDirection.coerce(None) is None
+    assert TurnDirection.coerce("left") is TurnDirection.LEFT
+    assert TurnDirection.coerce("RIGHT") is TurnDirection.RIGHT
+    assert TurnDirection.coerce(TurnDirection.LEFT) is TurnDirection.LEFT
+    # str-enum keeps string equality so legacy comparisons still work.
+    assert TurnDirection.RIGHT == "right"
+    with pytest.raises(ValueError, match="Invalid turn direction"):
+        TurnDirection.coerce("sideways")
+
+
+@requires_libstp
+def test_factory_coerces_force_direction_string_to_enum():
+    from raccoon.robot.heading_reference import TurnDirection
+    from raccoon.step.motion.heading_reference import turn_to_heading_left
+
+    step = _resolve(turn_to_heading_left(45, force_direction="right"))
+    assert step._force_direction is TurnDirection.RIGHT
+
+
+@requires_libstp
+def test_factory_rejects_invalid_force_direction():
+    from raccoon.step.motion.heading_reference import turn_to_heading_right
+
+    with pytest.raises(ValueError, match="Invalid turn direction"):
+        _resolve(turn_to_heading_right(30, force_direction="up"))
+
+
+@requires_libstp
+def test_compute_turn_forced_direction_extends_past_180():
+    from raccoon.robot.heading_reference import TurnDirection
+
+    _, service = _robot_with_marked_reference(heading=0.0)
+
+    # Shortest path to +10° is +10° left; forcing RIGHT must go the long way.
+    assert service.compute_turn(10.0) == pytest.approx(10.0)
+    assert service.compute_turn(10.0, force_direction=TurnDirection.RIGHT) == pytest.approx(-350.0)
+    # And vice-versa: shortest path to -10° is right; forcing LEFT wraps to +350.
+    assert service.compute_turn(-10.0) == pytest.approx(-10.0)
+    assert service.compute_turn(-10.0, force_direction="left") == pytest.approx(350.0)
+
+
+@requires_libstp
+def test_on_start_preserves_forced_direction_target(monkeypatch):
+    """Regression: on_start must hand the forced (possibly >180°) delta to
+    TurnMotion verbatim. The previous ``math.remainder`` normalization silently
+    folded a forced 350° right turn back into a 10° left turn."""
+    import math
+
+    import raccoon.step.motion.heading_reference as hr
+    from raccoon.robot.heading_reference import TurnDirection
+
+    robot, _ = _robot_with_marked_reference(heading=0.0)
+
+    captured = {}
+
+    class _FakeMotion:
+        def __init__(self, _drive, _odo, _pid, config):
+            captured["config"] = config
+
+        def start(self) -> None:
+            pass
+
+    monkeypatch.setattr(hr, "TurnMotion", _FakeMotion)
+
+    # turn_to_heading_left(10) -> target +10°; forcing RIGHT -> -350° physical.
+    step = _resolve(hr.turn_to_heading_left(10, force_direction=TurnDirection.RIGHT))
+    step.on_start(robot)
+
+    assert "config" in captured  # not skipped as "already at target"
+    assert captured["config"].target_angle_rad == pytest.approx(math.radians(-350.0))
+    # Guard against the old bug: must NOT have collapsed to the +10° shortest path.
+    assert captured["config"].target_angle_rad < -math.pi

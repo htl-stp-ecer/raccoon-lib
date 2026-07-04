@@ -198,6 +198,115 @@ class DriveAngleAdapter:
             self._step._motion.set_suppress_hard_stop(val)
 
 
+class CrabArcAdapter:
+    """Drives a constant-heading 90° corner blend (``crab_arc``).
+
+    A holonomic base can round a ``forward↔strafe`` corner without rotating: the
+    body-frame velocity vector is swept from the entry leg's travel direction
+    (``crab_from``) to the exit leg's (``crab_to``) along a quarter circle of
+    radius ``R = seg.radius_m``, while a proportional controller holds the
+    heading captured at start. Progress is the path length travelled (read from
+    odometry); the arc angle is ``α = travelled / R`` and the blend completes at
+    ``α = arc_angle_rad`` (π/2).
+
+    No C++ motion backs this — like ``DriveAngle`` it commands chassis velocity
+    directly. It never relies on a trapezoidal profile, so a cold ``start`` and a
+    profiled ``start_warm`` both simply begin commanding the blend at cruise (or
+    the carried) speed; ``inflate`` is irrelevant.
+    """
+
+    # Proportional heading-hold gain (rad/s per rad of error), clamped to the
+    # drivetrain's angular cap. Gentle: the base barely yaws during a crab blend.
+    _HEADING_KP = 4.0
+
+    def __init__(self, seg: Segment, robot: "GenericRobot") -> None:
+        self._seg = seg
+        self._robot = robot
+        self._e1 = seg.crab_from or (1.0, 0.0)
+        self._e2 = seg.crab_to or (0.0, 1.0)
+        self._radius = seg.radius_m or 0.0
+        self._arc = abs(seg.arc_angle_rad if seg.arc_angle_rad is not None else math.pi / 2.0)
+        self._done = False
+        self._traveled = 0.0
+        self._prev_xy: tuple[float, float] | None = None
+        self._target_heading = 0.0
+        self._speed = 0.0
+
+    def _cruise_speed(self) -> float:
+        cfg = self._robot.motion_pid_config
+        # The blend reaches full vx at α=0 and full vy at α=π/2, so cap the
+        # magnitude by the SLOWER of the two axes to respect both limits.
+        base = min(cfg.linear.max_velocity, cfg.lateral.max_velocity)
+        return base * (self._seg.speed_scale or 1.0)
+
+    def _begin(self, speed: float) -> None:
+        from .._heading_utils import get_world_heading_rad
+
+        self._target_heading = get_world_heading_rad(self._robot)
+        self._speed = max(0.0, min(speed, self._cruise_speed()))
+        self._done = self._radius <= 1e-9
+        self._traveled = 0.0
+        pos = self._robot.odometry.get_pose().position
+        self._prev_xy = (float(pos[0]), float(pos[1]))
+
+    def start(self) -> None:
+        self._begin(self._cruise_speed())
+
+    def start_warm(self, offset: float, velocity: float) -> None:  # offset unused
+        # ``velocity`` is the linear m/s carried from the previous leg (the
+        # executor does NOT divide by radius for non-"arc" kinds). Use it so the
+        # robot flows into the corner instead of restarting from rest.
+        self._begin(velocity if velocity > 1e-3 else self._cruise_speed())
+
+    def update(self, dt: float) -> None:
+        from raccoon.foundation import ChassisVelocity
+
+        if self._done:
+            self._robot.drive.set_velocity(ChassisVelocity(0.0, 0.0, 0.0))
+            self._robot.drive.update(dt)
+            return
+
+        self._robot.odometry.update(dt)
+        pos = self._robot.odometry.get_pose().position
+        x, y = float(pos[0]), float(pos[1])
+        if self._prev_xy is not None:
+            self._traveled += math.hypot(x - self._prev_xy[0], y - self._prev_xy[1])
+        self._prev_xy = (x, y)
+
+        alpha = self._traveled / self._radius if self._radius > 1e-9 else self._arc
+        if alpha >= self._arc:
+            self._done = True
+            self._robot.drive.set_velocity(ChassisVelocity(0.0, 0.0, 0.0))
+            self._robot.drive.update(dt)
+            return
+
+        # Body-frame velocity direction: rotate from crab_from to crab_to.
+        c, s = math.cos(alpha), math.sin(alpha)
+        dx = c * self._e1[0] + s * self._e2[0]
+        dy = c * self._e1[1] + s * self._e2[1]
+
+        # Hold the heading captured at start (P control, clamped to angular cap).
+        heading = float(self._robot.odometry.get_heading())
+        err = math.remainder(self._target_heading - heading, 2.0 * math.pi)
+        omega_cap = self._robot.motion_pid_config.angular.max_velocity
+        wz = max(-omega_cap, min(omega_cap, self._HEADING_KP * err))
+
+        self._robot.drive.set_velocity(ChassisVelocity(self._speed * dx, self._speed * dy, wz))
+        self._robot.drive.update(dt)
+
+    def is_finished(self) -> bool:
+        return self._done
+
+    def has_reached_distance(self) -> bool:
+        return self._done
+
+    def get_filtered_velocity(self) -> float:
+        return self._speed
+
+    def set_suppress_hard_stop(self, val: bool) -> None:
+        pass  # the adapter commands its own velocity; nothing to suppress
+
+
 class SplineAdapter:
     """Adapts a SplinePath step to the C++ motion API.
 
@@ -420,6 +529,10 @@ def create_motion(
         return _create_turn_motion(robot, seg, is_last, current_world_heading_rad, inflate)
     if seg.kind == "arc":
         return _create_arc_motion(robot, seg, is_last, current_world_heading_rad, inflate)
+    if seg.kind == "crab_arc":
+        # Constant-heading corner blend (holonomic forward↔strafe). The adapter
+        # reads the held heading itself, so current_world_heading_rad is unused.
+        return CrabArcAdapter(seg, robot)
     if seg.kind == "follow_line":
         return LineFollowAdapter(seg.opaque_step, robot)
     if seg.kind == "spline":

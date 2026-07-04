@@ -29,6 +29,7 @@ import math
 
 import pytest
 
+from raccoon.motion import LineFollowCorrectionMode
 from raccoon.step.condition import StopCondition
 from raccoon.step.motion import (
     DirectionalFollowLine,
@@ -948,3 +949,149 @@ def test_simulation_delta_directional_zero_speed_defaults_to_forward() -> None:
     delta = step.to_simulation_step().delta
     assert delta.forward == pytest.approx(0.3)  # 0.3 m fallback * fwd_frac 1.0
     assert delta.strafe == pytest.approx(0.0)
+
+
+# ===========================================================================
+# Absolute heading support (heading-hold correction modes)
+# ===========================================================================
+
+
+class _FakeMotionCfg:
+    """Duck-typed stand-in for ``DirectionalLineFollowMotionConfig``.
+
+    Mirrors only the two fields ``_apply_hold_heading`` writes, so the wiring
+    can be asserted without a rebuilt C++ bundle.
+    """
+
+    def __init__(self) -> None:
+        self.has_target_heading = False
+        self.target_heading_rad = 0.0
+
+
+class _FakeHeadingRefService:
+    """Resolves reference-relative degrees to a fixed absolute radian value."""
+
+    def __init__(self, absolute_rad: float) -> None:
+        self._absolute_rad = absolute_rad
+        self.requested_deg: float | None = None
+
+    def target_absolute_rad(self, target_deg: float) -> float:
+        self.requested_deg = target_deg
+        return self._absolute_rad
+
+
+class _FakeRobotWithHeadingRef:
+    def __init__(self, service: _FakeHeadingRefService) -> None:
+        self._service = service
+
+    def get_service(self, _service_cls: object) -> _FakeHeadingRefService:
+        return self._service
+
+
+class _FakeStep:
+    def __init__(self) -> None:
+        self.debug_messages: list[str] = []
+
+    def debug(self, message: str) -> None:
+        self.debug_messages.append(message)
+
+
+def test_strafe_follow_line_threads_heading_deg_into_config() -> None:
+    step = StrafeFollowLine(FakeSensor(), FakeSensor(), distance_cm=40, heading_deg=90)
+    assert step.config.heading_deg == pytest.approx(90)
+    assert step._heading_deg == pytest.approx(90)
+    # Default is None (hold whatever heading the step starts at).
+    assert StrafeFollowLine(FakeSensor(), FakeSensor(), distance_cm=40).config.heading_deg is None
+
+
+def test_lateral_follow_line_threads_heading_deg_into_config() -> None:
+    step = LateralFollowLine(FakeSensor(), FakeSensor(), distance_cm=40, heading_deg=-45)
+    assert step.config.heading_deg == pytest.approx(-45)
+
+
+def test_single_variants_thread_heading_deg_into_config() -> None:
+    strafe = StrafeFollowLineSingle(FakeSensor(), distance_cm=40, heading_deg=15)
+    lateral = LateralFollowLineSingle(FakeSensor(), distance_cm=40, heading_deg=15)
+    assert strafe.config.heading_deg == pytest.approx(15)
+    assert lateral.config.heading_deg == pytest.approx(15)
+
+
+def test_builder_hold_heading_threads_into_config() -> None:
+    step = (
+        line_follow()
+        .dual(FakeSensor(), FakeSensor())
+        .move(forward=0.5)
+        .correct_lateral()
+        .hold_heading(30)
+        .distance_cm(40)
+        .resolve()
+    )
+    assert isinstance(step, DirectionalLineFollow)
+    assert step.config.heading_deg == pytest.approx(30)
+
+
+def test_builder_hold_heading_defaults_to_none() -> None:
+    b = ConfigurableLineFollowBuilder()
+    assert b._heading_deg is None
+    assert b.hold_heading(12) is b
+    assert b._heading_deg == pytest.approx(12)
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [LineFollowCorrectionMode.Lateral, LineFollowCorrectionMode.Forward],
+)
+def test_apply_hold_heading_sets_absolute_target_for_heading_hold_modes(mode) -> None:
+    from raccoon.step.motion.line_follow import _apply_hold_heading
+
+    cfg = _FakeMotionCfg()
+    service = _FakeHeadingRefService(absolute_rad=1.234)
+    robot = _FakeRobotWithHeadingRef(service)
+    step = _FakeStep()
+
+    _apply_hold_heading(
+        step, cfg, heading_deg=90, heading_hold=True, correction_mode=mode, robot=robot
+    )
+
+    assert cfg.has_target_heading is True
+    assert cfg.target_heading_rad == pytest.approx(1.234)
+    assert service.requested_deg == pytest.approx(90)
+
+
+def test_apply_hold_heading_none_is_noop() -> None:
+    from raccoon.step.motion.line_follow import _apply_hold_heading
+
+    cfg = _FakeMotionCfg()
+    step = _FakeStep()
+    # No robot access should happen when heading_deg is None.
+    _apply_hold_heading(
+        step,
+        cfg,
+        heading_deg=None,
+        heading_hold=True,
+        correction_mode=LineFollowCorrectionMode.Lateral,
+        robot=None,
+    )
+    assert cfg.has_target_heading is False
+    assert cfg.target_heading_rad == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    ("heading_hold", "mode"),
+    [
+        (True, LineFollowCorrectionMode.Angular),
+        (False, LineFollowCorrectionMode.Lateral),
+    ],
+)
+def test_apply_hold_heading_warns_and_skips_when_not_applicable(heading_hold, mode) -> None:
+    from raccoon.step.motion.line_follow import _apply_hold_heading
+
+    cfg = _FakeMotionCfg()
+    step = _FakeStep()
+    # Angular steering / heading_hold=False cannot hold an absolute heading;
+    # the helper must skip (no robot access) and log why.
+    _apply_hold_heading(
+        step, cfg, heading_deg=90, heading_hold=heading_hold, correction_mode=mode, robot=None
+    )
+    assert cfg.has_target_heading is False
+    assert any("ignored" in m for m in step.debug_messages)

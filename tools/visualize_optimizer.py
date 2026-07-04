@@ -233,7 +233,7 @@ def advance_segment(p: Pose, seg, lib: Lib, preview_m: float, env: Env) -> tuple
         samples, ex, ey, eh = lib.arc_samples(
             p.x, p.y, p.h, seg.radius_m or 0.0, seg.arc_angle_rad or 0.0, seg.lateral
         )
-        pts = [(p.x, p.y)] + list(samples)
+        pts = [(p.x, p.y), *list(samples)]
         deg = math.degrees(seg.arc_angle_rad or 0.0)
         return (
             TraceItem("arc", pts, f"arc r{(seg.radius_m or 0)*M:.0f} {deg:+.0f}°", heading_end=eh),
@@ -337,7 +337,7 @@ def trace_absolute(abs_nodes, lib: Lib, preview_m: float) -> list[TraceItem]:
                     )
                     for (fwd, left) in step._waypoints
                 ]
-                pts = [(p.x, p.y)] + ctrl
+                pts = [(p.x, p.y), *ctrl]
                 if ctrl:
                     p = Pose(ctrl[-1][0], ctrl[-1][1], p.h)
                 items.append(TraceItem("spline", pts, "SplineFollow", heading_end=p.h))
@@ -481,7 +481,7 @@ def _cond_src(cond, lib: Lib, depth: int = 0) -> str:
     children = []
     for attr in ("_conditions", "_conds", "_parts"):
         seq = getattr(cond, attr, None)
-        if isinstance(seq, (list, tuple)) and seq:
+        if isinstance(seq, list | tuple) and seq:
             children = list(seq)
             break
     if not children:
@@ -529,6 +529,7 @@ def _seg_src(seg, lib: Lib) -> str:
         target = getattr(seg.opaque_step, "_target_deg", None) if seg.opaque_step else None
         if target is not None:
             fd = getattr(seg.opaque_step, "_force_direction", None)
+            fd = fd.value if hasattr(fd, "value") else fd  # TurnDirection enum -> str
             side = fd if fd in ("left", "right") else ("left" if (seg.sign or 1) >= 0 else "right")
             return _call(f"turn_to_heading_{side}", _num(target)) + _until(seg, lib)
         if seg.angle_rad is not None:
@@ -581,7 +582,7 @@ def _side_src(step, is_bg: bool, lib: Lib) -> str:
             f"  # closed-loop nav, {len(legs)} absolute target(s)"
         )
     if lib.SplineFollow is not None and isinstance(step, lib.SplineFollow):
-        pts = ", ".join(f"({_num(f * 100)}, {_num(l * 100)})" for f, l in step._waypoints)
+        pts = ", ".join(f"({_num(f * 100)}, {_num(lat * 100)})" for f, lat in step._waypoints)
         return f"spline_follow([{pts}], speed={_num(step._speed)}),  # absolute pure-pursuit spline"
     if isinstance(step, lib.AbsoluteHoldMove):
         axis = "Forward" if step._free_axis == lib.LinearAxis.Forward else "Lateral"
@@ -669,7 +670,7 @@ def combo_codegen_text(seq, lib: Lib, cut_cm: float = 8.0) -> str:
     return "\n".join(out) + "\n"
 
 
-def combo_sequence(lib: Lib):
+def combo_sequence(lib: Lib):  # noqa: ARG001
     """A clean pure-motion path (no side actions) so all combos are valid."""
     from raccoon.step.motion import drive_forward, turn_left, turn_right
 
@@ -755,7 +756,7 @@ def _arrow(ax, x, y, h, color, scale=4.0):
         "",
         xy=(x + scale * math.cos(h), y + scale * math.sin(h)),
         xytext=(x, y),
-        arrowprops=dict(arrowstyle="-|>", color=color, lw=1.2, alpha=0.8),
+        arrowprops={"arrowstyle": "-|>", "color": color, "lw": 1.2, "alpha": 0.8},
     )
 
 
@@ -896,7 +897,7 @@ def plot_with_spline(
         va="top",
         ha="left",
         family="monospace",
-        bbox=dict(boxstyle="round", fc="#fffbe6", ec="#cccccc", alpha=0.95),
+        bbox={"boxstyle": "round", "fc": "#fffbe6", "ec": "#cccccc", "alpha": 0.95},
     )
 
     fig.tight_layout()
@@ -950,7 +951,7 @@ def node_summary(nodes, lib: Lib) -> str:
 # ---------------------------------------------------------------------------
 
 
-def demo_sequence(lib: Lib):
+def demo_sequence(lib: Lib):  # noqa: ARG001
     from raccoon.step.motion import (
         drive_forward,
         mark_heading_reference,
@@ -1069,9 +1070,9 @@ def main():
     args = ap.parse_args()
 
     if not args.show:
-        import matplotlib
+        import matplotlib as mpl
 
-        matplotlib.use("Agg")
+        mpl.use("Agg")
 
     out_dir = Path(args.out).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)

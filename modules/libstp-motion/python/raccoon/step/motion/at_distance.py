@@ -17,13 +17,16 @@ Multiple distance-triggered actions:
         seq([wait_until_distance(45), servo_close()]),
     )
 
-Polls odometry at 100Hz.  Because LinearMotion.start() resets odometry,
-the distance is measured from the start of the concurrent drive step.
+Polls odometry at 100Hz.  Motion steps no longer reset odometry on start
+(the world pose lives in the continuously-accumulating localization frame),
+so the distance is measured as the displacement from where THIS step began
+rather than from the odometry origin.
 """
 
 from __future__ import annotations
 
 import asyncio
+import math
 from typing import TYPE_CHECKING
 
 from .. import Step
@@ -37,7 +40,10 @@ if TYPE_CHECKING:
 class WaitUntilDistance(Step):
     """Wait until the robot has driven at least the given distance.
 
-    Polls odometry straight-line distance from the origin at 100 Hz.
+    Snapshots the odometry position when the step starts and polls the
+    straight-line displacement from that point at 100 Hz. Because motion steps
+    no longer reset odometry on start, the threshold is measured relative to
+    this step's own start — not the (continuously accumulating) odometry origin.
     Designed to run inside a ``parallel()`` branch alongside a drive step,
     enabling actions to trigger at specific distances during a drive.
 
@@ -73,28 +79,40 @@ class WaitUntilDistance(Step):
         stall_timeout_s = 0.5
 
         loop = asyncio.get_event_loop()
+
+        # Odometry accumulates continuously from the last full reset() and is
+        # NOT zeroed when the concurrent drive starts. Snapshot the position at
+        # step start and measure the displacement from there, so the threshold
+        # reflects distance driven during this step rather than the (possibly
+        # large) absolute distance from the mission's odometry origin.
+        origin = robot.odometry.get_distance_from_origin()
+        start_forward = origin.forward
+        start_lateral = origin.lateral
+
         last_progress_dist = 0.0
         last_progress_time = loop.time()
 
         while True:
-            dist = robot.odometry.get_distance_from_origin()
+            d = robot.odometry.get_distance_from_origin()
+            # forward/lateral are projections onto the fixed origin frame, so
+            # their delta is the Euclidean displacement since step start —
+            # direction-independent and immune to the origin never resetting.
+            traveled = math.hypot(d.forward - start_forward, d.lateral - start_lateral)
             now = loop.time()
 
-            if dist.straight_line >= self._distance_m:
-                self.debug(
-                    f"Distance {dist.straight_line:.3f}m >= " f"{self._distance_m:.3f}m — done"
-                )
+            if traveled >= self._distance_m:
+                self.debug(f"Traveled {traveled:.3f}m >= {self._distance_m:.3f}m — done")
                 return
 
-            # Stall detection: if distance hasn't meaningfully changed,
+            # Stall detection: if displacement hasn't meaningfully changed,
             # the driving motion has likely finished or stalled.
-            if dist.straight_line - last_progress_dist > stall_threshold_m:
-                last_progress_dist = dist.straight_line
+            if traveled - last_progress_dist > stall_threshold_m:
+                last_progress_dist = traveled
                 last_progress_time = now
             elif now - last_progress_time > stall_timeout_s:
                 self.error(
-                    f"Stall detected: distance stuck at "
-                    f"{dist.straight_line:.3f}m for {stall_timeout_s}s, "
+                    f"Stall detected: displacement stuck at "
+                    f"{traveled:.3f}m for {stall_timeout_s}s, "
                     f"target was {self._distance_m:.3f}m — "
                     f"the concurrent motion likely ended early"
                 )

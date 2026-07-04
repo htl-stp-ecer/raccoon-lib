@@ -297,5 +297,19 @@ PYBIND11_MODULE(sim, m)
         "Read an analog value through the mock HAL path. Auto-ticks if "
         "enabled and returns the sim sensor value when one is bound to "
         "`port`, otherwise the stock static analog value.");
+
+    mockMod.def("set_odometry_drift",
+        [](float vx_bias, float vy_bias, float yaw_bias) {
+            auto* sim = platform::mock::core::MockPlatform::instance().sim();
+            if (sim) sim->setOdometryDrift(vx_bias, vy_bias, yaw_bias);
+        },
+        py::arg("vx_bias") = 1.0f, py::arg("vy_bias") = 1.0f, py::arg("yaw_bias") = 1.0f,
+        "Inject per-axis multiplicative drift into the dead-reckoned odometry "
+        "ONLY (the ground-truth pose() is untouched). A bias < 1 makes a "
+        "controller that closes its loop on odometry physically OVER-travel "
+        "that axis; the divergence models accumulated odometry error that an "
+        "absolute reference (localization landmark observe()) can correct. "
+        "SIM-ONLY; defaults restore no drift. Must be called after the scene "
+        "is configured (use_scene / configure).");
 #endif
 }

@@ -261,6 +261,13 @@ class WFLDetectScreen(UIScreen[None]):
         self.hint: str = ""
         self.request_test_mode: bool = False
         self.request_reinit: bool = False
+        # Turns the Reinit button green as immediate press feedback.
+        self.reinit_active: bool = False
+
+    @property
+    def _reinit_style(self) -> str:
+        """Green once the Reinit button was pressed, warning otherwise."""
+        return "success" if self.reinit_active else "warning"
 
     def build(self) -> Widget:
         # Big full-screen TRIGGERED indicator
@@ -284,6 +291,8 @@ class WFLDetectScreen(UIScreen[None]):
                             Text(f"Threshold: {self.threshold:.0f}", size="large"),
                             Spacer(8),
                             Text("Turn off lamp to continue", size="small", muted=True),
+                            Spacer(16),
+                            Button("reinit", "Reinit Kalman", style=self._reinit_style),
                         ],
                         align="center",
                         spacing=0,
@@ -320,7 +329,7 @@ class WFLDetectScreen(UIScreen[None]):
                     Row(
                         children=[
                             Button("test", "Back to Test Mode", style="secondary"),
-                            Button("reinit", "Reinit Kalman", style="warning"),
+                            Button("reinit", "Reinit Kalman", style=self._reinit_style),
                         ],
                         spacing=8,
                     ),
@@ -353,7 +362,7 @@ class WFLDetectScreen(UIScreen[None]):
         if self.status != "WARMING UP":
             children += [
                 Spacer(16),
-                Button("reinit", "Reinit Kalman", style="warning"),
+                Button("reinit", "Reinit Kalman", style=self._reinit_style),
             ]
 
         return Center(
@@ -369,3 +378,5 @@ class WFLDetectScreen(UIScreen[None]):
     @on_click("reinit")
     async def on_reinit(self):
         self.request_reinit = True
+        self.reinit_active = True
+        await self.refresh()

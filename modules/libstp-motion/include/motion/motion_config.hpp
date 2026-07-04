@@ -65,7 +65,11 @@ namespace libstp::motion
         double saturation_recovery_threshold{0.95};
 
         // Tolerances
-        double distance_tolerance_m{0.01};
+        // 2 mm: the motion must actually reach the goal. A looser band let the
+        // profiled PID declare "done" ~1 cm short, hard-stop, and leave the
+        // robot parked short of the target (the strafe-reversal stall). Kept in
+        // lockstep with the executor's DISTANCE_TOL_M / progress eps (2 mm).
+        double distance_tolerance_m{0.002};
         double angle_tolerance_rad{0.035};
 
         // Saturation heading thresholds

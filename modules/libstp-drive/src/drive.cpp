@@ -96,6 +96,18 @@ void Drive::hardStop()
     LIBSTP_LOG_DEBUG("Drive::hardStop invoked; zeroing desired velocity");
     desired_ = foundation::ChassisVelocity{0, 0, 0};
     resetVelocityControllers();
+
+    // On real hardware route the stop through the SAME chassis-velocity channel
+    // as normal motion: a zero body velocity makes the coprocessor passive-brake
+    // all motors (see DeviceController::setChassisVelocity). Keeping the stop on
+    // one ordered channel removes the mode_cmd-vs-chassis_vel cross-channel race
+    // that previously left motors armed in CHASSIS mode after a stop.
+    if (foundation::ChassisControlContext::instance().command(0.0, 0.0, 0.0))
+    {
+        return;
+    }
+
+    // No on-MCU chassis loop (mock/sim) -> brake the motors host-side.
     kinematics_->hardStop();
 }
 

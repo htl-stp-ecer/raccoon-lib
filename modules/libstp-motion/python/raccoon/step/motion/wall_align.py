@@ -89,6 +89,7 @@ class WallAlign(MotionStep):
         settle_duration: float,
         max_duration: float,
         grace_period: float,
+        wz: float = 0.0,
     ):
         super().__init__()
         if not isinstance(direction, WallDirection):
@@ -109,12 +110,18 @@ class WallAlign(MotionStep):
         if not isinstance(grace_period, int | float) or grace_period < 0:
             msg = f"grace_period must be >= 0, got {grace_period}"
             raise ValueError(msg)
+        if not isinstance(wz, int | float) or isinstance(wz, bool):
+            msg = f"wz must be a number, got {wz}"
+            raise ValueError(msg)
         self.direction = direction
         self.speed = speed
         self.accel_threshold = accel_threshold
         self.settle_duration = settle_duration
         self.max_duration = max_duration
         self.grace_period = grace_period
+        # Constant rotation rate (rad/s) applied for the whole step, letting
+        # the robot continuously press a corner/edge flush against the wall.
+        self.wz = wz
 
         self._imu: IMU | None = None
         self._elapsed: float = 0.0
@@ -129,18 +136,18 @@ class WallAlign(MotionStep):
         return (
             f"WallAlign(direction={self.direction.value}, "
             f"speed={self.speed:.2f}, threshold={self.accel_threshold:.1f}, "
-            f"settle={self.settle_duration:.2f})"
+            f"settle={self.settle_duration:.2f}, wz={self.wz:.2f})"
         )
 
     def _get_velocity(self) -> ChassisVelocity:
         if self.direction == WallDirection.FORWARD:
-            return ChassisVelocity(self.speed, 0.0, 0.0)
+            return ChassisVelocity(self.speed, 0.0, self.wz)
         if self.direction == WallDirection.BACKWARD:
-            return ChassisVelocity(-self.speed, 0.0, 0.0)
+            return ChassisVelocity(-self.speed, 0.0, self.wz)
         if self.direction == WallDirection.STRAFE_LEFT:
-            return ChassisVelocity(0.0, -self.speed, 0.0)
+            return ChassisVelocity(0.0, -self.speed, self.wz)
         # STRAFE_RIGHT
-        return ChassisVelocity(0.0, self.speed, 0.0)
+        return ChassisVelocity(0.0, self.speed, self.wz)
 
     def on_start(self, robot: "GenericRobot") -> None:
         self._imu = IMU()
@@ -230,7 +237,8 @@ class WallAlignForward(WallAlign):
     correction applied during the settle push.
 
     Args:
-        speed: Drive speed in m/s (default 1.0).
+        speed: Drive speed in m/s (default 1.0).  Lower values slow the
+            approach so the bump is gentler and easier to detect cleanly.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
             to classify as a bump (default 0.5).  Lower values are more
             sensitive but may false-trigger on rough surfaces.
@@ -240,6 +248,11 @@ class WallAlignForward(WallAlign):
             no bump is detected (default 5.0).
         grace_period: Seconds to ignore acceleration after starting, so the
             robot's own acceleration doesn't trigger detection (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step
+            (default 0.0 = no rotation).  A non-zero value makes the robot
+            continuously rotate in one direction while driving, so a corner
+            or edge is actively pressed flush against the wall.  Positive is
+            counter-clockwise.
 
     Returns:
         A WallAlignForward step driving forward with bump detection.
@@ -253,6 +266,9 @@ class WallAlignForward(WallAlign):
 
         # More sensitive detection at slower speed
         wall_align_forward(speed=0.3, accel_threshold=0.3)
+
+        # Slowly press in while rotating CW to wedge a corner flush
+        wall_align_forward(speed=0.2, wz=-20)
     """
 
     def __init__(
@@ -262,6 +278,7 @@ class WallAlignForward(WallAlign):
         settle_duration: float = 0.2,
         max_duration: float = 5.0,
         grace_period: float = 0.3,
+        wz: float = 0.0,
     ):
         super().__init__(
             direction=WallDirection.FORWARD,
@@ -270,13 +287,14 @@ class WallAlignForward(WallAlign):
             settle_duration=settle_duration,
             max_duration=max_duration,
             grace_period=grace_period,
+            wz=math.radians(wz),
         )
 
     def _generate_signature(self) -> str:
         return (
             f"WallAlignForward(speed={self.speed:.2f}, "
             f"threshold={self.accel_threshold:.1f}, "
-            f"settle={self.settle_duration:.2f})"
+            f"settle={self.settle_duration:.2f}, wz={self.wz:.2f})"
         )
 
 
@@ -289,12 +307,18 @@ class WallAlignBackward(WallAlign):
     detection to know when the wall has been reached.
 
     Args:
-        speed: Drive speed in m/s (default 1.0).
+        speed: Drive speed in m/s (default 1.0).  Lower values slow the
+            approach for a gentler, cleaner bump.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
             to classify as a bump (default 0.5).
         settle_duration: Seconds to keep pushing after impact (default 0.2).
         max_duration: Safety timeout in seconds (default 5.0).
         grace_period: Seconds to ignore acceleration at start (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step
+            (default 0.0 = no rotation).  A non-zero value makes the robot
+            continuously rotate in one direction while driving, so a corner
+            or edge is actively pressed flush against the wall.  Positive is
+            counter-clockwise.
 
     Returns:
         A WallAlignBackward step driving backward with bump detection.
@@ -314,6 +338,7 @@ class WallAlignBackward(WallAlign):
         settle_duration: float = 0.2,
         max_duration: float = 5.0,
         grace_period: float = 0.3,
+        wz: float = 0.0,
     ):
         super().__init__(
             direction=WallDirection.BACKWARD,
@@ -322,13 +347,14 @@ class WallAlignBackward(WallAlign):
             settle_duration=settle_duration,
             max_duration=max_duration,
             grace_period=grace_period,
+            wz=math.radians(wz),
         )
 
     def _generate_signature(self) -> str:
         return (
             f"WallAlignBackward(speed={self.speed:.2f}, "
             f"threshold={self.accel_threshold:.1f}, "
-            f"settle={self.settle_duration:.2f})"
+            f"settle={self.settle_duration:.2f}, wz={self.wz:.2f})"
         )
 
 
@@ -342,12 +368,18 @@ class WallAlignStrafeLeft(WallAlign):
     movement.
 
     Args:
-        speed: Strafe speed in m/s (default 0.5).
+        speed: Strafe speed in m/s (default 0.5).  Lower values slow the
+            approach for a gentler, cleaner bump.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
             to classify as a bump (default 0.5).
         settle_duration: Seconds to keep pushing after impact (default 0.2).
         max_duration: Safety timeout in seconds (default 5.0).
         grace_period: Seconds to ignore acceleration at start (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step
+            (default 0.0 = no rotation).  A non-zero value makes the robot
+            continuously rotate in one direction while strafing, so a corner
+            or edge is actively pressed flush against the wall.  Positive is
+            counter-clockwise.
 
     Returns:
         A WallAlignStrafeLeft step strafing left with bump detection.
@@ -367,6 +399,7 @@ class WallAlignStrafeLeft(WallAlign):
         settle_duration: float = 0.2,
         max_duration: float = 5.0,
         grace_period: float = 0.3,
+        wz: float = 0.0,
     ):
         super().__init__(
             direction=WallDirection.STRAFE_LEFT,
@@ -375,13 +408,14 @@ class WallAlignStrafeLeft(WallAlign):
             settle_duration=settle_duration,
             max_duration=max_duration,
             grace_period=grace_period,
+            wz=math.radians(wz),
         )
 
     def _generate_signature(self) -> str:
         return (
             f"WallAlignStrafeLeft(speed={self.speed:.2f}, "
             f"threshold={self.accel_threshold:.1f}, "
-            f"settle={self.settle_duration:.2f})"
+            f"settle={self.settle_duration:.2f}, wz={self.wz:.2f})"
         )
 
 
@@ -395,12 +429,18 @@ class WallAlignStrafeRight(WallAlign):
     movement.
 
     Args:
-        speed: Strafe speed in m/s (default 0.5).
+        speed: Strafe speed in m/s (default 0.5).  Lower values slow the
+            approach for a gentler, cleaner bump.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s²
             to classify as a bump (default 0.5).
         settle_duration: Seconds to keep pushing after impact (default 0.2).
         max_duration: Safety timeout in seconds (default 5.0).
         grace_period: Seconds to ignore acceleration at start (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step
+            (default 0.0 = no rotation).  A non-zero value makes the robot
+            continuously rotate in one direction while strafing, so a corner
+            or edge is actively pressed flush against the wall.  Positive is
+            counter-clockwise.
 
     Returns:
         A WallAlignStrafeRight step strafing right with bump detection.
@@ -420,6 +460,7 @@ class WallAlignStrafeRight(WallAlign):
         settle_duration: float = 0.2,
         max_duration: float = 5.0,
         grace_period: float = 0.3,
+        wz: float = 0.0,
     ):
         super().__init__(
             direction=WallDirection.STRAFE_RIGHT,
@@ -428,11 +469,12 @@ class WallAlignStrafeRight(WallAlign):
             settle_duration=settle_duration,
             max_duration=max_duration,
             grace_period=grace_period,
+            wz=math.radians(wz),
         )
 
     def _generate_signature(self) -> str:
         return (
             f"WallAlignStrafeRight(speed={self.speed:.2f}, "
             f"threshold={self.accel_threshold:.1f}, "
-            f"settle={self.settle_duration:.2f})"
+            f"settle={self.settle_duration:.2f}, wz={self.wz:.2f})"
         )

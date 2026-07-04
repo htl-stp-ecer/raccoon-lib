@@ -147,13 +147,18 @@ namespace libstp::motion
         double vx = vx_mps_;
         double vy = vy_mps_;
 
+        // The heading to hold: an absolute world target when the caller pinned
+        // one (has_target_heading), otherwise the heading captured at start.
+        const double hold_heading_rad =
+            cfg_.has_target_heading ? cfg_.target_heading_rad : initial_heading_rad_;
+
         if (cfg_.correction_mode == LineFollowCorrectionMode::Forward)
         {
             vx += correction * max_linear_mps_;
             if (cfg_.heading_hold)
             {
                 heading_error = std::remainder(
-                    initial_heading_rad_ - odometry().getHeading(),
+                    hold_heading_rad - odometry().getHeading(),
                     2.0 * std::numbers::pi);
                 wz = heading_pid_->update(heading_error, dt);
             }
@@ -164,7 +169,7 @@ namespace libstp::motion
             if (cfg_.heading_hold)
             {
                 heading_error = std::remainder(
-                    initial_heading_rad_ - odometry().getHeading(),
+                    hold_heading_rad - odometry().getHeading(),
                     2.0 * std::numbers::pi);
                 wz = heading_pid_->update(heading_error, dt);
             }
@@ -177,6 +182,23 @@ namespace libstp::motion
         foundation::ChassisVelocity cmd{vx, vy, wz};
         drive().setVelocity(cmd);
         [[maybe_unused]] const auto motor_cmd = drive().update(dt);
+
+        // Per-tick breakdown of how the sensor error turns into a chassis
+        // command. Trace level (compiled out unless LIBSTP_TRACE_LOGGING) so the
+        // 100 Hz spam only appears when explicitly debugging line-follow.
+        LIBSTP_LOG_TRACE(
+            "lf tick: mode={} err={:.4f} corr={:.4f} -> vx={:.4f} vy={:.4f} wz={:.4f} "
+            "(base vx={:.4f} vy={:.4f}, heading_err={:.4f}rad, dt={:.4f})",
+            static_cast<int>(cfg_.correction_mode),
+            sensor_error_,
+            correction,
+            vx,
+            vy,
+            wz,
+            vx_mps_,
+            vy_mps_,
+            heading_error,
+            dt);
 
         if (telemetry_.size() >= kMaxTelemetrySamples)
         {

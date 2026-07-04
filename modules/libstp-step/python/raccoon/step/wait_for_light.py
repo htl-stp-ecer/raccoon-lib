@@ -135,6 +135,8 @@ class WaitForLight(UIStep):
     ) -> _KalmanFilter:
         kf = _KalmanFilter(process_variance=0.01, measurement_variance=50.0)
         warmup_end = time.monotonic() + self._warmup_seconds
+        # Clear the green Reinit press-feedback for the fresh baseline.
+        screen.reinit_active = False
         self.info(f"WFL: warming up for {self._warmup_seconds}s...")
         last_ui = 0.0
 
@@ -256,11 +258,21 @@ class WaitForLight(UIStep):
 
                         # Stay triggered until sensor returns above threshold
                         while True:
+                            # Pump UI events so the "Reinit Kalman" button works
+                            # even while the TRIGGERED screen is showing.
+                            await self.pump_events()
+                            if screen.request_reinit:
+                                # Let the outer-loop reinit handler take over.
+                                break
+
                             raw = sensor.read()
                             trigger_threshold = kf.estimate * threshold_factor
                             if raw >= trigger_threshold:
                                 break
                             await asyncio.sleep(self._poll_interval)
+
+                        if screen.request_reinit:
+                            continue
 
                         consecutive = 0
                         self.info("WFL: lamp off, back to test mode")

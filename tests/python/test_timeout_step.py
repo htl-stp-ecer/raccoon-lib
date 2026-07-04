@@ -6,9 +6,15 @@ The ``Timeout`` step wraps another step with a wall-clock budget via
 * If the wrapped step completes within ``seconds`` -> the timeout step
   finishes successfully (and the wrapped step actually ran to completion).
 * If the wrapped step exceeds ``seconds`` -> ``asyncio.wait_for`` cancels the
-  wrapped step, gives it a chance to clean up, logs an error, and *re-raises*
-  ``TimeoutError`` (a hard failure, NOT a silent swallow).
-* Any exception raised by the wrapped step propagates normally.
+  wrapped step and gives it a chance to clean up.  What happens next depends on
+  ``propagate``:
+    - ``propagate=False`` (the DEFAULT): the timeout is *contained* — a warning
+      is logged and the step finishes successfully, so the surrounding mission
+      keeps running.  One stuck step must NOT take down the whole run.
+    - ``propagate=True``: an error is logged and ``TimeoutError`` is *re-raised*
+      (a hard failure that aborts the enclosing sequence/mission).
+* Any *other* exception raised by the wrapped step propagates normally,
+  regardless of ``propagate``.
 
 Every expected value here is derived independently from that contract, the
 parameter units (``seconds`` is wall-clock seconds, cast to ``float``), and the
@@ -212,11 +218,27 @@ async def test_child_finishes_within_budget_completes_normally() -> None:
 
 
 @pytest.mark.asyncio
-async def test_child_exceeding_budget_raises_timeout_and_cancels_child() -> None:
-    # Child wants 10s but only gets 0.01s -> wait_for cancels it and re-raises
-    # TimeoutError (the documented HARD failure, not a swallow).
+async def test_child_exceeding_budget_is_contained_by_default() -> None:
+    # Child wants 10s but only gets 0.01s. With the default propagate=False the
+    # timeout is CONTAINED: wait_for cancels the child, the child cleans up, and
+    # _execute_step returns normally so the surrounding mission keeps running.
     child = FakeStep(run_seconds=10.0)
     step = Timeout(child, seconds=0.01)
+
+    await step._execute_step(_ROBOT)  # must NOT raise
+
+    assert child.started is True
+    assert child.finished is False  # never completed
+    assert child.cancelled is True  # wait_for cancelled it
+    assert child.cleaned_up is True  # cleanup (finally-style) got to run
+
+
+@pytest.mark.asyncio
+async def test_child_exceeding_budget_raises_when_propagate_true() -> None:
+    # With propagate=True the timeout is a HARD failure: wait_for cancels the
+    # child and TimeoutError is re-raised to abort the enclosing mission.
+    child = FakeStep(run_seconds=10.0)
+    step = Timeout(child, seconds=0.01, propagate=True)
 
     with pytest.raises(TimeoutError):
         await step._execute_step(_ROBOT)
@@ -228,20 +250,36 @@ async def test_child_exceeding_budget_raises_timeout_and_cancels_child() -> None
 
 
 @pytest.mark.asyncio
-async def test_timeout_logs_error_at_boundary() -> None:
-    # The boundary logs an error before re-raising.  ClassNameLogger.error
-    # routes through raccoon.log (not stdlib logging), so we capture by
-    # overriding step.error (same convention as the wall_align suite).
+async def test_contained_timeout_logs_warning_not_error() -> None:
+    # The default (contained) path logs a warning at the boundary and does NOT
+    # emit an error. ClassNameLogger.warn/error route through raccoon.log (not
+    # stdlib logging), so we capture by overriding the methods.
     child = FakeStep(run_seconds=10.0)
     step = Timeout(child, seconds=0.01)
+    errors: list[str] = []
+    warns: list[str] = []
+    step.error = errors.append  # type: ignore[assignment]
+    step.warn = warns.append  # type: ignore[assignment]
+
+    await step._execute_step(_ROBOT)
+
+    assert errors == []
+    assert len(warns) == 1
+    assert "FakeStep" in warns[0]
+
+
+@pytest.mark.asyncio
+async def test_propagating_timeout_logs_error_at_boundary() -> None:
+    # With propagate=True the boundary logs an error before re-raising, carrying
+    # the child-name token (wording and exact formatting are prose, not pinned).
+    child = FakeStep(run_seconds=10.0)
+    step = Timeout(child, seconds=0.01, propagate=True)
     errors: list[str] = []
     step.error = errors.append  # type: ignore[assignment]
 
     with pytest.raises(TimeoutError):
         await step._execute_step(_ROBOT)
 
-    # Exactly one boundary error, carrying the child-name token (wording and
-    # exact formatting are prose, not pinned).
     assert len(errors) == 1
     assert "FakeStep" in errors[0]
 
@@ -345,9 +383,21 @@ async def test_run_step_success_path() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_step_propagates_timeout() -> None:
+async def test_run_step_contains_timeout_by_default() -> None:
+    # The public entry point mirrors _execute_step: by default a timeout is
+    # contained (child cancelled, no raise) so the mission continues.
     child = FakeStep(run_seconds=10.0)
     step = Timeout(child, seconds=0.01)
+    step._skip_timing = True
+
+    await step.run_step(_ROBOT)  # must NOT raise
+    assert child.cancelled is True
+
+
+@pytest.mark.asyncio
+async def test_run_step_propagates_timeout_when_requested() -> None:
+    child = FakeStep(run_seconds=10.0)
+    step = Timeout(child, seconds=0.01, propagate=True)
     step._skip_timing = True
 
     with pytest.raises(TimeoutError):

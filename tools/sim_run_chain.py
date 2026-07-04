@@ -172,10 +172,20 @@ def _sim_scene_path(real_scene: Path) -> Path:
     """
     data = json.loads(real_scene.read_text())
     if data.get("version") == 2:
-        # v2 maps model the ramp as a real LAYER (with a transition), not as
-        # phantom ground walls — the sim tracks which plane the robot is on, so
-        # there is nothing to strip. Use the map as authored.
-        print("    sim scene: v2 multi-layer map — used as-is (ramp is a layer)")
+        # v2 map built from the PROVEN hand-made ground plane: its wall segments
+        # (ramp-structure base + SW corner) are load-bearing — the ground
+        # missions wall-align against them and they shape the drive envelope.
+        # Keep them. The ramp itself is a drivable LAYER reached via a transition
+        # (no perimeter walls authored on the ramp layer), so nothing traps the
+        # robot on the climb.
+        #
+        # NOTE on the east border: widthCm (236.4) is one half of the doubled
+        # competition table, so the sim's auto-added border at x=236 sits on the
+        # table centre (no physical wall there). Moving it out to the doubled
+        # outer edge was tried and made things WORSE — the upper-deck missions,
+        # when their line-search condition can't be met, then run away east into
+        # the empty far half instead of being contained. The border at the
+        # centre is the lesser evil, so the scene is passed through unchanged.
         return real_scene
     segs = data.get("lines", [])
     kept = [s for s in segs if s.get("kind") != "wall"]
@@ -185,6 +195,33 @@ def _sim_scene_path(real_scene: Path) -> Path:
     out.write_text(json.dumps(data))
     print(f"    sim scene: dropped {dropped} interior wall(s) (ramp/structures are drivable)")
     return out
+
+
+def _patch_calibration_switch_for_sim(black: float = 700.0, white: float = 300.0):
+    """Make ``switch_calibration_set`` keep SIM-scale IR thresholds.
+
+    On the real robot the step loads named per-set thresholds (e.g. the "upper"
+    deck set, ~208/~3222) from the CalibrationStore. Those don't fit the sim's
+    0..1023 line-sensor scale, so after a mission switches sets the sim sensors
+    stop classifying black correctly and every downstream ``on_black`` /
+    ``line_follow`` stalls. Under the sim we override the step to re-apply the
+    sim-scale thresholds to every IR sensor regardless of the requested set, so
+    ramp/upper-deck missions keep sensing. Harness-only; production is untouched.
+    """
+    try:
+        from raccoon.sensor_ir import IRSensor
+        from raccoon.step.calibration.sensors.switch_set_step import SwitchCalibrationSet
+    except Exception as e:
+        print(f"    [warn] could not patch switch_calibration_set: {e}")
+        return
+
+    async def _sim_execute(self, robot):  # noqa: ARG001
+        for s in getattr(robot.defs, "analog_sensors", []):
+            if isinstance(s, IRSensor):
+                s.setCalibration(black, white)
+
+    SwitchCalibrationSet._execute_step = _sim_execute
+    print("    patched switch_calibration_set -> sim-scale thresholds persist")
 
 
 def _install_fake_transport():
@@ -212,11 +249,11 @@ def _augment_services(robot):
     # GenericRobot mixes in ClassNameLogger; some steps call robot.warn/info/…
     for level in ("trace", "debug", "info", "warn", "warning", "error"):
         if not hasattr(robot, level):
-            setattr(robot, level, lambda *a, **k: None)
+            setattr(robot, level, lambda *a, **k: None)  # noqa: ARG005
     return robot
 
 
-def _ordered_missions(project: Path):
+def _ordered_missions(project: Path):  # noqa: ARG001
     """Mission classes in run order (Robot.missions order if available)."""
     import src.missions as M_pkg  # type: ignore[import-not-found]
 
@@ -270,6 +307,7 @@ async def _simulate(project: Path, scene: Path, start, timeout: float):
     except Exception as e:
         print(f"    [warn] could not load project motion_pid_config/defs: {e}")
     _calibrate_ir_sensors()  # so on_black / line_follow fire against the scene
+    _patch_calibration_switch_for_sim()  # keep sim scale across switch_calibration_set
     missions = _ordered_missions(project)
 
     traj: list[dict] = []  # {x,y,theta,mi}
@@ -323,17 +361,24 @@ def _load_segments(scene: Path):
 
     m = sim.WorldMap()
     m.load_ftmap(str(scene))
-    return [
-        {
-            "x0": s.start_x,
-            "y0": s.start_y,
-            "x1": s.end_x,
-            "y1": s.end_y,
-            "w": s.width_cm,
-            "wall": "WALL" in str(s.kind),
-        }
-        for s in m.all_segments
-    ], (m.table_width_cm, m.table_height_cm)
+    # all_segments only returns the GROUND layer — iterate every layer so the
+    # ramp/deck tape lines (layer >= 1) are rendered too. Tag each with its
+    # layer so the renderer can colour deck lines distinctly.
+    segs = []
+    for li in range(m.layer_count):
+        for s in m.layer_segments(li):
+            segs.append(
+                {
+                    "x0": s.start_x,
+                    "y0": s.start_y,
+                    "x1": s.end_x,
+                    "y1": s.end_y,
+                    "w": s.width_cm,
+                    "wall": "WALL" in str(s.kind),
+                    "layer": li,
+                }
+            )
+    return segs, (m.table_width_cm, m.table_height_cm)
 
 
 def _b2w(x, y, theta, fwd, strafe):
@@ -376,9 +421,18 @@ def _draw_table(ax, segs, table):
                 )
             )
         else:
+            # Ground tape = black; ramp/deck tape (layer >= 1) = teal so the
+            # elevated upper-deck lines are visually distinct from the ground.
+            deck = s.get("layer", 0) >= 1
             ax.add_patch(
                 Polygon(
-                    corners, closed=True, facecolor="#111", edgecolor="none", alpha=0.9, zorder=2
+                    corners,
+                    closed=True,
+                    facecolor="#0e7c7b" if deck else "#111",
+                    edgecolor="#0e7c7b" if deck else "none",
+                    lw=0.8 if deck else 0.0,
+                    alpha=0.9,
+                    zorder=3 if deck else 2,
                 )
             )
     ax.set_aspect("equal")
@@ -456,14 +510,14 @@ def _arrow(ax, x, y, theta, color):
         "",
         xy=(x + 7 * math.cos(theta), y + 7 * math.sin(theta)),
         xytext=(x, y),
-        arrowprops=dict(arrowstyle="-|>", color=color, lw=1.0, alpha=0.7),
+        arrowprops={"arrowstyle": "-|>", "color": color, "lw": 1.0, "alpha": 0.7},
     )
 
 
 def render(result, segs, table, out_dir: Path):
-    import matplotlib
+    import matplotlib as mpl
 
-    matplotlib.use("Agg")
+    mpl.use("Agg")
     import matplotlib.pyplot as plt
 
     traj = result["traj"]
@@ -578,7 +632,7 @@ def main():
             # sensors can be drawn even for trajectories saved before capture.
             proj = Path(args.project).resolve()
             sys.path.insert(0, str(proj))
-            cwd = os.getcwd()
+            cwd = os.getcwd()  # noqa: PTH109
             os.chdir(proj)
             try:
                 result["geometry"] = _robot_geometry()
@@ -598,6 +652,11 @@ def main():
     # Opt into sim-only fallbacks for unsimulatable stop conditions (e.g.
     # on_analog_flank game-piece detection). Never set on the real robot.
     os.environ["RACCOON_SIM"] = "1"
+    # The headless sim has no match clock / drum-bot to synchronise against, so
+    # wait_for_checkpoint / do_until_checkpoint would block on a mission-relative
+    # time that never arrives. Skip checkpoint waits — they are competition
+    # timing, not motion. Never set on the real robot.
+    os.environ["LIBSTP_NO_CHECKPOINTS"] = "1"
 
     import sim_fasttime
 
