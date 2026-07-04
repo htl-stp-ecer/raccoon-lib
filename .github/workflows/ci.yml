@@ -17,7 +17,7 @@ jobs:
     outputs:
       has-code: ${{ steps.check.outputs.has-code }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
       - id: check
@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Checkout with submodules
         if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           token: ${{ secrets.GH_PAT || github.token }}
@@ -63,7 +63,7 @@ jobs:
 
       - name: Restore compiler and package caches
         if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: |
             .gha-cache/ccache
@@ -163,7 +163,7 @@ jobs:
 
       - name: Save compiler and package caches
         if: always() && env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: |
             .gha-cache/ccache
@@ -186,14 +186,14 @@ jobs:
 
     steps:
       - name: Checkout with submodules
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: recursive
           token: ${{ secrets.GH_PAT || github.token }}
           clean: false
 
       - name: Restore release tool caches
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: |
             .gha-cache/ccache
@@ -329,7 +329,7 @@ jobs:
 
       - name: Save release tool caches
         if: always()
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: |
             .gha-cache/ccache
@@ -358,7 +358,7 @@ jobs:
             name: windows
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
           token: ${{ secrets.GH_PAT || github.token }}
@@ -368,7 +368,7 @@ jobs:
       # that pins dep versions (FetchContent_Declare blocks) so unrelated
       # CMakeLists edits don't invalidate ~180MB of dep sources + builds.
       - name: Cache CMake FetchContent dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .cmake-cache
           # Bumped to v4: the v3 cache stored FetchContent subbuild dirs pinned
@@ -388,7 +388,7 @@ jobs:
 
       - name: Cache ccache (Linux)
         if: runner.os == 'Linux'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .gha-cache/ccache
           key: ccache-${{ matrix.name }}-${{ github.run_id }}
@@ -419,7 +419,7 @@ jobs:
           print(f"Version set to: 1.0.{run_number}")
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.0
+        uses: pypa/cibuildwheel@v4.1
         env:
           CIBW_BUILD: cp313-*
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
@@ -520,7 +520,7 @@ jobs:
 
     steps:
       - name: Checkout for release notes
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0   # full history so the previous tag is reachable
           submodules: recursive   # raccoon-transport needed to import raccoon
