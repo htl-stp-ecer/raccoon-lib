@@ -51,7 +51,10 @@ DEFAULT_LATERAL_ACCEL_MPS2 = 0.5
 DEFAULT_SENSOR_CARRY_MPS = math.inf
 
 _EPS = 1e-6
-_TRANSLATIONAL = {"linear", "follow_line", "arc"}
+_TRANSLATIONAL = {"linear", "follow_line", "arc", "crab_arc"}
+# Curved segments emitted by cut_corners — tangent to their neighbouring legs by
+# construction, so speed carries across the seam.
+_CURVED = {"arc", "crab_arc"}
 
 
 def _dir_sign(seg: Segment) -> float:
@@ -62,9 +65,12 @@ def _dir_sign(seg: Segment) -> float:
 
 
 def _arc_tangent(a: Segment, b: Segment) -> bool:
-    """An arc abuts its neighbouring straight/arc tangentially by construction
-    (cut_corners emits linear+arc+linear tangent), so speed may carry across."""
-    return "arc" in (a.kind, b.kind) and a.kind in _TRANSLATIONAL and b.kind in _TRANSLATIONAL
+    """A curved leg (arc / crab_arc) abuts its neighbouring straight/curve
+    tangentially by construction — cut_corners emits ``linear+arc+linear`` and
+    ``linear+crab_arc+linear`` tangent — so speed may carry across."""
+    return (
+        bool(_CURVED & {a.kind, b.kind}) and a.kind in _TRANSLATIONAL and b.kind in _TRANSLATIONAL
+    )
 
 
 def _is_continuous_seam(a: Segment, b: Segment) -> bool:
@@ -111,7 +117,7 @@ def _seam_speed_cap(
 def _length_m(seg: Segment) -> float | None:
     """Translational length of a segment, or None when unknown (condition-only —
     treated as 'long enough' for the accel reach, since it stops at a barrier)."""
-    if seg.kind == "arc" and seg.radius_m is not None and seg.arc_angle_rad is not None:
+    if seg.kind in _CURVED and seg.radius_m is not None and seg.arc_angle_rad is not None:
         return abs(seg.radius_m * seg.arc_angle_rad)
     if seg.distance_m is not None:
         return abs(seg.distance_m)
@@ -122,7 +128,7 @@ def _v_max(seg: Segment, max_speed: float, lat_accel: float) -> float:
     if seg.kind == "turn":
         return 0.0  # rotation in place — no translational speed
     base = max_speed * (seg.speed_scale or 1.0)
-    if seg.kind == "arc" and seg.radius_m:
+    if seg.kind in _CURVED and seg.radius_m:
         return min(base, math.sqrt(max(0.0, lat_accel * abs(seg.radius_m))))
     return base
 

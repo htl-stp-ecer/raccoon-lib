@@ -36,7 +36,10 @@ def wait_until_distance(cm: float = _UNSET):
     """
     Wait until the robot has driven at least the given distance.
 
-    Polls odometry straight-line distance from the origin at 100 Hz.
+    Snapshots the odometry position when the step starts and polls the
+    straight-line displacement from that point at 100 Hz. Because motion steps
+    no longer reset odometry on start, the threshold is measured relative to
+    this step's own start — not the (continuously accumulating) odometry origin.
     Designed to run inside a ``parallel()`` branch alongside a drive step,
     enabling actions to trigger at specific distances during a drive.
 

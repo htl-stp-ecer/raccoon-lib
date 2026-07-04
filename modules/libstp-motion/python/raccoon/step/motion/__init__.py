@@ -36,6 +36,7 @@ from .turn import TurnLeft, TurnRight
 from .turn_dsl import turn_left, turn_right
 from .heading_reference import (
     MarkHeadingReference,
+    TurnDirection,
     turn_to_heading_right,
     turn_to_heading_left,
 )
@@ -72,6 +73,12 @@ from .wall_align_dsl import (
     wall_align_strafe_left,
     wall_align_strafe_right,
 )
+from .drive_until_impact import (
+    DriveUntilImpact,
+    ImpactResult,
+    drive_until_impact_back,
+)
+from .drive_until_impact_dsl import drive_until_impact
 from .line_follow import (
     LineFollow,
     LineFollowConfig,
@@ -164,6 +171,15 @@ from .set_speed_mode_dsl import set_speed_mode
 # conversion, then breaks them when an internal refactor renames the field.
 __all__ = [
     "BumpResult",
+    # Collision-aware drive
+    #   DriveUntilImpact (the class) is exported — unlike other step classes —
+    #   because the impact distance is read off the *live instance* after it
+    #   runs. Construct it directly (not via the drive_until_impact() factory,
+    #   which returns a builder that seq resolves into a different instance).
+    "DriveUntilImpact",
+    "ImpactResult",
+    "drive_until_impact",
+    "drive_until_impact_back",
     "ConfigurableLineFollowBuilder",
     "CorrectionSide",
     # Custom velocity
@@ -259,6 +275,7 @@ __all__ = [
     "strafe_right_lineup_on_white",
     # Drive telemetry
     "tune_drive",
+    "TurnDirection",
     "turn_left",
     "turn_right",
     "turn_to_heading_left",

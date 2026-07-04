@@ -18,7 +18,12 @@ from typing import TYPE_CHECKING
 from raccoon.no_calibrate import is_no_calibrate
 from raccoon.step.annotation import dsl
 from raccoon.step.base import Step
-from raccoon.ui.screens.distance import DistanceDrivingScreen, DistanceMeasureScreen
+from raccoon.ui.screens.distance import (
+    DISTANCE_MEASURE_RETRY,
+    DistanceConfirmScreen,
+    DistanceDrivingScreen,
+    DistanceMeasureScreen,
+)
 from raccoon.ui.step import UIStep
 
 from .session import CalibrationAxis, DriveCalibrationSample, SetupCalibrationSession
@@ -318,33 +323,65 @@ class CalibrationGate(UIStep):
             if axis == CalibrationAxis.LATERAL and not supports_lateral:
                 self.debug("Drivetrain has no lateral motion; skipping lateral trim calibration")
                 continue
-            if not session.get_drive_samples(axis):
-                # The axis gathered no opportunistic samples, so drive a measured
-                # fallback to obtain ground truth. With a calibration board the
-                # board supplies it; without one the fallback prompts the operator
-                # to measure the travelled distance by hand.
-                await self._run_drive_fallback(robot, session, axis)
+            # Collect (driving a fallback if no opportunistic samples), then show a
+            # summary the operator confirms before the trim is applied. "Redo
+            # Calibration" discards the evidence and drives a fresh measured
+            # fallback. The loop repeats until the operator applies, dismisses, or
+            # the redo produces no usable ground truth.
+            applied = False
+            while True:
                 if not session.get_drive_samples(axis):
+                    # No opportunistic samples (or the operator asked to redo), so
+                    # drive a measured fallback for ground truth. With a calibration
+                    # board the board supplies it; without one the fallback prompts
+                    # the operator to measure the travelled distance by hand.
+                    await self._run_drive_fallback(robot, session, axis)
+                    if not session.get_drive_samples(axis):
+                        self.warn(
+                            f"No usable ground truth for the {_axis_name(axis)} drive; "
+                            f"leaving axis untrimmed"
+                        )
+                        break
+
+                # SET the trim to the measured scale (absolute), never compose it.
+                #
+                # The per-sample scale is odom / ground_truth, both measured over the
+                # SAME physical drive, so it is the absolute target scale and is
+                # INDEPENDENT of the currently-applied scale. Composing it
+                # (S_new = S_current * scale) would multiply the scale on every run and
+                # diverge geometrically (the robot drives further and further). Absolute
+                # assignment converges in one run and is idempotent.
+                scale = session.median_axis_scale(axis)
+                sample = session.median_axis_sample(axis)
+                # Show a representative (requested, measured) pair; derive measured
+                # from the applied scale so the summary's scale matches what is set.
+                requested_cm = _axis_abs_cm(sample.odom_distance_m) if sample else 0.0
+                measured_cm = requested_cm / scale if scale else requested_cm
+                result = await self.show(
+                    DistanceConfirmScreen(requested=requested_cm, measured=measured_cm)
+                )
+                if result is None:
                     self.warn(
-                        f"No usable ground truth for the {_axis_name(axis)} fallback drive; "
+                        f"Distance summary dismissed for {_axis_name(axis)}; "
                         f"leaving axis untrimmed"
                     )
+                    break
+                if not result.confirmed:
+                    # "Redo Calibration": throw away the samples and drive again.
+                    self.info(f"Operator chose to redo {_axis_name(axis)} distance calibration")
+                    session.clear_drive_samples(axis)
                     continue
-            # SET the trim to the measured scale (absolute), never compose it.
-            #
-            # The per-sample scale is odom / ground_truth, both measured over the
-            # SAME physical drive, so it is the absolute target scale and is
-            # INDEPENDENT of the currently-applied scale. Composing it
-            # (S_new = S_current * scale) would multiply the scale on every run and
-            # diverge geometrically (the robot drives further and further). Absolute
-            # assignment converges in one run and is idempotent.
-            scale = session.median_axis_scale(axis)
-            trim_svc.set_axis_scale(_axis_name(axis), scale)
-            trimmed += 1
-            self.info(
-                f"Applied {_axis_name(axis)} trim scale {scale:.5f} "
-                f"from {len(session.get_drive_samples(axis))} sample(s)"
-            )
+
+                trim_svc.set_axis_scale(_axis_name(axis), scale)
+                applied = True
+                self.info(
+                    f"Applied {_axis_name(axis)} trim scale {scale:.5f} "
+                    f"from {len(session.get_drive_samples(axis))} sample(s)"
+                )
+                break
+
+            if applied:
+                trimmed += 1
         return trimmed
 
     async def _run_drive_fallback(
@@ -357,17 +394,11 @@ class CalibrationGate(UIStep):
             from raccoon import drive_forward
 
             target_cm = self._forward_fallback_cm
-            # Do NOT pin an absolute heading: the gate may run before any
-            # mark_heading_reference(), so an absolute target would crash. Leaving
-            # it unset holds the current world heading, which is enough to measure
-            # the straight-line drive.
-            step = drive_forward(target_cm, speed=_FALLBACK_DRIVE_SPEED)
             verb, direction = "drive", "forward"
         else:
             from raccoon import strafe_right
 
             target_cm = self._lateral_fallback_cm
-            step = strafe_right(target_cm, speed=_FALLBACK_DRIVE_SPEED)
             verb, direction = "strafe", "right"
 
         # Announce the motion before it starts: the robot is about to move on its
@@ -387,50 +418,72 @@ class CalibrationGate(UIStep):
             )
             return
 
-        odom_distance_m, board_ground_truth_m = await self.run_with_ui(
-            DistanceDrivingScreen(target_cm),
-            self._collect_fallback_drive(robot, session, step, axis),
-        )
+        # Drive → measure loop. On the manual-measurement screen the operator can
+        # tap Retry (e.g. the robot was bumped or moved), which re-drives instead
+        # of recording a bogus sample. A fresh step is built each pass since a
+        # motion step is not re-runnable.
+        while True:
+            # Do NOT pin an absolute heading: the gate may run before any
+            # mark_heading_reference(), so an absolute target would crash. Leaving
+            # it unset holds the current world heading, which is enough to measure
+            # the straight-line drive.
+            if axis == CalibrationAxis.FORWARD:
+                step = drive_forward(target_cm, speed=_FALLBACK_DRIVE_SPEED)
+            else:
+                step = strafe_right(target_cm, speed=_FALLBACK_DRIVE_SPEED)
 
-        ground_truth_m = board_ground_truth_m
-        source = "calibration_board"
-        if ground_truth_m is None:
-            # No calibration-board ground truth (no board, dropout, or ~0cm
-            # reading). Prompt the operator to measure the distance the robot
-            # actually travelled — that hand measurement becomes the ground truth.
-            # Default the entry to what the odometry believes so the operator only
-            # nudges it.
-            measured_cm = await self.show(
-                DistanceMeasureScreen(
-                    requested_distance=_axis_abs_cm(odom_distance_m),
-                    default_value=_axis_abs_cm(odom_distance_m),
+            odom_distance_m, board_ground_truth_m = await self.run_with_ui(
+                DistanceDrivingScreen(target_cm),
+                self._collect_fallback_drive(robot, session, step, axis),
+            )
+
+            ground_truth_m = board_ground_truth_m
+            source = "calibration_board"
+            if ground_truth_m is None:
+                # No calibration-board ground truth (no board, dropout, or ~0cm
+                # reading). Prompt the operator to measure the distance the robot
+                # actually travelled — that hand measurement becomes the ground
+                # truth. Default the entry to what the odometry believes so the
+                # operator only nudges it.
+                measured_cm = await self.show(
+                    DistanceMeasureScreen(
+                        requested_distance=_axis_abs_cm(odom_distance_m),
+                        default_value=_axis_abs_cm(odom_distance_m),
+                        allow_retry=True,
+                    )
+                )
+                if measured_cm is DISTANCE_MEASURE_RETRY:
+                    self.info(
+                        f"Operator asked to re-drive the {_axis_name(axis)} fallback "
+                        f"(robot moved); driving again"
+                    )
+                    continue
+                if measured_cm is None:
+                    self.warn(
+                        f"Manual measurement dismissed for the {_axis_name(axis)} fallback "
+                        f"drive; leaving axis untrimmed"
+                    )
+                    return
+                # Preserve the travel direction; the scale uses absolute distances.
+                sign = 1.0 if odom_distance_m >= 0.0 else -1.0
+                ground_truth_m = sign * (float(measured_cm) / 100.0)
+                if abs(ground_truth_m) < _MIN_GROUND_TRUTH_M:
+                    self.warn(
+                        f"Manual measurement of ~0cm for the {_axis_name(axis)} fallback "
+                        f"drive; discarding sample"
+                    )
+                    return
+                source = "manual_entry"
+
+            session.add_drive_sample(
+                DriveCalibrationSample(
+                    axis=axis,
+                    odom_distance_m=odom_distance_m,
+                    ground_truth_distance_m=ground_truth_m,
+                    source=source,
                 )
             )
-            if measured_cm is None:
-                self.warn(
-                    f"Manual measurement dismissed for the {_axis_name(axis)} fallback "
-                    f"drive; leaving axis untrimmed"
-                )
-                return
-            # Preserve the travel direction; the scale uses absolute distances.
-            sign = 1.0 if odom_distance_m >= 0.0 else -1.0
-            ground_truth_m = sign * (float(measured_cm) / 100.0)
-            if abs(ground_truth_m) < _MIN_GROUND_TRUTH_M:
-                self.warn(
-                    f"Manual measurement of ~0cm for the {_axis_name(axis)} fallback "
-                    f"drive; rejecting sample"
-                )
-                return
-            source = "manual_entry"
-
-        session.add_drive_sample(
-            DriveCalibrationSample(
-                axis=axis,
-                odom_distance_m=odom_distance_m,
-                ground_truth_distance_m=ground_truth_m,
-                source=source,
-            )
-        )
+            return
 
     async def _collect_fallback_drive(
         self,

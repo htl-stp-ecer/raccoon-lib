@@ -100,6 +100,10 @@ def _render_node(idx: int, node) -> str:
         elif seg.kind == "arc":
             parts.append(f"radius_m={seg.radius_m}")
             parts.append(f"arc_angle_rad={seg.arc_angle_rad}")
+        elif seg.kind == "crab_arc":
+            parts.append(f"radius_m={seg.radius_m}")
+            parts.append(f"from={seg.crab_from}")
+            parts.append(f"to={seg.crab_to}")
         parts.append(f"has_known_endpoint={seg.has_known_endpoint}")
         return f"  [{idx}] Segment({', '.join(parts)})"
     if isinstance(node, SideAction):
@@ -236,13 +240,30 @@ class Optimizer(Step):
         """
         return self._add(AbsoluteHeadingPass())
 
-    def cut_corners(self, radius_cm: float) -> "Optimizer":
-        """Replace ``linear+turn+linear`` corners with arcs (``CornerCutPass``).
+    def cut_corners(self, radius_cm: float, cut_until: bool = False) -> "Optimizer":
+        """Round corners between straight legs with arcs (``CornerCutPass``).
 
-        ``radius_cm`` is the cut distance trimmed from each straight leg, in
-        centimeters; converted to meters for ``CornerCutPass`` here.
+        Cuts two corner shapes, trimming ``radius_cm`` from each straight leg:
+
+        - **Turn corners** (``linear+turn+linear``, same-axis legs) become a
+          circular arc — forward legs give a drive arc, strafe legs a lateral arc.
+        - **Crab corners** (``linear(Forward)+linear(Lateral)``, no turn) become
+          a constant-heading ``crab_arc``: a holonomic base blends forward into
+          strafe over a 90° quarter circle without rotating.
+
+        By default only corners between known fixed-distance legs are cut. Set
+        ``cut_until=True`` to also round a corner whose EXIT leg is a
+        sensor-bounded ``.until()`` leg: the entry leg is trimmed, the arc rounds
+        the corner, and the ``.until()`` leg then runs from the arc's end until
+        its condition fires (it is kept untrimmed — its endpoint is unknown, and
+        the sensor still triggers at the same place). The ENTRY leg can never be
+        a ``.until()`` leg: the fillet would have to start curving before the
+        sensor fires, which can't be anticipated.
+
+        ``radius_cm`` is the cut distance trimmed from each (known) straight leg,
+        in centimeters; converted to meters for ``CornerCutPass`` here.
         """
-        return self._add(CornerCutPass(radius_cm / 100.0))
+        return self._add(CornerCutPass(radius_cm / 100.0, cut_until=cut_until))
 
     def splinify(self) -> "Optimizer":
         """Replace the whole relative run with one Catmull-Rom spline (terminal).
@@ -321,6 +342,10 @@ class Optimizer(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """Compile the raw steps and run the plan via the path executor."""
+        # Composite steps log only at debug level, so without this the whole
+        # optimize() block would run silently except for its inline side actions.
+        # Announce the compiled pipeline; the executor then logs each leg.
+        self.info(self._generate_signature())
         plan = PathCompiler(self._effective_passes()).compile(self._raw_steps)
         executor = PathExecutor(
             nodes=plan.nodes,

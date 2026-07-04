@@ -187,6 +187,9 @@ class SmoothPath(Step):
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         """Run the compiled plan via the path executor."""
+        # Composite steps log only at debug level; announce this block so the
+        # executor's per-leg lines have a header (mirrors optimize()).
+        self.info(self._generate_signature())
         executor = PathExecutor(
             nodes=self._plan.nodes,
             deferred=self._plan.deferred,

@@ -30,7 +30,6 @@ from .path.passes.spline import sample_centripetal_catmull_rom
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
-
     from raccoon.step.condition import StopCondition
 
 
@@ -515,6 +514,7 @@ def _hold_velocity(
     *,
     pos_gain: float = _LINEAR_GAIN,
     heading_gain: float = _ANGULAR_GAIN,
+    hold_heading_rad: float | None = None,
 ) -> tuple[float, float, float]:
     """Pure control law for :class:`AbsoluteHoldMove` — no robot required.
 
@@ -524,8 +524,15 @@ def _hold_velocity(
     pose-like with ``.position`` indexable x, y in metres and ``.heading`` in
     radians):
 
-    - The free-axis world unit vector is taken at the ANCHOR heading (the line
-      the move travels along is fixed at start, like ``GotoWaypoints`` targets).
+    - The HELD heading is ``hold_heading_rad`` when the original leg specified an
+      absolute ``heading=`` (resolved to the localization frame by the
+      ``to_absolute`` pass), else the ANCHOR heading captured at start. The
+      free-axis world unit vector and the heading correction both use it, so a
+      ``strafe_left(heading=0)`` travels along the world line for heading 0 even
+      if the robot enters the move rotated away from it (it rotates onto the held
+      heading while strafing — matching what the relative leg does). Holding the
+      anchor heading instead would point the strafe along whatever heading the
+      robot happened to have at start, so the sensor line is never crossed.
     - The cross world unit vector is the free vector rotated 90° CCW.
     - ``cross_err = (current_pos - anchor_pos) · cross_dir`` — drift off the
       intended travel line (should be 0).
@@ -536,16 +543,16 @@ def _hold_velocity(
     - That world velocity is rotated into the BODY frame using the CURRENT
       heading (so drift in heading still produces a correct body command), via
       the same ``_world_to_body`` convention goto uses.
-    - ``wz = heading_gain · wrap(anchor_heading - current_heading)`` corrects
-      heading back onto the anchor heading.
+    - ``wz = heading_gain · wrap(held_heading - current_heading)`` corrects
+      heading back onto the held heading.
 
     Returns body-frame ``(vx, vy, wz)`` — NOT clamped here (the step clamps
     against the robot's configured limits, keeping this helper pure).
     """
-    anchor_h = float(anchor.heading)
+    hold_h = float(anchor.heading) if hold_heading_rad is None else float(hold_heading_rad)
     cur_h = float(current.heading)
 
-    free_x, free_y = _free_axis_world_dir(free_axis, anchor_h)
+    free_x, free_y = _free_axis_world_dir(free_axis, hold_h)
     # Cross direction = free rotated 90° CCW: (x, y) -> (-y, x).
     cross_x, cross_y = -free_y, free_x
 
@@ -562,7 +569,7 @@ def _hold_velocity(
     # (same convention as goto's _world_to_body: forward, strafe_right).
     vx, vy = _world_to_body(vx_world, vy_world, cur_h)
 
-    heading_err = math.remainder(anchor_h - cur_h, 2.0 * math.pi)
+    heading_err = math.remainder(hold_h - cur_h, 2.0 * math.pi)
     wz = heading_gain * heading_err
 
     return (vx, vy, wz)
@@ -597,6 +604,7 @@ class AbsoluteHoldMove(MotionStep):
         sign: float,
         speed: float,
         condition: "StopCondition",
+        hold_heading_rad: float | None = None,
     ) -> None:
         super().__init__()
         if not isinstance(speed, int | float):
@@ -606,6 +614,9 @@ class AbsoluteHoldMove(MotionStep):
         self._sign = sign
         self._speed = speed
         self._condition = condition
+        # Absolute heading (localization frame) the original leg's ``heading=``
+        # resolves to, or None to hold the anchor heading captured at start.
+        self._hold_heading_rad = hold_heading_rad
         self._anchor = None
 
     def required_resources(self) -> frozenset[str]:
@@ -631,6 +642,7 @@ class AbsoluteHoldMove(MotionStep):
             self._free_axis,
             self._sign,
             self._speed,
+            hold_heading_rad=self._hold_heading_rad,
         )
 
         cfg = robot.motion_pid_config

@@ -102,38 +102,74 @@ class DistanceDrivingScreen(UIScreen[None]):
         )
 
 
+class _RetryRequested:
+    """Sentinel result: the operator wants to re-drive instead of measuring.
+
+    Returned by :class:`DistanceMeasureScreen` when ``allow_retry`` is set and the
+    operator taps *Retry* (e.g. because the robot was bumped or moved before they
+    could measure). Callers re-run the drive instead of recording a sample.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return "DISTANCE_MEASURE_RETRY"
+
+
+#: Singleton sentinel, identity-compared (``measured is DISTANCE_MEASURE_RETRY``).
+DISTANCE_MEASURE_RETRY = _RetryRequested()
+
+
 class DistanceMeasureScreen(UIScreen[float]):
     """
     Measure actual distance traveled.
 
-    Shows numeric keypad for entering measured distance.
+    Shows numeric keypad for entering measured distance. When ``allow_retry`` is
+    set, an extra *Retry* button lets the operator re-drive (returning
+    :data:`DISTANCE_MEASURE_RETRY`) instead of entering a measurement — useful when
+    the robot was moved after the drive.
     """
 
     title = "Distance Calibration"
     _primary_button_id = "submit"
 
-    def __init__(self, requested_distance: float, default_value: float | None = None):
+    def __init__(
+        self,
+        requested_distance: float,
+        default_value: float | None = None,
+        allow_retry: bool = False,
+    ):
         super().__init__()
         self.requested_distance = requested_distance
         self.value = default_value if default_value is not None else requested_distance
+        self.allow_retry = allow_retry
         self._input_str = ""
 
     def build(self) -> Widget:
+        actions: list[Widget] = [Button("submit", "Submit", style="success", icon="check")]
+        if self.allow_retry:
+            actions.append(
+                Button("retry", "Retry", style="secondary", icon="refresh"),
+            )
+        left: list[Widget] = [
+            Text("Enter actual distance", size="title"),
+            Spacer(8),
+            Text(f"Robot attempted: {self.requested_distance:.0f} cm", muted=True),
+            Spacer(24),
+            NumericInput(
+                id="value",
+                value=self.value,
+                unit="cm",
+                min_value=0,
+            ),
+            Spacer(24),
+            Row(children=actions, spacing=12),
+        ]
+        if self.allow_retry:
+            left.append(Spacer(8))
+            left.append(Text("Robot moved? Tap Retry to drive again.", size="small", muted=True))
         return Split(
-            left=[
-                Text("Enter actual distance", size="title"),
-                Spacer(8),
-                Text(f"Robot attempted: {self.requested_distance:.0f} cm", muted=True),
-                Spacer(24),
-                NumericInput(
-                    id="value",
-                    value=self.value,
-                    unit="cm",
-                    min_value=0,
-                ),
-                Spacer(24),
-                Button("submit", "Submit", style="success", icon="check"),
-            ],
+            left=left,
             right=[
                 NumericKeypad(),
             ],
@@ -165,6 +201,10 @@ class DistanceMeasureScreen(UIScreen[float]):
     @on_click("submit")
     async def on_submit(self):
         self.close(self.value)
+
+    @on_click("retry")
+    async def on_retry(self):
+        self.close(DISTANCE_MEASURE_RETRY)
 
 
 @dataclass
@@ -253,7 +293,7 @@ class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
                             style="success" if self.is_good else "warning",
                             icon="check",
                         ),
-                        Button("retry", "Retry", style="secondary", icon="refresh"),
+                        Button("retry", "Redo Calibration", style="secondary", icon="refresh"),
                     ],
                     spacing=16,
                 ),

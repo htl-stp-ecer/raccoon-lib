@@ -103,14 +103,14 @@ class FakeClock:
 
 
 def _make_step(direction=WallDirection.FORWARD, **overrides):
-    kwargs = dict(
-        direction=direction,
-        speed=1.0,
-        accel_threshold=0.5,
-        settle_duration=0.2,
-        max_duration=5.0,
-        grace_period=0.3,
-    )
+    kwargs = {
+        "direction": direction,
+        "speed": 1.0,
+        "accel_threshold": 0.5,
+        "settle_duration": 0.2,
+        "max_duration": 5.0,
+        "grace_period": 0.3,
+    }
     kwargs.update(overrides)
     return WallAlign(**kwargs)
 
@@ -215,6 +215,26 @@ class TestGetVelocity:
         v = _make_step(WallDirection.STRAFE_RIGHT, speed=0.7)._get_velocity()
         assert (v.vx, v.vy, v.wz) == pytest.approx((0.0, 0.7, 0.0))
 
+    def test_wz_default_is_zero(self):
+        v = _make_step(WallDirection.FORWARD, speed=0.7)._get_velocity()
+        assert v.wz == pytest.approx(0.0)
+
+    def test_constant_wz_applied_to_every_direction(self):
+        # wz (rad/s on the base step) rides along on all four drive directions
+        # so the robot keeps rotating while pressing into the wall.
+        for direction, vx, vy in [
+            (WallDirection.FORWARD, 0.7, 0.0),
+            (WallDirection.BACKWARD, -0.7, 0.0),
+            (WallDirection.STRAFE_LEFT, 0.0, -0.7),
+            (WallDirection.STRAFE_RIGHT, 0.0, 0.7),
+        ]:
+            v = _make_step(direction, speed=0.7, wz=0.5)._get_velocity()
+            assert (v.vx, v.vy, v.wz) == pytest.approx((vx, vy, 0.5))
+
+    def test_negative_wz_rotates_the_other_way(self):
+        v = _make_step(WallDirection.FORWARD, speed=0.7, wz=-0.5)._get_velocity()
+        assert v.wz == pytest.approx(-0.5)
+
 
 # ---------------------------------------------------------------------------
 # 4. Constructor validation
@@ -258,6 +278,24 @@ class TestValidation:
     def test_zero_grace_period_allowed(self):
         step = _make_step(grace_period=0.0)
         assert step.grace_period == 0.0
+
+    def test_wz_defaults_to_zero(self):
+        # wz is optional on the base step and must default to no rotation.
+        assert _make_step().wz == 0.0
+
+    @pytest.mark.parametrize("wz", [-1.5, 0.0, 2.0])
+    def test_wz_accepts_any_sign(self, wz):
+        # Rotation direction is meaningful, so negative/zero/positive are valid.
+        assert _make_step(wz=wz).wz == pytest.approx(wz)
+
+    def test_non_numeric_wz(self):
+        with pytest.raises(ValueError, match="wz must be a number"):
+            _make_step(wz="spin")
+
+    def test_bool_wz_rejected(self):
+        # bool is an int subclass; reject it so True doesn't silently mean 1 rad/s.
+        with pytest.raises(ValueError, match="wz must be a number"):
+            _make_step(wz=True)
 
     def test_valid_attrs_assigned(self):
         step = _make_step(
@@ -336,6 +374,27 @@ class TestPublicSubclasses:
         # Public factories pass abs(speed) so a sign typo can't reverse drive.
         assert WallAlignForward(speed=-0.8).speed == pytest.approx(0.8)
         assert WallAlignStrafeRight(speed=-0.4).speed == pytest.approx(0.4)
+
+    def test_wz_default_zero_on_public_subclasses(self):
+        for cls in (
+            WallAlignForward,
+            WallAlignBackward,
+            WallAlignStrafeLeft,
+            WallAlignStrafeRight,
+        ):
+            assert cls().wz == 0.0
+
+    def test_public_wz_is_degrees_converted_to_radians(self):
+        # Public factories take deg/s (user-friendly) and store rad/s, unlike
+        # the base step which already holds rad/s. 90 deg/s -> pi/2 rad/s.
+        assert WallAlignForward(wz=90).wz == pytest.approx(math.pi / 2)
+        assert WallAlignBackward(wz=-180).wz == pytest.approx(-math.pi)
+        assert WallAlignStrafeLeft(wz=30).wz == pytest.approx(math.radians(30))
+        assert WallAlignStrafeRight(wz=-45).wz == pytest.approx(math.radians(-45))
+
+    def test_public_wz_sign_preserved(self):
+        # Unlike speed (abs()), wz keeps its sign so rotation direction sticks.
+        assert WallAlignForward(wz=-20).wz < 0
 
 
 # ---------------------------------------------------------------------------

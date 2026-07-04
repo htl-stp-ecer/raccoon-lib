@@ -45,6 +45,7 @@ class ConfigurableLineFollowBuilder(StepBuilder):
         self._correction = FollowCorrection.ANGULAR
         self._heading_hold = True
         self._correction_sign = 1.0
+        self._heading_deg: float | None = None
 
     def dual(self, left_sensor: IRSensor, right_sensor: IRSensor) -> ConfigurableLineFollowBuilder:
         self._left_sensor = left_sensor
@@ -97,6 +98,20 @@ class ConfigurableLineFollowBuilder(StepBuilder):
 
     def correction_sign(self, value: float) -> ConfigurableLineFollowBuilder:
         self._correction_sign = value
+        return self
+
+    def hold_heading(self, degrees: float | None) -> ConfigurableLineFollowBuilder:
+        """Hold an absolute heading while correcting laterally/forward.
+
+        ``degrees`` is measured from the :func:`mark_heading_reference` origin
+        (CCW-positive, same convention as ``turn_to_heading_left`` and
+        ``drive_forward(heading=…)``). Pass ``None`` (the default) to hold
+        whatever heading the robot has when the step starts. Only takes effect
+        together with :meth:`correct_lateral` / :meth:`correct_forward` (the
+        heading-hold correction modes); it is a no-op under angular correction.
+        Requires :func:`mark_heading_reference` earlier in the mission.
+        """
+        self._heading_deg = degrees
         return self
 
     def distance_cm(self, value: float | None) -> ConfigurableLineFollowBuilder:
@@ -156,6 +171,7 @@ class ConfigurableLineFollowBuilder(StepBuilder):
             "forward_correction": forward_correction,
             "heading_hold": self._heading_hold,
             "correction_sign": correction_sign,
+            "heading_deg": self._heading_deg,
         }
 
         if has_single:

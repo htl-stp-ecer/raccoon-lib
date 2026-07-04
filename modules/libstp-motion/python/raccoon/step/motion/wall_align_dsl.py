@@ -28,6 +28,7 @@ class WallAlignForwardBuilder(StepBuilder):
         self._settle_duration = 0.2
         self._max_duration = 5.0
         self._grace_period = 0.3
+        self._wz = 0.0
 
     def speed(self, value: float):
         self._speed = value
@@ -49,6 +50,10 @@ class WallAlignForwardBuilder(StepBuilder):
         self._grace_period = value
         return self
 
+    def wz(self, value: float):
+        self._wz = value
+        return self
+
     def _build(self):
         kwargs = {}
         kwargs["speed"] = self._speed
@@ -56,6 +61,7 @@ class WallAlignForwardBuilder(StepBuilder):
         kwargs["settle_duration"] = self._settle_duration
         kwargs["max_duration"] = self._max_duration
         kwargs["grace_period"] = self._grace_period
+        kwargs["wz"] = self._wz
         return WallAlignForward(**kwargs)
 
 
@@ -66,6 +72,7 @@ def wall_align_forward(
     settle_duration: float = 0.2,
     max_duration: float = 5.0,
     grace_period: float = 0.3,
+    wz: float = 0.0,
 ):
     """
     Drive forward into a wall and align the front of the robot.
@@ -83,14 +90,15 @@ def wall_align_forward(
     correction applied during the settle push.
 
     Args:
-        speed: Drive speed in m/s (default 1.0).
+        speed: Drive speed in m/s (default 1.0).  Lower values slow the approach so the bump is gentler and easier to detect cleanly.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s² to classify as a bump (default 0.5).  Lower values are more sensitive but may false-trigger on rough surfaces.
         settle_duration: Seconds to keep pushing after the bump is detected, letting the chassis rotate flush (default 0.2).
         max_duration: Safety timeout in seconds — the step finishes even if no bump is detected (default 5.0).
         grace_period: Seconds to ignore acceleration after starting, so the robot's own acceleration doesn't trigger detection (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step (default 0.0 = no rotation).  A non-zero value makes the robot continuously rotate in one direction while driving, so a corner or edge is actively pressed flush against the wall.  Positive is counter-clockwise.
 
     Returns:
-        A WallAlignForwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A WallAlignForwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.wz()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -101,6 +109,9 @@ def wall_align_forward(
 
         # More sensitive detection at slower speed
         wall_align_forward(speed=0.3, accel_threshold=0.3)
+
+        # Slowly press in while rotating CW to wedge a corner flush
+        wall_align_forward(speed=0.2, wz=-20)
     """
     b = WallAlignForwardBuilder()
     b._speed = speed
@@ -108,6 +119,7 @@ def wall_align_forward(
     b._settle_duration = settle_duration
     b._max_duration = max_duration
     b._grace_period = grace_period
+    b._wz = wz
     return b
 
 
@@ -121,6 +133,7 @@ class WallAlignBackwardBuilder(StepBuilder):
         self._settle_duration = 0.2
         self._max_duration = 5.0
         self._grace_period = 0.3
+        self._wz = 0.0
 
     def speed(self, value: float):
         self._speed = value
@@ -142,6 +155,10 @@ class WallAlignBackwardBuilder(StepBuilder):
         self._grace_period = value
         return self
 
+    def wz(self, value: float):
+        self._wz = value
+        return self
+
     def _build(self):
         kwargs = {}
         kwargs["speed"] = self._speed
@@ -149,6 +166,7 @@ class WallAlignBackwardBuilder(StepBuilder):
         kwargs["settle_duration"] = self._settle_duration
         kwargs["max_duration"] = self._max_duration
         kwargs["grace_period"] = self._grace_period
+        kwargs["wz"] = self._wz
         return WallAlignBackward(**kwargs)
 
 
@@ -159,6 +177,7 @@ def wall_align_backward(
     settle_duration: float = 0.2,
     max_duration: float = 5.0,
     grace_period: float = 0.3,
+    wz: float = 0.0,
 ):
     """
     Drive backward into a wall and align the back of the robot.
@@ -168,14 +187,15 @@ def wall_align_backward(
     detection to know when the wall has been reached.
 
     Args:
-        speed: Drive speed in m/s (default 1.0).
+        speed: Drive speed in m/s (default 1.0).  Lower values slow the approach for a gentler, cleaner bump.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s² to classify as a bump (default 0.5).
         settle_duration: Seconds to keep pushing after impact (default 0.2).
         max_duration: Safety timeout in seconds (default 5.0).
         grace_period: Seconds to ignore acceleration at start (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step (default 0.0 = no rotation).  A non-zero value makes the robot continuously rotate in one direction while driving, so a corner or edge is actively pressed flush against the wall.  Positive is counter-clockwise.
 
     Returns:
-        A WallAlignBackwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A WallAlignBackwardBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.wz()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -190,6 +210,7 @@ def wall_align_backward(
     b._settle_duration = settle_duration
     b._max_duration = max_duration
     b._grace_period = grace_period
+    b._wz = wz
     return b
 
 
@@ -203,6 +224,7 @@ class WallAlignStrafeLeftBuilder(StepBuilder):
         self._settle_duration = 0.2
         self._max_duration = 5.0
         self._grace_period = 0.3
+        self._wz = 0.0
 
     def speed(self, value: float):
         self._speed = value
@@ -224,6 +246,10 @@ class WallAlignStrafeLeftBuilder(StepBuilder):
         self._grace_period = value
         return self
 
+    def wz(self, value: float):
+        self._wz = value
+        return self
+
     def _build(self):
         kwargs = {}
         kwargs["speed"] = self._speed
@@ -231,6 +257,7 @@ class WallAlignStrafeLeftBuilder(StepBuilder):
         kwargs["settle_duration"] = self._settle_duration
         kwargs["max_duration"] = self._max_duration
         kwargs["grace_period"] = self._grace_period
+        kwargs["wz"] = self._wz
         return WallAlignStrafeLeft(**kwargs)
 
 
@@ -241,6 +268,7 @@ def wall_align_strafe_left(
     settle_duration: float = 0.2,
     max_duration: float = 5.0,
     grace_period: float = 0.3,
+    wz: float = 0.0,
 ):
     """
     Strafe left into a wall and align the left side of the robot.
@@ -251,14 +279,15 @@ def wall_align_strafe_left(
     movement.
 
     Args:
-        speed: Strafe speed in m/s (default 0.5).
+        speed: Strafe speed in m/s (default 0.5).  Lower values slow the approach for a gentler, cleaner bump.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s² to classify as a bump (default 0.5).
         settle_duration: Seconds to keep pushing after impact (default 0.2).
         max_duration: Safety timeout in seconds (default 5.0).
         grace_period: Seconds to ignore acceleration at start (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step (default 0.0 = no rotation).  A non-zero value makes the robot continuously rotate in one direction while strafing, so a corner or edge is actively pressed flush against the wall.  Positive is counter-clockwise.
 
     Returns:
-        A WallAlignStrafeLeftBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A WallAlignStrafeLeftBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.wz()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -273,6 +302,7 @@ def wall_align_strafe_left(
     b._settle_duration = settle_duration
     b._max_duration = max_duration
     b._grace_period = grace_period
+    b._wz = wz
     return b
 
 
@@ -286,6 +316,7 @@ class WallAlignStrafeRightBuilder(StepBuilder):
         self._settle_duration = 0.2
         self._max_duration = 5.0
         self._grace_period = 0.3
+        self._wz = 0.0
 
     def speed(self, value: float):
         self._speed = value
@@ -307,6 +338,10 @@ class WallAlignStrafeRightBuilder(StepBuilder):
         self._grace_period = value
         return self
 
+    def wz(self, value: float):
+        self._wz = value
+        return self
+
     def _build(self):
         kwargs = {}
         kwargs["speed"] = self._speed
@@ -314,6 +349,7 @@ class WallAlignStrafeRightBuilder(StepBuilder):
         kwargs["settle_duration"] = self._settle_duration
         kwargs["max_duration"] = self._max_duration
         kwargs["grace_period"] = self._grace_period
+        kwargs["wz"] = self._wz
         return WallAlignStrafeRight(**kwargs)
 
 
@@ -324,6 +360,7 @@ def wall_align_strafe_right(
     settle_duration: float = 0.2,
     max_duration: float = 5.0,
     grace_period: float = 0.3,
+    wz: float = 0.0,
 ):
     """
     Strafe right into a wall and align the right side of the robot.
@@ -334,14 +371,15 @@ def wall_align_strafe_right(
     movement.
 
     Args:
-        speed: Strafe speed in m/s (default 0.5).
+        speed: Strafe speed in m/s (default 0.5).  Lower values slow the approach for a gentler, cleaner bump.
         accel_threshold: Minimum XY linear-acceleration magnitude in m/s² to classify as a bump (default 0.5).
         settle_duration: Seconds to keep pushing after impact (default 0.2).
         max_duration: Safety timeout in seconds (default 5.0).
         grace_period: Seconds to ignore acceleration at start (default 0.3).
+        wz: Constant rotation rate in deg/s applied for the whole step (default 0.0 = no rotation).  A non-zero value makes the robot continuously rotate in one direction while strafing, so a corner or edge is actively pressed flush against the wall.  Positive is counter-clockwise.
 
     Returns:
-        A WallAlignStrafeRightBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A WallAlignStrafeRightBuilder (chainable via ``.speed()``, ``.accel_threshold()``, ``.settle_duration()``, ``.max_duration()``, ``.grace_period()``, ``.wz()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -356,6 +394,7 @@ def wall_align_strafe_right(
     b._settle_duration = settle_duration
     b._max_duration = max_duration
     b._grace_period = grace_period
+    b._wz = wz
     return b
 
 

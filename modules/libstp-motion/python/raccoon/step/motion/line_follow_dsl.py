@@ -439,6 +439,7 @@ class StrafeFollowLineBuilder(StepBuilder):
         self._kp = 0.4
         self._ki = 0.0
         self._kd = 0.1
+        self._heading_deg = None
         self._until = None
 
     def left_sensor(self, value: IRSensor):
@@ -469,6 +470,10 @@ class StrafeFollowLineBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def heading_deg(self, value: float | None):
+        self._heading_deg = value
+        return self
+
     def until(self, value: StopCondition | None):
         self._until = value
         return self
@@ -484,6 +489,7 @@ class StrafeFollowLineBuilder(StepBuilder):
         kwargs["kp"] = self._kp
         kwargs["ki"] = self._ki
         kwargs["kd"] = self._kd
+        kwargs["heading_deg"] = self._heading_deg
         kwargs["until"] = self._until
         return StrafeFollowLine(**kwargs)
 
@@ -497,6 +503,7 @@ def strafe_follow_line(
     kp: float = 0.4,
     ki: float = 0.0,
     kd: float = 0.1,
+    heading_deg: float | None = None,
     until: StopCondition | None = None,
 ):
     """
@@ -523,10 +530,11 @@ def strafe_follow_line(
         kp: Proportional gain for lateral PID.  Default 0.75.
         ki: Integral gain for lateral PID.  Default 0.0.
         kd: Derivative gain for lateral PID.  Default 0.5.
+        heading_deg: Absolute heading to hold while correcting, in degrees from the :func:`mark_heading_reference` origin (CCW-positive, same convention as ``turn_to_heading_left`` and ``drive_forward(heading=…)``). ``None`` (default) holds whatever heading the robot has when the step starts.  Requires :func:`mark_heading_reference` earlier in the mission when set.
         until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A StrafeFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A StrafeFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.heading_deg()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -538,6 +546,9 @@ def strafe_follow_line(
 
         # Follow until both sensors see black
         strafe_follow_line(left, right, speed=0.4).until(on_black(left) & on_black(right))
+
+        # Hold the board-forward heading (0° from the marked reference)
+        strafe_follow_line(left, right, distance_cm=40, speed=0.4, heading_deg=0)
     """
     b = StrafeFollowLineBuilder()
     if left_sensor is not _UNSET:
@@ -549,6 +560,7 @@ def strafe_follow_line(
     b._kp = kp
     b._ki = ki
     b._kd = kd
+    b._heading_deg = heading_deg
     b._until = until
     return b
 
@@ -565,6 +577,7 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
         self._kp = 0.4
         self._ki = 0.0
         self._kd = 0.1
+        self._heading_deg = None
         self._until = None
 
     def sensor(self, value: IRSensor):
@@ -595,6 +608,10 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def heading_deg(self, value: float | None):
+        self._heading_deg = value
+        return self
+
     def until(self, value: StopCondition | None):
         self._until = value
         return self
@@ -609,6 +626,7 @@ class StrafeFollowLineSingleBuilder(StepBuilder):
         kwargs["kp"] = self._kp
         kwargs["ki"] = self._ki
         kwargs["kd"] = self._kd
+        kwargs["heading_deg"] = self._heading_deg
         kwargs["until"] = self._until
         return StrafeFollowLineSingle(**kwargs)
 
@@ -622,6 +640,7 @@ def strafe_follow_line_single(
     kp: float = 0.4,
     ki: float = 0.0,
     kd: float = 0.1,
+    heading_deg: float | None = None,
     until: StopCondition | None = None,
 ):
     """
@@ -647,10 +666,11 @@ def strafe_follow_line_single(
         kp: Proportional gain for lateral PID.  Default 1.0.
         ki: Integral gain for lateral PID.  Default 0.0.
         kd: Derivative gain for lateral PID.  Default 0.3.
+        heading_deg: Absolute heading to hold while correcting, in degrees from the :func:`mark_heading_reference` origin (CCW-positive). ``None`` (default) holds the heading captured at step start. Requires :func:`mark_heading_reference` earlier when set.
         until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A StrafeFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A StrafeFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.heading_deg()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -662,6 +682,9 @@ def strafe_follow_line_single(
 
         # Follow until stop sensor sees black
         strafe_follow_line_single(front_ir, speed=0.4).until(on_black(stop))
+
+        # Hold 0° (board forward) while correcting on the strafe axis
+        strafe_follow_line_single(front_ir, distance_cm=40, speed=0.4, heading_deg=0)
     """
     b = StrafeFollowLineSingleBuilder()
     if sensor is not _UNSET:
@@ -672,6 +695,7 @@ def strafe_follow_line_single(
     b._kp = kp
     b._ki = ki
     b._kd = kd
+    b._heading_deg = heading_deg
     b._until = until
     return b
 
@@ -688,6 +712,7 @@ class LateralFollowLineBuilder(StepBuilder):
         self._kp = 0.4
         self._ki = 0.0
         self._kd = 0.1
+        self._heading_deg = None
         self._until = None
 
     def left_sensor(self, value: IRSensor):
@@ -718,6 +743,10 @@ class LateralFollowLineBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def heading_deg(self, value: float | None):
+        self._heading_deg = value
+        return self
+
     def until(self, value: StopCondition | None):
         self._until = value
         return self
@@ -733,6 +762,7 @@ class LateralFollowLineBuilder(StepBuilder):
         kwargs["kp"] = self._kp
         kwargs["ki"] = self._ki
         kwargs["kd"] = self._kd
+        kwargs["heading_deg"] = self._heading_deg
         kwargs["until"] = self._until
         return LateralFollowLine(**kwargs)
 
@@ -746,6 +776,7 @@ def lateral_follow_line(
     kp: float = 0.4,
     ki: float = 0.0,
     kd: float = 0.1,
+    heading_deg: float | None = None,
     until: StopCondition | None = None,
 ):
     """
@@ -774,10 +805,11 @@ def lateral_follow_line(
         kp: Proportional gain for cross-track PID.
         ki: Integral gain for cross-track PID.
         kd: Derivative gain for cross-track PID.
+        heading_deg: Absolute heading to hold while strafing, in degrees from the :func:`mark_heading_reference` origin (CCW-positive). ``None`` (default) holds the heading captured at step start. Requires :func:`mark_heading_reference` earlier when set.
         until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A LateralFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A LateralFollowLineBuilder (chainable via ``.left_sensor()``, ``.right_sensor()``, ``.distance_cm()``, ``.speed()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.heading_deg()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -795,6 +827,7 @@ def lateral_follow_line(
     b._kp = kp
     b._ki = ki
     b._kd = kd
+    b._heading_deg = heading_deg
     b._until = until
     return b
 
@@ -811,6 +844,7 @@ class LateralFollowLineSingleBuilder(StepBuilder):
         self._kp = 0.4
         self._ki = 0.0
         self._kd = 0.1
+        self._heading_deg = None
         self._until = None
 
     def sensor(self, value: IRSensor):
@@ -841,6 +875,10 @@ class LateralFollowLineSingleBuilder(StepBuilder):
         self._kd = value
         return self
 
+    def heading_deg(self, value: float | None):
+        self._heading_deg = value
+        return self
+
     def until(self, value: StopCondition | None):
         self._until = value
         return self
@@ -855,6 +893,7 @@ class LateralFollowLineSingleBuilder(StepBuilder):
         kwargs["kp"] = self._kp
         kwargs["ki"] = self._ki
         kwargs["kd"] = self._kd
+        kwargs["heading_deg"] = self._heading_deg
         kwargs["until"] = self._until
         return LateralFollowLineSingle(**kwargs)
 
@@ -868,6 +907,7 @@ def lateral_follow_line_single(
     kp: float = 0.4,
     ki: float = 0.0,
     kd: float = 0.1,
+    heading_deg: float | None = None,
     until: StopCondition | None = None,
 ):
     """
@@ -892,10 +932,11 @@ def lateral_follow_line_single(
         kp: Proportional gain for cross-track PID.
         ki: Integral gain for cross-track PID.
         kd: Derivative gain for cross-track PID.
+        heading_deg: Absolute heading to hold while strafing, in degrees from the :func:`mark_heading_reference` origin (CCW-positive). ``None`` (default) holds the heading captured at step start. Requires :func:`mark_heading_reference` earlier when set.
         until: Composable stop condition. Can also be chained via the ``.until()`` builder method.
 
     Returns:
-        A LateralFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A LateralFollowLineSingleBuilder (chainable via ``.sensor()``, ``.distance_cm()``, ``.speed()``, ``.side()``, ``.kp()``, ``.ki()``, ``.kd()``, ``.heading_deg()``, ``.until()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -912,6 +953,7 @@ def lateral_follow_line_single(
     b._kp = kp
     b._ki = ki
     b._kd = kd
+    b._heading_deg = heading_deg
     b._until = until
     return b
 

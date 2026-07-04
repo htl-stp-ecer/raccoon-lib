@@ -16,8 +16,12 @@
 #define LIBSTP_LOG_LEVEL_CRITICAL 5
 #define LIBSTP_LOG_LEVEL_OFF 6
 
+// Compile-time floor for the LIBSTP_LOG_* macros. DEBUG by default so C++ debug
+// statements are compiled in and can reach the per-run log file; TRACE stays
+// behind the LIBSTP_TRACE_LOGGING build flag (see CMakeLists.txt) to avoid the
+// cost of the highest-rate trace sites in normal builds.
 #ifndef FOUNDATION_LOG_ACTIVE_LEVEL
-#define FOUNDATION_LOG_ACTIVE_LEVEL LIBSTP_LOG_LEVEL_INFO
+#define FOUNDATION_LOG_ACTIVE_LEVEL LIBSTP_LOG_LEVEL_DEBUG
 #endif
 
 namespace spdlog { class logger; }
@@ -66,6 +70,13 @@ namespace logging {
     void set_package_level(const std::string& package, Level level);
     void clear_package_level(const std::string& package);
     void clear_filters();
+
+    /// Minimum level this run's log file captures, independent of the console
+    /// filters above. Defaults to Level::debug so the file is a complete debug
+    /// record even while the console stays at info. Set to Level::trace for the
+    /// most verbose file, or higher to quieten the file.
+    void set_file_log_level(Level level);
+    Level get_file_log_level();
 
     /// Query whether a log level is enabled by the current runtime filter state.
     bool is_enabled(Level level);

@@ -28,6 +28,12 @@ namespace libstp::motion
         LineFollowCorrectionMode correction_mode{LineFollowCorrectionMode::Angular};
         bool heading_hold{true};
         double correction_sign{1.0};
+        // When true, the heading-hold PID regulates onto ``target_heading_rad``
+        // (an absolute world heading) instead of the heading captured at start.
+        // Only consulted when heading_hold is true and correction_mode is
+        // Lateral or Forward.
+        bool has_target_heading{false};
+        double target_heading_rad{0.0};
     };
 
     struct DirectionalLineFollowMotionTelemetry

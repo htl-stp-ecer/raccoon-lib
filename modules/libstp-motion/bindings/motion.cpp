@@ -64,7 +64,7 @@ void init_motion_base(py::module_& m)
              py::arg("heading_recovery_rate") = 0.05,
              py::arg("saturation_hold_cycles") = 5,
              py::arg("saturation_recovery_threshold") = 0.95,
-             py::arg("distance_tolerance_m") = 0.01,
+             py::arg("distance_tolerance_m") = 0.002,
              py::arg("angle_tolerance_rad") = 0.035,
              py::arg("heading_saturation_error_rad") = 0.01,
              py::arg("heading_recovery_error_rad") = 0.005,

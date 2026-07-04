@@ -4,15 +4,22 @@ import math
 from typing import TYPE_CHECKING, Literal
 
 from raccoon.motion import TurnConfig, TurnMotion
-from raccoon.robot.heading_reference import HeadingReferenceService
+from raccoon.robot.heading_reference import HeadingReferenceService, TurnDirection
 
 from .. import Step, dsl
 from ..annotation import dsl_step
-from ._heading_utils import get_world_heading_rad
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
+
+__all__ = [
+    "MarkHeadingReference",
+    "TurnDirection",
+    "TurnToHeading",
+    "turn_to_heading_left",
+    "turn_to_heading_right",
+]
 
 
 @dsl_step(tags=["motion", "turn"])
@@ -115,20 +122,22 @@ class TurnToHeading(MotionStep):
             CCW-positive (``turn_to_heading_right(d)`` passes ``-d``;
             ``turn_to_heading_left(d)`` passes ``+d``).
         speed: Fraction of max angular speed, 0.0 to 1.0.
-        force_direction: ``"left"`` / ``"right"`` to force the physical turn
-            direction, or ``None`` for shortest path.
+        force_direction: :class:`TurnDirection` (or the strings ``"left"`` /
+            ``"right"``) to force the physical turn direction, or ``None`` for
+            shortest path. An invalid value raises ``ValueError``.
     """
 
     def __init__(
         self,
         target_deg: float,
         speed: float = 1.0,
-        force_direction: Literal["left", "right"] | None = None,
+        force_direction: TurnDirection | str | None = None,
     ) -> None:
         super().__init__()
         self._target_deg = target_deg
         self._speed = speed
-        self._force_direction = force_direction
+        # Validate eagerly so a typo fails at mission-build time, not mid-run.
+        self._force_direction = TurnDirection.coerce(force_direction)
         self._motion: TurnMotion | None = None
         self._done = False
 
@@ -160,13 +169,15 @@ class TurnToHeading(MotionStep):
             self._done = True
             return
 
-        # Absolute world target heading: regulate onto a fixed heading so the
-        # turn is drift-corrected, instead of integrating a relative angle.
-        target_heading_rad = get_world_heading_rad(robot) + math.radians(relative_deg)
-
-        current_world = get_world_heading_rad(robot)
+        # TurnMotion regulates on an unwrapped, accumulated heading, so
+        # ``target_angle_rad`` is the SIGNED RELATIVE turn delta (positive = CCW,
+        # negative = CW). Use the value from ``compute_turn`` verbatim: it is the
+        # shortest path when no direction is forced, or an extended ±180..±360
+        # delta when ``force_direction`` is set. Normalizing it back to [-π, π]
+        # here (e.g. via ``math.remainder``) would silently undo a forced
+        # direction — turning a forced 300° left back into a 60° right turn.
         config = TurnConfig()
-        config.target_angle_rad = math.remainder(target_heading_rad - current_world, 2.0 * math.pi)
+        config.target_angle_rad = math.radians(relative_deg)
         config.has_angle_target = True
         config.speed_scale = self._speed
         self._motion = TurnMotion(
@@ -203,7 +214,7 @@ class TurnToHeading(MotionStep):
 def turn_to_heading_right(
     degrees: float,
     speed: float = 1.0,
-    force_direction: Literal["left", "right"] | None = None,
+    force_direction: TurnDirection | str | None = None,
 ) -> TurnToHeading:
     """Turn to face a heading measured clockwise from the origin.
 
@@ -224,9 +235,11 @@ def turn_to_heading_right(
             Must be positive. For example, 90 means "face 90° to the
             right of origin".
         speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
-        force_direction: ``"left"`` or ``"right"`` to force the physical
-            turn direction regardless of shortest path, or ``None``
-            (default) for automatic shortest-path selection.
+        force_direction: :class:`TurnDirection` (``TurnDirection.LEFT`` /
+            ``TurnDirection.RIGHT``, or the equivalent strings ``"left"`` /
+            ``"right"``) to force the physical turn direction regardless of
+            shortest path, or ``None`` (default) for automatic shortest-path
+            selection. An invalid value raises ``ValueError``.
 
     Returns:
         A :class:`TurnToHeading` step that resolves the shortest-path turn
@@ -234,10 +247,12 @@ def turn_to_heading_right(
 
     Raises:
         RuntimeError: If no heading reference has been set.
+        ValueError: If ``force_direction`` is not a valid direction.
 
     Example::
 
         from raccoon.step.motion import mark_heading_reference, turn_to_heading_right
+        from raccoon.robot.heading_reference import TurnDirection
 
         # Capture origin after wait-for-light
         mark_heading_reference()
@@ -248,7 +263,7 @@ def turn_to_heading_right(
         turn_to_heading_right(90)
 
         # Force turning right even if left would be shorter
-        turn_to_heading_right(30, force_direction="right")
+        turn_to_heading_right(30, force_direction=TurnDirection.RIGHT)
 
         # Return to origin heading
         turn_to_heading_right(0)
@@ -260,7 +275,7 @@ def turn_to_heading_right(
 def turn_to_heading_left(
     degrees: float,
     speed: float = 1.0,
-    force_direction: Literal["left", "right"] | None = None,
+    force_direction: TurnDirection | str | None = None,
 ) -> TurnToHeading:
     """Turn to face a heading measured counter-clockwise from the origin.
 
@@ -281,9 +296,11 @@ def turn_to_heading_left(
             origin. Must be positive. For example, 90 means "face 90°
             to the left of origin".
         speed: Fraction of max angular speed, 0.0 to 1.0 (default 1.0).
-        force_direction: ``"left"`` or ``"right"`` to force the physical
-            turn direction regardless of shortest path, or ``None``
-            (default) for automatic shortest-path selection.
+        force_direction: :class:`TurnDirection` (``TurnDirection.LEFT`` /
+            ``TurnDirection.RIGHT``, or the equivalent strings ``"left"`` /
+            ``"right"``) to force the physical turn direction regardless of
+            shortest path, or ``None`` (default) for automatic shortest-path
+            selection. An invalid value raises ``ValueError``.
 
     Returns:
         A :class:`TurnToHeading` step that resolves the shortest-path turn
@@ -291,10 +308,12 @@ def turn_to_heading_left(
 
     Raises:
         RuntimeError: If no heading reference has been set.
+        ValueError: If ``force_direction`` is not a valid direction.
 
     Example::
 
         from raccoon.step.motion import mark_heading_reference, turn_to_heading_left
+        from raccoon.robot.heading_reference import TurnDirection
 
         # Capture origin after wait-for-light
         mark_heading_reference()
@@ -305,7 +324,7 @@ def turn_to_heading_left(
         turn_to_heading_left(90)
 
         # Force turning right to avoid obstacle on the left
-        turn_to_heading_left(45, force_direction="right")
+        turn_to_heading_left(45, force_direction=TurnDirection.RIGHT)
 
         # Return to origin heading
         turn_to_heading_left(0)

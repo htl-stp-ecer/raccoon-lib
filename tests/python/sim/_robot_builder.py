@@ -103,11 +103,20 @@ def build_robot(cfg, *, enable_localization: bool = True):
         # scenarios; the production default is 10 ms.
         localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
 
+    # Checkpoint-aware timing steps (wait_for_checkpoint / do_until_checkpoint)
+    # call robot.synchronizer. The real GenericRobot lazily creates one; the
+    # fake sim robot must provide it too or those steps raise AttributeError.
+    # Under the headless sim there is no match clock / drum-bot to sync against,
+    # so checkpoints are skipped (LIBSTP_NO_CHECKPOINTS=1) and this synchronizer
+    # only needs to exist — its wait returns immediately in that mode.
+    from raccoon.timing.synchronizer import Synchronizer
+
     return SimpleNamespace(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,
         motion_pid_config=pid_cfg,
         localization=localization,
+        synchronizer=Synchronizer(),
         _refs=refs,
     )

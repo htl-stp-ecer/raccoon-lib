@@ -41,6 +41,14 @@ class Segment:
                           optional ``condition``.
     - ``"arc"``         — ``radius_m``, ``arc_angle_rad``, ``speed_scale``,
                           ``lateral``.
+    - ``"crab_arc"``    — ``radius_m``, ``arc_angle_rad``, ``speed_scale`` plus
+                          ``crab_from`` / ``crab_to`` (body-frame unit velocity
+                          directions at entry / exit). A constant-heading 90°
+                          corner blend for a holonomic base: the body velocity
+                          vector rotates from ``crab_from`` to ``crab_to`` over a
+                          quarter circle WITHOUT rotating the heading. Driven by
+                          a Python adapter (no warm-start unless profiled). Used
+                          by ``cut_corners`` for ``forward↔strafe`` corners.
     - ``"follow_line"`` — same shape as ``"linear"`` plus ``opaque_step``
                           (the original LineFollow step). Adapter delegates
                           lifecycle to the step's ``on_start``/``on_update``.
@@ -69,6 +77,13 @@ class Segment:
     radius_m: float | None = None
     arc_angle_rad: float | None = None
     lateral: bool = False
+
+    # Crab-arc params (kind == "crab_arc"): body-frame unit velocity directions
+    # (vx, vy) at entry / exit of a constant-heading 90° corner blend. vx > 0 =
+    # forward, vy > 0 = strafe right (matches ``ChassisVelocity``). The velocity
+    # vector follows ``cos(α)·crab_from + sin(α)·crab_to`` for α ∈ [0, π/2].
+    crab_from: tuple[float, float] | None = None
+    crab_to: tuple[float, float] | None = None
 
     # Diagonal params (kind == "diagonal"): known body-frame displacement,
     # +forward / +left (90° CCW). The travel direction is decoupled from the

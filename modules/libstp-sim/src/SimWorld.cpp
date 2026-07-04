@@ -228,11 +228,17 @@ namespace libstp::sim
         // fixed-distance strafe close its lateral loop instead of running away,
         // without disturbing the forward / turn loops (which already worked).
         {
+            // Apply the sim-only per-axis odometry drift here and ONLY here, so
+            // the dead-reckoned odometry diverges from the physical pose below.
+            // Defaults to 1/1/1 (no drift) — see setOdometryDrift().
+            const float vxDr = vxMps * m_odoDrift.vxBias;
+            const float vyDr = vyMps * m_odoDrift.vyBias;
+            const float yawDr = yawRate * m_odoDrift.yawBias;
             const float co = std::cos(m_odoPose.theta);
             const float so = std::sin(m_odoPose.theta);
-            m_odoPose.x += (vxMps * co - vyMps * so) * kMetersToCm * dt;
-            m_odoPose.y += (vxMps * so + vyMps * co) * kMetersToCm * dt;
-            m_odoPose.theta = normalizeAngle(m_odoPose.theta + yawRate * dt);
+            m_odoPose.x += (vxDr * co - vyDr * so) * kMetersToCm * dt;
+            m_odoPose.y += (vxDr * so + vyDr * co) * kMetersToCm * dt;
+            m_odoPose.theta = normalizeAngle(m_odoPose.theta + yawDr * dt);
         }
 
         const float dxLocalCm = vxMps * kMetersToCm * dt;

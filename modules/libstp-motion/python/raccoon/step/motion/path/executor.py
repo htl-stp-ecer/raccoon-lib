@@ -13,6 +13,7 @@ import dataclasses
 import math
 from typing import TYPE_CHECKING
 
+from raccoon.class_name_logger import ClassNameLogger
 from raccoon.motion import LinearAxis
 from raccoon.step.calibration import check_distance_calibration
 
@@ -57,8 +58,41 @@ if TYPE_CHECKING:
 # Per-segment manual completion check tolerances
 # ---------------------------------------------------------------------------
 
-DISTANCE_TOL_M = 0.005  # 5mm tolerance for manual distance check
+DISTANCE_TOL_M = 0.002  # 2mm — in lockstep with C++ distance_tolerance_m
 ANGLE_TOL_RAD = 0.035  # ~2° tolerance for manual angle check
+
+# Stall watchdog for geometric (linear/turn/arc) path segments. A short tactical
+# leg (e.g. a 5 cm strafe) that makes NO progress toward its target for this long
+# is stuck — a mis-compiled distance/sign, a blocked robot, or odometry that never
+# crosses the (possibly wrong) target. Without this guard the segment drives blind
+# for tens of seconds (the M050 "30 s freeze": a 5 cm strafe ran ~30 s because its
+# odometry completion check never fired). Bail loudly instead.
+_SEGMENT_STALL_TIMEOUT_S = 4.0
+# 2 mm — meaningful linear progress toward target. Matches the completion band
+# (DISTANCE_TOL_M) so the watchdog counts the tighter final approach as progress
+# and doesn't trip while the profiled PID is legitimately closing the last few mm.
+_PROGRESS_EPS_M = 0.002
+_PROGRESS_EPS_RAD = math.radians(1.0)  # ~1° — meaningful angular progress
+
+
+def _segment_target_and_eps(seg: Segment) -> tuple[float, float] | None:
+    """Return ``(target, progress_eps)`` for a geometric segment, else ``None``.
+
+    Opaque segments (follow_line/spline/diagonal/crab_arc, opaque turns) and
+    open-ended segments (``target is None``) have no measurable distance/angle
+    target and are skipped by the trace/watchdog logic.
+    """
+    if seg.kind == "linear":
+        target, eps = seg.distance_m, _PROGRESS_EPS_M
+    elif seg.kind == "turn":
+        target, eps = seg.angle_rad, _PROGRESS_EPS_RAD
+    elif seg.kind == "arc":
+        target, eps = seg.arc_angle_rad, _PROGRESS_EPS_RAD
+    else:
+        return None
+    if target is None:
+        return None
+    return target, eps
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +164,34 @@ def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
         return robot.odometry.get_distance_from_origin().forward
     # "spline" / "diagonal": not used for warm-start (always cold-start).
     return 0.0
+
+
+def _non_last_reached(
+    robot: "GenericRobot",
+    seg: Segment,
+    seg_origin: float,
+    motion,
+) -> bool:
+    """Completion decision for a NON-terminal geometric segment.
+
+    Two independent completion paths, whichever fires first:
+
+    1. Manual position check (:func:`_check_segment_reached`, 5 mm band) — an
+       INFLATED segment cruises through its endpoint and never self-completes,
+       so the executor triggers the transition at the real target.
+    2. The motion's OWN completion (:func:`_has_reached_target`) — a NON-inflated
+       segment (the next leg cold-starts) decelerates to its target exactly like
+       the last segment and self-completes at the C++ distance tolerance (1 cm),
+       then hard-stops. Its profile has ramped to zero; we MUST accept that
+       completion here, otherwise the robot sits parked one tolerance-gap short
+       of the tighter manual band, making no progress until the stall watchdog
+       trips (the strafe-reversal stall in the 2026-07-01 hardware log).
+
+    For an inflated segment path (2) is inert — the inflated +1 m target is never
+    reached and the motion never finishes — so warm-start cruise behaviour is
+    unchanged and only path (1) drives the transition.
+    """
+    return _check_segment_reached(robot, seg, seg_origin) or _has_reached_target(motion, seg)
 
 
 def _check_segment_reached(
@@ -220,17 +282,33 @@ async def _advance_past_side_actions(
     Resolves any Defer placeholders encountered along the way.  Returns
     the index of the next ``Segment`` node (or ``len(nodes)``).
 
-    This is called at every segment transition, so it is also the join point
-    for parallel() branches: any EPHEMERAL background task launched for a
-    previous spine is awaited here (the spine that scoped it has now ended)
-    before the next side actions / segment run — restoring parallel()'s
-    await-all semantics so a branch can't leak past its scope.
+    EPHEMERAL parallel() branches are joined LAZILY, not at every transition:
+    only right before a blocking, NON-motion inline side action (a servo / wait
+    that might need a resource the branch holds), and at path end (see
+    ``PathExecutor.run``'s ``finally``). Two transitions must NOT join, or they
+    break motion:
+
+    * A bare segment→segment warm continuation (merged same-type legs carry
+      velocity with no hard stop). Blocking the join there freezes the control
+      loop while the motor keeps its last velocity command, so the robot coasts
+      open-loop for the whole branch duration and overshoots the leg (a 0.3 s
+      servo branch ran tens of cm past a merged drive). Letting the loop keep
+      ticking keeps the motion closed-loop.
+    * An inline side action that is itself a COLLAPSED MOTION spine — under
+      ``to_absolute()`` / ``splinify()`` a ``parallel(spine, branch)`` lowers to
+      ``[branch(eph), GotoWaypoints/SplineFollow(inline)]``; the branch must run
+      CONCURRENTLY with that move (that is the whole point of parallel()), so we
+      detect it via the "drive" resource and skip the pre-join.
+
+    In every case the branch still runs concurrently and is joined before the
+    next blocking non-motion step or at path end, preserving await-all.
     """
-    # Join the previous spine's ephemeral parallel branches before proceeding.
-    if ephemeral_tasks:
-        pending = list(ephemeral_tasks)
-        ephemeral_tasks.clear()
-        await asyncio.gather(*pending, return_exceptions=True)
+
+    async def _join_ephemeral() -> None:
+        if ephemeral_tasks:
+            pending = list(ephemeral_tasks)
+            ephemeral_tasks.clear()
+            await asyncio.gather(*pending, return_exceptions=True)
 
     idx = start_idx
     while idx < len(nodes):
@@ -245,6 +323,11 @@ async def _advance_past_side_actions(
             if node.ephemeral:
                 ephemeral_tasks.append(task)
         else:
+            # A non-motion inline step waits in place, so honour parallel()'s
+            # await-all by joining first. A collapsed-motion inline (drive
+            # resource) instead runs concurrently with the branch — don't join.
+            if "drive" not in node.step.collected_resources():
+                await _join_ephemeral()
             await node.step.run_step(robot)
         idx += 1
     return idx
@@ -291,7 +374,11 @@ def _next_segment_warmstarts(
             if not node.is_background:
                 return False  # blocking inline side action → next cold-starts
             continue  # background / ephemeral branch — doesn't stop the spine
-        return is_same_type(seg, node)  # next Segment: warm only if same type
+        # Next Segment: warm only if same type AND not a direction reversal.
+        # A reversal cold-starts (see _should_warm), so this leg must NOT
+        # inflate/cruise through its endpoint — it has to decelerate to its
+        # real target so the reversal point is clean.
+        return is_same_type(seg, node) and not _reverses_direction(seg, node)
     return False  # no further segment
 
 
@@ -343,11 +430,86 @@ def _warm_velocity(seg, fallback_mps: float) -> float:
     return fallback_mps
 
 
+def _reverses_direction(prev_seg, seg) -> bool:
+    """Do two consecutive same-axis linear legs travel in opposite directions?
+
+    A ``Lateral -5cm`` immediately followed by ``Lateral +6cm`` is same-type
+    (so ``is_same_type`` says "warm"), but carrying the previous leg's velocity
+    into the reversal sends the robot the WRONG way first — it must decelerate,
+    reverse, and only then chase the new target. Observed on hardware: the +6cm
+    strafe flew to -5.5cm before turning around, wasting ~1.2s and never
+    settling. Opposite signs on the same axis ⇒ cold-start (hard stop between)
+    so the new profile begins cleanly at zero velocity.
+    """
+    if prev_seg.kind != "linear" or seg.kind != "linear":
+        return False
+    pd, cd = prev_seg.distance_m, seg.distance_m
+    if pd is None or cd is None:
+        return False
+    return pd * cd < 0.0
+
+
 def _should_warm(prev_seg, seg) -> bool:
-    """Warm-start into ``seg``? Profile decides when stamped, else same-type."""
+    """Warm-start into ``seg``? Profile decides when stamped, else same-type.
+
+    Even for same-type legs, never warm-start across a direction reversal on
+    the same axis — carrying velocity into the opposite direction overshoots
+    the wrong way first (see :func:`_reverses_direction`).
+    """
     if _is_profiled(seg):
         return _carries_in(seg)
+    if _reverses_direction(prev_seg, seg):
+        return False
     return is_same_type(prev_seg, seg)
+
+
+# ---------------------------------------------------------------------------
+# Segment logging
+# ---------------------------------------------------------------------------
+
+
+def _describe_segment(seg: Segment) -> str:
+    """One-line, human-readable description of a motion segment for logging.
+
+    The optimizer/compiler lowers the user's drive/turn/strafe steps into bare
+    ``Segment`` IR that the executor runs directly via ``create_motion`` —
+    bypassing ``Step.run_step``, which is where ordinary steps print their
+    signature. So none of the motion legs in an ``optimize()`` / ``smooth_path``
+    block logged anything. This rebuilds a step-like signature from the IR so the
+    executor can announce each leg as it starts.
+
+    Opaque segments (follow_line / spline / diagonal / heading-turn) still carry
+    their original step, so we reuse that step's own signature verbatim.
+    """
+    if seg.opaque_step is not None:
+        try:
+            return seg.opaque_step._generate_signature()
+        except Exception:  # logging must never break the run
+            return f"{seg.kind}()"
+
+    suffix = " until <condition>" if seg.condition is not None else ""
+
+    if seg.kind == "linear":
+        axis = seg.axis.name if seg.axis is not None else "?"
+        if seg.distance_m is not None:
+            body = f"{axis} {seg.distance_m * 100.0:+.1f}cm"
+        else:
+            body = f"{axis} (sensor)"
+        return f"Drive({body}){suffix}"
+    if seg.kind == "turn":
+        if seg.angle_rad is not None:
+            return f"Turn({math.degrees(seg.angle_rad):+.1f}°){suffix}"
+        if seg.target_heading_rad is not None:
+            return f"Turn(to {math.degrees(seg.target_heading_rad):.1f}°){suffix}"
+        return f"Turn(sensor){suffix}"
+    if seg.kind == "arc":
+        r = (seg.radius_m or 0.0) * 100.0
+        a = math.degrees(seg.arc_angle_rad or 0.0)
+        return f"Arc(R={r:.1f}cm, {a:+.1f}°){suffix}"
+    if seg.kind == "crab_arc":
+        r = (seg.radius_m or 0.0) * 100.0
+        return f"CrabArc(R={r:.1f}cm){suffix}"
+    return f"{seg.kind}(){suffix}"
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +517,7 @@ def _should_warm(prev_seg, seg) -> bool:
 # ---------------------------------------------------------------------------
 
 
-class PathExecutor:
+class PathExecutor(ClassNameLogger):
     """Runs a compiled plan against a robot.
 
     The executor owns the control loop, manages segment transitions
@@ -394,6 +556,14 @@ class PathExecutor:
         # transition (see _advance_past_side_actions).
         ephemeral_tasks: list[asyncio.Task] = []
 
+        # Set once the path runs to its natural end (vs. unwinding on an
+        # exception). Gates the ephemeral join in ``finally`` so a teardown on
+        # error still cancels instead of awaiting a possibly-stuck branch.
+        completed = False
+
+        # Running count of motion legs started, for the per-segment log line.
+        seg_count = 0
+
         try:
             node_idx = 0
 
@@ -407,6 +577,7 @@ class PathExecutor:
                 ephemeral_tasks,
             )
             if node_idx >= len(nodes):
+                completed = True
                 return  # path was only side actions
 
             # Resolve deferred first segment if needed.
@@ -433,6 +604,9 @@ class PathExecutor:
             seg = _with_heading_offset(seg, h0)
             is_last = _is_last_segment(nodes, node_idx)
 
+            seg_count += 1
+            self.info(f"#{seg_count} {_describe_segment(seg)}")
+
             motion = create_motion(
                 robot,
                 seg,
@@ -450,6 +624,12 @@ class PathExecutor:
             update_rate = 1.0 / self._hz
             loop = asyncio.get_event_loop()
             last_time = loop.time() - update_rate  # seed first dt
+
+            # Per-segment stall watchdog state. Re-armed (by object identity)
+            # whenever the active segment changes inside the loop.
+            watch_seg: Segment | None = None
+            watch_best_remaining = math.inf
+            watch_last_progress_t = last_time
 
             while True:
                 current_time = loop.time()
@@ -475,9 +655,52 @@ class PathExecutor:
                 # via is_finished(), so the geometric distance/angle checks must
                 # NOT run for them (a heading turn has angle_rad=None, which the
                 # non-last _check_segment_reached can't evaluate).
-                is_opaque = seg.kind in ("follow_line", "spline", "diagonal") or (
+                is_opaque = seg.kind in ("follow_line", "spline", "diagonal", "crab_arc") or (
                     seg.kind == "turn" and seg.opaque_step is not None
                 )
+
+                # Per-tick TRACE telemetry + stall watchdog for geometric
+                # segments. Opaque adapters (follow_line/spline/…) log their own
+                # per-tick state and self-terminate via is_finished(), so they're
+                # excluded here. A geometric leg that logs nothing per tick is the
+                # blind spot that hid the M050 30 s strafe hang — make it visible
+                # and bail if it stops progressing toward its target.
+                if not transition and seg.has_known_endpoint and not is_opaque:
+                    te = _segment_target_and_eps(seg)
+                    if te is not None:
+                        target, eps = te
+                        traveled = _get_position_offset(robot, seg) - seg_origin
+                        remaining = abs(target - traveled)
+                        self.trace(
+                            f"#{seg_count} {seg.kind} "
+                            f"axis={getattr(seg, 'axis', None)} "
+                            f"traveled={traveled:.4f} target={target:.4f} "
+                            f"remaining={remaining:.4f} dt={dt:.4f}"
+                        )
+                        if seg is not watch_seg:
+                            watch_seg = seg
+                            watch_best_remaining = remaining
+                            watch_last_progress_t = current_time
+                        elif remaining < watch_best_remaining - eps:
+                            watch_best_remaining = remaining
+                            watch_last_progress_t = current_time
+                        elif current_time - watch_last_progress_t > _SEGMENT_STALL_TIMEOUT_S:
+                            robot.drive.hard_stop()
+                            msg = (
+                                f"path segment #{seg_count} "
+                                f"({_describe_segment(seg)}) made no progress "
+                                f"toward its target for "
+                                f"{_SEGMENT_STALL_TIMEOUT_S:.1f}s "
+                                f"(traveled={traveled:.4f}, target={target:.4f}, "
+                                f"remaining={remaining:.4f}) — skipping stuck "
+                                f"segment and continuing the path. Likely a "
+                                f"mis-compiled distance/sign or a blocked robot."
+                            )
+                            self.error(msg)
+                            # Don't crash the mission: treat the stall as if the
+                            # segment completed so the control loop advances to the
+                            # next node instead of raising out of the run.
+                            transition = True
 
                 # Distance/angle completion (geometric segments only).
                 if not transition and seg.has_known_endpoint and not is_opaque:
@@ -485,13 +708,10 @@ class PathExecutor:
                         # Profile decelerates naturally to the real target.
                         transition = _has_reached_target(motion, seg)
                     else:
-                        # Manual check while the inflated profile keeps
-                        # the robot at cruise speed.
-                        transition = _check_segment_reached(
-                            robot,
-                            seg,
-                            seg_origin,
-                        )
+                        # Manual band OR the motion's own completion — see
+                        # _non_last_reached (fixes the ramp-to-zero-then-stuck
+                        # strafe-reversal stall).
+                        transition = _non_last_reached(robot, seg, seg_origin, motion)
 
                 # Opaque steps: adapter signals completion via is_finished().
                 if not transition and is_opaque:
@@ -553,6 +773,9 @@ class PathExecutor:
                     seg = _with_heading_offset(seg, h0)
                     is_last = _is_last_segment(nodes, node_idx)
 
+                    seg_count += 1
+                    self.info(f"#{seg_count} {_describe_segment(seg)}")
+
                     next_world_heading = await _world_heading_for_seg(robot, seg)
                     inflate = _warm_lookahead(nodes, node_idx, seg)
                     if _should_warm(prev_seg, seg):
@@ -588,9 +811,27 @@ class PathExecutor:
                         seg.condition.start(robot)
 
                 await asyncio.sleep(update_rate)
+
+            # Loop exits only via the end-of-path breaks above — natural end.
+            completed = True
         finally:
             robot.drive.hard_stop()
-            # Clean up any background side-action tasks.
+            # On NORMAL completion, join any still-pending EPHEMERAL
+            # parallel-branch tasks before tearing down: parallel()'s await-all
+            # semantics must hold even when the path ends without a following
+            # segment transition to join at — e.g. to_absolute()/splinify()
+            # collapsed the motion into inline side actions (no real Segment
+            # left to transition through), or the parallel sat at the path tail.
+            # Without this the branch is launched and then cancelled below
+            # before it can finish — the bug where parallel side actions on an
+            # optimized path silently didn't run. On exception teardown
+            # (completed is False) we skip the join and cancel everything.
+            if completed and ephemeral_tasks:
+                await asyncio.gather(*ephemeral_tasks, return_exceptions=True)
+                ephemeral_tasks.clear()
+            # Plain (non-ephemeral) background() tasks stay fire-and-forget:
+            # cancel whatever is still running. Ephemeral tasks joined just
+            # above are already done here, so cancelling is a no-op for them.
             for task in bg_tasks:
                 if not task.done():
                     task.cancel()

@@ -144,6 +144,27 @@ namespace libstp::sim
         /// the sim integrates a +vy command as the robot's physical RIGHT.)
         Pose2D odometryPose() const noexcept { return m_odoPose; }
 
+        /// Per-axis multiplicative drift on the dead-reckoned odometry ONLY
+        /// (the physical `pose()` is untouched). A bias < 1 makes odometry
+        /// UNDER-report that axis, so a controller that closes its loop on
+        /// odometry physically OVER-travels; > 1 over-reports / under-travels.
+        /// This is the sim model of accumulated odometry error: the controller
+        /// believes the (biased) odometry while the ground-truth `pose()`
+        /// diverges. A separate absolute reference (e.g. localization landmark
+        /// `observe()`) is what corrects it. SIM-ONLY — defaults to 1/1/1
+        /// (no drift) so existing scenarios are unchanged.
+        struct OdometryDrift
+        {
+            float vxBias{1.0f};
+            float vyBias{1.0f};
+            float yawBias{1.0f};
+        };
+        void setOdometryDrift(float vxBias, float vyBias, float yawBias) noexcept
+        {
+            m_odoDrift = OdometryDrift{vxBias, vyBias, yawBias};
+        }
+        OdometryDrift odometryDrift() const noexcept { return m_odoDrift; }
+
         /// Signed motor command in the range [-100, 100]. Matches the scale
         /// used by HAL Motor::setSpeed.
         void setMotorCommand(uint8_t port, int signedPercent);
@@ -217,6 +238,7 @@ namespace libstp::sim
         int m_currentLayer{0};  // index of the plane the robot is on (ground = 0)
         Pose2D m_pose{};
         Pose2D m_odoPose{};  // dead-reckoned controller-facing odometry (see odometryPose())
+        OdometryDrift m_odoDrift{};  // sim-only per-axis odometry bias (see setOdometryDrift)
 
         std::array<float, kNumMotorPorts> m_motorTargetOmega{};   // rad/s, signed
         std::array<float, kMaxWheels> m_wheelOmega{};             // rad/s

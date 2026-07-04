@@ -26,6 +26,8 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from raccoon.log import debug
+
 if TYPE_CHECKING:
     from raccoon.hal import AnalogSensor, DigitalSensor, Motor
     from raccoon.robot.api import GenericRobot
@@ -35,12 +37,47 @@ if TYPE_CHECKING:
 class StopCondition:
     """Base class for composable stop conditions."""
 
+    # Set the first time this condition fires, so the completion log is emitted
+    # exactly once. Not reset on re-`start()` — conditions are normally built
+    # fresh per motion step, so at worst a reused instance skips one log line.
+    _fire_logged: bool = False
+
     def start(self, robot: "GenericRobot") -> None:
         """Called once when the motion step starts. Override to initialize state."""
 
     def check(self, robot: "GenericRobot") -> bool:
-        """Return True to stop the motion. Called each update cycle."""
+        """Return True to stop the motion. Called each update cycle.
+
+        Public entry point. Delegates to the subclass :meth:`_evaluate` and
+        emits a one-shot ``debug`` log the moment the condition first fires, so
+        mission logs show *which* condition completed and its state at
+        completion.
+
+        ``_state()`` (which may poll sensors/odometry) is only evaluated on the
+        firing tick, so this adds no per-tick cost to the 100 Hz motion loop.
+        """
+        fired = self._evaluate(robot)
+        if fired and not self._fire_logged:
+            self._fire_logged = True
+            detail = self._state(robot)
+            debug(f"condition met: {self._label()}" + (f" [{detail}]" if detail else ""))
+        return fired
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
+        """Return True to stop the motion. Called each update cycle.
+
+        Override this (not :meth:`check`) in subclasses; :meth:`check` wraps it
+        with completion/pending logging.
+        """
         raise NotImplementedError
+
+    def _label(self) -> str:
+        """Short human-readable name for logs. Override to add key parameters."""
+        return type(self).__name__
+
+    def _state(self, robot: "GenericRobot") -> str:
+        """Optional runtime detail logged alongside the label (e.g. progress)."""
+        return ""
 
     def __or__(self, other: "StopCondition") -> "StopCondition":
         """Combine conditions: stop when EITHER triggers."""
@@ -93,11 +130,15 @@ class _Then(StopCondition):
         self._first_done = False
         self._first.start(robot)
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"({self._first._label()} -> {self._second._label()})"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         if not self._first_done:
             if self._first.check(robot):
                 self._first_done = True
                 self._second.start(robot)
+                debug(f"condition advanced: {self._label()} — first stage done, arming second")
             return False
         return self._second.check(robot)
 
@@ -116,7 +157,10 @@ class _AnyOf(StopCondition):
         for c in self._conditions:
             c.start(robot)
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return "any(" + ", ".join(c._label() for c in self._conditions) + ")"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return any(c.check(robot) for c in self._conditions)
 
 
@@ -134,7 +178,10 @@ class _AllOf(StopCondition):
         for c in self._conditions:
             c.start(robot)
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return "all(" + ", ".join(c._label() for c in self._conditions) + ")"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return all(c.check(robot) for c in self._conditions)
 
 
@@ -151,7 +198,13 @@ class on_black(StopCondition):
         self._sensor = sensor
         self._threshold = threshold
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"on_black(>= {self._threshold:.2f})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return f"p_black={self._sensor.probabilityOfBlack():.2f}"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return self._sensor.probabilityOfBlack() >= self._threshold
 
 
@@ -168,7 +221,13 @@ class on_white(StopCondition):
         self._sensor = sensor
         self._threshold = threshold
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"on_white(>= {self._threshold:.2f})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return f"p_white={self._sensor.probabilityOfWhite():.2f}"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return self._sensor.probabilityOfWhite() >= self._threshold
 
 
@@ -188,7 +247,13 @@ class after_seconds(StopCondition):
     def start(self, robot: "GenericRobot") -> None:
         self._deadline = time.monotonic() + self._duration
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"after_seconds({self._duration:.2f})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return f"remaining={max(0.0, self._deadline - time.monotonic()):.2f}s"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return time.monotonic() >= self._deadline
 
 
@@ -224,7 +289,17 @@ class after_cm(StopCondition):
             self._baseline_m = robot.odometry.get_path_length()
         self._started = True
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        mode = "abs" if self._absolute else "rel"
+        return f"after_cm({self._target_m * 100:.1f}, {mode})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        if not self._started:
+            return "not started"
+        traveled = robot.odometry.get_path_length() - self._baseline_m
+        return f"traveled={traveled * 100:.1f}/{self._target_m * 100:.1f}cm"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         if not self._started:
             return False
         return (robot.odometry.get_path_length() - self._baseline_m) >= self._target_m
@@ -326,7 +401,23 @@ class _AxisDisplacementCondition(StopCondition):
     def _absolute_component(self, robot: "GenericRobot") -> float:
         raise NotImplementedError
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        name = self._axis_name or "axis"
+        if self._absolute:
+            mode = "abs"
+        elif self._heading_deg is not None:
+            mode = f"heading={self._heading_deg:.1f}"
+        else:
+            mode = "rel"
+        return f"after_{name}_cm({self._target_m * 100:.1f}, {mode})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        if not self._started:
+            return "not started"
+        name = self._axis_name or "axis"
+        return f"{name}={self._displacement_m(robot) * 100:.1f}/{self._target_m * 100:.1f}cm"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         if not self._started:
             return False
         delta = self._displacement_m(robot)
@@ -362,6 +453,8 @@ class after_forward_cm(_AxisDisplacementCondition):
     odometry origin, projected onto the origin heading.
     """
 
+    _axis_name = "forward"
+
     def _project(self, dx: float, dy: float) -> float:
         return dx * self._cos_h + dy * self._sin_h
 
@@ -386,6 +479,8 @@ class after_lateral_cm(_AxisDisplacementCondition):
     In absolute mode (``absolute=True``) the displacement is read directly
     from ``get_distance_from_origin().lateral``.
     """
+
+    _axis_name = "lateral"
 
     def _project(self, dx: float, dy: float) -> float:
         return -dx * self._sin_h + dy * self._cos_h
@@ -429,7 +524,16 @@ class after_degrees(StopCondition):
         self._last_heading = self._world_heading(robot)
         self._accumulated_rad = 0.0
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"after_degrees({math.degrees(self._target_rad):.1f})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return (
+            f"turned={math.degrees(self._accumulated_rad):.1f}"
+            f"/{math.degrees(self._target_rad):.1f}deg"
+        )
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         # Accumulate the TOTAL rotation by summing the per-tick heading step.
         # Each step is wrapped to (-pi, pi] so the heading discontinuity at
         # +/-pi never corrupts the running total, and abs() makes it direction-
@@ -456,7 +560,13 @@ class on_digital(StopCondition):
         self._sensor = sensor
         self._pressed = pressed
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"on_digital(pressed={self._pressed})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return f"read={self._sensor.read()}"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return self._sensor.read() == self._pressed
 
 
@@ -473,7 +583,13 @@ class on_analog_above(StopCondition):
         self._sensor = sensor
         self._threshold = threshold
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"on_analog_above({self._threshold})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return f"read={self._sensor.read()}"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return self._sensor.read() > self._threshold
 
 
@@ -490,7 +606,13 @@ class on_analog_below(StopCondition):
         self._sensor = sensor
         self._threshold = threshold
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"on_analog_below({self._threshold})"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        return f"read={self._sensor.read()}"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return self._sensor.read() < self._threshold
 
 
@@ -524,7 +646,15 @@ class stall_detected(StopCondition):
         self._last_time = time.monotonic()
         self._stall_start = None
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        return f"stall_detected(< {self._threshold_tps}tps for {self._duration:.2f}s)"
+
+    def _state(self, robot: "GenericRobot") -> str:
+        if self._stall_start is None:
+            return "moving"
+        return f"stalled {time.monotonic() - self._stall_start:.2f}/{self._duration:.2f}s"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         now = time.monotonic()
         dt = now - self._last_time
         if dt < 0.02:
@@ -557,7 +687,11 @@ class custom(StopCondition):
             raise TypeError(msg)
         self._fn = fn
 
-    def check(self, robot: "GenericRobot") -> bool:
+    def _label(self) -> str:
+        name = getattr(self._fn, "__name__", None) or repr(self._fn)
+        return f"custom({name})"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
         return self._fn(robot)
 
 

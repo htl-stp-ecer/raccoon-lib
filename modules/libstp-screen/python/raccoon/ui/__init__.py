@@ -173,6 +173,7 @@ from .screens import (
     DistanceMeasureScreen,
     DistanceConfirmScreen,
     DistanceConfirmResult,
+    DISTANCE_MEASURE_RETRY,
 )
 
 __all__ = [
@@ -249,4 +250,5 @@ __all__ = [
     "DistanceMeasureScreen",
     "DistanceConfirmScreen",
     "DistanceConfirmResult",
+    "DISTANCE_MEASURE_RETRY",
 ]

@@ -60,7 +60,12 @@ class IRResultsDashboardScreen(UIScreen[IRDashboardResult]):
             [
                 self._build_status_row(),
                 Spacer(12),
-                self._build_chart(),
+                # Let the chart take the remaining height instead of a fixed 320px:
+                # on shorter robot displays a fixed height overflowed the screen and
+                # the chart's lower edge — the white/lower threshold line — was
+                # clipped off-screen. Expanded makes the column fill and the chart
+                # shrink to fit, keeping both thresholds visible.
+                Expanded(child=self._build_chart()),
                 Spacer(12),
                 Row(
                     children=[

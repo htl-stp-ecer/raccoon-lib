@@ -48,8 +48,12 @@ if(LIBSTP_TRACE_LOGGING)
   )
   add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=0)
 else()
-  message(STATUS "Setting logging level to INFO")
-  add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=2)
+  message(STATUS "Setting logging compile level to DEBUG")
+  message(
+    STATUS
+      "  -> DEBUG and above compiled in so the rotating log file captures debug; "
+      "TRACE sites stay out unless LIBSTP_TRACE_LOGGING is set")
+  add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=1)
 endif()
 
 # Scikit-build-core sets these values for you, or you can just hard-code the

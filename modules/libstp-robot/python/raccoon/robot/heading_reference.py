@@ -1,12 +1,51 @@
 from __future__ import annotations
 
 import math
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from .service import RobotService
 
 if TYPE_CHECKING:
     from .api import GenericRobot
+
+
+class TurnDirection(str, Enum):
+    """Physical direction a heading turn may be forced to take.
+
+    Subclasses ``str`` so existing call sites that pass the bare strings
+    ``"left"`` / ``"right"`` keep working (``TurnDirection.LEFT == "left"``)
+    while new code gets a real, self-validating type. Coerce any user input
+    via :meth:`coerce`, which raises ``ValueError`` on an unknown value
+    instead of silently falling back to the shortest path.
+    """
+
+    LEFT = "left"
+    """Counter-clockwise (CCW) — positive angular direction."""
+
+    RIGHT = "right"
+    """Clockwise (CW) — negative angular direction."""
+
+    @classmethod
+    def coerce(cls, value: "TurnDirection | str | None") -> "TurnDirection | None":
+        """Normalize ``value`` to a :class:`TurnDirection`, validating it.
+
+        ``None`` passes through (meaning "shortest path"). A
+        :class:`TurnDirection` is returned as-is. A string is matched
+        case-insensitively against the members. Anything else raises
+        ``ValueError`` so a typo (e.g. ``"lft"``) fails loudly rather than
+        being silently ignored.
+        """
+        if value is None or isinstance(value, cls):
+            return value
+        if isinstance(value, str):
+            try:
+                return cls(value.strip().lower())
+            except ValueError:
+                pass
+        valid = ", ".join(repr(member.value) for member in cls)
+        msg = f"Invalid turn direction {value!r}; expected one of {valid} or None."
+        raise ValueError(msg)
 
 
 def _normalize_angle(angle: float) -> float:
@@ -118,7 +157,7 @@ class HeadingReferenceService(RobotService):
     def compute_turn(
         self,
         target_deg: float,
-        force_direction: str | None = None,
+        force_direction: "TurnDirection | str | None" = None,
     ) -> float:
         """Compute the signed relative turn angle to reach *target_deg* from reference.
 
@@ -128,20 +167,25 @@ class HeadingReferenceService(RobotService):
 
         Args:
             target_deg: Desired heading in degrees relative to the reference.
-            force_direction: ``"left"`` to force CCW, ``"right"`` to force CW,
-                or ``None`` (default) for shortest path.
+            force_direction: :attr:`TurnDirection.LEFT` to force CCW,
+                :attr:`TurnDirection.RIGHT` to force CW, or ``None`` (default)
+                for shortest path. Plain strings ``"left"`` / ``"right"`` are
+                accepted and validated; an unknown value raises ``ValueError``.
 
         Returns:
             Signed angle in degrees (positive = CCW / left, negative = CW / right).
-            Normalized to [-180, 180] for shortest path, or adjusted to the
-            forced direction.
+            Normalized to [-180, 180] for shortest path, or extended past
+            ±180 (up to ±360) to honour the forced direction.
 
         Raises:
             RuntimeError: If no reference has been marked yet.
+            ValueError: If ``force_direction`` is not a valid direction.
         """
         if self._reference_rad is None:
             msg = "No heading reference set. Call mark_heading_reference() first."
             raise RuntimeError(msg)
+
+        direction = TurnDirection.coerce(force_direction)
 
         sign = 1.0 if self._positive_direction == "left" else -1.0
         target_absolute = self._reference_rad + sign * math.radians(target_deg)
@@ -149,9 +193,9 @@ class HeadingReferenceService(RobotService):
         relative_rad = _normalize_angle(target_absolute - current_absolute)
         relative_deg = math.degrees(relative_rad)
 
-        if force_direction == "left" and relative_deg < 0:
+        if direction is TurnDirection.LEFT and relative_deg < 0:
             relative_deg += 360.0
-        elif force_direction == "right" and relative_deg > 0:
+        elif direction is TurnDirection.RIGHT and relative_deg > 0:
             relative_deg -= 360.0
 
         self.debug(
@@ -159,7 +203,7 @@ class HeadingReferenceService(RobotService):
             f"target_abs={math.degrees(target_absolute):.1f}° "
             f"current_abs={math.degrees(current_absolute):.1f}° "
             f"→ relative={relative_deg:.1f}°"
-            f"{f' (forced {force_direction})' if force_direction else ''}"
+            f"{f' (forced {direction.value})' if direction else ''}"
         )
 
         return relative_deg

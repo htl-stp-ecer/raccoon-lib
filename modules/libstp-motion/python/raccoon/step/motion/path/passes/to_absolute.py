@@ -225,8 +225,15 @@ def _run_to_waypoints(
                 abs_active = True
             if seg.axis == LinearAxis.Forward:
                 lf, ll = d, 0.0
-            else:  # Lateral (+left), distance_m already signed
-                lf, ll = 0.0, d
+            else:
+                # Lateral. The waypoint frame is +left (90° CCW), but a lateral
+                # leg's signed distance_m follows the strafe convention where
+                # +sign = RIGHT (StrafeRight._sign=+1 → +distance_m; StrafeLeft
+                # =-1 → -distance_m), matching the relative LinearMotion which
+                # drives a +distance_m strafe to the robot's RIGHT. So negate to
+                # express it in the +left waypoint frame — otherwise GotoWaypoints
+                # strafes a known-distance strafe_right to the LEFT.
+                lf, ll = 0.0, -d
         else:  # diagonal — holds heading, known body-frame displacement
             lf, ll = seg.forward_m or 0.0, seg.left_m or 0.0
 
@@ -315,6 +322,33 @@ class ToAbsolutePass:
                     # until the sensor fires. (Each AbsoluteHoldMove re-anchors
                     # at its own on_start, so no run flush is needed here — runs
                     # are already flushed before any non-qualifying node.)
+                    #
+                    # If the leg specified an absolute ``heading=`` (e.g.
+                    # ``strafe_left(heading=0).until(on_black)``), resolve it to
+                    # the localization frame the SAME way a qualifying heading-
+                    # holding leg does (``_abs_heading_rad``) and HOLD it — so the
+                    # free axis travels along the world direction the user asked
+                    # for instead of along whatever heading the robot drifted to
+                    # by the time this leg starts. Holding the anchor heading
+                    # instead points the strafe the wrong way and the sensor
+                    # never fires (the M030 timeout).
+                    #
+                    # But the absolute heading needs the mark offset to resolve.
+                    # When the leg holds a heading yet no mark_heading_reference()
+                    # is in scope (the mark was set by an EARLIER mission and this
+                    # is a per-mission wrap), the offset is unknown — DEGRADE
+                    # GRACEFULLY: pass the original relative leg through so it
+                    # holds the heading reference at runtime, exactly like the
+                    # plain-seq baseline. (Same degrade the qualifying heading
+                    # runs use; the only cost is no drift-correction on this leg.)
+                    hold_heading: float | None = None
+                    if node.heading_deg is not None:
+                        if active_mark is None:
+                            result.append(node)
+                            i += 1
+                            continue
+                        o_rad, sign = active_mark
+                        hold_heading = _abs_heading_rad(node.heading_deg, o_rad, sign)
                     result.append(
                         SideAction(
                             step=AbsoluteHoldMove(
@@ -322,6 +356,7 @@ class ToAbsolutePass:
                                 sign=node.sign,
                                 speed=node.speed_scale,
                                 condition=node.condition,
+                                hold_heading_rad=hold_heading,
                             ),
                             is_background=False,
                         )

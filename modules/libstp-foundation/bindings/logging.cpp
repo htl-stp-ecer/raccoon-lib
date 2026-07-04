@@ -54,6 +54,27 @@ void init_logger(py::module_& m)
 
     m.def("clear_filters", &logging::clear_filters, R"pbdoc(
         Clear all file-specific filters and reset global level to INFO.
+
+        Note: this resets the console filters only. The file log level
+        (set_file_log_level) is a separate policy and is left untouched.
+    )pbdoc");
+
+    m.def("set_file_log_level", &logging::set_file_log_level, R"pbdoc(
+        Set the minimum level captured by this run's log file.
+
+        Independent of the console filters: the file captures everything at or
+        above this level regardless of set_global_level / set_file_level /
+        set_package_level. Defaults to Level.trace so the file is a complete
+        forensic record (incl. per-tick TRACE telemetry) even while the console
+        stays at Level.info.
+
+        Args:
+            level: The minimum level for the file sink (e.g. Level.trace,
+                Level.debug, Level.info)
+    )pbdoc", py::arg("level"));
+
+    m.def("get_file_log_level", &logging::get_file_log_level, R"pbdoc(
+        Return the minimum level currently captured by this run's log file.
     )pbdoc");
 
     m.def("debug", [](const char* message) { logging::core()->debug(message); }, R"pbdoc(

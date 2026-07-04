@@ -28,6 +28,11 @@ SKBUILD_DIR="${SKBUILD_DIR:-_skbuild-docker}"
 FETCHCONTENT_DIR="${FETCHCONTENT_DIR:-.cmake-cache-docker}"
 DOCKER_BUILDX_CACHE_DIR="${DOCKER_BUILDX_CACHE_DIR:-}"
 LIBSTP_RUN_MYPY="${LIBSTP_RUN_MYPY:-OFF}"
+# Compile SPDLOG trace sites (LIBSTP_LOG_TRACE) into the wheel. ON while
+# debugging line-follow / conditions; costs ~800 runtime filter checks/sec on
+# the Pi even when the sink drops them, so set LIBSTP_TRACE_LOGGING=OFF for
+# competition wheels.
+LIBSTP_TRACE_LOGGING="${LIBSTP_TRACE_LOGGING:-ON}"
 
 # -------- Version patching --------
 PYPROJECT="pyproject.toml"
@@ -223,7 +228,7 @@ echo "• Generating step builder DSL code..."
 docker_exec "python tools/generate_step_builders.py"
 
 echo "• Building Python wheel with scikit-build-core (using all $BUILD_JOBS CPUs)"
-CMAKE_ARGS="-DFETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache;-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DLIBSTP_RUN_MYPY=$LIBSTP_RUN_MYPY"
+CMAKE_ARGS="-DFETCHCONTENT_BASE_DIR=/src/$FETCHCONTENT_DIR;-DCMAKE_CXX_COMPILER_LAUNCHER=ccache;-DCMAKE_C_COMPILER_LAUNCHER=ccache;-DLIBSTP_RUN_MYPY=$LIBSTP_RUN_MYPY;-DLIBSTP_TRACE_LOGGING=$LIBSTP_TRACE_LOGGING"
 if [[ -n "$EXTRA_CMAKE_ARGS" ]]; then
   CMAKE_ARGS="$CMAKE_ARGS;$EXTRA_CMAKE_ARGS"
 fi

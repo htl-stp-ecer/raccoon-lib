@@ -150,6 +150,11 @@ class SetupCalibrationSession:
     def get_drive_samples(self, axis: CalibrationAxis) -> list[DriveCalibrationSample]:
         return list(self._drive_samples[axis])
 
+    def clear_drive_samples(self, axis: CalibrationAxis) -> None:
+        """Drop all accumulated samples for an axis (operator asked to re-drive)."""
+        self._drive_samples[axis] = []
+        self.mark_pending()
+
     def add_ir_samples(
         self,
         set_name: str,
@@ -178,6 +183,19 @@ class SetupCalibrationSession:
         if len(scales) % 2 == 1:
             return float(scales[mid])
         return float((scales[mid - 1] + scales[mid]) / 2.0)
+
+    def median_axis_sample(self, axis: CalibrationAxis) -> DriveCalibrationSample | None:
+        """The sample whose scale is the median, for a representative summary.
+
+        Returns ``None`` when the axis has no samples. The applied trim is always
+        :meth:`median_axis_scale`; this just picks a real ``(odom, ground_truth)``
+        pair to display alongside it.
+        """
+        samples = self._drive_samples[axis]
+        if not samples:
+            return None
+        ordered = sorted(samples, key=lambda sample: sample.scale)
+        return ordered[len(ordered) // 2]
 
     def ensure_board_probe(self, robot: "GenericRobot", log_step) -> None:
         # Probe whether the calibration board is connected so it can be read as
