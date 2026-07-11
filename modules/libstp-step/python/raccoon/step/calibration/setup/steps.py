@@ -52,6 +52,23 @@ def _axis_name(axis: CalibrationAxis) -> str:
     return axis.value
 
 
+async def _run_step_untrimmed(robot: "GenericRobot", step) -> None:
+    """Run ``step`` with the distance trim bypassed.
+
+    Distance-calibration measurement drives must travel a distance that depends
+    only on the command, not on the currently-stored scale — otherwise the
+    ``odom / ground_truth`` ratio they yield is contaminated by the scale being
+    measured and cannot correct a bad one (nor is it reproducible run to run).
+    The :class:`MotionTrimService` bypass makes every ``cm``-based drive inside
+    this call target its raw commanded distance.
+    """
+    from raccoon.step.motion._motion_trim import MotionTrimService
+
+    trim_svc = robot.get_service(MotionTrimService)
+    with trim_svc.bypass_scaling():
+        await step.run_step(robot)
+
+
 def _axis_abs_cm(value_m: float) -> float:
     return abs(float(value_m)) * 100.0
 
@@ -128,7 +145,11 @@ class CollectDrive(UIStep):
             session.capture_reference_snapshot(robot) if session.board_available else None
         )
 
-        await self._step.run_step(robot)
+        # Drive the wrapped motion RAW: a distance-calibration measurement must
+        # not run through the trim layer, or the physical distance travelled —
+        # and thus the odom/ground-truth ratio recorded below — would depend on
+        # the currently-stored (possibly wrong) scale and never converge.
+        await _run_step_untrimmed(robot, self._step)
 
         internal_end = robot.odometry.get_internal_pose()
         # The driven axis is inferred from the dominant internal-odometry
@@ -366,6 +387,15 @@ class CalibrationGate(UIStep):
                         f"leaving axis untrimmed"
                     )
                     break
+                if not result.confirmed and result.reenter:
+                    # "Re-enter Value": the drive was fine, only the typed
+                    # measurement was wrong. Re-open the keypad and replace the
+                    # ground truth without driving again.
+                    if await self._reenter_measurement(session, axis, sample, measured_cm):
+                        continue
+                    # Operator dismissed the keypad: leave the existing sample as-is
+                    # and re-show the summary so they can still apply or redo.
+                    continue
                 if not result.confirmed:
                     # "Redo Calibration": throw away the samples and drive again.
                     self.info(f"Operator chose to redo {_axis_name(axis)} distance calibration")
@@ -383,6 +413,56 @@ class CalibrationGate(UIStep):
             if applied:
                 trimmed += 1
         return trimmed
+
+    async def _reenter_measurement(
+        self,
+        session: SetupCalibrationSession,
+        axis: CalibrationAxis,
+        sample: DriveCalibrationSample | None,
+        current_measured_cm: float,
+    ) -> bool:
+        """Re-prompt only the measured distance for an already-driven axis.
+
+        Keeps the drive's odometry displacement and replaces the ground-truth
+        measurement with a freshly typed value, so a typo on the measurement
+        screen can be fixed without re-driving. Returns ``True`` when a new value
+        was entered and the sample was updated, ``False`` when the operator
+        dismissed the keypad (the existing sample is left untouched).
+        """
+        if sample is None:
+            return False
+        odom_cm = _axis_abs_cm(sample.odom_distance_m)
+        measured_cm = await self.show(
+            DistanceMeasureScreen(
+                requested_distance=odom_cm,
+                default_value=current_measured_cm,
+            )
+        )
+        if measured_cm is None:
+            self.warn(f"Re-entry dismissed for {_axis_name(axis)}; keeping previous measurement")
+            return False
+        # Preserve the drive direction; the scale is computed from absolute distances.
+        sign = 1.0 if sample.odom_distance_m >= 0.0 else -1.0
+        ground_truth_m = sign * (float(measured_cm) / 100.0)
+        if abs(ground_truth_m) < _MIN_GROUND_TRUTH_M:
+            self.warn(f"Re-entered ~0cm for {_axis_name(axis)}; keeping previous measurement")
+            return False
+        # Replace every sample for this axis with the corrected single sample: the
+        # operator's hand measurement is the authoritative ground truth now.
+        session.clear_drive_samples(axis)
+        session.add_drive_sample(
+            DriveCalibrationSample(
+                axis=axis,
+                odom_distance_m=sample.odom_distance_m,
+                ground_truth_distance_m=ground_truth_m,
+                source="manual_entry",
+            )
+        )
+        self.info(
+            f"Re-entered {_axis_name(axis)} measurement: "
+            f"odom={odom_cm:.1f}cm measured={float(measured_cm):.1f}cm"
+        )
+        return True
 
     async def _run_drive_fallback(
         self,
@@ -502,7 +582,10 @@ class CalibrationGate(UIStep):
         reference_start = (
             session.capture_reference_snapshot(robot) if session.board_available else None
         )
-        await step.run_step(robot)
+        # Same rule as the opportunistic collector: the fallback measurement
+        # drive runs raw so its odom/ground-truth ratio is independent of the
+        # stored scale (see :func:`_run_step_untrimmed`).
+        await _run_step_untrimmed(robot, step)
         internal_end = robot.odometry.get_internal_pose()
         odom_distance_m = session.axis_distance_m(internal_start, internal_end, axis)
 

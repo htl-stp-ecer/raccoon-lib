@@ -389,3 +389,70 @@ class TestCollectDriveManualMeasurementFlag:
         reject_idx = collect.index("if not self._manual_measurement:")
         prompt_idx = collect.index("DistanceMeasureScreen")
         assert reject_idx < prompt_idx
+
+
+# --------------------------------------------------------------------------- #
+# 8. Calibration measurement drives run RAW (trim bypassed).                   #
+#                                                                              #
+#    A distance-calibration drive must not be scaled by the currently-stored   #
+#    scale, or the physical distance travelled — and thus the odom/ground-     #
+#    truth ratio it yields — would depend on the (possibly wrong) scale being  #
+#    measured and could never correct it (nor be reproducible run to run).     #
+# --------------------------------------------------------------------------- #
+class TestMeasurementDrivesAreUntrimmed:
+    @requires_libstp
+    @pytest.mark.asyncio
+    async def test_run_step_untrimmed_bypasses_scale_during_drive(self):
+        """The wrapped step runs while the trim service reports bypassed."""
+        from raccoon.step.calibration.setup.steps import _run_step_untrimmed
+        from raccoon.step.motion._motion_trim import MotionTrimService
+
+        class _Svc(MotionTrimService):
+            @staticmethod
+            def _make_store():
+                return _FakeStore()
+
+        trim = _Svc(_FakeRobot())
+        trim.set_axis_scale("forward", 0.5)  # would halve a real command
+
+        class _Robot:
+            def get_service(self, svc_type):
+                assert svc_type is MotionTrimService
+                return trim
+
+        seen: dict = {}
+
+        class _Step:
+            async def run_step(self, robot):
+                # DURING the measurement drive the scale must be bypassed, so a
+                # commanded 0.70 m targets 0.70 m of odometry, not 0.35 m.
+                seen["bypassed"] = trim.scaling_bypassed
+                seen["commanded"] = trim.scale_distance_m("forward", 0.70)
+
+        await _run_step_untrimmed(_Robot(), _Step())
+
+        assert seen["bypassed"] is True
+        assert seen["commanded"] == pytest.approx(0.70)
+        # Scaling is restored once the drive finishes.
+        assert trim.scaling_bypassed is False
+        assert trim.scale_distance_m("forward", 0.70) == pytest.approx(0.35)
+
+    def test_opportunistic_collect_drive_runs_untrimmed(self):
+        source = _STEPS_PATH.read_text()
+        start = source.index("class CollectDrive(")
+        end = source.index("class CollectIrSet(")
+        collect = source[start:end]
+        # The MEASURED motion must be driven via the untrimmed helper. Only the
+        # is_no_calibrate() short-circuit (which records nothing) may still call
+        # self._step.run_step directly — a scaled drive there is harmless.
+        assert "_run_step_untrimmed(robot, self._step)" in collect
+        measure_region = collect[collect.index("internal_start =") :]
+        assert "await self._step.run_step(robot)" not in measure_region
+
+    def test_fallback_drive_runs_untrimmed(self):
+        source = _STEPS_PATH.read_text()
+        start = source.index("async def _collect_fallback_drive")
+        end = source.index("async def _finalize_ir_set")
+        fallback = source[start:end]
+        assert "_run_step_untrimmed(robot, step)" in fallback
+        assert "await step.run_step(robot)" not in fallback

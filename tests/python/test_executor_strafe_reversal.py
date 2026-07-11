@@ -195,3 +195,80 @@ def test_non_last_transitions_on_manual_band_when_not_completed(_mod):
 
     motion = _FakeMotion(reached=False)
     assert ex._non_last_reached(robot, seg, seg_origin, motion) is True
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 — the reversal hard stop is PHYSICALLY realised (settle to rest)
+# ---------------------------------------------------------------------------
+#
+# hard_stop() only *commands* zero body velocity and returns while the robot is
+# still coasting. Starting the opposite-direction leg immediately re-arms the
+# motors mid-coast, so the stop never physically happens. Before a cold start we
+# hold zero and pump the drive controllers until the carried velocity is bled
+# off, so the new profile genuinely warm-starts from rest.
+
+
+class _FakeDrive:
+    """Counts the stop/update pumps a settle issues."""
+
+    def __init__(self):
+        self.hard_stops = 0
+        self.updates = 0
+
+    def hard_stop(self):
+        self.hard_stops += 1
+
+    def update(self, dt):
+        self.updates += 1
+
+
+class _FakeDriveRobot:
+    def __init__(self):
+        self.drive = _FakeDrive()
+
+
+@requires_libstp
+def test_settle_time_zero_when_at_rest(_mod):
+    ex, _Segment, _LinearAxis = _mod
+    assert ex._settle_time_s(0.0) == 0.0
+    assert ex._settle_time_s(0.0005) == 0.0  # below the at-rest epsilon
+
+
+@requires_libstp
+def test_settle_time_scales_and_clamps(_mod):
+    ex, _Segment, _LinearAxis = _mod
+    # Full-speed reversal saturates at the cap.
+    assert ex._settle_time_s(10.0) == ex._MAX_SETTLE_S
+    # A tiny non-zero carry still gets the floor (the brake must register).
+    assert ex._settle_time_s(0.01) == ex._MIN_SETTLE_S
+    # In between: monotonic in speed, inside the bounds.
+    mid = ex._settle_time_s(0.3)
+    assert ex._MIN_SETTLE_S <= mid <= ex._MAX_SETTLE_S
+    assert ex._settle_time_s(0.5) >= mid
+    # Sign-independent — a leftward coast settles the same as rightward.
+    assert ex._settle_time_s(-0.4) == ex._settle_time_s(0.4)
+
+
+@requires_libstp
+def test_settle_to_rest_noop_when_already_stopped(_mod):
+    import asyncio
+
+    ex, _Segment, _LinearAxis = _mod
+    robot = _FakeDriveRobot()
+    asyncio.run(ex._settle_to_rest(robot, hz=200.0, entry_vel=0.0))
+    # Nothing to bleed off ⇒ no braking pumps, no added latency.
+    assert robot.drive.hard_stops == 0
+    assert robot.drive.updates == 0
+
+
+@requires_libstp
+def test_settle_to_rest_pumps_brake_when_coasting(_mod):
+    import asyncio
+
+    ex, _Segment, _LinearAxis = _mod
+    robot = _FakeDriveRobot()
+    asyncio.run(ex._settle_to_rest(robot, hz=500.0, entry_vel=0.4))
+    # It actively held the stop and pumped the controllers at least once.
+    assert robot.drive.hard_stops >= 1
+    # hard_stop and update are pumped together on each active tick.
+    assert robot.drive.updates == robot.drive.hard_stops

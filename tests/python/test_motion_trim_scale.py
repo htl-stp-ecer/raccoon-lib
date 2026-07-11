@@ -187,6 +187,45 @@ class TestMotionTrimServiceApplication:
         assert svc.scale_distance_m("forward", 1.0) == pytest.approx(1.2)
         assert svc.scale_distance_m("lateral", 1.0) == pytest.approx(0.8)
 
+    def test_bypass_scaling_returns_raw_distance(self):
+        """Inside bypass_scaling(), a commanded distance is NOT trimmed.
+
+        Calibration measurement drives run through this context so the physical
+        distance they travel — and thus their odom/ground-truth ratio — is
+        independent of the (possibly wrong) stored scale.
+        """
+        svc = _make_trim_service()
+        svc.set_axis_scale("forward", 0.5)  # would halve a normal command
+        assert svc.scale_distance_m("forward", 0.70) == pytest.approx(0.35)
+        with svc.bypass_scaling():
+            assert svc.scaling_bypassed is True
+            assert svc.scale_distance_m("forward", 0.70) == pytest.approx(0.70)
+        # Scaling resumes after the context exits.
+        assert svc.scaling_bypassed is False
+        assert svc.scale_distance_m("forward", 0.70) == pytest.approx(0.35)
+
+    def test_bypass_scaling_is_reentrant(self):
+        svc = _make_trim_service()
+        svc.set_axis_scale("forward", 2.0)
+        with svc.bypass_scaling():
+            with svc.bypass_scaling():
+                assert svc.scale_distance_m("forward", 1.0) == pytest.approx(1.0)
+            # Still bypassed after the inner context exits (depth 1 > 0).
+            assert svc.scaling_bypassed is True
+            assert svc.scale_distance_m("forward", 1.0) == pytest.approx(1.0)
+        assert svc.scaling_bypassed is False
+        assert svc.scale_distance_m("forward", 1.0) == pytest.approx(2.0)
+
+    def test_bypass_scaling_restored_on_exception(self):
+        svc = _make_trim_service()
+        svc.set_axis_scale("forward", 2.0)
+        with pytest.raises(RuntimeError), svc.bypass_scaling():
+            msg = "boom"
+            raise RuntimeError(msg)
+        # The finally clause must have decremented the depth back to 0.
+        assert svc.scaling_bypassed is False
+        assert svc.scale_distance_m("forward", 1.0) == pytest.approx(2.0)
+
     def test_rejects_non_positive_scale(self):
         svc = _make_trim_service()
         with pytest.raises(ValueError):
@@ -463,7 +502,7 @@ class TestSetAxisScaleReal:
         assert store.data["motion-trim"]["lateral"] == pytest.approx(1.0)
 
     def test_set_scale_is_coerced_to_float(self):
-        svc, store, _robot = _real_service()
+        svc, _store, _robot = _real_service()
         svc.set_axis_scale("forward", 2)  # int in
         assert isinstance(svc.get_axis_scale("forward"), float)
         assert svc.get_axis_scale("forward") == pytest.approx(2.0)
@@ -634,7 +673,7 @@ class TestLoadStoredScalesReal:
         # float("1.5") succeeds -> the value is loaded (covers float() success).
         store = _FakeStore()
         store.data["motion-trim"] = {"forward": "1.5", "lateral": "2.0"}
-        svc, _store, robot = _real_service(store=store)
+        svc, _store, _robot = _real_service(store=store)
         assert svc.get_axis_scale("forward") == pytest.approx(1.5)
         assert svc.get_axis_scale("lateral") == pytest.approx(2.0)
 
@@ -659,7 +698,7 @@ class TestLoadStoredScalesReal:
         # debug prose, not pinned.
         store = _FakeStore()
         store.data["motion-trim"] = {"forward": 1.3, "lateral": 0.7}
-        svc, _store, robot = _real_service(store=store)
+        _svc, _store, robot = _real_service(store=store)
         assert len(robot.debug_msgs) == 1
         msg = robot.debug_msgs[0]
         assert "forward=1.3000" in msg
@@ -668,7 +707,7 @@ class TestLoadStoredScalesReal:
     def test_warn_message_names_the_section(self):
         # The empty-store warn message references the trim section name.
         # Assert the section token is carried; wording is prose, not pinned.
-        svc, _store, robot = _real_service()  # empty store -> warn branch
+        _svc, _store, robot = _real_service()  # empty store -> warn branch
         assert len(robot.warn_msgs) == 1
         assert "motion-trim" in robot.warn_msgs[0]
 

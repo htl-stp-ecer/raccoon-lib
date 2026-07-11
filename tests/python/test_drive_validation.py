@@ -584,9 +584,18 @@ class FakeOdometry:
         return _FakePose(self._heading)
 
 
+class _FakeDrive:
+    """Minimal drive double: reports at-rest so on_start cold-starts (unchanged)."""
+
+    def estimate_state(self):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(vx=0.0, vy=0.0, wz=0.0)
+
+
 class FakeRobot:
     def __init__(self, heading=0.0, trim=None) -> None:
-        self.drive = object()
+        self.drive = _FakeDrive()
         self.odometry = FakeOdometry(heading)
         self.motion_pid_config = object()
         self._trim = trim or FakeTrimService()

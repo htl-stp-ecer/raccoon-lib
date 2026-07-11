@@ -464,6 +464,67 @@ def _should_warm(prev_seg, seg) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Physically-realised stop before a cold (opposite-direction) start
+# ---------------------------------------------------------------------------
+
+# Conservative body deceleration used to size the settle window. It only needs
+# to be a lower bound on the real decel: too small just settles a touch longer,
+# never too short. Bounds keep a same-direction cold seam snappy while capping
+# the worst case for a full-speed reversal.
+_SETTLE_DECEL_MPS2 = 1.2
+_MIN_SETTLE_S = 0.05
+_MAX_SETTLE_S = 0.5
+
+
+def _settle_time_s(entry_vel: float) -> float:
+    """How long to actively brake before a cold start, given the speed we carry.
+
+    Zero when we're already essentially at rest (barrier legs ramp their own
+    profile to zero, so the cold seam has nothing to bleed off). Otherwise the
+    time to decelerate ``|entry_vel|`` to zero at :data:`_SETTLE_DECEL_MPS2`,
+    clamped into ``[_MIN_SETTLE_S, _MAX_SETTLE_S]``.
+    """
+    speed = abs(entry_vel)
+    if speed < 1e-3:
+        return 0.0
+    return min(_MAX_SETTLE_S, max(_MIN_SETTLE_S, speed / _SETTLE_DECEL_MPS2))
+
+
+async def _settle_to_rest(robot: "GenericRobot", hz: float, entry_vel: float) -> None:
+    """Bleed off residual velocity to a *physical* standstill before a cold start.
+
+    ``drive.hard_stop()`` only COMMANDS zero body velocity and returns while the
+    robot is still coasting on its momentum. Starting the next
+    (opposite-direction) segment immediately re-arms the motors mid-coast, so the
+    hard stop the reversal logic depends on never physically happens — the robot
+    flies past, exactly the overshoot the reversal guard was meant to prevent.
+
+    Hold the zero command and pump the drive controllers for long enough to
+    actually come to rest (window scaled by the entry speed we're shedding), so
+    the new profile genuinely warm-starts from zero — the Istzustand the cold
+    start assumes. Re-asserting ``hard_stop()`` every tick also beats the
+    mode-vs-velocity re-arm race that otherwise lets a stale command win.
+    """
+    settle_s = _settle_time_s(entry_vel)
+    if settle_s <= 0.0:
+        return
+    loop = asyncio.get_event_loop()
+    update_rate = 1.0 / hz
+    deadline = loop.time() + settle_s
+    last_time = loop.time() - update_rate  # seed first dt
+    while loop.time() < deadline:
+        now = loop.time()
+        dt = max(now - last_time, 0.0)
+        last_time = now
+        if dt < 1e-4:
+            await asyncio.sleep(update_rate)
+            continue
+        robot.drive.hard_stop()  # re-assert zero every tick (beats the re-arm race)
+        robot.drive.update(dt)  # keep the host-side brake controllers alive
+        await asyncio.sleep(update_rate)
+
+
+# ---------------------------------------------------------------------------
 # Segment logging
 # ---------------------------------------------------------------------------
 
@@ -794,8 +855,13 @@ class PathExecutor(ClassNameLogger):
                         )
                         motion.start_warm(offset, _warm_velocity(seg, current_vel))
                     else:
-                        # Cross-type: cold start.
-                        robot.drive.hard_stop()
+                        # Cross-type / direction reversal: cold start. hard_stop()
+                        # only COMMANDS zero — actively bleed off the residual
+                        # velocity to a real standstill first, so the new profile
+                        # warm-starts from genuine rest (Istzustand) instead of
+                        # re-arming the motors mid-coast and flying past. This is
+                        # the physical realisation of the reversal hard stop.
+                        await _settle_to_rest(robot, self._hz, current_vel)
                         motion = create_motion(
                             robot,
                             seg,

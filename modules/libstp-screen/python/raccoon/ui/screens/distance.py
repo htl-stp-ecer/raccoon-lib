@@ -209,10 +209,17 @@ class DistanceMeasureScreen(UIScreen[float]):
 
 @dataclass
 class DistanceConfirmResult:
-    """Result from DistanceConfirmScreen."""
+    """Result from DistanceConfirmScreen.
+
+    ``confirmed`` applies the trim. When ``confirmed`` is ``False`` the operator
+    backed out: ``reenter`` distinguishes *just fix the typed number* (re-open the
+    measurement keypad, keep the drive) from *redo the whole calibration*
+    (``reenter=False``, drive again).
+    """
 
     confirmed: bool
     scale_factor: float
+    reenter: bool = False
 
 
 class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
@@ -293,6 +300,7 @@ class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
                             style="success" if self.is_good else "warning",
                             icon="check",
                         ),
+                        Button("reenter", "Re-enter Value", style="secondary", icon="edit"),
                         Button("retry", "Redo Calibration", style="secondary", icon="refresh"),
                     ],
                     spacing=16,
@@ -307,6 +315,16 @@ class DistanceConfirmScreen(UIScreen[DistanceConfirmResult]):
             DistanceConfirmResult(
                 confirmed=True,
                 scale_factor=self.scale_factor,
+            )
+        )
+
+    @on_click("reenter")
+    async def on_reenter(self):
+        self.close(
+            DistanceConfirmResult(
+                confirmed=False,
+                scale_factor=self.scale_factor,
+                reenter=True,
             )
         )
 

@@ -8,6 +8,7 @@ from raccoon.motion import TurnConfig, TurnMotion
 
 from ..annotation import dsl_step
 from ..condition import StopCondition
+from ._warm_start import warm_start_angular
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -67,7 +68,9 @@ class _ConditionalTurn(MotionStep):
                 robot.motion_pid_config,
                 config,
             )
-            self._motion.start()
+            # Ramp from the current yaw rate (Ist), not zero — at rest this
+            # cold-starts unchanged. See _warm_start.
+            warm_start_angular(self._motion, robot)
         else:
             max_w = robot.motion_pid_config.angular.max_velocity
             vel = ChassisVelocity(0, 0, self._sign * self._speed * max_w)

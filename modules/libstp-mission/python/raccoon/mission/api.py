@@ -99,11 +99,14 @@ class Mission(ClassNameLogger, MissionProtocol):
             self.info(f"RACCOON_PROFILE set — profiling enabled, output → {dest}")
             async with profiler:
                 await root.run_step(robot)
-            done = (
-                f"trace written to {profiler.trace_path}"
-                if profiler.trace_path
-                else "report printed"
-            )
+            if not profiler.trace_path:
+                done = "report printed"
+            elif profiler.defer_trace:
+                # Buffered in RAM; the robot writes all traces after the run so
+                # the json.dump never stalls the between-missions transition.
+                done = f"trace buffered → {profiler.trace_path} (written post-run)"
+            else:
+                done = f"trace written to {profiler.trace_path}"
             self.info(f"Profiling finished — {done}")
         else:
             await root.run_step(robot)

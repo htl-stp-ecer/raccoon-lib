@@ -61,6 +61,7 @@ from .servo import *
 from .servo import __all__ as _servo_all
 from .motor import *
 from .motor import __all__ as _motor_all
+from .params import NumberParam, ParamSet, AskNumber, ask, reset_params
 
 __all__ = [
     "Step",
@@ -108,6 +109,12 @@ __all__ = [
     "defer",
     "Run",
     "run",
+    # Mission parameters
+    "NumberParam",
+    "ParamSet",
+    "AskNumber",
+    "ask",
+    "reset_params",
     # Conditions
     "StopCondition",
     "on_black",

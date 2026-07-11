@@ -20,12 +20,19 @@ namespace libstp::motion
      * - `arc_angle_rad > 0` → counter-clockwise (left) arc
      * - `arc_angle_rad < 0` → clockwise (right) arc
      * - `radius_m` is always positive (distance from arc center to robot)
+     *
+     * `speed_scale` carries both magnitude and travel direction:
+     * - `speed_scale > 0` → drive the arc forwards
+     * - `speed_scale < 0` → drive the arc BACKWARDS along the *same* circle: the
+     *   arc centre stays on the same side, the robot reverses and its heading
+     *   turns the opposite way (a forward left arc's mirror in time). The
+     *   effective magnitude is `|speed_scale|`, clamped to [0.01, 1.0].
      */
     struct ArcMotionConfig
     {
         double radius_m{0.0};           // Turning radius (always positive)
         double arc_angle_rad{0.0};      // Total heading change (positive = CCW/left, negative = CW/right)
-        double speed_scale{1.0};        // 0-1 fraction of max speed
+        double speed_scale{1.0};        // fraction of max speed; sign = travel direction (<0 = reverse)
         bool lateral{false};            // true = strafe arc (vy), false = drive arc (vx)
     };
 
@@ -96,6 +103,12 @@ namespace libstp::motion
         void complete();
 
         ArcMotionConfig cfg_{};
+        // Travel direction from the sign of speed_scale: +1 forwards, -1 reverse.
+        double travel_dir_{1.0};
+        // Heading target actually tracked by the PID. Equals cfg_.arc_angle_rad
+        // forwards; negated for a reverse arc so the robot turns the opposite way
+        // while the arc centre stays on the same side.
+        double goal_angle_rad_{0.0};
         double max_angular_velocity_{0.0};
         ProfiledPIDController profiled_pid_;
         bool finished_{false};

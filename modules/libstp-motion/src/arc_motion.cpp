@@ -13,7 +13,9 @@ namespace libstp::motion
     static double computeArcMaxAngularVelocity(const UnifiedMotionPidConfig& pid_config,
                                                 const ArcMotionConfig& config)
     {
-        double scale = std::clamp(config.speed_scale, 0.01, 1.0);
+        // Magnitude only — the sign of speed_scale selects travel direction and
+        // is applied to the velocity commands, not to this (always-positive) cap.
+        double scale = std::clamp(std::abs(config.speed_scale), 0.01, 1.0);
 
         // Angular velocity is limited by both angular and linear axis constraints.
         // Since vx = |omega| * radius, we need: |omega| * radius <= linear.max_velocity.
@@ -53,6 +55,8 @@ namespace libstp::motion
 
     ArcMotion::ArcMotion(MotionContext ctx, ArcMotionConfig config)
         : Motion(ctx), cfg_(config)
+        , travel_dir_(config.speed_scale < 0.0 ? -1.0 : 1.0)
+        , goal_angle_rad_(travel_dir_ * config.arc_angle_rad)
         , max_angular_velocity_(computeArcMaxAngularVelocity(ctx_.pid_config, config))
         , profiled_pid_(makeArcProfiledPID(ctx_.pid_config, config, max_angular_velocity_))
     {
@@ -77,14 +81,14 @@ namespace libstp::motion
         drive().resetVelocityControllers();
 
         profiled_pid_.reset(0.0);
-        profiled_pid_.setGoal(cfg_.arc_angle_rad);
+        profiled_pid_.setGoal(goal_angle_rad_);
 
-        LIBSTP_LOG_DEBUG("ArcMotion started: radius={:.3f} m, arc_angle={:.3f} rad ({:.1f} deg), "
-                    "max_omega={:.3f} rad/s, max_v={:.3f} m/s (scale={:.2f}, lateral={})",
+        LIBSTP_LOG_DEBUG("ArcMotion started: radius={:.3f} m, goal_angle={:.3f} rad ({:.1f} deg), "
+                    "max_omega={:.3f} rad/s, max_v={:.3f} m/s (scale={:.2f}, dir={:+.0f}, lateral={})",
                     cfg_.radius_m,
-                    cfg_.arc_angle_rad, cfg_.arc_angle_rad * 180.0 / std::numbers::pi,
+                    goal_angle_rad_, goal_angle_rad_ * 180.0 / std::numbers::pi,
                     max_angular_velocity_, max_angular_velocity_ * cfg_.radius_m,
-                    cfg_.speed_scale, cfg_.lateral);
+                    cfg_.speed_scale, travel_dir_, cfg_.lateral);
     }
 
     void ArcMotion::startWarm(double heading_offset_rad, double initial_angular_velocity)
@@ -102,13 +106,13 @@ namespace libstp::motion
         telemetry_.clear();
 
         profiled_pid_.reset(0.0, initial_angular_velocity);
-        profiled_pid_.setGoal(cfg_.arc_angle_rad);
+        profiled_pid_.setGoal(goal_angle_rad_);
 
-        LIBSTP_LOG_DEBUG("ArcMotion warm-started: radius={:.3f} m, arc_angle={:.3f} rad ({:.1f} deg), "
+        LIBSTP_LOG_DEBUG("ArcMotion warm-started: radius={:.3f} m, goal_angle={:.3f} rad ({:.1f} deg), "
                     "offset={:.3f} rad, initial_vel={:.3f} rad/s, "
                     "max_omega={:.3f} rad/s (scale={:.2f}, lateral={})",
                     cfg_.radius_m,
-                    cfg_.arc_angle_rad, cfg_.arc_angle_rad * 180.0 / std::numbers::pi,
+                    goal_angle_rad_, goal_angle_rad_ * 180.0 / std::numbers::pi,
                     heading_offset_rad_, initial_angular_velocity,
                     max_angular_velocity_, cfg_.speed_scale, cfg_.lateral);
     }
@@ -136,7 +140,7 @@ namespace libstp::motion
         const double current_heading = std::remainder(
             raw_heading - initial_absolute_heading_rad_,
             2.0 * std::numbers::pi);
-        const double heading_error = cfg_.arc_angle_rad - current_heading;
+        const double heading_error = goal_angle_rad_ - current_heading;
 
         // Filtered angular velocity for settling detection (use shortest-path
         // delta to absorb ±π wrap).
@@ -164,9 +168,11 @@ namespace libstp::motion
         const double omega_cmd_raw = profiled_pid_.calculate(current_heading, dt);
         const double omega_cmd = std::clamp(omega_cmd_raw, -max_angular_velocity_, max_angular_velocity_);
 
-        // Derive linear velocity from angular velocity: v = |omega| * radius
-        // For lateral mode (strafe arc), velocity goes to vy; otherwise to vx.
-        const double linear_cmd = std::abs(omega_cmd) * cfg_.radius_m;
+        // Derive linear speed from angular velocity: |v| = |omega| * radius.
+        // travel_dir_ (<0 for a reverse arc) sets the sign so the robot backs
+        // along the same circle. For lateral mode (strafe arc) it goes to vy,
+        // otherwise to vx.
+        const double linear_cmd = travel_dir_ * std::abs(omega_cmd) * cfg_.radius_m;
         const double vx_cmd = cfg_.lateral ? 0.0 : linear_cmd;
         // Strafe sign: positive arc_angle (CCW/left turn) => strafe right (+vy)
         //              negative arc_angle (CW/right turn) => strafe left (-vy)
@@ -184,7 +190,7 @@ namespace libstp::motion
         telemetry_.push_back(ArcMotionTelemetry{
             .time_s = elapsed_time_,
             .dt = dt,
-            .target_angle_rad = cfg_.arc_angle_rad,
+            .target_angle_rad = goal_angle_rad_,
             .heading_rad = current_heading,
             .heading_error_rad = heading_error,
             .arc_position_m = arc_position,
@@ -222,7 +228,7 @@ namespace libstp::motion
         const double current_heading = std::remainder(
             odometry().getAbsoluteHeading() - initial_absolute_heading_rad_,
             2.0 * std::numbers::pi);
-        const double heading_error = cfg_.arc_angle_rad - current_heading;
+        const double heading_error = goal_angle_rad_ - current_heading;
         return std::abs(heading_error) <= ctx_.pid_config.angle_tolerance_rad;
     }
 

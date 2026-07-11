@@ -29,6 +29,14 @@ namespace libstp::motion
     {
         std::vector<std::pair<double, double>> waypoints_m;
         std::vector<double> headings_rad;   // empty = tangent-following; one per waypoint = explicit
+        // Fraction of max speed AND travel direction via its sign:
+        //  - speed_scale > 0 → drive the path forwards (nose leads).
+        //  - speed_scale < 0 → drive the path in reverse. On a holonomic
+        //    (mecanum/omni) drivetrain the robot HOLDS its start orientation and
+        //    strafes the path backwards (nose stays put — genuine reverse). On a
+        //    differential drivetrain, which cannot hold heading through a curve,
+        //    it falls back to rear-first (nose points opposite the travel).
+        //    Magnitude is clamped to [0.01, 1.0].
         double speed_scale{1.0};
 
         /// When set, the robot smoothly rotates to this heading (radians,
@@ -109,6 +117,12 @@ namespace libstp::motion
         std::vector<double> heading_arc_lengths_;  // arc-length at each point (origin + waypoints)
         std::vector<double> all_headings_;         // heading at each point (origin=0 + user headings)
         bool use_explicit_headings_{false};
+
+        // Reverse traversal (speed_scale < 0), resolved in start() once the
+        // drivetrain's lateral capability is known.
+        bool reverse_{false};
+        bool hold_heading_{false};   // holonomic reverse: keep the start orientation
+        bool rear_first_{false};     // differential reverse: nose opposite travel
 
         // Projection tracking
         double s_measured_{0.0};  // last projected arc-length (hint for next cycle)

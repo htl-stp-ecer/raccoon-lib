@@ -322,6 +322,17 @@ PYBIND11_MODULE(localization, m)
               cfg.robot_json = robot_json;
               cfg.sensors_json = sensors_json;
               cfg.table_map_json = table_map_json;
+              // Keep only the N most recent recordings (default 3) so the
+              // ~150 MB-per-run files don't fill the SD card. Override with
+              // LIBSTP_RECORDING_RETAIN (0 = keep all).
+              if (const char* retain_env = std::getenv("LIBSTP_RECORDING_RETAIN");
+                  retain_env != nullptr && std::strlen(retain_env) > 0) {
+                  try {
+                      cfg.retain_recordings = std::stoi(retain_env);
+                  } catch (...) {
+                      // keep default
+                  }
+              }
               return loc.enableRecording(std::move(cfg));
           },
           py::arg("localization"),

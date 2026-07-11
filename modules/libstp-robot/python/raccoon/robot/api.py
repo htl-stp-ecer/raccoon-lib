@@ -702,7 +702,36 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             self.info("Running shutdown mission")
             await shutdown_mission.run(self)
 
+        # Persist deferred diagnostics now that the robot is idle: the step-
+        # timing DB and the per-mission profiler traces both buffer in RAM
+        # during the run (so no fsync/json.dump lands between steps or missions)
+        # and write once here.
+        await self._flush_deferred_diagnostics()
+
         self.info("Robot execution complete. Exiting.")
+
+    async def _flush_deferred_diagnostics(self) -> None:
+        """Write the run's RAM-buffered timing + profiler traces after the run."""
+        try:
+            from raccoon.timing.tracker import StepTimingTracker
+
+            if StepTimingTracker._instance is not None:
+                await StepTimingTracker._instance.database.flush()
+        except Exception as exc:  # never let diagnostics break shutdown
+            self.debug(f"Step-timing flush skipped: {exc}")
+
+        try:
+            from raccoon.profiling import StepProfiler
+
+            # json.dump is blocking; run it off the loop so the shutdown path
+            # (and any UI ticking) stays responsive while traces land on disk.
+            paths = await asyncio.to_thread(StepProfiler.flush_traces)
+            if paths:
+                self.info(f"Profiler: wrote {len(paths)} buffered trace(s) post-run")
+        except ImportError:
+            pass  # profiling add-on not installed
+        except Exception as exc:
+            self.debug(f"Profiler trace flush skipped: {exc}")
 
     def _preload_missions(
         self,

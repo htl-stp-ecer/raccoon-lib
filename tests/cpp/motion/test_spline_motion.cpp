@@ -240,3 +240,93 @@ TEST_F(SplineMotionTest, TelemetryIsPopulated)
     EXPECT_GT(telem.back().arc_target_m, 0.0);
     EXPECT_GE(telem.back().time_s, 0.0);
 }
+
+// ===========================================================================
+// Reverse traversal (speed_scale < 0)
+// ===========================================================================
+
+// A positive-magnitude reverse speed is NOT clamped to a near-stall crawl: the
+// path velocity cap scales with |speed_scale|, identical to a forward speed.
+TEST_F(SplineMotionTest, ReverseSpeedMagnitudeNotClampedToStall)
+{
+    SplineMotionConfig fwd;
+    fwd.waypoints_m = {{0.3, 0.0}, {0.6, 0.0}};
+    fwd.speed_scale = 0.8;
+    auto m_fwd = makeMotion(fwd);
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);
+    m_fwd->start();
+    setWorldPose(*mock_odometry_, 0.05, 0.0, 0.0);
+    m_fwd->update(kDt);
+
+    SplineMotionConfig rev = fwd;
+    rev.speed_scale = -0.8;
+    auto m_rev = makeMotion(rev);
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);
+    m_rev->start();
+    setWorldPose(*mock_odometry_, 0.05, 0.0, 0.0);
+    m_rev->update(kDt);
+
+    // Same speed profile magnitude — the |0.8| path cap, not a clamped 0.01.
+    const double v_fwd = std::abs(m_fwd->getTelemetry().back().setpoint_velocity_mps);
+    const double v_rev = std::abs(m_rev->getTelemetry().back().setpoint_velocity_mps);
+    EXPECT_NEAR(v_fwd, v_rev, 1e-9);
+}
+
+// Differential reverse: the drivetrain cannot hold heading through a curve, so
+// it drives rear-first — the heading target points opposite the travel tangent
+// and the commanded body-forward velocity is negative.
+TEST_F(SplineMotionTest, DifferentialReverseIsRearFirst)
+{
+    SplineMotionConfig cfg;
+    cfg.waypoints_m = {{0.3, 0.0}, {0.6, 0.0}};  // straight, tangent = +x
+    cfg.speed_scale = -0.5;                       // reverse
+
+    auto motion = makeMotion(cfg);               // fixture kinematics = differential
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);  // start facing +x
+    motion->start();
+    motion->update(kDt);
+
+    // Heading target points opposite the +x tangent (~pi): the robot is asked to
+    // turn its nose away from travel so it can back along the curve rear-first.
+    EXPECT_NEAR(std::abs(motion->getTelemetry().back().target_heading_rad),
+                std::numbers::pi, 1e-6);
+
+    // Once the nose has turned to face backward, the commanded body-forward
+    // velocity is negative — the robot drives in reverse along the path. The
+    // velocity decomposition reads getHeading(), so stub it too.
+    setWorldPose(*mock_odometry_, 0.0, 0.0, std::numbers::pi);
+    ON_CALL(*mock_odometry_, getHeading())
+        .WillByDefault(::testing::Return(std::numbers::pi));
+    motion->update(kDt);
+    EXPECT_LT(motion->getTelemetry().back().cmd_vx_mps, 0.0);
+}
+
+// Holonomic (mecanum) reverse: the robot HOLDS its start orientation (heading
+// target 0, no turn) and strafes the path. With a backward-leading path this is
+// genuine reverse motion while the nose stays put.
+TEST_F(SplineMotionTest, MecanumReverseHoldsHeading)
+{
+    auto kin = std::make_unique<NiceMock<MockKinematics>>();
+    kin->setupAsMecanum();  // supportsLateralMotion() => true
+    Drive mdrive(std::move(kin), ChassisVelocityControlConfig{}, *mock_imu_);
+
+    SplineMotionConfig cfg;
+    cfg.waypoints_m = {{-0.3, 0.0}, {-0.6, 0.0}};  // path leads BACKWARD (-x)
+    cfg.speed_scale = -0.5;
+
+    pid_config_ = defaultUnifiedMotionPidConfig();
+    pid_config_.linear = AxisConstraints{0.5, 1.0, 1.0};
+    pid_config_.lateral = AxisConstraints{0.3, 0.8, 0.8};
+    MotionContext ctx{mdrive, *mock_odometry_, pid_config_};
+    auto motion = std::make_shared<SplineMotion>(ctx, cfg);
+
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);  // facing +x (forward)
+    motion->start();
+    motion->update(kDt);
+
+    const auto& s = motion->getTelemetry().back();
+    // Nose held at the start orientation — no turn to the tangent.
+    EXPECT_NEAR(s.target_heading_rad, 0.0, 1e-6);
+    // Backward-leading path + held forward nose => body drives backward.
+    EXPECT_LT(s.cmd_vx_mps, 0.0);
+}
