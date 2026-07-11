@@ -2,6 +2,8 @@
 
 #include "core/CommandTrace.hpp"
 
+#include "foundation/logging.hpp"
+
 #include <raccoon/Options.h>
 #include <chrono>
 
@@ -22,7 +24,9 @@ void TransportWriter::setMotor(uint8_t port, int valueData)
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = valueData;
     const auto ch = Channels::motorPowerCommand(port);
-    transport_.publish(ch, publishedValue);
+    if (!transport_.publish(ch, publishedValue, reliableOpts))
+        LIBSTP_LOG_WARN("TransportWriter: motor power command DROPPED (publish failed) "
+                        "port={} value={} channel={}", port, valueData, ch);
     CommandTrace::instance().record("motor_power", ch, port, valueData, 0, 0, 1,
                                     publishedValue.timestamp);
 }
@@ -33,7 +37,9 @@ void TransportWriter::setMotorVelocity(uint8_t port, int32_t velocity)
     msg.timestamp = currentTimestampUsec();
     msg.value = velocity;
     const auto ch = Channels::motorVelocityCommand(port);
-    transport_.publish(ch, msg);
+    if (!transport_.publish(ch, msg, reliableOpts))
+        LIBSTP_LOG_WARN("TransportWriter: motor velocity command DROPPED (publish failed) "
+                        "port={} velocity={} channel={}", port, velocity, ch);
     CommandTrace::instance().record("motor_vel", ch, port, velocity, 0, 0, 1, msg.timestamp);
 }
 
@@ -45,7 +51,9 @@ void TransportWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t g
     msg.y = static_cast<float>(goalPosition);
     msg.z = 0.0f;
     const auto ch = Channels::motorPositionCommand(port);
-    transport_.publish(ch, msg, reliableOpts);
+    if (!transport_.publish(ch, msg, reliableOpts))
+        LIBSTP_LOG_WARN("TransportWriter: motor position command DROPPED (publish failed) "
+                        "port={} velocity={} goal={} channel={}", port, velocity, goalPosition, ch);
     CommandTrace::instance().record("motor_pos", ch, port, velocity, goalPosition, 0, 2,
                                     msg.timestamp);
 }
@@ -58,7 +66,9 @@ void TransportWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t d
     msg.y = static_cast<float>(deltaPosition);
     msg.z = 0.0f;
     const auto ch = Channels::motorRelativeCommand(port);
-    transport_.publish(ch, msg, reliableOpts);
+    if (!transport_.publish(ch, msg, reliableOpts))
+        LIBSTP_LOG_WARN("TransportWriter: motor relative command DROPPED (publish failed) "
+                        "port={} velocity={} delta={} channel={}", port, velocity, deltaPosition, ch);
     CommandTrace::instance().record("motor_rel", ch, port, velocity, deltaPosition, 0, 2,
                                     msg.timestamp);
 }
@@ -139,7 +149,9 @@ void TransportWriter::setMotorMode(uint8_t port, int mode)
     modeCmd.timestamp = currentTimestampUsec();
     modeCmd.value = mode;
     const auto ch = Channels::motorModeCommand(port);
-    transport_.publish(ch, modeCmd, reliableOpts);
+    if (!transport_.publish(ch, modeCmd, reliableOpts))
+        LIBSTP_LOG_WARN("TransportWriter: motor mode command DROPPED (publish failed) "
+                        "port={} mode={} channel={}", port, mode, ch);
     CommandTrace::instance().record("motor_mode", ch, port, mode, 0, 0, 1, modeCmd.timestamp);
 }
 
