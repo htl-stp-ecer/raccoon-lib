@@ -38,6 +38,7 @@ from .passes import (
     DecomposePass,
     MergePass,
     Representation,
+    ResolveHeadingTurnsPass,
     SplinifyPass,
     ToAbsolutePass,
     VelocityProfilePass,
@@ -182,14 +183,19 @@ class Optimizer(Step):
 
         return self
 
-    def _effective_passes(self) -> list:
+    def _effective_passes(self, robot: "GenericRobot | None" = None) -> list:
         """The full compiled pass pipeline: always-on prepends + user passes.
 
-        ``DecomposePass`` then ``MergePass`` always run first (both are
-        behavior-preserving RELATIVE→RELATIVE transforms), followed by the
-        user's opt-in passes in the order they were chained.  decompose runs
-        before merge — and both before user passes — which also yields the
-        canonical "merge before cut_corners" ordering for free.
+        ``ResolveHeadingTurnsPass`` runs first when a robot is available
+        (compilation happens immediately before execution, so the live heading
+        is the path-start heading): it stamps compile-time ``angle_rad`` values
+        onto ``TurnToHeading`` segments so geometry passes (``cut_corners``)
+        can consume them; unconsumed turns still execute drift-corrected via
+        their opaque step.  ``DecomposePass`` then ``MergePass`` always run
+        next (both are behavior-preserving RELATIVE→RELATIVE transforms),
+        followed by the user's opt-in passes in the order they were chained.
+        decompose runs before merge — and both before user passes — which also
+        yields the canonical "merge before cut_corners" ordering for free.
 
         Absolute-mode coupling: when both ``to_absolute()`` and ``splinify()``
         are chained, the whole path becomes ONE absolute spline — so the per-leg
@@ -198,7 +204,7 @@ class Optimizer(Step):
         renders the relative spline.
         """
         has_splinify = any(isinstance(p, SplinifyPass) for p in self._passes)
-        out: list = [DecomposePass(), MergePass()]
+        out: list = [ResolveHeadingTurnsPass(robot), DecomposePass(), MergePass()]
         for p in self._passes:
             if isinstance(p, ToAbsolutePass) and has_splinify:
                 continue  # subsumed: the whole path is one absolute spline
@@ -346,7 +352,7 @@ class Optimizer(Step):
         # optimize() block would run silently except for its inline side actions.
         # Announce the compiled pipeline; the executor then logs each leg.
         self.info(self._generate_signature())
-        plan = PathCompiler(self._effective_passes()).compile(self._raw_steps)
+        plan = PathCompiler(self._effective_passes(robot)).compile(self._raw_steps)
         executor = PathExecutor(
             nodes=plan.nodes,
             deferred=plan.deferred,

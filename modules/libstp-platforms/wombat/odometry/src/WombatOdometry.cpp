@@ -355,7 +355,7 @@ namespace libstp::hal::platform
     std::shared_ptr<libstp::odometry::IOdometry> Platform::createOdometry(
         std::shared_ptr<libstp::kinematics::IKinematics> kinematics)
     {
-        auto imu = std::make_shared<libstp::hal::imu::IMU>();
+        auto imu = libstp::hal::imu::IMU::instance();
         auto odom = std::make_shared<WombatOdometry>(std::move(imu), std::move(kinematics));
 
         // Register the on-MCU chassis loop so Drive::update routes body-velocity

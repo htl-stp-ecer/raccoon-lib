@@ -26,6 +26,37 @@ _S = TypeVar("_S", bound=RobotService)
 # (treated as a wiring error so silent-None can't sneak past callers).
 _AUTO_WIRE_LOCALIZATION = object()
 
+# === TESTING OVERRIDE ===================================================
+# Hard kill-switch for test runs. When True, localization runs in pure
+# dead-reckoning mode:
+#   * the C++ ``Localization`` particle filter is NEVER constructed, so its
+#     background predict thread never spawns and no particle-filter math runs;
+#   * the continuous line-sensor → filter fusion loop never starts, so there
+#     is no fusion thread and no ``observe()``/particle weighting.
+# Steps that read ``robot.localization`` still get a live pose straight from
+# odometry (``get_pose()`` forwards odometry; ``observe()`` is a no-op).
+# Flip back to False to restore real Monte-Carlo localization.
+_DISABLE_LOCALIZATION_FOR_TESTING = True
+
+
+class _DeadReckoningLocalization:
+    """Testing stub used when ``_DISABLE_LOCALIZATION_FOR_TESTING`` is set.
+
+    Presents the two methods every consumer uses (``get_pose`` / ``observe``)
+    without a particle filter or any background thread: ``get_pose`` forwards
+    the live odometry pose and ``observe`` discards the observation. Odometry
+    is read lazily so construction never triggers hardware access.
+    """
+
+    def __init__(self, robot: "GenericRobot") -> None:
+        self._robot = robot
+
+    def get_pose(self):
+        return self._robot.odometry.get_pose()
+
+    def observe(self, *args, **kwargs) -> None:
+        return None
+
 
 class LocalizationNotWiredError(RuntimeError):
     """Raised when ``robot.localization`` cannot be auto-wired.
@@ -54,6 +85,7 @@ if TYPE_CHECKING:
     from raccoon.localization import Localization
     from raccoon.map import WorldMap as TableMap
     from raccoon.mission.api import MissionProtocol, SetupMission
+    from raccoon.robot.localization_fusion import ContinuousLocalizationFusion
 
 
 @runtime_checkable
@@ -169,6 +201,14 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
 
     def _build_localization(self) -> "Localization":
         """Build the platform-default Localization wrapping ``self.odometry``."""
+        # TESTING: skip the real particle filter entirely — no C++ predict
+        # thread, no particle-filter computation. See the module-level note.
+        if _DISABLE_LOCALIZATION_FOR_TESTING:
+            self.info(
+                "Localization DISABLED for testing — dead-reckoning only (no particle filter, no thread)"
+            )
+            return _DeadReckoningLocalization(self)
+
         try:
             from raccoon.localization import Localization, LocalizationConfig
         except ImportError as exc:
@@ -501,12 +541,19 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
     #: ``False`` on a robot subclass to fall back to dead-reckoning + resync-only.
     enable_localization_fusion: bool = True
 
-    def _start_localization_fusion(self) -> "asyncio.Task[None] | None":
+    def _start_localization_fusion(self) -> "ContinuousLocalizationFusion | None":
         """Launch the always-on line-sensor → localization fuser, or ``None``.
 
-        No-ops (returns ``None``) when disabled, when localization has no table
-        map (nothing to correct against), or when the robot has no line sensors.
-        Never raises — a fusion-wiring problem must not abort the run."""
+        The fuser runs on its OWN dedicated daemon thread — all localization
+        work (sensor reads, building observations, ``observe()``) is off the
+        asyncio motion loop and can never block the hot path. Returns a stop-
+        handle (call ``.stop()``) or ``None`` when disabled, when localization
+        has no table map (nothing to correct against), or when the robot has no
+        line sensors. Never raises — a fusion-wiring problem must not abort the
+        run."""
+        # TESTING: never spawn the fusion thread / run particle weighting.
+        if _DISABLE_LOCALIZATION_FOR_TESTING:
+            return None
         if not getattr(self, "enable_localization_fusion", True):
             return None
         try:
@@ -515,10 +562,10 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             # start_localization_fusion is a no-op (returns None) without line
             # sensors; without a table map the C++ weighting is itself a cheap
             # no-op, so no extra guard is needed here.
-            task = start_localization_fusion(self)
-            if task is not None:
-                self.info("Continuous localization fusion: ON (line sensors → particle filter)")
-            return task
+            fusion = start_localization_fusion(self)
+            if fusion is not None:
+                self.info("Continuous localization fusion: ON (dedicated thread → particle filter)")
+            return fusion
         except Exception as exc:  # pragma: no cover - defensive
             self.warn(f"Could not start localization fusion: {exc!r}")
             return None
@@ -654,10 +701,25 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         wdt = get_watchdog_manager(self)
 
         # Continuous, automatic line-sensor → localization fusion: an always-on
-        # background loop that corrects the particle filter against the table map
-        # every tick during the run, so localization is real Monte-Carlo
-        # localization rather than dead-reckoning between rare resync steps.
-        fusion_task = self._start_localization_fusion()
+        # loop that corrects the particle filter against the table map every tick
+        # during the run, so localization is real Monte-Carlo localization rather
+        # than dead-reckoning between rare resync steps. It runs on its OWN
+        # daemon thread — never on this event loop — so it can never block the
+        # motion hot path.
+        fusion = self._start_localization_fusion()
+
+        # Heading-drift watchdog: warns when the chassis rotates while no
+        # motion step holds the drive (external contact during servo phases).
+        # Own daemon thread, diagnostic only — see heading_drift_watchdog.py.
+        drift_wd = None
+        try:
+            from raccoon.robot.heading_drift_watchdog import start_heading_drift_watchdog
+
+            drift_wd = start_heading_drift_watchdog(self)
+            if drift_wd is not None:
+                self.info("Heading-drift watchdog: ON (dedicated thread)")
+        except Exception as exc:  # pragma: no cover - defensive
+            self.warn(f"Could not start heading-drift watchdog: {exc!r}")
 
         main_task = asyncio.create_task(self._run_main_missions(missions))
         wdt.attach_main_task(main_task)
@@ -688,10 +750,14 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         finally:
             wdt.detach_main_task()
             await wdt.cancel_all()
-            if fusion_task is not None:
-                fusion_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await fusion_task
+            if fusion is not None:
+                # Join the fusion thread off the event loop so the (blocking)
+                # join never stalls the loop; the thread is a daemon anyway.
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(fusion.stop)
+            if drift_wd is not None:
+                with contextlib.suppress(Exception):
+                    await asyncio.to_thread(drift_wd.stop)
 
         # Cancel orphaned background tasks before shutdown mission
         await self._drain_background_tasks()

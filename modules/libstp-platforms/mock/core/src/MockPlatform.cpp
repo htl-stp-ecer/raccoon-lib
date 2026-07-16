@@ -219,6 +219,13 @@ namespace platform::mock::core
         return addNoise(m_imu.mag_z);
     }
 
+    // Quaternion components are returned noise-free: perturbing them would break
+    // the unit-norm invariant the tilt math relies on.
+    float MockPlatform::getQuatW() const { return m_imu.quat_w; }
+    float MockPlatform::getQuatX() const { return m_imu.quat_x; }
+    float MockPlatform::getQuatY() const { return m_imu.quat_y; }
+    float MockPlatform::getQuatZ() const { return m_imu.quat_z; }
+
     uint32_t MockPlatform::getLastUpdateUs() const
     {
         auto now = std::chrono::high_resolution_clock::now();

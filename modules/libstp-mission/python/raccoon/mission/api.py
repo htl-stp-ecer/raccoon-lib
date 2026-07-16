@@ -27,6 +27,12 @@ class MissionProtocol(Protocol):
 # trace file per mission, keeping a per-name counter for missions that repeat.
 _profile_run_counts: "dict[str, int]" = {}
 
+# === TESTING OVERRIDE ===================================================
+# Hard kill-switch for test runs: when True, profiling is force-disabled
+# regardless of RACCOON_PROFILE (and any RACCOON_PROFILE_* knob). Flip back
+# to False to honour the environment again.
+_DISABLE_PROFILING_FOR_TESTING = True
+
 
 def _per_mission_trace_path(trace_path: str, mission_name: str) -> str:
     from pathlib import Path
@@ -79,7 +85,9 @@ class Mission(ClassNameLogger, MissionProtocol):
         # isn't installed on this target — a missing add-on must never crash a
         # mission run.
         profiler = None
-        if os.environ.get("RACCOON_PROFILE"):
+        if os.environ.get("RACCOON_PROFILE") and _DISABLE_PROFILING_FOR_TESTING:
+            self.info("RACCOON_PROFILE set but profiling is DISABLED for testing — ignoring")
+        if os.environ.get("RACCOON_PROFILE") and not _DISABLE_PROFILING_FOR_TESTING:
             try:
                 from raccoon.profiling import StepProfiler
             except ImportError:

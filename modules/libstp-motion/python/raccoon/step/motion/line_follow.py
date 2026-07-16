@@ -562,6 +562,10 @@ class DirectionalLineFollowConfig:
     kp: float = 0.4
     ki: float = 0.0
     kd: float = 0.1
+    # Anti-windup band for the correction PID integrator. None for integral_min
+    # mirrors -integral_max (symmetric clamp, the classic behaviour).
+    integral_max: float = 1.0
+    integral_min: float | None = None
     lateral_correction: bool = False
     forward_correction: bool = False
     heading_hold: bool = True
@@ -703,6 +707,11 @@ class DirectionalLineFollow(MotionStep):
         motion_config.kp = cfg.kp
         motion_config.ki = cfg.ki
         motion_config.kd = cfg.kd
+        motion_config.integral_max = cfg.integral_max
+        # C++ treats NaN integral_min as "mirror -integral_max" (symmetric clamp).
+        motion_config.integral_min = (
+            cfg.integral_min if cfg.integral_min is not None else float("nan")
+        )
         motion_config.heading_hold = cfg.heading_hold
         motion_config.correction_sign = cfg.correction_sign
         if cfg.forward_correction:
@@ -792,6 +801,10 @@ class DirectionalSingleLineFollowConfig:
     kp: float = 0.4
     ki: float = 0.0
     kd: float = 0.1
+    # Anti-windup band for the correction PID integrator. None for integral_min
+    # mirrors -integral_max (symmetric clamp, the classic behaviour).
+    integral_max: float = 1.0
+    integral_min: float | None = None
     lateral_correction: bool = False
     forward_correction: bool = False
     heading_hold: bool = True
@@ -876,6 +889,11 @@ class DirectionalSingleLineFollow(MotionStep):
         motion_config.kp = cfg.kp
         motion_config.ki = cfg.ki
         motion_config.kd = cfg.kd
+        motion_config.integral_max = cfg.integral_max
+        # C++ treats NaN integral_min as "mirror -integral_max" (symmetric clamp).
+        motion_config.integral_min = (
+            cfg.integral_min if cfg.integral_min is not None else float("nan")
+        )
         motion_config.heading_hold = cfg.heading_hold
         motion_config.correction_sign = cfg.correction_sign
         if cfg.forward_correction:

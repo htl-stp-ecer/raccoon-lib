@@ -11,7 +11,8 @@
 namespace libstp::motion
 {
     static double computeArcMaxAngularVelocity(const UnifiedMotionPidConfig& pid_config,
-                                                const ArcMotionConfig& config)
+                                                const ArcMotionConfig& config,
+                                                const kinematics::IKinematics& kinematics)
     {
         // Magnitude only — the sign of speed_scale selects travel direction and
         // is applied to the velocity commands, not to this (always-positive) cap.
@@ -24,7 +25,14 @@ namespace libstp::motion
             ? pid_config.linear.max_velocity / config.radius_m
             : angular_limit;
 
-        return scale * std::min(angular_limit, linear_limit);
+        // Wheel-speed coupling: on an arc the OUTER wheel travels faster than
+        // the chassis centre. Capping only the centre speed over-commands the
+        // outer wheel, the drivetrain desaturates and the differential (= the
+        // turn) collapses — observed as an arc creeping at a fraction of the
+        // commanded yaw rate. The kinematics model knows its own lever arm.
+        double wheel_limit = kinematics.maxYawRateForArcRadius(config.radius_m, config.lateral);
+
+        return scale * std::min({angular_limit, linear_limit, wheel_limit});
     }
 
     static ProfiledPIDController makeArcProfiledPID(const UnifiedMotionPidConfig& pid_config,
@@ -57,7 +65,8 @@ namespace libstp::motion
         : Motion(ctx), cfg_(config)
         , travel_dir_(config.speed_scale < 0.0 ? -1.0 : 1.0)
         , goal_angle_rad_(travel_dir_ * config.arc_angle_rad)
-        , max_angular_velocity_(computeArcMaxAngularVelocity(ctx_.pid_config, config))
+        , max_angular_velocity_(computeArcMaxAngularVelocity(ctx_.pid_config, config,
+                                                             ctx_.drive.getKinematics()))
         , profiled_pid_(makeArcProfiledPID(ctx_.pid_config, config, max_angular_velocity_))
     {
     }

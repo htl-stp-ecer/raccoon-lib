@@ -30,6 +30,7 @@ void init_motion_base(py::module_& m)
                  int saturation_hold_cycles, double saturation_recovery_threshold,
                  double distance_tolerance_m, double angle_tolerance_rad,
                  double heading_saturation_error_rad, double heading_recovery_error_rad,
+                 double heading_omega_slew,
                  AxisConstraints linear, AxisConstraints lateral, AxisConstraints angular)
              {
                  UnifiedMotionPidConfig cfg;
@@ -48,6 +49,7 @@ void init_motion_base(py::module_& m)
                  cfg.angle_tolerance_rad = angle_tolerance_rad;
                  cfg.heading_saturation_error_rad = heading_saturation_error_rad;
                  cfg.heading_recovery_error_rad = heading_recovery_error_rad;
+                 cfg.heading_omega_slew = heading_omega_slew;
                  cfg.linear = linear;
                  cfg.lateral = lateral;
                  cfg.angular = angular;
@@ -68,6 +70,7 @@ void init_motion_base(py::module_& m)
              py::arg("angle_tolerance_rad") = 0.035,
              py::arg("heading_saturation_error_rad") = 0.01,
              py::arg("heading_recovery_error_rad") = 0.005,
+             py::arg("heading_omega_slew") = 0.0,
              py::arg("linear") = AxisConstraints{},
              py::arg("lateral") = AxisConstraints{},
              py::arg("angular") = AxisConstraints{}
@@ -87,6 +90,7 @@ void init_motion_base(py::module_& m)
         .def_readwrite("angle_tolerance_rad", &UnifiedMotionPidConfig::angle_tolerance_rad)
         .def_readwrite("heading_saturation_error_rad", &UnifiedMotionPidConfig::heading_saturation_error_rad)
         .def_readwrite("heading_recovery_error_rad", &UnifiedMotionPidConfig::heading_recovery_error_rad)
+        .def_readwrite("heading_omega_slew", &UnifiedMotionPidConfig::heading_omega_slew)
         .def_readwrite("linear", &UnifiedMotionPidConfig::linear)
         .def_readwrite("lateral", &UnifiedMotionPidConfig::lateral)
         .def_readwrite("angular", &UnifiedMotionPidConfig::angular);

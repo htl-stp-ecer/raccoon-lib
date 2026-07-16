@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+
 #include "foundation/motor.hpp"
 
 namespace libstp::foundation
@@ -35,7 +37,12 @@ namespace libstp::foundation
         double kp{1.0};
         double ki{0.0};
         double kd{0.0};
-        double integral_max{10.0};       ///< Integrator clamp, in output units.
+        double integral_max{10.0};       ///< Upper integrator clamp, in output units.
+        /// Lower integrator clamp, in output units. NaN (the default) means
+        /// "mirror the upper clamp", i.e. clamp to [-integral_max, integral_max]
+        /// — the classic symmetric anti-windup. Set it explicitly to make the
+        /// windup band asymmetric (e.g. integral_min=0 for a one-sided integrator).
+        double integral_min{std::numeric_limits<double>::quiet_NaN()};
         double integral_deadband{0.01};  ///< Error magnitude below which the integrator ignores the sample.
         double derivative_lpf_alpha{0.1};///< IIR weight on new derivative samples; clamped to [0, 1] at runtime.
         double output_min{-10.0};

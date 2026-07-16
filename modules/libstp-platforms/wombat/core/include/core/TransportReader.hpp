@@ -8,6 +8,7 @@
 #include <raccoon/scalar_i8_t.hpp>
 #include <raccoon/scalar_i32_t.hpp>
 #include <raccoon/scalar_f_t.hpp>
+#include <raccoon/quaternion_t.hpp>
 #include <raccoon/string_t.hpp>
 #include <string>
 #include <unordered_map>
@@ -46,6 +47,10 @@ namespace platform::wombat::core {
         void resetAccelVelocity();
         raccoon::vector3f_t readMag();
         raccoon::scalar_f_t readHeading();
+        /// Latest DMP 6-axis fused orientation quaternion (gyro+accel).
+        /// Cache is zero-initialised, so a never-received quaternion reads
+        /// {w,x,y,z} = {0,0,0,0} — callers can detect "no data" via |q| < 0.5.
+        raccoon::quaternion_t readQuaternion();
         raccoon::scalar_i32_t readBemf(int idx);
         int32_t readMotorPosition(int port);
         bool readMotorDone(int port);
@@ -124,6 +129,7 @@ namespace platform::wombat::core {
         raccoon::vector3f_t accel_velocity_offset_{};
         raccoon::vector3f_t mag_cache_{};
         raccoon::scalar_f_t heading_cache_{};
+        raccoon::quaternion_t quaternion_cache_{};
         raccoon::scalar_f_t temp_cache_{};
 
         // STM32 odometry cache

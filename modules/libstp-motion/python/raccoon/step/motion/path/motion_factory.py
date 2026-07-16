@@ -470,7 +470,14 @@ def _create_arc_motion(
     do_inflate = (not is_last) if inflate is None else inflate
     config = ArcMotionConfig()
     config.radius_m = seg.radius_m
+    # IR convention: ``seg.arc_angle_rad`` is the TRUE heading delta and a
+    # negative ``speed_scale`` means reverse travel. ArcMotion's reverse mode
+    # is a forward arc mirrored in time — it NEGATES the executed heading
+    # change relative to ``config.arc_angle_rad`` — so flip the angle here to
+    # keep the commanded heading delta equal to the IR's.
     actual = seg.arc_angle_rad
+    if actual is not None and seg.speed_scale < 0:
+        actual = -actual
 
     if do_inflate and actual is not None:
         config.arc_angle_rad = actual + math.copysign(OVERSHOOT_RAD, actual)

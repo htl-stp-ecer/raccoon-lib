@@ -133,7 +133,26 @@ def _has_reached_target(motion, seg: Segment) -> bool:
     return motion.is_finished()
 
 
-def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
+def _linear_axis_heading(robot: "GenericRobot", seg: Segment) -> float:
+    """World heading of a linear segment's travel axis.
+
+    ``target_heading_rad`` when the segment pins an (absolute) heading,
+    otherwise the robot's current world heading (relative / hold-current mode —
+    the motion holds this heading throughout the leg).
+
+    Capture this ONCE at segment start and reuse it for every projection of
+    that segment (see ``_get_position_offset``'s ``axis_heading``) — re-reading
+    the live heading each tick is the phantom-progress bug fixed below.
+    """
+    h = seg.target_heading_rad
+    if h is None:
+        h = float(robot.odometry.get_heading())
+    return h
+
+
+def _get_position_offset(
+    robot: "GenericRobot", seg: Segment, axis_heading: float | None = None
+) -> float:
     """Get the current odometry position to use as offset for warm-start.
 
     For linear segments we project the world position onto the segment's
@@ -147,11 +166,20 @@ def _get_position_offset(robot: "GenericRobot", seg: Segment) -> float:
     leg (e.g. a 3 cm grab drive) at a 90°-off heading then never registered as
     reached and the robot ran away. Forward uses the heading axis; Lateral the
     right-positive perpendicular.
+
+    ``axis_heading`` FREEZES the projection axis. The progress check compares
+    two projections of the ABSOLUTE world position (a captured ``seg_origin``
+    vs. the current read), and only a COMMON heading makes that subtraction
+    collapse to the projected *displacement*. Passing ``None`` re-reads the
+    live heading, so sub-degree yaw wobble gets multiplied by the (possibly
+    multi-metre) distance from the odometry origin and manufactures centimetres
+    of phantom travel — which prematurely trips the reached band (the M050
+    back-to-back strafes that ended after ~1 cm far from the odom origin).
+    Callers comparing against a captured ``seg_origin`` MUST pass the same
+    ``axis_heading`` used to capture it (see ``_linear_axis_heading``).
     """
     if seg.kind == "linear":
-        h = seg.target_heading_rad
-        if h is None:
-            h = float(robot.odometry.get_heading())
+        h = axis_heading if axis_heading is not None else _linear_axis_heading(robot, seg)
         pos = robot.odometry.get_pose().position
         x, y = float(pos[0]), float(pos[1])
         if seg.axis == LinearAxis.Forward:
@@ -170,6 +198,7 @@ def _non_last_reached(
     robot: "GenericRobot",
     seg: Segment,
     seg_origin: float,
+    axis_heading: float | None,
     motion,
 ) -> bool:
     """Completion decision for a NON-terminal geometric segment.
@@ -191,21 +220,25 @@ def _non_last_reached(
     reached and the motion never finishes — so warm-start cruise behaviour is
     unchanged and only path (1) drives the transition.
     """
-    return _check_segment_reached(robot, seg, seg_origin) or _has_reached_target(motion, seg)
+    return _check_segment_reached(robot, seg, seg_origin, axis_heading) or _has_reached_target(
+        motion, seg
+    )
 
 
 def _check_segment_reached(
     robot: "GenericRobot",
     seg: Segment,
     seg_origin: float,
+    axis_heading: float | None = None,
 ) -> bool:
     """Manual position check for non-terminal segments.
 
     Compares odometry-based distance traveled against the segment target.
     Used instead of the C++ check when the profile target is inflated with
-    overshoot.
+    overshoot. ``axis_heading`` must be the frozen heading used to capture
+    ``seg_origin`` — see ``_get_position_offset``.
     """
-    current = _get_position_offset(robot, seg)
+    current = _get_position_offset(robot, seg, axis_heading)
     traveled = current - seg_origin
 
     if seg.kind == "linear":
@@ -421,12 +454,23 @@ def _warm_lookahead(nodes, idx, seg) -> bool:
 
 def _warm_velocity(seg, fallback_mps: float) -> float:
     """Seed velocity for ``seg.start_warm`` — the profile's prescribed entry
-    speed (converted to angular for arcs), else the measured carry velocity."""
+    speed (converted to angular for arcs), else the measured carry velocity.
+
+    ``entry_speed_mps`` is a MAGNITUDE (``velocity_profile`` caps everything with
+    ``abs(speed_scale)``), so it must be re-signed with the segment's travel
+    direction before seeding the profile. Without this a backward leg that
+    warm-starts off a reverse arc (``linear-fwd → reverse-arc → linear-back``)
+    gets a POSITIVE seed and lunges FORWARD before it can chase its negative
+    goal — observed on hardware as the last cone-return leg driving the wrong way.
+    Direction: reverse arcs encode it in ``speed_scale``'s sign; linear legs in
+    the sign of ``distance_m`` (falling back to ``sign``)."""
     if _is_profiled(seg) and _carries_in(seg):
         v = seg.entry_speed_mps or 0.0
         if seg.kind == "arc" and seg.radius_m:
-            return v / abs(seg.radius_m)
-        return v
+            direction = math.copysign(1.0, seg.speed_scale or 1.0)
+            return direction * v / abs(seg.radius_m)
+        direction = math.copysign(1.0, seg.distance_m) if seg.distance_m else (seg.sign or 1.0)
+        return direction * v
     return fallback_mps
 
 
@@ -676,7 +720,8 @@ class PathExecutor(ClassNameLogger):
                 inflate=_warm_lookahead(nodes, node_idx, seg),
             )
             motion.start()
-            seg_origin = _get_position_offset(robot, seg)
+            seg_axis_heading = _linear_axis_heading(robot, seg) if seg.kind == "linear" else None
+            seg_origin = _get_position_offset(robot, seg, seg_axis_heading)
 
             if seg.condition is not None:
                 seg.condition.start(robot)
@@ -730,7 +775,7 @@ class PathExecutor(ClassNameLogger):
                     te = _segment_target_and_eps(seg)
                     if te is not None:
                         target, eps = te
-                        traveled = _get_position_offset(robot, seg) - seg_origin
+                        traveled = _get_position_offset(robot, seg, seg_axis_heading) - seg_origin
                         remaining = abs(target - traveled)
                         self.trace(
                             f"#{seg_count} {seg.kind} "
@@ -772,7 +817,9 @@ class PathExecutor(ClassNameLogger):
                         # Manual band OR the motion's own completion — see
                         # _non_last_reached (fixes the ramp-to-zero-then-stuck
                         # strafe-reversal stall).
-                        transition = _non_last_reached(robot, seg, seg_origin, motion)
+                        transition = _non_last_reached(
+                            robot, seg, seg_origin, seg_axis_heading, motion
+                        )
 
                 # Opaque steps: adapter signals completion via is_finished().
                 if not transition and is_opaque:
@@ -871,7 +918,10 @@ class PathExecutor(ClassNameLogger):
                         )
                         motion.start()
 
-                    seg_origin = _get_position_offset(robot, seg)
+                    seg_axis_heading = (
+                        _linear_axis_heading(robot, seg) if seg.kind == "linear" else None
+                    )
+                    seg_origin = _get_position_offset(robot, seg, seg_axis_heading)
 
                     if seg.condition is not None:
                         seg.condition.start(robot)

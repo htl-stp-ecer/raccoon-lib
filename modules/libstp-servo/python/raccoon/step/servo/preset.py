@@ -8,6 +8,10 @@ that have well-defined positions (e.g., "open", "closed", "up", "down").
 Calling a position without ``speed`` uses an instant ``servo()`` command.
 Calling with ``speed`` uses ``SlowServo`` for eased motion.
 
+Pass ``blocking=False`` to fire the move without waiting for it to finish
+(no wait time is computed or awaited); the default ``blocking=True`` waits
+out the estimated move duration.
+
 The optional ``offset`` shifts all positions by a fixed amount — useful
 when a servo is remounted slightly off from its original alignment.
 
@@ -65,10 +69,11 @@ class _PresetPosition:
         self,
         speed: float | None = None,
         easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+        blocking: bool = True,
     ) -> Step:
         if speed is None:
-            return _servo_step(self._servo, self._actual)
-        return SlowServo(self._servo, self._actual, speed, easing=easing)
+            return _servo_step(self._servo, self._actual, blocking=blocking)
+        return SlowServo(self._servo, self._actual, speed, easing=easing, blocking=blocking)
 
     def __repr__(self) -> str:
         return f"<PresetPosition {self.__name__!r} angle={self._actual}>"

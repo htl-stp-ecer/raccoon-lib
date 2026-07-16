@@ -63,6 +63,10 @@ namespace platform::mock::core
         float getMagX() const;
         float getMagY() const;
         float getMagZ() const;
+        float getQuatW() const;
+        float getQuatX() const;
+        float getQuatY() const;
+        float getQuatZ() const;
 
         uint32_t getLastUpdateUs() const;
 
@@ -173,6 +177,8 @@ namespace platform::mock::core
             float gyro_x = 0.0f, gyro_y = 0.0f, gyro_z = 0.0f;
             float accel_x = 0.0f, accel_y = 0.0f, accel_z = 9.81f;  // Default gravity
             float mag_x = 0.0f, mag_y = 0.0f, mag_z = 1.0f;        // Default magnetic field
+            // DMP fused orientation quaternion — default identity (flat).
+            float quat_w = 1.0f, quat_x = 0.0f, quat_y = 0.0f, quat_z = 0.0f;
         } m_imu;
 
         std::chrono::high_resolution_clock::time_point m_start_time;
@@ -234,6 +240,11 @@ namespace platform::mock::core
     inline float magX() { return MockPlatform::instance().getMagX(); }
     inline float magY() { return MockPlatform::instance().getMagY(); }
     inline float magZ() { return MockPlatform::instance().getMagZ(); }
+
+    inline float quatW() { return MockPlatform::instance().getQuatW(); }
+    inline float quatX() { return MockPlatform::instance().getQuatX(); }
+    inline float quatY() { return MockPlatform::instance().getQuatY(); }
+    inline float quatZ() { return MockPlatform::instance().getQuatZ(); }
 
     inline uint32_t lastUpdateUs()
     {

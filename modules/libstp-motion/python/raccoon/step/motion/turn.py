@@ -62,6 +62,9 @@ class _ConditionalTurn(MotionStep):
             config = TurnConfig()
             config.target_angle_rad = self._sign * math.radians(self._degrees)
             config.speed_scale = self._speed
+            # Static friction feedforward from robot.yml `turn.kS`, emitted into the
+            # generated robot class (getattr: robots generated before the field existed).
+            config.kS = float(getattr(robot, "turn_kS", 0.0))
             self._motion = TurnMotion(
                 robot.drive,
                 robot.odometry,

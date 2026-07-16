@@ -59,6 +59,10 @@ _CURVED = {"arc", "crab_arc"}
 
 def _dir_sign(seg: Segment) -> float:
     """Travel direction sign of a translational segment (+1 fwd / -1 back)."""
+    if seg.kind in _CURVED:
+        # Curved legs encode reverse travel in the SIGN of speed_scale
+        # (cut_corners emits a negative scale for a backward corner).
+        return math.copysign(1.0, seg.speed_scale or 1.0)
     if seg.distance_m is not None and abs(seg.distance_m) > _EPS:
         return math.copysign(1.0, seg.distance_m)
     return math.copysign(1.0, seg.sign or 1.0)
@@ -84,7 +88,9 @@ def _is_continuous_seam(a: Segment, b: Segment) -> bool:
     :func:`_seam_speed_cap`."""
     if a.kind not in _TRANSLATIONAL or b.kind not in _TRANSLATIONAL:
         return False
-    if a.kind == "linear" and b.kind == "linear" and _dir_sign(a) != _dir_sign(b):
+    # A direction reversal is discontinuous for ANY translational pair —
+    # including a backward linear meeting a (tangent) reverse arc.
+    if _dir_sign(a) != _dir_sign(b):
         return False
     return is_same_type(a, b) or _arc_tangent(a, b)
 
@@ -127,7 +133,9 @@ def _length_m(seg: Segment) -> float | None:
 def _v_max(seg: Segment, max_speed: float, lat_accel: float) -> float:
     if seg.kind == "turn":
         return 0.0  # rotation in place — no translational speed
-    base = max_speed * (seg.speed_scale or 1.0)
+    # speed_scale's SIGN is the travel direction (reverse arcs are negative);
+    # the cruise cap is a magnitude.
+    base = max_speed * abs(seg.speed_scale or 1.0)
     if seg.kind in _CURVED and seg.radius_m:
         return min(base, math.sqrt(max(0.0, lat_accel * abs(seg.radius_m))))
     return base

@@ -18,6 +18,18 @@ if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
 
+# dt-watchdog thresholds. A control tick whose dt runs far longer than the
+# scheduled period means the asyncio loop was starved — typically a Pi
+# undervoltage brownout stalling the stm32-data-reader's SPI sensor transfer
+# (cross-confirmed by the reader's SLOW LOOP / SELF STALL and mcap battery-sag).
+# While starved, this loop's `until` / `after_cm` guards cannot fire, so the
+# robot keeps moving on the last command and OVERSHOOTS the stop condition.
+# The watchdog is LOG-ONLY: it shouts, it never stops the step — behaviour is
+# unchanged, so it is safe to leave enabled in competition.
+_STALL_DT_FLOOR_S = 0.075  # ignore sub-75ms jitter (servo hiccups, GC)
+_STALL_DT_FACTOR = 5.0  # ...and require dt > 5x the scheduled tick
+
+
 @dataclass
 class MotionLoopStats:
     """Summary of the fixed-rate loop timing observed during one motion step."""
@@ -69,6 +81,15 @@ class MotionStep(Step):
                 if dt < 1e-4:
                     await asyncio.sleep(update_rate)
                     continue
+
+                if dt > _STALL_DT_FLOOR_S and dt > _STALL_DT_FACTOR * update_rate:
+                    self.error(
+                        f"CONTROL-LOOP STALL: {type(self).__name__} tick "
+                        f"dt={dt * 1000:.0f}ms (expected ~{update_rate * 1000:.0f}ms, "
+                        f"{dt / update_rate:.0f}x) — asyncio loop starved; until/after_cm "
+                        f"guards could not fire, robot moved UNCHECKED for this interval. "
+                        f"Suspect Pi undervoltage/SPI stall. (log-only watchdog, not stopping)"
+                    )
 
                 min_dt = min(dt, min_dt)
                 max_dt = max(dt, max_dt)

@@ -2,7 +2,7 @@
 
 Covers the parts that carry logic and don't need a live UI/transport: the
 runtime + persistent store, and the NumberParam descriptor (key derivation via
-__set_name__, clamping, default fallback, persistence round-trip).  The
+__set_name__, default fallback, persistence round-trip).  The
 AskNumber UI step is intentionally not exercised here — it only wires
 input_number() into param.set(), which requires a robot/transport.
 """
@@ -90,16 +90,16 @@ def test_set_then_get_roundtrips():
     assert P.speed.is_set() is True
 
 
-def test_set_clamps_to_range():
+def test_set_stores_value_unclamped():
     from raccoon import NumberParam, ParamSet
 
     class P(ParamSet):
-        offset = NumberParam(default=0.0, min=-20, max=20)
+        offset = NumberParam(default=0.0)
 
     P.offset.set(999)
-    assert P.offset.get() == 20.0
+    assert P.offset.get() == 999.0
     P.offset.set(-999)
-    assert P.offset.get() == -20.0
+    assert P.offset.get() == -999.0
 
 
 def test_reset_params_clears_runtime_value():
@@ -169,3 +169,167 @@ def test_non_persisted_get_ignores_existing_yaml(tmp_path):
     store = _ParamStore(cal_store=CalibrationStore(path=yml))
     # ...so a non-persisted read must not see it.
     assert store.get("k", 0.0, persisted=False) == 0.0
+
+
+# --- profile scoping (game-table / side) -----------------------------------
+
+
+def test_unscoped_param_ignores_active_profile():
+    from raccoon import NumberParam, ParamSet
+    from raccoon.step.params import set_active_profile
+
+    class P(ParamSet):
+        speed = NumberParam(default=0.5)  # not scoped
+
+    set_active_profile("Table 1", "A", persist=False)
+    P.speed.set(0.8)
+    set_active_profile("Table 2", "B", persist=False)
+    # A global param sees the same value regardless of the active profile.
+    assert P.speed.get() == 0.8
+
+
+def test_scoped_param_isolated_per_profile():
+    from raccoon import NumberParam, ParamSet
+    from raccoon.step.params import set_active_profile
+
+    class P(ParamSet):
+        offset = NumberParam(default=0.0, unit="cm", scoped=True)
+
+    set_active_profile("Table 1", "A", persist=False)
+    P.offset.set(3.0)
+
+    # Same table, other side — independent value.
+    set_active_profile("Table 1", "B", persist=False)
+    assert P.offset.is_set() is False
+    assert P.offset.get() == 0.0  # default
+    P.offset.set(7.0)
+
+    # Different table — independent again.
+    set_active_profile("Table 2", "A", persist=False)
+    assert P.offset.get() == 0.0
+
+    # Back to the first profile — original value survives.
+    set_active_profile("Table 1", "A", persist=False)
+    assert P.offset.get() == 3.0
+    assert P.offset.is_set() is True
+
+
+def test_scoped_param_without_profile_falls_back_to_global():
+    from raccoon import NumberParam, ParamSet
+
+    class P(ParamSet):
+        offset = NumberParam(default=1.0, scoped=True)
+
+    # No profile active: behaves like a plain global param.
+    P.offset.set(2.5)
+    assert P.offset.get() == 2.5
+
+
+def test_active_profile_persist_roundtrip(tmp_path, monkeypatch):
+    import raccoon.step.params as params_mod
+    from raccoon.step.calibration.store import CalibrationStore
+    from raccoon.step.params import (
+        _ParamStore,
+        clear_active_profile,
+        get_active_profile,
+        load_persisted_profile,
+        set_active_profile,
+    )
+
+    yml = tmp_path / "cal.yml"
+    monkeypatch.setattr(params_mod, "_store", _ParamStore(cal_store=CalibrationStore(path=yml)))
+
+    set_active_profile("Table 3", "B", persist=True)
+    clear_active_profile()
+    assert get_active_profile() is None
+
+    # A fresh process (cleared runtime) restores the profile from disk.
+    assert load_persisted_profile() == ("Table 3", "B")
+    assert get_active_profile() == ("Table 3", "B")
+
+
+def test_reset_params_clears_active_profile():
+    from raccoon import NumberParam, ParamSet
+    from raccoon.step.params import get_active_profile, reset_params, set_active_profile
+
+    class P(ParamSet):
+        offset = NumberParam(default=0.0, scoped=True)
+
+    set_active_profile("Table 1", "A", persist=False)
+    P.offset.set(4.0)
+    reset_params()
+    assert get_active_profile() is None
+    assert P.offset.get() == 0.0
+
+
+# --- profile-entry screen (keypad "1B") ------------------------------------
+#
+# The screen's refresh() is a no-op without a bound _step, so the real async
+# keypad/click handlers can be driven directly to exercise the actual logic.
+
+
+def _type(screen, *keys):
+    import asyncio
+
+    for k in keys:
+        asyncio.run(screen.on_key(k))
+
+
+def _make_screen():
+    from raccoon.step.params import _ProfileEntryScreen
+
+    return _ProfileEntryScreen()
+
+
+def test_profile_entry_parses_number_and_side():
+    import asyncio
+
+    s = _make_screen()
+    assert s._is_valid() is False  # nothing entered yet
+
+    _type(s, "1")
+    asyncio.run(s.on_side_b())
+    assert s._is_valid() is True
+    assert s._entry_label() == "1B"
+
+    # Submit closes with the entered (table, side).
+    asyncio.run(s.on_submit())
+    assert s._closed is True
+    assert s._result == ("1", "B")
+
+
+def test_profile_entry_accepts_any_number():
+    import asyncio
+
+    # No range protection: any typed number is accepted verbatim.
+    s = _make_screen()
+    _type(s, "9", "9")
+    asyncio.run(s.on_side_a())
+    assert s._is_valid() is True
+    asyncio.run(s.on_submit())
+    assert s._result == ("99", "A")
+
+
+def test_profile_entry_requires_number_and_side():
+    import asyncio
+
+    s = _make_screen()
+    _type(s, "2")
+    assert s._is_valid() is False  # side still missing
+    assert s._entry_label() == "2_"
+    # A premature submit must not close on a partial entry.
+    asyncio.run(s.on_submit())
+    assert s._closed is False
+
+
+def test_profile_entry_backspace_and_cancel():
+    import asyncio
+
+    s = _make_screen()
+    _type(s, "1", "back")
+    assert s._number_str == ""
+    assert s._is_valid() is False
+
+    asyncio.run(s.on_cancel())
+    assert s._closed is True
+    assert s._result is None

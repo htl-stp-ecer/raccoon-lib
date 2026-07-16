@@ -51,15 +51,17 @@ namespace libstp::motion
         captureInitialPose();
         drive().resetVelocityControllers();
 
-        correction_pid_ = std::make_unique<foundation::PidController>(
-            foundation::PidConfig{
-                cfg_.kp,
-                cfg_.ki,
-                cfg_.kd,
-                1.0,
-                -1.0,
-                1.0,
-            });
+        foundation::PidConfig correction_cfg{};
+        correction_cfg.kp = cfg_.kp;
+        correction_cfg.ki = cfg_.ki;
+        correction_cfg.kd = cfg_.kd;
+        correction_cfg.integral_max = cfg_.integral_max;
+        correction_cfg.integral_min = cfg_.integral_min;
+        // Preserve the historical correction-PID tuning: integrator accumulates
+        // every tick (deadband disabled) and the derivative is unfiltered.
+        correction_cfg.integral_deadband = -1.0;
+        correction_cfg.derivative_lpf_alpha = 1.0;
+        correction_pid_ = std::make_unique<foundation::PidController>(correction_cfg);
 
         heading_pid_.reset();
         if (cfg_.correction_mode != LineFollowCorrectionMode::Angular && cfg_.heading_hold)

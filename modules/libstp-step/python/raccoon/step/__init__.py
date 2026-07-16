@@ -19,6 +19,9 @@ from .condition import (
     stall_detected,
     custom,
     over_line,
+    on_incline,
+    on_level,
+    over_ramp,
 )
 from .sequential import Sequential, seq
 from .parallel import parallel
@@ -61,7 +64,17 @@ from .servo import *
 from .servo import __all__ as _servo_all
 from .motor import *
 from .motor import __all__ as _motor_all
-from .params import NumberParam, ParamSet, AskNumber, ask, reset_params
+from .params import (
+    NumberParam,
+    ParamSet,
+    AskNumber,
+    ask,
+    reset_params,
+    ConfigureMission,
+    configure_mission,
+    set_active_profile,
+    get_active_profile,
+)
 
 __all__ = [
     "Step",
@@ -115,6 +128,10 @@ __all__ = [
     "AskNumber",
     "ask",
     "reset_params",
+    "ConfigureMission",
+    "configure_mission",
+    "set_active_profile",
+    "get_active_profile",
     # Conditions
     "StopCondition",
     "on_black",
@@ -130,6 +147,9 @@ __all__ = [
     "stall_detected",
     "custom",
     "over_line",
+    "on_incline",
+    "on_level",
+    "over_ramp",
 ]
 __all__ += list(_calibration_all)
 __all__ += list(_logic_all)
