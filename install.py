@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""install.py — Install raccoon-lib locally or deploy to Raspberry Pi.
+"""install.py — Install the compiled raccoon-sim wheel locally or deploy to a Pi.
+
+Deploys the ``raccoon-sim`` distribution (compiled runtime + simulator + wombat
+bundle) — the thing that actually runs the robot. The platform-independent
+``raccoon-library`` header package (pure .pyi) is a laptop/PyPI concern and is
+not what this script installs.
 
 Usage:
-    python install.py                         # Install raccoon-lib on this machine
+    python install.py                         # Install raccoon-sim on this machine
     RPI_HOST=10.x.x.x python install.py      # Deploy full wheel to Pi
 
 Env vars (Pi deploy only):
@@ -100,9 +105,9 @@ def install_local() -> None:
     """Install the raccoon-lib wheel on this machine."""
     script_dir = Path(__file__).resolve().parent
 
-    wheel_file = _find_built_wheel(script_dir, "raccoon_library-*.whl")
+    wheel_file = _find_built_wheel(script_dir, "raccoon_sim-*.whl")
     if wheel_file is None:
-        print("Error: No raccoon_library-*.whl found.")
+        print("Error: No raccoon_sim-*.whl found.")
         print("  Run the build first, or download from a GitHub release.")
         sys.exit(1)
 
@@ -135,9 +140,9 @@ def deploy_to_pi() -> None:
     rpi_user = os.environ.get("RPI_USER", "pi")
     rpi_host = _validate_host(os.environ["RPI_HOST"])
 
-    wheel_file = _find_built_wheel(script_dir, "raccoon_library-*.whl")
+    wheel_file = _find_built_wheel(script_dir, "raccoon_sim-*.whl")
     if wheel_file is None:
-        print(f"Error: No raccoon_library-*.whl file found in {script_dir} or build-docker/")
+        print(f"Error: No raccoon_sim-*.whl file found in {script_dir} or build-docker/")
         sys.exit(1)
 
     wheel_basename = wheel_file.name

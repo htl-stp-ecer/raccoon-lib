@@ -4,9 +4,13 @@ build-backend = "scikit_build_core.build"
 
 
 [project]
-name = "raccoon-library"
+# Compiled runtime + simulator distribution. Installed as the `sim` extra of
+# `raccoon-library` (``pip install raccoon-library[sim]``) — the default
+# `raccoon-library` is a platform-independent .pyi-only header package built by
+# scripts/build-stubs.sh. See that script and .github/workflows/ci.yml.
+name = "raccoon-sim"
 version = "1.0.0"
-description="Raccoon robotics library (formerly libstp)"
+description="Raccoon robotics library — compiled runtime + simulator (native bindings; formerly libstp)"
 readme = "README.md"
 authors = [
   { name = "Tobias Madlberger", email = "tobias.madlberger@gmail.com" },
