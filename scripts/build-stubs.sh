@@ -2,11 +2,15 @@
 # build-stubs.sh — Generate type stubs for raccoon's pybind11 bindings
 # plus its pure-Python modules.
 #
+# The produced wheel IS the default ``raccoon-library`` distribution: a
+# platform-independent (py3-none-any) .pyi-only header package. The compiled
+# runtime + simulator ships separately as ``raccoon-sim`` and is pulled in via
+# the ``raccoon-library[sim]`` extra.
+#
 # Two modes:
 #
-# 1. CI / wheel build (default): runs inside the ARM64 Docker image with
-#    a mock raccoon already installed; emits a stubs-only wheel ready for
-#    PyPI.
+# 1. CI / wheel build (default): runs with a mock raccoon already installed;
+#    emits the ``raccoon-library`` header wheel ready for PyPI.
 #       bash scripts/build-stubs.sh <version>
 #
 # 2. Local dev: skip the wheel step and dump stubs into a staging dir
@@ -92,12 +96,17 @@ if [ -d "$PY_STUBS_TMP/raccoon" ]; then
   done
 fi
 
-# --- 3) Strip all runtime code — keep only .pyi + py.typed ---
-find "$STAGING/raccoon" -name '*.py' ! -name '__init__.py' -delete
-find "$STAGING/raccoon" -name '__init__.py' -exec sh -c 'echo "" > "$1"' _ {} \;
+# --- 3) Strip ALL runtime code — keep only .pyi + py.typed ---
+# The default ``raccoon-library`` wheel must ship *exclusively* .pyi stubs so it
+# can coexist in the same ``raccoon/`` namespace as the compiled ``raccoon-sim``
+# wheel (``pip install raccoon-library[sim]``) without RECORD file conflicts.
+# raccoon-sim owns every ``.py`` / ``.so``; this package owns every ``.pyi``.
+# So we delete *all* ``.py`` — including ``__init__.py`` — and substitute an
+# ``__init__.pyi`` in each package dir so type checkers still see each subpackage.
+find "$STAGING/raccoon" -name '*.py' -delete
 
 find "$STAGING/raccoon" -type d | while read -r dir; do
-  if [ ! -f "$dir/__init__.pyi" ] && [ ! -f "$dir/__init__.py" ]; then
+  if [ ! -f "$dir/__init__.pyi" ]; then
     touch "$dir/__init__.pyi"
   fi
 done
@@ -115,22 +124,44 @@ if [ "$PYI_COUNT" -eq 0 ]; then
 fi
 
 # --- 5) Write pyproject.toml ---
+# This is the DEFAULT ``raccoon-library`` distribution: a platform-independent
+# (py3-none-any) header package of .pyi stubs. ``raccoon-library[sim]`` pulls in
+# the compiled runtime + simulator from the sibling ``raccoon-sim`` distribution
+# (built by scikit-build/cibuildwheel), pinned to the exact same version so the
+# stubs and native bindings can never drift apart.
+#
+# Package discovery: with no ``__init__.py`` left on disk, setuptools' package
+# *finder* can't detect the tree, so we enumerate every ``raccoon`` subdirectory
+# as an explicit package. ``package-data`` then ships each package's ``.pyi``
+# (``__init__.pyi`` matches ``*.pyi``) plus the ``py.typed`` marker.
+PACKAGES="$(
+  cd "$STAGING" && find raccoon -type d | sed 's#/#.#g' | sort |
+    sed 's/^/    "/; s/$/",/'
+)"
+
 cat > "$STAGING/pyproject.toml" << EOF
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "raccoon-stubs"
+name = "raccoon-library"
 version = "$VERSION"
-description = "Type stubs for raccoon (IDE support, type hinting, codegen — no runtime code)"
+description = "Raccoon robotics library — platform-independent Python/.pyi headers (IDE support, type hinting, toolchain codegen). Install the [sim] extra for the compiled runtime + simulator."
 requires-python = ">=3.11"
 
-[tool.setuptools.packages.find]
-include = ["raccoon*"]
+[project.optional-dependencies]
+# The compiled runtime + simulator lives in the sibling ``raccoon-sim``
+# distribution. Pinned exact so headers and native bindings stay in lockstep.
+sim = ["raccoon-sim==$VERSION"]
+
+[tool.setuptools]
+packages = [
+$PACKAGES
+]
 
 [tool.setuptools.package-data]
-raccoon = ["*.pyi", "py.typed", "**/*.pyi"]
+"*" = ["*.pyi", "py.typed"]
 EOF
 
 # --- 6) Build the universal wheel (skip in local-dev mode) ---

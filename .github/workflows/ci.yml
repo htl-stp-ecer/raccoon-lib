@@ -507,9 +507,13 @@ jobs:
           name: wheels-${{ matrix.name }}
           path: ./wheelhouse/*.whl
 
-  # ─── Publish all platform wheels to PyPI + GitHub Release ─────────────────
+  # ─── Publish raccoon-sim platform wheels to PyPI + GitHub Release ──────────
+  # PyPI trusted publishing is scoped per project, and gh-action-pypi-publish
+  # may only be invoked once per job — so raccoon-sim and raccoon-library are
+  # published by two separate jobs (this one + publish-library below), each
+  # with its own trusted-publisher configured on PyPI.
   publish-pypi:
-    name: Publish raccoon-library to PyPI
+    name: Publish raccoon-sim to PyPI
     runs-on: ubuntu-latest
     needs: [build-wheels]
     # Run only when every matrix variant of build-wheels succeeded.
@@ -537,46 +541,39 @@ jobs:
         with:
           python-version: "3.13"
 
-      # Generate .pyi stubs once (using the Linux wheel since the runner is
-      # ubuntu) and inject them into every platform wheel. The stubs are
-      # platform-independent — the C++ API is identical across wheels — but
-      # IDEs / codegen tools only pick them up if they sit next to the .so
-      # inside the package, so each wheel needs its own copy.
-      - name: Generate Python type stubs from built wheel
+      # Build the DEFAULT platform-independent ``raccoon-library`` distribution:
+      # a py3-none-any package of .pyi stubs (no compiled code). It's what
+      # ``pip install raccoon-library`` gives you — for IDE type hints and the
+      # toolchain codegen. The compiled bindings + simulator ship separately as
+      # the ``raccoon-sim`` platform wheels sitting in dist/, and are pulled in
+      # via the ``raccoon-library[sim]`` extra (pinned raccoon-sim==<version>).
+      # It goes into a SEPARATE dir (dist-lib/) because PyPI trusted publishing
+      # is per-project — raccoon-library is uploaded by the publish-library job.
+      - name: Build platform-independent raccoon-library (.pyi headers) wheel
         run: |
           set -euxo pipefail
-          python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel
+          python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel build
           python -m pip install --quiet ./raccoon-transport/python
-          # Pick the cp313 Linux x86_64 wheel as the import source.
-          LINUX_WHEEL=$(ls dist/raccoon_library-*-cp313-cp313-manylinux*x86_64*.whl | head -1)
+          # Import the compiled raccoon-sim (cp313 Linux x86_64) so pybind11-stubgen
+          # can introspect the native bindings.
+          LINUX_WHEEL=$(ls dist/raccoon_sim-*-cp313-cp313-manylinux*x86_64*.whl | head -1)
           python -m pip install --quiet "${LINUX_WHEEL}"
           STAGING="${RUNNER_TEMP}/stubs-staging" \
-          SKIP_WHEEL=1 \
+          STUBS_OUTPUT="${GITHUB_WORKSPACE}/dist-lib" \
           PYTHON=python \
-          bash scripts/build-stubs.sh dev
-          echo "STUBS_STAGING=${RUNNER_TEMP}/stubs-staging" >> "$GITHUB_ENV"
+          bash scripts/build-stubs.sh "1.0.${{ github.run_number }}"
+          echo "=== dist/ (raccoon-sim platform wheels) ==="; ls -la dist/
+          echo "=== dist-lib/ (raccoon-library header wheel) ==="; ls -la dist-lib/
 
-      - name: Patch each platform wheel with stubs
-        run: |
-          set -euxo pipefail
-          mkdir -p dist-patched
-          for whl in dist/*.whl; do
-            UNPACK_DIR="${RUNNER_TEMP}/unpack-$(basename "$whl" .whl)"
-            rm -rf "$UNPACK_DIR"
-            python -m wheel unpack -d "$UNPACK_DIR" "$whl"
-            INNER=$(find "$UNPACK_DIR" -maxdepth 1 -mindepth 1 -type d | head -1)
-            # Merge stubs into the raccoon/ package inside the wheel.
-            cp -R "${STUBS_STAGING}/raccoon/." "${INNER}/raccoon/"
-            # py.typed marker tells type checkers the package ships stubs.
-            touch "${INNER}/raccoon/py.typed"
-            python -m wheel pack "$INNER" -d dist-patched
-          done
-          rm -rf dist
-          mv dist-patched dist
-          echo "=== Patched wheels ==="
-          ls -la dist/
+      # Hand the header wheel to the separate publish-library job. A per-project
+      # trusted publisher means one pypi-publish invocation per job.
+      - name: Upload raccoon-library header wheel for publish-library job
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-library
+          path: dist-lib/*.whl
 
-      - name: Publish to PyPI (OIDC trusted publisher)
+      - name: Publish raccoon-sim to PyPI (OIDC trusted publisher)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
@@ -634,17 +631,21 @@ jobs:
           body: |
             Automated release from commit ${{ github.sha }}.
 
-            **Install via PyPI (recommended):**
+            **Development / codegen / IDE — platform-independent (recommended on laptops):**
             ```bash
             pip install raccoon-library==1.0.${{ github.run_number }}
             ```
+            A pure Python/`.pyi` header package — no compilation, any platform. Powers
+            the toolchain codegen and IDE type hints; it does not run the robot by itself.
 
-            **Install from a wheel attached below:**
+            **Compiled runtime + simulator — to actually run missions (incl. Raspberry Pi):**
             ```bash
-            pip install raccoon_library-1.0.${{ github.run_number }}-*.whl
+            pip install "raccoon-library[sim]==1.0.${{ github.run_number }}"
             ```
+            Pulls in the compiled `raccoon-sim` bindings + simulator + mock/wombat bundle.
           files: |
             dist/*.whl
+            dist-lib/*.whl
             raccoon-docs-1.0.${{ github.run_number }}.zip
             dsl-steps.json
 
@@ -657,3 +658,27 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
             -d '{"event_type":"library-release","client_payload":{"version":"1.0.${{ github.run_number }}"}}'
+
+  # ─── Publish the platform-independent raccoon-library (.pyi) wheel to PyPI ──
+  # Separate job because PyPI trusted publishing is per-project and
+  # gh-action-pypi-publish may only run once per job. The header wheel was built
+  # and uploaded as the ``wheel-library`` artifact by the publish-pypi job.
+  publish-library:
+    name: Publish raccoon-library to PyPI
+    runs-on: ubuntu-latest
+    needs: [publish-pypi]
+    if: always() && needs.publish-pypi.result == 'success'
+    permissions:
+      id-token: write   # PyPI OIDC trusted-publisher (project: raccoon-library)
+
+    steps:
+      - name: Download raccoon-library header wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheel-library
+          path: dist-lib
+
+      - name: Publish raccoon-library to PyPI (OIDC trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-lib
