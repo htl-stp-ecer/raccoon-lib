@@ -35,6 +35,12 @@ def can_merge(a: Segment, b: Segment) -> bool:
             and _same_angle(a.target_heading_rad, b.target_heading_rad)
         )
     if a.kind == "turn" and b.kind == "turn":
+        # An opaque heading turn (TurnToHeading) executes via its own step —
+        # merging would keep only one opaque_step and silently drop the other
+        # target. resolve_heading stamps angle_rad on these, so without this
+        # guard they would suddenly become mergeable.
+        if a.opaque_step is not None or b.opaque_step is not None:
+            return False
         # Only merge if the combined angle stays non-zero.
         combined = (a.angle_rad or 0.0) + (b.angle_rad or 0.0)
         return abs(combined) > 1e-6

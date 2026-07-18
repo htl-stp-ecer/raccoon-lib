@@ -124,3 +124,62 @@ def test_bad_sensor_read_is_skipped_not_fatal():
     # only the good sensor produced a measurement
     assert len(obs.surface_measurements) == 1
     assert obs.surface_measurements[0].detected is True
+
+
+def test_fusion_runs_on_a_dedicated_thread_not_the_caller():
+    """The invariant we care about: localization work happens on the fusion's
+    OWN thread, never on the caller's (the caller being the asyncio motion loop
+    in production). Records the thread ident of every observe()."""
+    import threading
+    import time
+
+    class _ThreadRecordingLoc(_FakeLoc):
+        def __init__(self):
+            super().__init__()
+            self.observe_threads = []
+
+        def observe(self, obs):
+            self.observe_threads.append(threading.get_ident())
+            super().observe(obs)
+
+    s = _make_ir(0.9)
+    robot = _FakeRobot({s: _Pos(6.0, 0.0)})
+    robot.localization = _ThreadRecordingLoc()
+
+    fusion = ContinuousLocalizationFusion(robot, hz=200.0)
+    handle = fusion.start()
+    assert handle is fusion
+    try:
+        # wait for the loop to produce at least one observation
+        deadline = time.monotonic() + 2.0
+        while not robot.localization.observed and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert robot.localization.observed, "fusion thread never ticked"
+    finally:
+        fusion.stop()
+
+    # every observe ran off the main thread
+    main = threading.get_ident()
+    assert robot.localization.observe_threads
+    assert all(tid != main for tid in robot.localization.observe_threads)
+    # the dedicated thread is gone after stop()
+    assert fusion._thread is None
+
+
+def test_start_is_noop_without_sensors():
+    robot = _FakeRobot({})
+    fusion = ContinuousLocalizationFusion(robot)
+    assert fusion.start() is None
+    assert fusion._thread is None
+    # stop() is safe even when never started
+    fusion.stop()
+
+
+def test_stop_is_idempotent():
+    s = _make_ir(0.9)
+    robot = _FakeRobot({s: _Pos(6.0, 0.0)})
+    fusion = ContinuousLocalizationFusion(robot, hz=200.0)
+    fusion.start()
+    fusion.stop()
+    fusion.stop()  # second call must not raise
+    assert fusion._thread is None

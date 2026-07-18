@@ -35,6 +35,12 @@ class MarkHeadingReference(Step):
     The reference uses the raw IMU heading which is unaffected by
     odometry resets that occur during normal motion steps.
 
+    It also captures the current DMP orientation as the **flat tilt
+    reference** used by :func:`on_incline` / :func:`on_level` / :func:`over_ramp`.
+    Those ramp conditions measure tilt relative to it, so mark it on flat
+    ground (and after the DMP has converged — i.e. after some motion, not
+    dead-still right after power-on) before driving onto a ramp.
+
     Multiple calls overwrite the previous reference.
 
     Place this step right after ``wait_for_light()`` so the heading
@@ -180,6 +186,9 @@ class TurnToHeading(MotionStep):
         config.target_angle_rad = math.radians(relative_deg)
         config.has_angle_target = True
         config.speed_scale = self._speed
+        # Static friction feedforward from robot.yml `turn.kS`, emitted into the
+        # generated robot class (getattr: robots generated before the field existed).
+        config.kS = float(getattr(robot, "turn_kS", 0.0))
         self._motion = TurnMotion(
             robot.drive,
             robot.odometry,

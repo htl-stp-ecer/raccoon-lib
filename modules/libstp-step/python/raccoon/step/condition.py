@@ -24,7 +24,7 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from raccoon.log import debug
 
@@ -546,6 +546,271 @@ class after_degrees(StopCondition):
         return self._accumulated_rad >= self._target_rad
 
 
+# ── Quaternion helpers (w, x, y, z) ─────────────────────────────────────────
+# Small, allocation-light utilities for the tilt conditions below. Quaternions
+# are plain 4-tuples in (w, x, y, z) order to match IMU().get_quaternion().
+def _quat_norm(q: tuple[float, float, float, float]) -> float:
+    w, x, y, z = q
+    return math.sqrt(w * w + x * x + y * y + z * z)
+
+
+def _quat_normalize(q: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    n = _quat_norm(q)
+    if n < 1e-9:
+        return (1.0, 0.0, 0.0, 0.0)
+    return (q[0] / n, q[1] / n, q[2] / n, q[3] / n)
+
+
+def _quat_conj(q: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    w, x, y, z = q
+    return (w, -x, -y, -z)
+
+
+def _quat_mul(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    aw, ax, ay, az = a
+    bw, bx, by, bz = b
+    return (
+        aw * bw - ax * bx - ay * by - az * bz,
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+    )
+
+
+class _InclinationCondition(StopCondition):
+    """Shared base: monitor how far the robot is tilted off horizontal.
+
+    The tilt comes from the IMU's **DMP fused orientation quaternion**
+    (``IMU().get_quaternion()``). Its roll/pitch is gravity-referenced and
+    drift/vibration-immune, so — unlike the raw accelerometer — it is not
+    corrupted by the robot's own acceleration or chassis vibration while
+    driving. (The raw-accel approach used previously let a vibration spike
+    read as a 13° incline while the robot was still flat.)
+
+    The measurement is **relative to a flat reference orientation captured by
+    :func:`mark_heading_reference`** (which stores the current DMP quaternion
+    on the :class:`HeadingReferenceService`). Both ``on_incline`` and
+    ``on_level`` read that same shared reference, so ``on_level`` measures
+    "back to flat" against the true flat ground even though its own step only
+    arms once the robot is already tilted on the ramp. The reference cancels
+    the DMP's non-zero mounting/convergence baseline pitch and makes the tilt a
+    pure "how far off flat am I now". It is yaw-invariant: only pitch/roll
+    relative to the reference count::
+
+        q_rel = q_ref⁻¹ · q_now
+        tilt  = acos(1 − 2·(q_rel.x² + q_rel.y²))
+
+    Because the reference is shared, ``mark_heading_reference()`` must be called
+    on flat ground **and after the DMP has converged** (it needs some motion
+    after boot; a mark taken while the robot is dead-still right after power-on
+    can be ~18° off). Placing it shortly before the ramp — as M060 does — is
+    correct.
+
+    The scalar tilt is smoothed with an EMA (``smoothing``); the quaternion is
+    already clean, so light smoothing suffices.
+
+    Prerequisites:
+        (1) :func:`mark_heading_reference` called earlier on flat ground —
+        otherwise :meth:`start` raises ``RuntimeError``. (2) A working IMU whose
+        firmware publishes the DMP quaternion; an all-zero quaternion (a build
+        that does not stream it) also raises. The mock reports a flat identity
+        quaternion, so tests inject a fake IMU (``get_quaternion()``) plus a
+        reference via ``self._q_ref``.
+
+    Subclasses implement :meth:`_triggered` to decide, given the current
+    smoothed tilt in radians, whether to fire.
+    """
+
+    _MIN_QUAT_NORM: ClassVar[float] = 0.5
+
+    def __init__(self, degrees: float, *, up_axis: str = "z", smoothing: float = 0.2):
+        if not isinstance(degrees, int | float):
+            msg = f"degrees must be a number, got {type(degrees).__name__}"
+            raise TypeError(msg)
+        if not (0.0 <= degrees <= 90.0):
+            msg = f"degrees must be within 0–90, got {degrees}"
+            raise ValueError(msg)
+        # ``up_axis`` is accepted for backward compatibility but no longer has
+        # any effect: the quaternion-relative tilt is inherently yaw-invariant
+        # and picks up any pitch/roll off the flat reference regardless of
+        # mounting axis. Still validated so a typo fails loudly.
+        if up_axis not in ("x", "y", "z"):
+            msg = f"up_axis must be one of 'x', 'y', 'z', got {up_axis!r}"
+            raise ValueError(msg)
+        if not (0.0 < smoothing <= 1.0):
+            msg = f"smoothing must be within (0, 1], got {smoothing}"
+            raise ValueError(msg)
+        self._threshold_rad = math.radians(degrees)
+        self._alpha = smoothing
+        self._imu = None
+        self._q_ref: tuple[float, float, float, float] | None = None
+        self._tilt_ema_rad: float = 0.0
+
+    def start(self, robot: "GenericRobot") -> None:
+        # IMU handle is created lazily so tests can inject a fake IMU by
+        # pre-setting ``self._imu`` before start() is called.
+        if self._imu is None:
+            from raccoon.hal import IMU
+
+            self._imu = IMU()
+        # The flat reference is the orientation captured by
+        # mark_heading_reference() and shared via HeadingReferenceService, so
+        # on_incline and on_level agree on where "flat" is. Tests bypass the
+        # service by pre-setting ``self._q_ref``.
+        if self._q_ref is None:
+            from raccoon.robot.heading_reference import HeadingReferenceService
+
+            ref = robot.get_service(HeadingReferenceService).tilt_reference_quat()
+            if ref is None:
+                msg = (
+                    "on_incline/on_level need a flat tilt reference. Call "
+                    "mark_heading_reference() on flat ground (after the DMP has "
+                    "converged, i.e. after some motion) before the ramp. If the "
+                    "reference is present but all-zero, the firmware is not "
+                    "publishing raccoon/imu/quaternion."
+                )
+                raise RuntimeError(msg)
+            self._q_ref = ref
+        self._tilt_ema_rad = 0.0
+
+    def _read_quat(self) -> tuple[float, float, float, float]:
+        w, x, y, z = self._imu.get_quaternion()
+        return (float(w), float(x), float(y), float(z))
+
+    def _tilt_rad(self) -> float:
+        """Sample the quaternion, update the EMA, return the smoothed tilt.
+
+        Tilt is the angle between the reference "up" and the current "up",
+        i.e. the pitch/roll of ``q_now`` relative to ``q_ref`` (yaw removed).
+        """
+        q = self._read_quat()
+        if self._q_ref is None or _quat_norm(q) < self._MIN_QUAT_NORM:
+            # No reference yet, or a momentarily missing sample: hold the last
+            # smoothed value instead of injecting a NaN/0 spike.
+            return self._tilt_ema_rad
+        # q_rel = q_ref⁻¹ · q_now; for a unit quat the inverse is the conjugate.
+        rel = _quat_mul(_quat_conj(self._q_ref), _quat_normalize(q))
+        _, rx, ry, _ = rel
+        cos_tilt = 1.0 - 2.0 * (rx * rx + ry * ry)
+        tilt = math.acos(max(-1.0, min(1.0, cos_tilt)))
+        a = self._alpha
+        self._tilt_ema_rad = a * tilt + (1 - a) * self._tilt_ema_rad
+        return self._tilt_ema_rad
+
+    def _triggered(self, tilt_rad: float) -> bool:
+        raise NotImplementedError
+
+    def _state(self, robot: "GenericRobot") -> str:
+        if self._q_ref is None:
+            return "not started"
+        tilt = math.degrees(self._tilt_ema_rad)
+        return f"tilt={tilt:.1f}deg (threshold={math.degrees(self._threshold_rad):.1f})"
+
+    def _evaluate(self, robot: "GenericRobot") -> bool:
+        if self._q_ref is None:
+            return False
+        return self._triggered(self._tilt_rad())
+
+
+class on_incline(_InclinationCondition):
+    """Stop once the robot is tilted off horizontal by at least an angle.
+
+    Detects when the chassis pitches (or rolls) up onto a slope — e.g. the
+    front wheels climbing onto a ramp. The inclination is derived from the
+    IMU DMP orientation quaternion relative to the flat reference captured at
+    step start (see :class:`_InclinationCondition`); the condition fires as
+    soon as the smoothed tilt reaches ``min_deg``.
+
+    Pair it with :func:`on_level` to bracket a ramp: ``on_incline()`` marks
+    entering the slope, ``on_level()`` marks cresting back onto flat ground.
+    :func:`over_ramp` wires both together.
+
+    Prerequisites:
+        A working IMU. See :class:`_InclinationCondition` for tuning notes
+        on ``up_axis`` and ``smoothing``.
+
+    Args:
+        min_deg: Tilt threshold in degrees (0–90). Fires when the measured
+            inclination is at least this large. A 20° ramp reads ~20°, so a
+            threshold around 8–12° detects entry robustly while ignoring
+            floor roughness and driving jitter. Default 8.0.
+        up_axis: Deprecated / no effect (the quaternion tilt is yaw-invariant);
+            accepted only for backward compatibility.
+        smoothing: EMA factor in (0, 1] applied to the tilt angle to reject any
+            residual jitter (default 0.2).
+
+    Returns:
+        A :class:`StopCondition` that fires while tilted.
+
+    Example::
+
+        from raccoon.step.motion import drive_forward
+        from raccoon.step.condition import on_incline
+
+        # Drive until the robot noses up onto the ramp.
+        drive_forward(speed=0.4).until(on_incline(10))
+    """
+
+    def __init__(self, min_deg: float = 8.0, *, up_axis: str = "z", smoothing: float = 0.2):
+        super().__init__(min_deg, up_axis=up_axis, smoothing=smoothing)
+
+    def _label(self) -> str:
+        return f"on_incline(>= {math.degrees(self._threshold_rad):.1f}deg)"
+
+    def _triggered(self, tilt_rad: float) -> bool:
+        return tilt_rad >= self._threshold_rad
+
+
+class on_level(_InclinationCondition):
+    """Stop once the robot is back to (near-)horizontal.
+
+    The counterpart to :func:`on_incline`: it fires when the smoothed tilt
+    (from the IMU DMP orientation, relative to the flat start reference)
+    drops to at most ``max_deg`` — i.e. the robot has crested a ramp and
+    settled onto flat ground, or finished descending a slope.
+
+    Because it triggers on a *low* tilt, using it on its own from a flat
+    start would fire immediately. It is meant to run *after* the robot is
+    already tilted — typically as the second stage of a chain, e.g.
+    ``on_incline(10) + on_level(4)`` (which is what :func:`over_ramp`
+    builds).
+
+    Prerequisites:
+        A working IMU. See :class:`_InclinationCondition` for tuning notes.
+
+    Args:
+        max_deg: Tilt threshold in degrees (0–90). Fires when the measured
+            inclination is at most this large. Keep it a few degrees below
+            the matching ``on_incline`` threshold so transitional wobble
+            does not fire it early (hysteresis). Default 4.0.
+        up_axis: Deprecated / no effect (the quaternion tilt is yaw-invariant);
+            accepted only for backward compatibility.
+        smoothing: EMA factor in (0, 1] applied to the tilt angle (default 0.2).
+
+    Returns:
+        A :class:`StopCondition` that fires while (near) level.
+
+    Example::
+
+        from raccoon.step.condition import on_incline, on_level
+
+        # Climb onto the ramp, then keep going until back on the flat top.
+        drive_forward(speed=0.4).until(on_incline(10) + on_level(4))
+    """
+
+    def __init__(self, max_deg: float = 4.0, *, up_axis: str = "z", smoothing: float = 0.2):
+        super().__init__(max_deg, up_axis=up_axis, smoothing=smoothing)
+
+    def _label(self) -> str:
+        return f"on_level(<= {math.degrees(self._threshold_rad):.1f}deg)"
+
+    def _triggered(self, tilt_rad: float) -> bool:
+        return tilt_rad <= self._threshold_rad
+
+
 class on_digital(StopCondition):
     """Stop when a digital sensor reads a given state.
 
@@ -711,3 +976,43 @@ def over_line(
         white_threshold: Probability threshold for the white phase.
     """
     return on_black(sensor, black_threshold) + on_white(sensor, white_threshold)
+
+
+def over_ramp(
+    enter_deg: float = 8.0,
+    exit_deg: float = 4.0,
+    *,
+    up_axis: str = "z",
+    smoothing: float = 0.2,
+) -> StopCondition:
+    """Stop after crossing a ramp (tilt up, then back to level).
+
+    Equivalent to ``on_incline(enter_deg) + on_level(exit_deg)`` — waits for
+    the robot to tilt onto the slope, then waits for it to settle back onto
+    flat ground once it crests. Both stages read the DMP orientation relative
+    to the flat reference from :func:`mark_heading_reference` (which must have
+    been called on flat ground beforehand), so no odometry or line sensor is
+    needed. Use it to drive the whole way up and over a ramp with a single
+    stop condition::
+
+        drive_forward(speed=0.4).until(over_ramp())
+
+    To act on just one edge, use :func:`on_incline` (entering) or
+    :func:`on_level` (leaving) on their own.
+
+    Args:
+        enter_deg: Tilt at which the ramp is considered entered (default 8.0).
+        exit_deg: Tilt at or below which the robot is considered back on the
+            flat (default 4.0). Keep it below ``enter_deg`` for hysteresis.
+        up_axis: Deprecated / no effect (kept for backward compatibility).
+        smoothing: EMA factor in (0, 1] for both stages (default 0.2).
+
+    Returns:
+        A :class:`StopCondition` that fires once the ramp has been crossed.
+    """
+    if exit_deg > enter_deg:
+        msg = f"exit_deg ({exit_deg}) should be <= enter_deg ({enter_deg}) for hysteresis"
+        raise ValueError(msg)
+    return on_incline(enter_deg, up_axis=up_axis, smoothing=smoothing) + on_level(
+        exit_deg, up_axis=up_axis, smoothing=smoothing
+    )

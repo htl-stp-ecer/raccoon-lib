@@ -89,6 +89,10 @@ class HeadingReferenceService(RobotService):
         super().__init__(robot)
         self._reference_rad: float | None = None
         self._positive_direction: str = "left"
+        # Flat DMP orientation quaternion (w, x, y, z) captured at mark(), used
+        # by on_incline / on_level as the "zero tilt" baseline. None until a
+        # mark() runs; all-zero if the IMU has no quaternion to offer.
+        self._tilt_reference_quat: tuple[float, float, float, float] | None = None
 
     def mark(self, origin_offset_deg: float = 0.0, positive_direction: str = "left") -> None:
         """Capture the current absolute world heading as the reference.
@@ -107,11 +111,40 @@ class HeadingReferenceService(RobotService):
         raw = _world_heading(self.robot)
         self._reference_rad = raw + math.radians(origin_offset_deg)
         self._positive_direction = positive_direction
+        self._capture_tilt_reference()
         self.info(
             f"Heading reference set to {math.degrees(self._reference_rad):.1f} deg "
             f"(absolute={math.degrees(raw):.1f}°, offset={origin_offset_deg:.1f}°, "
             f"positive={positive_direction})"
         )
+
+    def _capture_tilt_reference(self) -> None:
+        """Snapshot the current DMP orientation as the flat tilt baseline.
+
+        Stored normalised so on_incline / on_level can measure tilt relative to
+        it. Best-effort: if the IMU exposes no (or an all-zero) quaternion, the
+        reference stays ``None`` and those conditions raise a clear error when
+        used. Must be called on flat ground and after the DMP has converged.
+        """
+        try:
+            from raccoon.hal import IMU
+
+            w, x, y, z = IMU().get_quaternion()
+        except Exception as exc:  # never let a mark() fail on this
+            self._tilt_reference_quat = None
+            self.debug(f"tilt reference not captured: {exc}")
+            return
+        norm = math.sqrt(w * w + x * x + y * y + z * z)
+        if norm < 0.5:
+            self._tilt_reference_quat = None
+            self.debug("tilt reference not captured: quaternion unavailable (all-zero)")
+            return
+        self._tilt_reference_quat = (w / norm, x / norm, y / norm, z / norm)
+        self.info(f"Tilt reference captured (quat w={w / norm:.3f})")
+
+    def tilt_reference_quat(self) -> tuple[float, float, float, float] | None:
+        """The flat DMP orientation quaternion from the last mark(), or None."""
+        return self._tilt_reference_quat
 
     @property
     def reference_deg(self) -> float | None:

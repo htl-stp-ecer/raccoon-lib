@@ -36,6 +36,7 @@ from .spline import (
 from .to_absolute import ToAbsolutePass
 from .absolute_heading import AbsoluteHeadingPass
 from .velocity_profile import run_velocity_profile, VelocityProfilePass
+from .resolve_heading import ResolveHeadingTurnsPass
 
 __all__ = [
     # Contract
@@ -73,6 +74,8 @@ __all__ = [
     # Time-optimal velocity profile
     "run_velocity_profile",
     "VelocityProfilePass",
+    # Compile-time heading-turn resolution
+    "ResolveHeadingTurnsPass",
     # Orchestrator
     "optimize_nodes",
 ]

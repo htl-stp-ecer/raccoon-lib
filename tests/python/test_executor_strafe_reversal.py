@@ -164,7 +164,7 @@ def test_non_last_transitions_when_motion_completes_short(_mod):
     assert ex._check_segment_reached(robot, seg, seg_origin) is False
     # With the motion reporting completion, the executor transitions:
     motion = _FakeMotion(reached=True)
-    assert ex._non_last_reached(robot, seg, seg_origin, motion) is True
+    assert ex._non_last_reached(robot, seg, seg_origin, None, motion) is True
 
 
 @requires_libstp
@@ -182,7 +182,7 @@ def test_non_last_waits_while_inflated_profile_cruises(_mod):
     seg_origin = 0.0
 
     motion = _FakeMotion(reached=False)  # inflated target never reached
-    assert ex._non_last_reached(robot, seg, seg_origin, motion) is False
+    assert ex._non_last_reached(robot, seg, seg_origin, None, motion) is False
 
 
 @requires_libstp
@@ -194,4 +194,116 @@ def test_non_last_transitions_on_manual_band_when_not_completed(_mod):
     seg_origin = 0.0
 
     motion = _FakeMotion(reached=False)
-    assert ex._non_last_reached(robot, seg, seg_origin, motion) is True
+    assert ex._non_last_reached(robot, seg, seg_origin, None, motion) is True
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 — progress axis heading is FROZEN at segment start (no lever-arm phantom)
+# ---------------------------------------------------------------------------
+#
+# The non-terminal completion check projects the ABSOLUTE world position onto
+# the travel axis and subtracts a captured origin. If the projection heading is
+# re-read live each tick, sub-degree yaw wobble gets multiplied by the distance
+# from the odometry origin into centimetres of phantom "travel" — which crosses
+# the target and ends the leg after ~1cm. Freezing the axis heading captured at
+# segment start makes the subtraction collapse to the true displacement.
+# Regression: M050 back-to-back strafes, run1_20260715-204012, ~7.6m from origin.
+
+
+@requires_libstp
+def test_progress_axis_heading_frozen_rejects_yaw_wobble_phantom(_mod):
+    ex, _Segment, LinearAxis = _mod
+    seg = _lin(_mod, LinearAxis.Lateral, -0.05)  # strafe left 5cm, hold-current
+
+    # Segment start: ~7.6m from the odom origin, world heading h0.
+    h0 = -3.7204
+    origin_robot = _FakeRobot(x=-7.176, y=2.520, heading=h0)
+    seg_axis_heading = ex._linear_axis_heading(origin_robot, seg)  # frozen == h0
+    seg_origin = ex._get_position_offset(origin_robot, seg, seg_axis_heading)
+
+    # One tick later: body moved ~0.6cm, but odom heading wobbled +0.6°.
+    wobbled = _FakeRobot(x=-7.181, y=2.524, heading=-3.7099)
+
+    # FIXED: frozen axis heading → true displacement (<1cm) → NOT reached.
+    assert ex._check_segment_reached(wobbled, seg, seg_origin, seg_axis_heading) is False
+
+    # REGRESSION GUARD: re-reading the live heading (axis_heading=None) fabricates
+    # the ~8cm phantom that crosses the 5cm target — the pre-fix behaviour.
+    assert ex._check_segment_reached(wobbled, seg, seg_origin) is True
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 — the reversal hard stop is PHYSICALLY realised (settle to rest)
+# ---------------------------------------------------------------------------
+#
+# hard_stop() only *commands* zero body velocity and returns while the robot is
+# still coasting. Starting the opposite-direction leg immediately re-arms the
+# motors mid-coast, so the stop never physically happens. Before a cold start we
+# hold zero and pump the drive controllers until the carried velocity is bled
+# off, so the new profile genuinely warm-starts from rest.
+
+
+class _FakeDrive:
+    """Counts the stop/update pumps a settle issues."""
+
+    def __init__(self):
+        self.hard_stops = 0
+        self.updates = 0
+
+    def hard_stop(self):
+        self.hard_stops += 1
+
+    def update(self, dt):
+        self.updates += 1
+
+
+class _FakeDriveRobot:
+    def __init__(self):
+        self.drive = _FakeDrive()
+
+
+@requires_libstp
+def test_settle_time_zero_when_at_rest(_mod):
+    ex, _Segment, _LinearAxis = _mod
+    assert ex._settle_time_s(0.0) == 0.0
+    assert ex._settle_time_s(0.0005) == 0.0  # below the at-rest epsilon
+
+
+@requires_libstp
+def test_settle_time_scales_and_clamps(_mod):
+    ex, _Segment, _LinearAxis = _mod
+    # Full-speed reversal saturates at the cap.
+    assert ex._settle_time_s(10.0) == ex._MAX_SETTLE_S
+    # A tiny non-zero carry still gets the floor (the brake must register).
+    assert ex._settle_time_s(0.01) == ex._MIN_SETTLE_S
+    # In between: monotonic in speed, inside the bounds.
+    mid = ex._settle_time_s(0.3)
+    assert ex._MIN_SETTLE_S <= mid <= ex._MAX_SETTLE_S
+    assert ex._settle_time_s(0.5) >= mid
+    # Sign-independent — a leftward coast settles the same as rightward.
+    assert ex._settle_time_s(-0.4) == ex._settle_time_s(0.4)
+
+
+@requires_libstp
+def test_settle_to_rest_noop_when_already_stopped(_mod):
+    import asyncio
+
+    ex, _Segment, _LinearAxis = _mod
+    robot = _FakeDriveRobot()
+    asyncio.run(ex._settle_to_rest(robot, hz=200.0, entry_vel=0.0))
+    # Nothing to bleed off ⇒ no braking pumps, no added latency.
+    assert robot.drive.hard_stops == 0
+    assert robot.drive.updates == 0
+
+
+@requires_libstp
+def test_settle_to_rest_pumps_brake_when_coasting(_mod):
+    import asyncio
+
+    ex, _Segment, _LinearAxis = _mod
+    robot = _FakeDriveRobot()
+    asyncio.run(ex._settle_to_rest(robot, hz=500.0, entry_vel=0.4))
+    # It actively held the stop and pumped the controllers at least once.
+    assert robot.drive.hard_stops >= 1
+    # hard_stop and update are pumped together on each active tick.
+    assert robot.drive.updates == robot.drive.hard_stops

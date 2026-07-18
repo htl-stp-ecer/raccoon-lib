@@ -63,34 +63,19 @@ namespace logging {
     /// Initialize the shared logger, sinks, and formatter. Safe to call more than once.
     void init();
 
-    /// Runtime log level filtering API.
-    void set_global_level(Level level);
-    void set_file_level(const std::string& filename, Level level);
-    void clear_file_level(const std::string& filename);
-    void set_package_level(const std::string& package, Level level);
-    void clear_package_level(const std::string& package);
-    void clear_filters();
-
-    /// Minimum level this run's log file captures, independent of the console
-    /// filters above. Defaults to Level::debug so the file is a complete debug
-    /// record even while the console stays at info. Set to Level::trace for the
-    /// most verbose file, or higher to quieten the file.
-    void set_file_log_level(Level level);
-    Level get_file_log_level();
-
-    /// Query whether a log level is enabled by the current runtime filter state.
+    /// Query whether logging is live (initialized and not shut down). There is no
+    /// runtime level filtering: what is compiled in (the FOUNDATION_LOG_ACTIVE_LEVEL
+    /// gate at the call site) is what the JSONL file captures. The console shows
+    /// warn/error only, enforced natively by the console sink's level.
     bool is_enabled(Level level);
 
-    /// Query whether a log level is enabled for a source file.
-    /// Accepts either a basename ("drive.cpp") or a full/repo-relative path.
-    /// Checks exact basename match first, then package prefix filters.
-    bool is_enabled_for(Level level, const char* file);
-
-    /// Log a preformatted message without source-file context.
+    /// Log a preformatted message without source-location context.
     void log(Level level, std::string_view message);
 
-    /// Log a preformatted message while annotating the originating source file.
-    void log(Level level, const char* source_file, std::string_view message);
+    /// Log a preformatted message while annotating the originating source location
+    /// (file / line / function). These land as discrete fields in the JSONL record.
+    void log(Level level, const char* source_file, int line, const char* func,
+             std::string_view message);
 
     // Format-aware logging helper that keeps formatting outside of the logging backend.
     template <typename... Args>
@@ -112,15 +97,15 @@ namespace logging {
         }
     }
 
-    // Format-aware logging helper with file-based filtering
+    // Format-aware logging helper that annotates the originating source location.
     template <typename... Args>
-    inline void logf_file(Level level, const char* filter_name, const char* display_path,
-                          std::string_view fmt_str, Args&&... args) {
-        if (!is_enabled_for(level, filter_name)) {
+    inline void logf_loc(Level level, const char* file, int line, const char* func,
+                         std::string_view fmt_str, Args&&... args) {
+        if (!is_enabled(level)) {
             return;
         }
         if constexpr (sizeof...(Args) == 0) {
-            log(level, display_path, fmt_str);
+            log(level, file, line, func, fmt_str);
         } else {
             auto args_tuple = std::make_tuple(std::forward<Args>(args)...);
             auto message = std::apply(
@@ -129,7 +114,7 @@ namespace logging {
                                         fmt::make_format_args(unpacked...));
                 },
                 args_tuple);
-            log(level, display_path, message);
+            log(level, file, line, func, message);
         }
     }
 
@@ -145,9 +130,9 @@ namespace logging {
 #define LIBSTP_LOG_CALL(level_enum, fmt, ...)                                                      \
     do {                                                                                           \
         if constexpr (::logging::detail::level_value(level_enum) >= FOUNDATION_LOG_ACTIVE_LEVEL) { \
-            ::logging::logf_file(level_enum, __FILE__,                                            \
-                                 __FILE__,                                                         \
-                                 fmt __VA_OPT__(, __VA_ARGS__));                                   \
+            ::logging::logf_loc(level_enum, __FILE__, __LINE__,                                     \
+                                static_cast<const char*>(__FUNCTION__),                             \
+                                fmt __VA_OPT__(, __VA_ARGS__));                                      \
         }                                                                                          \
     } while (0)
 

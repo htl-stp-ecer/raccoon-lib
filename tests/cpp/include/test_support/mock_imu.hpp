@@ -13,6 +13,7 @@ namespace libstp::test
         MOCK_METHOD(void, calibrate, (), (override));
         MOCK_METHOD(float, getHeading, (), (override));
         MOCK_METHOD(void, getLinearAcceleration, (float*), (override));
+        MOCK_METHOD(void, getQuaternion, (float*), (override));
         MOCK_METHOD(void, getIntegratedVelocity, (float*), (override));
         MOCK_METHOD(void, resetIntegratedVelocity, (), (override));
         MOCK_METHOD(bool, waitForReady, (int timeout_ms), (override));

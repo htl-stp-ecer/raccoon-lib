@@ -56,7 +56,7 @@ def drive_arc_left(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: fl
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel direction: positive drives the arc forwards, negative drives it backwards along the *same* circle (the arc centre stays on the same side, the robot reverses and its heading turns the opposite way). The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A DriveArcLeftBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -123,7 +123,7 @@ def drive_arc_right(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: f
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel direction: positive drives the arc forwards, negative drives it backwards along the *same* circle (the arc centre stays on the same side, the robot reverses and its heading turns the opposite way). The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A DriveArcRightBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -194,7 +194,7 @@ def strafe_arc_left(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: f
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel direction: positive drives the arc forwards, negative drives it backwards along the *same* circle (the arc centre stays on the same side, the robot reverses and its heading turns the opposite way). The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A StrafeArcLeftBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -268,7 +268,7 @@ def strafe_arc_right(radius_cm: float = _UNSET, degrees: float = _UNSET, speed: 
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel direction: positive drives the arc forwards, negative drives it backwards along the *same* circle (the arc centre stays on the same side, the robot reverses and its heading turns the opposite way). The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A StrafeArcRightBuilder (chainable via ``.radius_cm()``, ``.degrees()``, ``.speed()``, ``.on_anomaly()``, ``.skip_timing()``).

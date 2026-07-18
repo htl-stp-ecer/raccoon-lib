@@ -29,54 +29,6 @@ void init_logger(py::module_& m)
           "Flush and tear down the logger so that no further log calls touch spdlog");
     m.def("initialize_timer", &logging::initialize_timer, "Initialize the timer for elapsed time logging");
 
-    // Runtime log level filtering API
-    m.def("set_global_level", &logging::set_global_level, R"pbdoc(
-        Set the global runtime log level. Messages below this level are filtered.
-
-        Args:
-            level: The minimum log level to display (e.g., Level.trace, Level.debug, Level.info)
-    )pbdoc", py::arg("level"));
-
-    m.def("set_file_level", &logging::set_file_level, R"pbdoc(
-        Set the log level for a specific source file (by basename).
-
-        Args:
-            filename: The source file basename (e.g., "fused_odometry.cpp")
-            level: The minimum log level for this file
-    )pbdoc", py::arg("filename"), py::arg("level"));
-
-    m.def("clear_file_level", &logging::clear_file_level, R"pbdoc(
-        Remove the log level filter for a specific source file.
-
-        Args:
-            filename: The source file basename to clear
-    )pbdoc", py::arg("filename"));
-
-    m.def("clear_filters", &logging::clear_filters, R"pbdoc(
-        Clear all file-specific filters and reset global level to INFO.
-
-        Note: this resets the console filters only. The file log level
-        (set_file_log_level) is a separate policy and is left untouched.
-    )pbdoc");
-
-    m.def("set_file_log_level", &logging::set_file_log_level, R"pbdoc(
-        Set the minimum level captured by this run's log file.
-
-        Independent of the console filters: the file captures everything at or
-        above this level regardless of set_global_level / set_file_level /
-        set_package_level. Defaults to Level.trace so the file is a complete
-        forensic record (incl. per-tick TRACE telemetry) even while the console
-        stays at Level.info.
-
-        Args:
-            level: The minimum level for the file sink (e.g. Level.trace,
-                Level.debug, Level.info)
-    )pbdoc", py::arg("level"));
-
-    m.def("get_file_log_level", &logging::get_file_log_level, R"pbdoc(
-        Return the minimum level currently captured by this run's log file.
-    )pbdoc");
-
     m.def("debug", [](const char* message) { logging::core()->debug(message); }, R"pbdoc(
         Log a message with severity level debug
     )pbdoc", py::arg("message"));
@@ -93,38 +45,23 @@ void init_logger(py::module_& m)
         Log a message with severity level error
     )pbdoc", py::arg("message"));
 
-    m.def("set_package_level", &logging::set_package_level, R"pbdoc(
-        Set the log level for all source files whose path contains the given substring.
-
-        Package filters are checked after file-specific filters (set_file_level).
-        Use path fragments like "libstp-motion" (C++ module) or "libstp/step/motion"
-        (Python package) to match groups of files.
-
-        Args:
-            package: A substring to match against the full source file path
-            level: The minimum log level for matching files
-    )pbdoc", py::arg("package"), py::arg("level"));
-
-    m.def("clear_package_level", &logging::clear_package_level, R"pbdoc(
-        Remove the log level filter for a package substring.
-
-        Args:
-            package: The package substring to clear
-    )pbdoc", py::arg("package"));
-
-    m.def("_log_filtered", [](logging::Level level, const char* filepath, const char* message) {
-        if (logging::is_enabled_for(level, filepath)) {
-            logging::log(level, filepath, message);
-        }
+    m.def("_log", [](logging::Level level, const char* filepath, int line,
+                     const char* func, const char* message) {
+        logging::log(level, filepath, line, func, message);
     }, R"pbdoc(
-        Log a message with file-based filtering (internal use).
+        Log a message annotating its Python source location (internal use).
 
-        Checks is_enabled_for(level, filepath) before logging, supporting both
-        per-file filtering (set_file_level) and package filtering (set_package_level).
+        The file / line / func land as discrete fields in the JSONL record.
+        logging::log() drops the call if logging is not live; there is no runtime
+        level filtering (what is compiled in is captured).
 
         Args:
             level: The log level
-            filepath: The full source file path (used for filtering and display)
+            filepath: The Python source file path
+            line: The Python source line number
+            func: The originating function (qualified as "Class.method" when logged
+                through a ClassNameLogger)
             message: The log message
-    )pbdoc", py::arg("level"), py::arg("filepath"), py::arg("message"));
+    )pbdoc", py::arg("level"), py::arg("filepath"), py::arg("line"),
+       py::arg("func"), py::arg("message"));
 }

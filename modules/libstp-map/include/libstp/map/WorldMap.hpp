@@ -175,26 +175,11 @@ namespace libstp::map
         /// FtmapParseError for any schema violation.
         void loadFtmap(const std::filesystem::path& path);
 
-        /// Parse an in-memory ftmap payload. Used by tests and by Python
-        /// callers that already have the document as a string.
+        /// Parse an in-memory ftmap payload (flowchart-table-map v1 or v2).
+        /// Used by tests and by Python callers — including
+        /// ``TableMap.from_ftmap``, whose binding serializes the project's
+        /// ftmap dict to JSON and hands it here so there is one parser.
         void parseFtmap(const std::string& content);
-
-        /// Replace the contents from a parsed Python ftmap dict (the same
-        /// shape as TableMap.from_ftmap on the Python side). The C++
-        /// binding extracts plain types from py::dict before calling here
-        /// so this header stays pybind11-free.
-        struct FtmapDictEntry
-        {
-            std::string kind;     // "line" or "wall"
-            float startX{0.0f};
-            float startY{0.0f};
-            float endX{0.0f};
-            float endY{0.0f};
-            float widthCm{0.0f};
-        };
-        void loadFromDict(float tableWidthCm,
-                          float tableHeightCm,
-                          const std::vector<FtmapDictEntry>& entries);
 
         // ───────────── Programmatic construction ─────────────
         void setTable(float widthCm, float heightCm) noexcept

@@ -211,3 +211,81 @@ TEST(LocalizationRecorder, OverflowDropsOldestNoCrash) {
     EXPECT_NE(lines[0].find("\"kind\":\"header\""), std::string::npos);
     std::filesystem::remove(path);
 }
+
+TEST(LocalizationRecorder, RetentionKeepsOnlyNewestRecordings) {
+    // Simulate the on-device layout: <runsRoot>/<run_id>/localization.jsonl.
+    namespace fs = std::filesystem;
+    const fs::path runsRoot =
+        fs::temp_directory_path() / ("loc_retain_" + std::to_string(::getpid()));
+    std::error_code ec;
+    fs::remove_all(runsRoot, ec);
+    fs::create_directories(runsRoot, ec);
+
+    const auto now = fs::file_time_type::clock::now();
+    auto makeOldRecording = [&](const std::string& id, int ageMinutes) {
+        const fs::path dir = runsRoot / id;
+        fs::create_directories(dir, ec);
+        const fs::path f = dir / "localization.jsonl";
+        std::ofstream(f) << "{\"kind\":\"header\"}\n";
+        // Older than the recorder we create below (which lands at ~now).
+        fs::last_write_time(f, now - std::chrono::minutes(ageMinutes), ec);
+        return f;
+    };
+    // Five previous runs, run0 oldest … run4 newest.
+    const fs::path r0 = makeOldRecording("run0", 50);
+    const fs::path r1 = makeOldRecording("run1", 40);
+    const fs::path r2 = makeOldRecording("run2", 30);
+    const fs::path r3 = makeOldRecording("run3", 20);
+    const fs::path r4 = makeOldRecording("run4", 10);
+
+    // New run: constructing the recorder prunes to retain_recordings (3).
+    const fs::path newDir = runsRoot / "run_new";
+    fs::create_directories(newDir, ec);
+    RecorderConfig cfg;
+    cfg.path = (newDir / "localization.jsonl").string();
+    cfg.retain_recordings = 3;
+    {
+        LocalizationRecorder rec(cfg);
+        ASSERT_TRUE(rec.ok());
+    }
+
+    // Newest 3 survive (this run + run4 + run3); the three oldest are gone.
+    EXPECT_TRUE(fs::exists(newDir / "localization.jsonl"));
+    EXPECT_TRUE(fs::exists(r4));
+    EXPECT_TRUE(fs::exists(r3));
+    EXPECT_FALSE(fs::exists(r2));
+    EXPECT_FALSE(fs::exists(r1));
+    EXPECT_FALSE(fs::exists(r0));
+
+    fs::remove_all(runsRoot, ec);
+}
+
+TEST(LocalizationRecorder, RetentionDisabledKeepsAll) {
+    namespace fs = std::filesystem;
+    const fs::path runsRoot =
+        fs::temp_directory_path() / ("loc_retain_off_" + std::to_string(::getpid()));
+    std::error_code ec;
+    fs::remove_all(runsRoot, ec);
+    fs::create_directories(runsRoot, ec);
+    const auto now = fs::file_time_type::clock::now();
+    for (int i = 0; i < 4; ++i) {
+        const fs::path dir = runsRoot / ("run" + std::to_string(i));
+        fs::create_directories(dir, ec);
+        const fs::path f = dir / "localization.jsonl";
+        std::ofstream(f) << "{\"kind\":\"header\"}\n";
+        fs::last_write_time(f, now - std::chrono::minutes(10 * (4 - i)), ec);
+    }
+    const fs::path newDir = runsRoot / "run_new";
+    fs::create_directories(newDir, ec);
+    RecorderConfig cfg;
+    cfg.path = (newDir / "localization.jsonl").string();
+    cfg.retain_recordings = 0;  // disabled
+    { LocalizationRecorder rec(cfg); ASSERT_TRUE(rec.ok()); }
+
+    int count = 0;
+    for (const auto& e : fs::directory_iterator(runsRoot)) {
+        if (fs::exists(e.path() / "localization.jsonl")) ++count;
+    }
+    EXPECT_EQ(count, 5);  // 4 old + new, nothing pruned
+    fs::remove_all(runsRoot, ec);
+}

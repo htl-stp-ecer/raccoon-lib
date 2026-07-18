@@ -25,6 +25,7 @@ class ShakeServoBuilder(StepBuilder):
         self._duration = _UNSET
         self._angle_a = _UNSET
         self._angle_b = _UNSET
+        self._blocking = True
 
     def servo(self, value: Servo | ServoPreset):
         self._servo = value
@@ -42,6 +43,10 @@ class ShakeServoBuilder(StepBuilder):
         self._angle_b = value
         return self
 
+    def blocking(self, value: bool):
+        self._blocking = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._servo is not _UNSET:
@@ -52,6 +57,7 @@ class ShakeServoBuilder(StepBuilder):
             kwargs["angle_a"] = self._angle_a
         if self._angle_b is not _UNSET:
             kwargs["angle_b"] = self._angle_b
+        kwargs["blocking"] = self._blocking
         return ShakeServo(**kwargs)
 
 
@@ -61,6 +67,7 @@ def shake_servo(
     duration: float = _UNSET,
     angle_a: float = _UNSET,
     angle_b: float = _UNSET,
+    blocking: bool = True,
 ):
     """
     Oscillate a servo back and forth between two angles for a set time.
@@ -76,9 +83,10 @@ def shake_servo(
         duration: Total oscillation time in seconds. Must be >= 0.
         angle_a: First oscillation endpoint in degrees.
         angle_b: Second oscillation endpoint in degrees.
+        blocking: If ``True`` (default), oscillate for the full ``duration`` before completing. If ``False``, command the first endpoint and return immediately without running or awaiting the oscillation.
 
     Returns:
-        A ShakeServoBuilder (chainable via ``.servo()``, ``.duration()``, ``.angle_a()``, ``.angle_b()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A ShakeServoBuilder (chainable via ``.servo()``, ``.duration()``, ``.angle_a()``, ``.angle_b()``, ``.blocking()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -96,6 +104,7 @@ def shake_servo(
         b._angle_a = angle_a
     if angle_b is not _UNSET:
         b._angle_b = angle_b
+    b._blocking = blocking
     return b
 
 
@@ -108,6 +117,7 @@ class SlowServoBuilder(StepBuilder):
         self._angle = _UNSET
         self._speed = 60.0
         self._easing = Easing.EASE_IN_OUT
+        self._blocking = True
 
     def servo(self, value: Servo | ServoPreset):
         self._servo = value
@@ -125,6 +135,10 @@ class SlowServoBuilder(StepBuilder):
         self._easing = value
         return self
 
+    def blocking(self, value: bool):
+        self._blocking = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._servo is not _UNSET:
@@ -133,6 +147,7 @@ class SlowServoBuilder(StepBuilder):
             kwargs["angle"] = self._angle
         kwargs["speed"] = self._speed
         kwargs["easing"] = self._easing
+        kwargs["blocking"] = self._blocking
         return SlowServo(**kwargs)
 
 
@@ -142,6 +157,7 @@ def slow_servo(
     angle: float = _UNSET,
     speed: float = 60.0,
     easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+    blocking: bool = True,
 ):
     """
     Move a servo to an angle with smooth interpolated motion.
@@ -161,9 +177,10 @@ def slow_servo(
         angle: Target angle in degrees.
         speed: Movement speed in degrees per second. Must be positive. Defaults to 60.0 deg/s.
         easing: Interpolation curve. Pass an :class:`Easing` member or any callable ``(t: float) -> float`` mapping [0, 1] → [0, 1]. Defaults to ``Easing.EASE_IN_OUT``.
+        blocking: If ``True`` (default), wait for the move to finish before completing. If ``False``, hand the eased motion off to the firmware (for built-in easings) and return immediately without computing or awaiting the move duration.
 
     Returns:
-        A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.easing()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A SlowServoBuilder (chainable via ``.servo()``, ``.angle()``, ``.speed()``, ``.easing()``, ``.blocking()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -185,6 +202,7 @@ def slow_servo(
         b._angle = angle
     b._speed = speed
     b._easing = easing
+    b._blocking = blocking
     return b
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -7,6 +8,22 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+
+
+@contextlib.contextmanager
+def _no_sleep_allowed(steps_module):
+    """Patch the module's asyncio.sleep to fail if any wait is attempted."""
+
+    async def _fail(_delay):
+        msg = f"non-blocking step must not sleep (got asyncio.sleep({_delay}))"
+        raise AssertionError(msg)
+
+    original = steps_module.asyncio.sleep
+    steps_module.asyncio.sleep = _fail
+    try:
+        yield
+    finally:
+        steps_module.asyncio.sleep = original
 
 
 def libstp_available() -> bool:
@@ -94,3 +111,51 @@ class TestServoStepsOnlyCallTheirIntendedServoApis:
         servo.set_smooth_position.assert_not_called()
         servo.enable.assert_not_called()
         servo.disable.assert_not_called()
+
+
+@requires_libstp
+class TestNonBlockingServoStepsDoNotWait:
+    @pytest.mark.asyncio
+    async def test_set_servo_position_non_blocking_fires_without_sleeping(self):
+        steps = _load_workspace_servo_steps()
+        SetServoPosition = steps.SetServoPosition
+
+        # A large angular delta would normally imply a substantial wait; with
+        # blocking=False the step must fire the command and return immediately.
+        servo = _make_servo(position=0.0)
+        step = SetServoPosition(servo, 200.0, blocking=False)
+
+        with _no_sleep_allowed(steps):
+            await step._execute_step(robot=None)
+
+        servo.set_position.assert_called_once_with(200.0)
+        servo.get_position.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_slow_servo_non_blocking_hands_off_to_firmware_without_sleeping(self):
+        steps = _load_workspace_servo_steps()
+        Easing = steps.Easing
+        SlowServo = steps.SlowServo
+
+        servo = _make_servo(position=10.0)
+        step = SlowServo(servo, 160.0, speed=5.0, easing=Easing.EASE_IN_OUT, blocking=False)
+
+        with _no_sleep_allowed(steps):
+            await step._execute_step(robot=None)
+
+        servo.set_smooth_position.assert_called_once_with(160.0, 5.0, 3)
+        servo.set_position.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_shake_servo_non_blocking_sets_first_endpoint_without_sleeping(self):
+        steps = _load_workspace_servo_steps()
+        ShakeServo = steps.ShakeServo
+
+        servo = _make_servo(position=30.0)
+        step = ShakeServo(servo, duration=5.0, angle_a=40.0, angle_b=120.0, blocking=False)
+
+        with _no_sleep_allowed(steps):
+            await step._execute_step(robot=None)
+
+        servo.set_position.assert_called_once_with(40.0)
+        servo.set_smooth_position.assert_not_called()

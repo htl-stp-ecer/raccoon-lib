@@ -13,6 +13,7 @@ std::string pid_config_to_string(const libstp::foundation::PidConfig& cfg)
     std::ostringstream oss;
     oss << "PidConfig(kp=" << cfg.kp << ", ki=" << cfg.ki << ", kd=" << cfg.kd
         << ", integral_max=" << cfg.integral_max
+        << ", integral_min=" << cfg.integral_min
         << ", integral_deadband=" << cfg.integral_deadband
         << ", derivative_lpf_alpha=" << cfg.derivative_lpf_alpha
         << ", output_min=" << cfg.output_min
@@ -28,7 +29,8 @@ void init_pid(const py::module& m)
 
     py::class_<PidConfig>(m, "PidConfig")
         .def(py::init([](double kp, double ki, double kd,
-                         double integral_max, double integral_deadband,
+                         double integral_max, double integral_min,
+                         double integral_deadband,
                          double derivative_lpf_alpha,
                          double output_min, double output_max)
              {
@@ -37,6 +39,7 @@ void init_pid(const py::module& m)
                  cfg.ki = ki;
                  cfg.kd = kd;
                  cfg.integral_max = integral_max;
+                 cfg.integral_min = integral_min;
                  cfg.integral_deadband = integral_deadband;
                  cfg.derivative_lpf_alpha = derivative_lpf_alpha;
                  cfg.output_min = output_min;
@@ -47,6 +50,7 @@ void init_pid(const py::module& m)
              py::arg("ki") = 0.0,
              py::arg("kd") = 0.0,
              py::arg("integral_max") = 10.0,
+             py::arg("integral_min") = std::numeric_limits<double>::quiet_NaN(),
              py::arg("integral_deadband") = 0.01,
              py::arg("derivative_lpf_alpha") = 0.1,
              py::arg("output_min") = -10.0,
@@ -55,6 +59,7 @@ void init_pid(const py::module& m)
         .def_readwrite("ki", &PidConfig::ki)
         .def_readwrite("kd", &PidConfig::kd)
         .def_readwrite("integral_max", &PidConfig::integral_max)
+        .def_readwrite("integral_min", &PidConfig::integral_min)
         .def_readwrite("integral_deadband", &PidConfig::integral_deadband)
         .def_readwrite("derivative_lpf_alpha", &PidConfig::derivative_lpf_alpha)
         .def_readwrite("output_min", &PidConfig::output_min)

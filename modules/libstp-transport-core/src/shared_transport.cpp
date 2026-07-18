@@ -31,6 +31,33 @@ namespace
         std::memcpy(payload.data() + offset, channel.data(), static_cast<std::size_t>(channel_len));
         return payload;
     }
+
+    // Route the transport's reliable-delivery events into libstp's structured
+    // log (libstp.jsonl) instead of the transport's default cerr fallback. A
+    // WARN on first retransmit (a command was lost on first send but is being
+    // recovered) and an ERROR on give-up (genuinely unrecovered command loss).
+    void install_reliable_logging(raccoon::Transport& transport)
+    {
+        transport.setReliableEventHandler(
+            [](raccoon::Transport::ReliableEvent event, const std::string& channel,
+               std::int64_t key, std::uint32_t attempts)
+            {
+                if (event == raccoon::Transport::ReliableEvent::GaveUp)
+                {
+                    LIBSTP_LOG_ERROR(
+                        "reliable command LOST on {} (ts={}) — no ACK after {} "
+                        "retransmits; the subscriber never received it",
+                        channel, key, attempts);
+                }
+                else
+                {
+                    LIBSTP_LOG_WARN(
+                        "reliable command on {} (ts={}) not acked — "
+                        "retransmitting (attempt {})",
+                        channel, key, attempts);
+                }
+            });
+    }
 }
 
     namespace libstp::transport_core
@@ -65,6 +92,10 @@ namespace
         // want error broadcasts can call
         // SharedTransport::instance().subscribe_raw(...) themselves.
         ensure_started();
+        // ctor's initializer already created a live transport_, so
+        // ensure_started() skipped its (re-)create path — install the
+        // reliable-event logger here for the first transport instance.
+        install_reliable_logging(transport_);
     }
 
     SharedTransport::~SharedTransport()
@@ -81,6 +112,9 @@ namespace
         if (!transport_.is_alive())
         {
             transport_ = raccoon::Transport::create();
+            // Fresh backend handle — re-install the reliable-event logger so
+            // retransmit/give-up events keep reaching libstp.jsonl.
+            install_reliable_logging(transport_);
         }
         if (spin_daemon_.owns_thread())
         {

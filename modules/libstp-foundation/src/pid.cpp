@@ -28,7 +28,12 @@ namespace libstp::foundation
         if (std::abs(error) > cfg_.integral_deadband)
         {
             integral_ += error * dt;
-            integral_ = std::clamp(integral_, -cfg_.integral_max, cfg_.integral_max);
+            // NaN integral_min mirrors the upper clamp (symmetric anti-windup).
+            const double integral_lo =
+                std::isnan(cfg_.integral_min) ? -cfg_.integral_max : cfg_.integral_min;
+            // min/max instead of std::clamp so an inverted [lo, hi] band is
+            // well-defined (upper bound wins) rather than undefined behaviour.
+            integral_ = std::min(std::max(integral_, integral_lo), cfg_.integral_max);
         }
         const double i_term = cfg_.ki * integral_;
 

@@ -29,7 +29,9 @@ namespace libstp::motion
     static double computeMaxVelocity(const UnifiedMotionPidConfig& pid_config,
                                       double speed_scale)
     {
-        double scale = std::clamp(speed_scale, 0.01, 1.0);
+        // Magnitude only — the sign of speed_scale selects the travel direction
+        // and is handled by the reverse-mode heading logic, not this cap.
+        double scale = std::clamp(std::abs(speed_scale), 0.01, 1.0);
         return scale * pid_config.linear.max_velocity;
     }
 
@@ -108,6 +110,17 @@ namespace libstp::motion
             all_headings_ = {0.0, cfg_.final_heading_rad.value()};
             heading_arc_lengths_ = {0.0, spline_->totalLength()};
         }
+
+        // Resolve reverse traversal now that the drivetrain is known. A
+        // holonomic base holds its start heading and strafes the path backwards
+        // (genuine reverse, nose fixed); a differential base cannot hold heading
+        // through a curve, so it drives rear-first (nose opposite travel).
+        // Explicit per-waypoint / final headings always win — the caller is
+        // steering orientation directly, so we only honour the speed magnitude.
+        reverse_ = cfg_.speed_scale < 0.0;
+        const bool can_strafe = drive().getKinematics().supportsLateralMotion();
+        hold_heading_ = reverse_ && can_strafe && !use_explicit_headings_;
+        rear_first_ = reverse_ && !can_strafe && !use_explicit_headings_;
 
         drive().resetVelocityControllers();
         heading_pid_->reset();
@@ -326,10 +339,18 @@ namespace libstp::motion
     {
         if (!use_explicit_headings_)
         {
+            // Holonomic reverse: keep the start orientation (0 relative) so the
+            // robot strafes the path backwards without turning.
+            if (hold_heading_) return 0.0;
+
             // Tangent-following: heading = direction of tangent vector.
             // Negate y because spline uses right-positive lateral but heading is CCW-positive.
             Eigen::Vector2d t = spline_->tangentAt(s);
-            return std::atan2(-t.y(), t.x());
+            double h = std::atan2(-t.y(), t.x());
+            // Differential reverse: point the nose opposite the travel direction
+            // so the robot backs along the curve rear-first.
+            if (rear_first_) h += std::numbers::pi;
+            return h;
         }
 
         // Explicit heading interpolation vs arc-length

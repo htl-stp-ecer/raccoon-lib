@@ -27,6 +27,12 @@ libstp::hal::imu::IMU::~IMU()
 #endif
 }
 
+std::shared_ptr<libstp::hal::imu::IMU> libstp::hal::imu::IMU::instance()
+{
+    static std::shared_ptr<IMU> inst = std::make_shared<IMU>();
+    return inst;
+}
+
 void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
 {
 #ifdef SAFETY_CHECKS_ENABLED
@@ -35,7 +41,7 @@ void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
         throw std::runtime_error("IMU read failed! One or more output pointers are null.");
     }
 #endif
-    
+
     accel[0] = platform::mock::core::accelX();
     accel[1] = platform::mock::core::accelY();
     accel[2] = platform::mock::core::accelZ();
@@ -89,6 +95,20 @@ void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
     linear_accel[0] = 0.0f;
     linear_accel[1] = 0.0f;
     linear_accel[2] = 0.0f;
+}
+
+void libstp::hal::imu::IMU::getQuaternion(float* quat)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (quat == nullptr)
+    {
+        throw std::runtime_error("IMU getQuaternion failed! Output pointer is null.");
+    }
+#endif
+    quat[0] = platform::mock::core::quatW();
+    quat[1] = platform::mock::core::quatX();
+    quat[2] = platform::mock::core::quatY();
+    quat[3] = platform::mock::core::quatZ();
 }
 
 void libstp::hal::imu::IMU::getIntegratedVelocity(float* vel)

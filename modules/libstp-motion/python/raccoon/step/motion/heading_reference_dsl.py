@@ -52,6 +52,12 @@ def mark_heading_reference(
     The reference uses the raw IMU heading which is unaffected by
     odometry resets that occur during normal motion steps.
 
+    It also captures the current DMP orientation as the **flat tilt
+    reference** used by :func:`on_incline` / :func:`on_level` / :func:`over_ramp`.
+    Those ramp conditions measure tilt relative to it, so mark it on flat
+    ground (and after the DMP has converged — i.e. after some motion, not
+    dead-still right after power-on) before driving onto a ramp.
+
     Multiple calls overwrite the previous reference.
 
     Place this step right after ``wait_for_light()`` so the heading

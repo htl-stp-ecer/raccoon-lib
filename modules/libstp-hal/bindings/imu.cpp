@@ -13,8 +13,10 @@ void init_imu(const py::module& m)
     py::class_<libstp::hal::imu::IMU, std::shared_ptr<libstp::hal::imu::IMU>>(m, "IMU")
         .def(py::init([]()
         {
-            auto imu = std::make_shared<libstp::hal::imu::IMU>();
-            return imu;
+            // Return the shared process-wide handle instead of constructing a
+            // new object. IMU is stateless, so every Python `IMU()` maps to the
+            // same underlying instance, avoiding redundant-construction warnings.
+            return libstp::hal::imu::IMU::instance();
         }), "Create an IMU instance")
         .def("read", [](libstp::hal::imu::IMU& self)
         {
@@ -53,6 +55,12 @@ void init_imu(const py::module& m)
         self.getLinearAcceleration(linear_accel);
         return py::make_tuple(linear_accel[0], linear_accel[1], linear_accel[2]);
     }, "Get gravity-compensated linear acceleration as (x, y, z) in m/s²")
+    .def("get_quaternion", [](libstp::hal::imu::IMU& self)
+    {
+        float quat[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        self.getQuaternion(quat);
+        return py::make_tuple(quat[0], quat[1], quat[2], quat[3]);
+    }, "Get DMP fused orientation quaternion as (w, x, y, z); all-zero if no data")
     .def("get_integrated_velocity", [](libstp::hal::imu::IMU& self)
     {
         float vel[3] = {0.0f, 0.0f, 0.0f};

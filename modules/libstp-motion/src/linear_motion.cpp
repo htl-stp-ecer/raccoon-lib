@@ -98,6 +98,7 @@ namespace libstp::motion
 
         prev_primary_position_ = 0.0;
         filtered_velocity_ = 0.0;
+        prev_omega_cmd_ = 0.0;
         elapsed_time_ = 0.0;
         telemetry_.clear();
 
@@ -134,6 +135,7 @@ namespace libstp::motion
         // the caller's old odometry offset would double-count prior segments.
         position_offset_m_ = 0.0;
 
+        prev_omega_cmd_ = 0.0;
         prev_primary_position_ = 0.0;
         filtered_velocity_ = initial_velocity_mps;
         elapsed_time_ = 0.0;
@@ -238,6 +240,19 @@ namespace libstp::motion
             ? omega_cmd_raw
             : omega_cmd_raw * heading_scale_;
 
+        // Rate-limit the internal heading correction so an inherited heading
+        // error is corrected smoothly instead of snapping to a saturated omega
+        // in the first tick. The line-follow override manages its own omega.
+        double omega_cmd_out = omega_cmd_scaled;
+        if (!omega_override_.has_value() && ctx_.pid_config.heading_omega_slew > 0.0 && dt > 0.0)
+        {
+            const double max_step = ctx_.pid_config.heading_omega_slew * dt;
+            omega_cmd_out = std::clamp(omega_cmd_scaled,
+                                       prev_omega_cmd_ - max_step,
+                                       prev_omega_cmd_ + max_step);
+        }
+        prev_omega_cmd_ = omega_cmd_out;
+
         LIBSTP_LOG_TRACE("LinearMotion scaled cmd: primary={:.3f}, omega={:.3f} (speed_scale={:.3f}, heading_scale={:.3f})",
                     primary_cmd, omega_cmd_scaled, speed_scale_, heading_scale_);
 
@@ -251,7 +266,7 @@ namespace libstp::motion
         {
             cmd.vy = primary_cmd;
         }
-        cmd.wz = omega_cmd_scaled;
+        cmd.wz = omega_cmd_out;
 
         drive().setVelocity(cmd);
         const auto motor_cmd = drive().update(dt);

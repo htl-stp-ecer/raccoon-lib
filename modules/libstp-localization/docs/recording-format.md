@@ -132,12 +132,26 @@ the filter. Required behavior:
    `boost::lockfree::spsc_queue`). If the queue is full, drop the oldest
    frame and log a warning — file I/O backpressure must never stall the
    tick loop.
-3. **Writer thread.** A dedicated thread pops frames, serializes to JSON,
-   writes a line, optionally flushes. Joined on `stop_recording()` or in
-   the destructor.
+3. **Writer thread.** A dedicated thread pops frames and serializes to JSON.
+   Joined on `stop_recording()` or in the destructor.
 
 Hold the mutex for ≤ a memcpy of `particle_count × 32 B` ≈ 4 KB. That is
 the entire steady-state work the recorder adds to the tick loop.
+
+### Disk timing (`buffer_in_ram`, default true)
+
+The writer serializes into a chunked in-RAM buffer and does **no disk I/O
+during the run**. The whole recording is written to the file in one burst at
+`stop()`. This is deliberate: even though the writer thread never blocks the
+filter, streaming 100+ MB to the SD card mid-run saturates the card and starves
+*other* processes' real-time work — most visibly the STM32 SPI reader's control
+loop, which then misses servo/motor updates. A full ~2-minute run is well under
+200 MB and fits comfortably in Pi RAM.
+
+Set `buffer_in_ram = false` to fall back to streaming with a periodic
+`flush_every` disk flush. That is crash-resilient (a truncated run keeps the
+frames written so far) but reintroduces mid-run disk pressure — use it only when
+debugging a crash that loses the tail of a recording, never for competition runs.
 
 ## Recording Activation
 

@@ -199,11 +199,17 @@ def try_corner_arc(
 
     new_lin1 = _trim_toward_corner(lin1, cut_m)
     new_lin2 = _trim_toward_corner(lin2, cut_m)
+    # Travel direction of the corner comes from the legs. ArcMotion encodes
+    # reverse travel as a NEGATIVE speed_scale; ``arc_angle_rad`` in the IR
+    # stays the TRUE heading delta (= the turn's theta) so heading-integrating
+    # passes keep working — the time-mirror flip a reverse ArcMotion needs is
+    # applied by the motion factory, not here.
+    direction = 1.0 if lin1.sign >= 0 else -1.0
     arc_seg = Segment(
         kind="arc",
         radius_m=radius_m,
         arc_angle_rad=theta,
-        speed_scale=min(lin1.speed_scale, turn.speed_scale, lin2.speed_scale),
+        speed_scale=direction * min(lin1.speed_scale, turn.speed_scale, lin2.speed_scale),
         lateral=(lin1.axis == LinearAxis.Lateral),
         has_known_endpoint=True,
     )

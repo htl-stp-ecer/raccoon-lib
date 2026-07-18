@@ -117,7 +117,16 @@ namespace libstp::motion
         const double body_forward = dx * cos_h + dy * sin_h;
         const double body_lateral = -dx * sin_h + dy * cos_h;
 
-        const double current_heading = odometry().getAbsoluteHeading();
+        // Close the heading loop on getHeading() — the SAME frame as
+        // cfg_.target_heading_rad (set from getPose().heading, either via
+        // get_world_heading_rad or HeadingReferenceService) and as
+        // initial_heading_rad_ used for the cross-track projection above.
+        // Using getAbsoluteHeading() here mixed the raw-IMU frame (never reset)
+        // with the odometry/heading-reference frame, injecting a phantom yaw
+        // error equal to their offset whenever odometry had been reset/resynced
+        // — the controller then slammed the chassis into a spurious turn.
+        // LinearMotion/TurnMotion already close on getHeading(); match them.
+        const double current_heading = odometry().getHeading();
         // Heading error to absolute target.
         const double yaw_error = std::remainder(
             cfg_.target_heading_rad - current_heading,

@@ -7,6 +7,7 @@ from raccoon.motion import LinearAxis, LinearMotion, LinearMotionConfig
 from ..annotation import dsl_step
 from ..condition import StopCondition
 from ._motion_trim import MotionTrimService
+from ._warm_start import warm_start_linear
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -115,7 +116,9 @@ class _ConditionalDrive(MotionStep):
             robot.motion_pid_config,
             config,
         )
-        self._motion.start()
+        # Ramp the profile from the robot's current velocity (Ist), not from
+        # zero — at rest this cold-starts unchanged. See _warm_start.
+        warm_start_linear(self._motion, robot, self._axis)
 
         if self._until is not None:
             self._until.start(robot)

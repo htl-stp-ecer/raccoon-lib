@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 #: Calibration-store section holding the per-axis distance scale factors.
 TRIM_STORE_SECTION = "motion-trim"
 
@@ -24,6 +26,12 @@ class MotionTrimService:
             "forward": 1.0,
             "lateral": 1.0,
         }
+        # Re-entrant depth counter for :meth:`bypass_scaling`. While > 0, the
+        # trim scale is NOT applied to commanded distances (see
+        # :meth:`scale_distance_m`). Used to run calibration *measurement* drives
+        # raw, so the odom-vs-ground-truth ratio they produce does not depend on
+        # the currently-stored (possibly wrong) scale.
+        self._bypass_depth = 0
         self._store = self._make_store()
         self._load_stored_scales()
 
@@ -105,5 +113,30 @@ class MotionTrimService:
     def get_axis_scale(self, axis: str) -> float:
         return float(self._axis_scale.get(axis, 1.0))
 
+    @property
+    def scaling_bypassed(self) -> bool:
+        """True while inside a :meth:`bypass_scaling` context."""
+        return self._bypass_depth > 0
+
+    @contextmanager
+    def bypass_scaling(self):
+        """Run commanded distances *raw* (untrimmed) for the duration.
+
+        A calibration *measurement* drive must not be scaled by the
+        currently-stored factor: if it were, the physical distance travelled —
+        and therefore the ``odom / ground_truth`` ratio it yields — would depend
+        on the (possibly wrong) scale already in effect, so the measurement
+        could never correct a bad scale and would not be reproducible run to run.
+        Commanding e.g. 70 cm inside this context always targets 70 cm of
+        odometry, independent of the stored scale. Re-entrant.
+        """
+        self._bypass_depth += 1
+        try:
+            yield
+        finally:
+            self._bypass_depth -= 1
+
     def scale_distance_m(self, axis: str, distance_m: float) -> float:
+        if self._bypass_depth > 0:
+            return float(distance_m)
         return float(distance_m) * self.get_axis_scale(axis)

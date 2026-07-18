@@ -76,6 +76,14 @@ namespace libstp::motion
         double heading_saturation_error_rad{0.01};
         double heading_recovery_error_rad{0.005};
 
+        // Max rate-of-change of the internal heading-hold omega output in
+        // LinearMotion (rad/s^2). Prevents a motion that starts with an
+        // inherited heading error from snapping to a saturated omega in its
+        // first tick (visible yaw jerk + overshoot on high-inertia chassis).
+        // 0 disables the limit (legacy behaviour). Does not affect the line
+        // follow omega override, which runs its own controller.
+        double heading_omega_slew{0.0};
+
         // Per-axis motion profile constraints, typically populated from
         // characterization data such as characterize_drive().
         AxisConstraints linear{};

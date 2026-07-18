@@ -66,5 +66,19 @@ namespace libstp::kinematics::differential
 
         void setMaxWheelSpeed(double max_wheel_speed) { m_maxWheelSpeed = max_wheel_speed; }
         [[nodiscard]] double getMaxWheelSpeed() const { return m_maxWheelSpeed; }
+
+        /**
+         * Outer wheel on an arc travels at `omega * (radius + wheelbase/2)`;
+         * keep it inside the wheel-speed limit. `lateral` is irrelevant — a
+         * differential base has no strafe arcs.
+         */
+        [[nodiscard]] double maxYawRateForArcRadius(double radius_m,
+                                                    bool /*lateral*/) const override
+        {
+            if (m_maxWheelSpeed <= 0.0)
+                return std::numeric_limits<double>::infinity();
+            const double max_wheel_mps = m_maxWheelSpeed * m_wheelRadius;
+            return max_wheel_mps / (radius_m + 0.5 * m_wheelbase);
+        }
     };
 }

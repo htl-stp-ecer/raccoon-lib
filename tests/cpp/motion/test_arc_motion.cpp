@@ -183,6 +183,79 @@ TEST_F(ArcMotionCovTest, ClockwiseArcNegativeOmegaPositiveForward)
 }
 
 // ===================================================================
+// Reverse arc (negative speed_scale): back along the SAME circle
+// ===================================================================
+
+// A reverse LEFT arc drives backwards (vx<0) AND flips the heading goal so the
+// robot turns the opposite way (omega<0). vx and omega keep the same-sign
+// relationship as the forward arc, so the arc centre stays on the same side.
+TEST_F(ArcMotionCovTest, ReverseLeftArcBacksAlongSameCircle)
+{
+    ArcMotionConfig cfg;
+    cfg.radius_m = 0.25;
+    cfg.arc_angle_rad = kPi;     // left (CCW) arc geometry
+    cfg.speed_scale = -1.0;      // negative => reverse
+    auto arc = makeArc(cfg);
+
+    setAbsHeading(0.0);
+    arc.start();
+    arc.update(kDt);
+
+    const auto& s = arc.getTelemetry().back();
+    EXPECT_LT(s.target_angle_rad, 0.0);            // goal negated (turns CW now)
+    EXPECT_LT(s.cmd_wz_radps, 0.0);                // omega follows the negated goal
+    EXPECT_LT(s.cmd_vx_mps, 0.0);                  // and the robot moves backwards
+    EXPECT_NEAR(s.cmd_vx_mps, -std::abs(s.cmd_wz_radps) * 0.25, 1e-9);
+    EXPECT_GT(s.cmd_vx_mps * s.cmd_wz_radps, 0.0); // same-side ICR (same circle)
+}
+
+// A negative speed of magnitude 1 is NOT clamped to a near-stall crawl: the
+// derived reverse speed matches a forward speed=+1 arc, just mirrored in sign.
+TEST_F(ArcMotionCovTest, ReverseSpeedMagnitudeMatchesForward)
+{
+    ArcMotionConfig fwd;
+    fwd.radius_m = 0.25;
+    fwd.arc_angle_rad = kPi;
+    fwd.speed_scale = 1.0;
+    auto arc_fwd = makeArc(fwd);
+    setAbsHeading(0.0);
+    arc_fwd.start();
+    arc_fwd.update(kDt);
+
+    ArcMotionConfig rev = fwd;
+    rev.speed_scale = -1.0;
+    auto arc_rev = makeArc(rev);
+    setAbsHeading(0.0);
+    arc_rev.start();
+    arc_rev.update(kDt);
+
+    const double vx_fwd = arc_fwd.getTelemetry().back().cmd_vx_mps;
+    const double vx_rev = arc_rev.getTelemetry().back().cmd_vx_mps;
+    EXPECT_GT(vx_fwd, 0.0);
+    EXPECT_NEAR(vx_rev, -vx_fwd, 1e-9);            // same magnitude, opposite sign
+}
+
+// Reverse strafe (lateral) arc: vy flips together with the travel direction.
+TEST_F(ArcMotionCovTest, ReverseLateralArcFlipsVy)
+{
+    ArcMotionConfig cfg;
+    cfg.radius_m = 0.25;
+    cfg.arc_angle_rad = kPi;   // forward would strafe right (+vy)
+    cfg.lateral = true;
+    cfg.speed_scale = -1.0;    // reverse
+    auto arc = makeArc(cfg);
+
+    setAbsHeading(0.0);
+    arc.start();
+    arc.update(kDt);
+
+    const auto& s = arc.getTelemetry().back();
+    EXPECT_NEAR(s.cmd_vx_mps, 0.0, 1e-12);         // lateral => no vx
+    EXPECT_LT(s.cmd_vy_mps, 0.0);                  // reversed from the forward +vy
+    EXPECT_NEAR(s.cmd_vy_mps, -std::abs(s.cmd_wz_radps) * 0.25, 1e-9);
+}
+
+// ===================================================================
 // Lateral (strafe) arc: velocity goes to vy with sign from arc direction
 // ===================================================================
 

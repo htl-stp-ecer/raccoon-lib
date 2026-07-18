@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "hal/IIMU.hpp"
 
 namespace libstp::hal::imu
@@ -21,6 +23,18 @@ namespace libstp::hal::imu
 
         ~IMU() override;
 
+        /**
+         * Shared, process-wide IMU handle.
+         *
+         * `IMU` is stateless: every method delegates to the platform
+         * `TransportReader`/`MockPlatform` singleton. A single instance is
+         * therefore sufficient, and reusing it avoids the redundant
+         * construction that trips the `imuInstanceCreated` safety guard.
+         * All call sites (Python binding, odometry) should obtain the IMU
+         * through this accessor rather than constructing their own.
+         */
+        static std::shared_ptr<IMU> instance();
+
         /// Read accel, gyro, and magnetometer data into caller-owned buffers.
         void read(float* accel, float* gyro, float* magneto) override;
         /// Read angular velocity in radians per second into a caller-owned buffer.
@@ -31,6 +45,8 @@ namespace libstp::hal::imu
         [[nodiscard]] float getHeading() override;
         /// Read gravity-compensated acceleration into a caller-owned buffer.
         void getLinearAcceleration(float* linear_accel) override;
+        /// Read the DMP fused orientation quaternion [w,x,y,z] into a buffer.
+        void getQuaternion(float* quat) override;
         /// Read firmware-integrated velocity when the platform provides it.
         void getIntegratedVelocity(float* vel) override;
         /// Reset the platform's integrated-velocity accumulator if supported.

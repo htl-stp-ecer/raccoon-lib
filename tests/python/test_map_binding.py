@@ -59,6 +59,62 @@ def test_from_ftmap_rejects_bad_format() -> None:
         WorldMap.from_ftmap(bad)
 
 
+# A v2 map exactly as the generated ``robot.py`` embeds it (web-IDE toFtmapV2
+# shape: stacked ``layers[]`` + ramp ``transitions[]``). Regression guard for
+# the from_ftmap dict path, which previously hard-rejected ``version != 1``.
+V2_RAMP_FTMAP = {
+    "format": "flowchart-table-map",
+    "version": 2,
+    "table": {"widthCm": 200, "heightCm": 100},
+    "layers": [
+        {
+            "id": "ground",
+            "name": "Ground",
+            "zCm": 0,
+            "lines": [
+                {"kind": "line", "startX": 50, "startY": 0, "endX": 50, "endY": 100, "widthCm": 5},
+            ],
+        },
+        {
+            "id": "ramp",
+            "name": "Ramp",
+            "zCm": 12,
+            "lines": [
+                {
+                    "kind": "line",
+                    "startX": 150,
+                    "startY": 0,
+                    "endX": 150,
+                    "endY": 100,
+                    "widthCm": 5,
+                },
+            ],
+        },
+    ],
+    "transitions": [
+        {
+            "id": "seam",
+            "fromLayer": "ground",
+            "toLayer": "ramp",
+            "from": {"startX": 100, "startY": 0, "endX": 100, "endY": 100},
+            "to": {"startX": 100, "startY": 0, "endX": 100, "endY": 100},
+            "bidirectional": True,
+            "widthCm": 40,
+        },
+    ],
+    "activeLayerId": "ground",
+}
+
+
+def test_from_ftmap_parses_v2_layers_and_transitions() -> None:
+    m = WorldMap.from_ftmap(V2_RAMP_FTMAP)
+    assert m.table_width_cm == pytest.approx(200.0)
+    assert m.layer_count == 2
+    assert m.transition_count == 1
+    assert m.layer_index("ground") == 0
+    assert m.layer_index("ramp") == 1
+
+
 def test_parse_ftmap_string_matches_dict() -> None:
     # Same JSON document via parse_ftmap and from_ftmap must produce maps
     # that agree on the geometric queries — the silent-divergence trap the
