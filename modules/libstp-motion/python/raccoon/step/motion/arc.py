@@ -7,6 +7,7 @@ from raccoon.motion import ArcMotion, ArcMotionConfig
 
 from .. import dsl
 from ..annotation import dsl_step
+from ._warm_start import warm_start_angular
 from .motion_step import MotionStep
 
 if TYPE_CHECKING:
@@ -46,7 +47,9 @@ class Arc(MotionStep):
 
     def on_start(self, robot: "GenericRobot") -> None:
         self._motion = ArcMotion(robot.drive, robot.odometry, robot.motion_pid_config, self.config)
-        self._motion.start()
+        # Ramp from the current yaw rate (Ist), not zero — at rest this
+        # cold-starts unchanged. See _warm_start.
+        warm_start_angular(self._motion, robot)
 
     def on_update(self, robot: "GenericRobot", dt: float) -> bool:
         self._motion.update(dt)
@@ -64,7 +67,11 @@ class DriveArcLeft(Arc):
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel
+            direction: positive drives the arc forwards, negative drives it
+            backwards along the *same* circle (the arc centre stays on the same
+            side, the robot reverses and its heading turns the opposite way).
+            The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A DriveArcLeft step configured for a left (CCW) arc.
@@ -108,7 +115,11 @@ class DriveArcRight(Arc):
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel
+            direction: positive drives the arc forwards, negative drives it
+            backwards along the *same* circle (the arc centre stays on the same
+            side, the robot reverses and its heading turns the opposite way).
+            The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A DriveArcRight step configured for a right (CW) arc.
@@ -180,7 +191,11 @@ class StrafeArcLeft(Arc):
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel
+            direction: positive drives the arc forwards, negative drives it
+            backwards along the *same* circle (the arc centre stays on the same
+            side, the robot reverses and its heading turns the opposite way).
+            The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A StrafeArcLeft step configured for a left (CCW) strafe arc.
@@ -232,7 +247,11 @@ class StrafeArcRight(Arc):
     Args:
         radius_cm: Turning radius in centimeters (center of arc to robot center).
         degrees: Arc angle in degrees (how much the robot turns).
-        speed: Fraction of max speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of max speed (default 1.0). The sign sets the travel
+            direction: positive drives the arc forwards, negative drives it
+            backwards along the *same* circle (the arc centre stays on the same
+            side, the robot reverses and its heading turns the opposite way).
+            The magnitude is clamped to [0.01, 1.0].
 
     Returns:
         A StrafeArcRight step configured for a right (CW) strafe arc.

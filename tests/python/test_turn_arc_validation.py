@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib
 import math
+from typing import ClassVar
 
 import pytest
 
@@ -92,6 +93,13 @@ class FakeDrive:
 
     def set_velocity(self, v) -> None:
         self.velocity = v
+
+    def estimate_state(self):
+        # At-rest measured velocity → warm_start_* takes the cold-start path,
+        # so on_start still calls motion.start() (assertions below unchanged).
+        from types import SimpleNamespace
+
+        return SimpleNamespace(vx=0.0, vy=0.0, wz=0.0)
 
     def update(self, dt: float) -> None:
         self.update_dts.append(dt)
@@ -317,7 +325,7 @@ class TestTurnSignature:
 
 
 _ARC_PUBLIC = [DriveArcLeft, DriveArcRight, StrafeArcLeft, StrafeArcRight]
-_ARC_ALL = _ARC_PUBLIC + [DriveArc, StrafeArc]
+_ARC_ALL = [*_ARC_PUBLIC, DriveArc, StrafeArc]
 
 
 @pytest.mark.parametrize("cls", _ARC_ALL)
@@ -571,7 +579,7 @@ class TestArcLifecycle:
 
 
 class _RecordingArcMotion:
-    instances: list = []
+    instances: ClassVar[list] = []
 
     def __init__(self, drive, odometry, pid_config, config) -> None:
         self.drive = drive
@@ -688,7 +696,7 @@ class _FakeTurnConfig:
 class _RecordingTurnMotion:
     """Captures the ctor args (incl. the config) and records start()."""
 
-    instances: list = []
+    instances: ClassVar[list] = []
 
     def __init__(self, drive, odometry, pid_config, config) -> None:
         self.drive = drive

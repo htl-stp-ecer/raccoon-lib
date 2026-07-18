@@ -29,9 +29,17 @@ does not deplete particles.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
+import threading
 from typing import TYPE_CHECKING
+
+# Localization/foundation types are imported at MODULE LOAD (never lazily inside
+# tick()): the fusion loop runs on a dedicated background thread and must never
+# trigger the CPython import lock while the motion event loop is live. These are
+# compiled leaf modules (no back-reference to raccoon.robot), so importing them
+# here cannot create a cycle.
+from raccoon.foundation import Pose
+from raccoon.localization import Observation, SurfaceKind, SurfaceMeasurement
 
 if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
@@ -74,6 +82,10 @@ class ContinuousLocalizationFusion:
         self._anchor_sigma_rad = math.radians(anchor_sigma_deg)
         self._line_sigma_cm = float(line_sigma_cm)
         self._sensors = self._discover_line_sensors(robot)
+        # Dedicated background thread + its stop signal. Localization fusion runs
+        # ONLY here, never on the asyncio motion loop.
+        self._thread: "threading.Thread | None" = None
+        self._stop = threading.Event()
 
     @staticmethod
     def _discover_line_sensors(robot: "GenericRobot") -> list[tuple[object, "SensorPosition"]]:
@@ -105,9 +117,6 @@ class ContinuousLocalizationFusion:
     def _build_observation(self):
         """One Observation: weak pose anchor on the current estimate + a line
         SurfaceMeasurement per sensor (detected booleans read live)."""
-        from raccoon.foundation import Pose
-        from raccoon.localization import Observation, SurfaceKind, SurfaceMeasurement
-
         loc = self._robot.localization
         cur = loc.get_pose()
         pose = Pose()
@@ -146,30 +155,56 @@ class ContinuousLocalizationFusion:
         loc.observe(self._build_observation())
         return True
 
-    async def run(self) -> None:
-        """Fuse every ``period`` until cancelled. Never raises out of the loop —
-        a single bad read must not kill localization."""
-        if not self._sensors:
-            return
-        while True:
+    def _loop(self) -> None:
+        """Thread body: fuse every ``period`` until :meth:`stop`. Never raises —
+        a single bad read must not kill the thread, and nothing here may ever
+        surface on the motion event loop."""
+        while not self._stop.is_set():
             with contextlib.suppress(Exception):
                 self.tick()
-            await asyncio.sleep(self._period_s)
+            # Event.wait() is the sleep: it returns early the instant stop() is
+            # signalled, so shutdown never waits a full period.
+            self._stop.wait(self._period_s)
+
+    def start(self) -> "ContinuousLocalizationFusion | None":
+        """Spawn the dedicated daemon thread that runs the fusion loop.
+
+        Returns ``self`` (a stop-handle) or ``None`` if there are no line sensors
+        (nothing to fuse). The thread is a daemon so it can never block process
+        shutdown, and it is COMPLETELY off the asyncio motion loop — localization
+        work never runs on, and can never block, the hot path. Idempotent."""
+        if not self._sensors:
+            return None
+        if self._thread is not None and self._thread.is_alive():
+            return self
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._loop,
+            name="localization-fusion",
+            daemon=True,
+        )
+        self._thread.start()
+        return self
+
+    def stop(self, timeout: float = 1.0) -> None:
+        """Signal the loop to exit and join the thread. Safe to call more than
+        once and from any thread. Never raises."""
+        self._stop.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=timeout)
+        self._thread = None
 
 
-def start_localization_fusion(robot: "GenericRobot", **kwargs) -> "asyncio.Task[None] | None":
-    """Launch :class:`ContinuousLocalizationFusion` as a background task.
+def start_localization_fusion(
+    robot: "GenericRobot", **kwargs
+) -> "ContinuousLocalizationFusion | None":
+    """Launch :class:`ContinuousLocalizationFusion` on its own daemon thread.
 
-    Returns the task (so the caller can cancel it) or ``None`` if there is no
-    running event loop or the robot has no line sensors. Safe to call once at
-    robot start; idempotent guard is the caller's responsibility."""
+    Returns the running fusion (call ``.stop()`` to shut it down) or ``None`` if
+    the robot has no line sensors. All localization work — sensor reads, building
+    observations, ``observe()`` — happens on that thread, NEVER on the caller's
+    asyncio event loop, so it can never block the motion hot path. Safe to call
+    once at robot start; idempotent guard is the caller's responsibility."""
     fusion = ContinuousLocalizationFusion(robot, **kwargs)
-    if fusion.sensor_count == 0:
-        return None
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return None
-    task = loop.create_task(fusion.run())
-    task.add_done_callback(lambda t: t.cancelled() or t.exception())
-    return task
+    return fusion.start()

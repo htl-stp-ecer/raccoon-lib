@@ -90,6 +90,16 @@ TransportReader::TransportReader()
             imu_heading_received_ = true;
         }, retainedOpts);
 
+    // DMP 6-axis fused orientation quaternion — drift/vibration-immune tilt
+    // source for on_incline / on_level (retained so a late subscriber sees the
+    // last orientation on first poll).
+    transport_.subscribe<raccoon::quaternion_t>(
+        Channels::DMP_ORIENTATION,
+        [this](const raccoon::quaternion_t& msg) {
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            quaternion_cache_ = msg;
+        }, retainedOpts);
+
     // Subscribe to BEMF topics (indices 0-3) — retained
     for (int idx = 0; idx < 4; ++idx) {
         transport_.subscribe<raccoon::scalar_i32_t>(
@@ -298,6 +308,11 @@ raccoon::vector3f_t TransportReader::readMag() {
 raccoon::scalar_f_t TransportReader::readHeading() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     return heading_cache_;
+}
+
+raccoon::quaternion_t TransportReader::readQuaternion() {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    return quaternion_cache_;
 }
 
 raccoon::scalar_i32_t TransportReader::readBemf(const int idx) {

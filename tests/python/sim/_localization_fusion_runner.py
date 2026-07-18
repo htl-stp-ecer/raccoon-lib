@@ -23,8 +23,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import contextlib  # noqa: E402
-
 from _robot_builder import build_robot  # noqa: E402
 
 # Game-table map with the tape grid (7 lines); the sim_drivable copy drops walls.
@@ -95,17 +93,16 @@ async def _run(mode: str, out: dict) -> None:
         loc.observe(_pose_obs(START[0] / 100, START[1] / 100, START[2]))
         await asyncio.sleep(0.1)
 
-        task = None
+        fusion = None
         if mode == "fusion":
+            # Fusion runs on its own daemon thread — never on this event loop.
             fusion = ContinuousLocalizationFusion(robot, hz=60.0, anchor_sigma_cm=8.0)
-            task = asyncio.create_task(fusion.run())
+            fusion.start()
 
         await asyncio.wait_for(drive_forward(55).run_step(robot), timeout=25)
 
-        if task is not None:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+        if fusion is not None:
+            fusion.stop()
 
         gp = pose()
         odo = robot.odometry.get_pose()

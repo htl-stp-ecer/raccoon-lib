@@ -13,6 +13,8 @@ namespace
 {
     constexpr double kDegToRad = std::numbers::pi / 180.0;
     constexpr double kSettlingVelocity = 0.05; // rad/s - must be nearly stopped to declare done
+    constexpr double kStictionVelocity = 0.1;  // rad/s - above this the chassis is moving and
+                                               // kinetic friction applies; kS fades to zero
 }
 
 namespace libstp::motion
@@ -171,12 +173,19 @@ namespace libstp::motion
 
         double omega_cmd = pid_raw;
 
-        // Static friction compensation (smooth linear ramp inside tolerance zone)
+        // Static friction compensation (smooth linear ramp inside tolerance zone).
+        // Only meaningful in the stiction regime: fade to zero with the measured
+        // yaw rate — once the chassis actually rotates, kinetic friction is far
+        // lower and a sign(error)-based boost acts as a relay that, combined
+        // with chassis inertia, produces a sustained limit cycle in the settle
+        // phase of large turns.
         if (cfg_.kS > 0.0)
         {
             const double smooth_zone = ctx_.pid_config.angle_tolerance_rad;
             const double kS_scale = std::clamp(error / smooth_zone, -1.0, 1.0);
-            omega_cmd += cfg_.kS * kS_scale;
+            const double stiction_scale =
+                std::max(0.0, 1.0 - std::abs(filtered_velocity_) / kStictionVelocity);
+            omega_cmd += cfg_.kS * kS_scale * stiction_scale;
         }
 
         const double omega_unclamped = omega_cmd;

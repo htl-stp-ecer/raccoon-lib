@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <vector>
 
 #include <Eigen/Core>
@@ -25,6 +26,11 @@ namespace libstp::motion
         double kp{0.4};
         double ki{0.0};
         double kd{0.1};
+        // Anti-windup band for the correction PID's integrator (output units,
+        // i.e. the same normalised correction space the PID emits). NaN
+        // integral_min mirrors -integral_max (symmetric clamp).
+        double integral_max{1.0};
+        double integral_min{std::numeric_limits<double>::quiet_NaN()};
         LineFollowCorrectionMode correction_mode{LineFollowCorrectionMode::Angular};
         bool heading_hold{true};
         double correction_sign{1.0};

@@ -50,57 +50,16 @@ namespace
         return out;
     }
 
-    // Convert a Python ftmap dict (TableMap.from_ftmap shape) into the
-    // dict-entry vector the C++ side expects. Validates the format/version
-    // and raises FtmapParseError on mismatch — same surface as parseFtmap.
+    // Route a Python ftmap dict (TableMap.from_ftmap shape — the value
+    // raccoon.project.yml stores under robot.physical.table_map) through the
+    // canonical parser. Serializing to JSON lets parseFtmap own all the
+    // format/version/layer/transition/Y-flip logic, so v1 and v2 maps share
+    // exactly one code path and raise the same FtmapParseError on mismatch.
     void applyFtmapDict(WorldMap& map, const py::dict& data)
     {
-        auto get = [&](const char* key) -> py::object {
-            if (!data.contains(key))
-            {
-                throw FtmapParseError(std::string{"ftmap missing key: "} + key);
-            }
-            return data[key];
-        };
-
-        const auto fmt = get("format").cast<std::string>();
-        if (fmt != "flowchart-table-map")
-        {
-            throw FtmapParseError("ftmap format must be 'flowchart-table-map'");
-        }
-        const auto version = get("version").cast<int>();
-        if (version != 1)
-        {
-            throw FtmapParseError("ftmap version must be 1");
-        }
-
-        const auto tableObj = get("table");
-        if (!py::isinstance<py::dict>(tableObj))
-        {
-            throw FtmapParseError("ftmap.table must be an object");
-        }
-        const auto table = tableObj.cast<py::dict>();
-        const float widthCm = table["widthCm"].cast<float>();
-        const float heightCm = table["heightCm"].cast<float>();
-
-        std::vector<WorldMap::FtmapDictEntry> entries;
-        if (data.contains("lines"))
-        {
-            for (auto item : data["lines"].cast<py::list>())
-            {
-                auto entry = item.cast<py::dict>();
-                WorldMap::FtmapDictEntry e{};
-                e.kind = entry.contains("kind") ? entry["kind"].cast<std::string>() : "line";
-                e.startX = entry["startX"].cast<float>();
-                e.startY = entry["startY"].cast<float>();
-                e.endX = entry["endX"].cast<float>();
-                e.endY = entry["endY"].cast<float>();
-                e.widthCm = entry["widthCm"].cast<float>();
-                entries.push_back(std::move(e));
-            }
-        }
-
-        map.loadFromDict(widthCm, heightCm, entries);
+        const auto json =
+            py::module_::import("json").attr("dumps")(data).cast<std::string>();
+        map.parseFtmap(json);
     }
 }
 

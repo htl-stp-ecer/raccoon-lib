@@ -11,11 +11,13 @@ namespace platform::wombat::core
     /**
      * Opt-in send-side command tracer.
      *
-     * When the environment variable ``RACCOON_CMD_TRACE`` names a writable path,
-     * every motor/servo/chassis command published through :class:`TransportWriter`
-     * is appended to that file as one JSON object per line (JSONL). Otherwise the
-     * tracer is inert — :func:`enabled` is a single bool read and ``record`` is
-     * never called by the writer.
+     * When the environment variable ``RACCOON_CMD_TRACE`` is truthy
+     * (``1``/``true``/``yes``/``on``), every motor/servo/chassis command
+     * published through :class:`TransportWriter` is appended as one JSON object
+     * per line (JSONL) to ``cmd_trace.robot.jsonl`` inside the run's artifact
+     * directory (``LIBSTP_LOG_DIR``), so ``raccoon logs`` downloads it with the
+     * rest of the bundle. Otherwise the tracer is inert — :func:`enabled` is a
+     * single bool read and ``record`` is never called by the writer.
      *
      * The point is *ordering*: a process-global monotonic ``seq`` is assigned to
      * every command across *all* channels, so the true intended send order (e.g.

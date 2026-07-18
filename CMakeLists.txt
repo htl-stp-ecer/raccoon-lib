@@ -44,14 +44,14 @@ if(LIBSTP_TRACE_LOGGING)
   message(STATUS "Enabling trace logging in foundation macros (level: TRACE)")
   message(
     STATUS
-      "  -> All log statements compiled in; use runtime filtering to control output"
+      "  -> All log statements compiled in; every record is captured in the JSONL log"
   )
   add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=0)
 else()
   message(STATUS "Setting logging compile level to DEBUG")
   message(
     STATUS
-      "  -> DEBUG and above compiled in so the rotating log file captures debug; "
+      "  -> DEBUG and above compiled in so the per-run JSONL log captures debug; "
       "TRACE sites stay out unless LIBSTP_TRACE_LOGGING is set")
   add_compile_definitions(FOUNDATION_LOG_ACTIVE_LEVEL=1)
 endif()

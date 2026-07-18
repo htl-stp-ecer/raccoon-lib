@@ -27,6 +27,12 @@ libstp::hal::imu::IMU::~IMU()
 #endif
 }
 
+std::shared_ptr<libstp::hal::imu::IMU> libstp::hal::imu::IMU::instance()
+{
+    static std::shared_ptr<IMU> inst = std::make_shared<IMU>();
+    return inst;
+}
+
 void libstp::hal::imu::IMU::read(float* accel, float* gyro, float* magneto)
 {
 #ifdef SAFETY_CHECKS_ENABLED
@@ -93,6 +99,22 @@ void libstp::hal::imu::IMU::getLinearAcceleration(float* linear_accel)
     linear_accel[0] = linearAccelValue.x;
     linear_accel[1] = linearAccelValue.y;
     linear_accel[2] = linearAccelValue.z;
+}
+
+void libstp::hal::imu::IMU::getQuaternion(float* quat)
+{
+#ifdef SAFETY_CHECKS_ENABLED
+    if (quat == nullptr)
+    {
+        throw std::runtime_error("IMU getQuaternion failed! Output pointer is null.");
+    }
+#endif
+
+    const raccoon::quaternion_t q = platform::wombat::core::TransportReader::instance().readQuaternion();
+    quat[0] = q.w;
+    quat[1] = q.x;
+    quat[2] = q.y;
+    quat[3] = q.z;
 }
 
 void libstp::hal::imu::IMU::getIntegratedVelocity(float* vel)

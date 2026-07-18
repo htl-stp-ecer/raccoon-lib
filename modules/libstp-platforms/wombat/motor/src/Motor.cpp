@@ -115,9 +115,11 @@ void libstp::hal::motor::Motor::resetPositionCounter()
 
 void libstp::hal::motor::Motor::disableAll()
 {
-    // First, set the STM32 shutdown flag - this is the safest way to ensure
-    // all motors and servos stop at the firmware level, even if we crash
-    // before completing the individual motor stop commands.
+    // First, set the STM32 motor shutdown flag - this is the safest way to
+    // ensure all motors stop at the firmware level, even if we crash before
+    // completing the individual motor stop commands. This does NOT disable the
+    // servos: they keep holding their last position on shutdown. Releasing the
+    // servos is an explicit user action (fully_disable_servos()).
     platform::wombat::core::TransportWriter::instance().setShutdown(true);
 
     // Also send individual brake commands for redundancy

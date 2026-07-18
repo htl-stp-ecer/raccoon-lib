@@ -80,6 +80,22 @@ namespace libstp::kinematics::mecanum
         void setMaxWheelSpeed(double max_wheel_speed) { m_maxWheelSpeed = max_wheel_speed; }
         [[nodiscard]] double getMaxWheelSpeed() const { return m_maxWheelSpeed; }
 
+        /**
+         * Mecanum wheel speed is `(|vx| + |vy| + |wz| * (l + w)/2) / r`; on an
+         * arc (`v = omega * radius`, one translational axis) the fastest wheel
+         * runs at `omega * (radius + (l + w)/2) / r` — cap omega so it stays
+         * inside the wheel-speed limit. Same lever for drive and strafe arcs.
+         */
+        [[nodiscard]] double maxYawRateForArcRadius(double radius_m,
+                                                    bool /*lateral*/) const override
+        {
+            if (m_maxWheelSpeed <= 0.0)
+                return std::numeric_limits<double>::infinity();
+            const double lever = 0.5 * (m_wheelbase + m_trackWidth);
+            const double max_wheel_mps = m_maxWheelSpeed * m_wheelRadius;
+            return max_wheel_mps / (radius_m + lever);
+        }
+
         /** Return the underlying motors in front-left, front-right, back-left, back-right order. */
         [[nodiscard]] std::vector<hal::motor::IMotor*> getMotors() override;
 

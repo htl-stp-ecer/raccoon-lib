@@ -41,6 +41,8 @@ class ConfigurableLineFollowBuilder(StepBuilder):
         self._kp = 0.4
         self._ki = 0.0
         self._kd = 0.1
+        self._integral_max = 1.0
+        self._integral_min: float | None = None
         self._until: StopCondition | None = None
         self._correction = FollowCorrection.ANGULAR
         self._heading_hold = True
@@ -118,10 +120,28 @@ class ConfigurableLineFollowBuilder(StepBuilder):
         self._distance_cm = value
         return self
 
-    def pid(self, kp: float, ki: float = 0.0, kd: float = 0.1) -> ConfigurableLineFollowBuilder:
+    def pid(
+        self,
+        kp: float,
+        ki: float = 0.0,
+        kd: float = 0.1,
+        integral_max: float = 1.0,
+        integral_min: float | None = None,
+    ) -> ConfigurableLineFollowBuilder:
+        """Set the correction PID gains and its integral anti-windup band.
+
+        ``integral_max``/``integral_min`` clamp the PID's accumulated integral
+        (in the normalised correction space the PID emits, roughly [-1, 1]).
+        Leave ``integral_min`` as ``None`` to mirror ``-integral_max`` (the
+        classic symmetric clamp); set both explicitly for an asymmetric band
+        (e.g. ``integral_min=0.0`` for a one-sided integrator). Only matters
+        when ``ki`` is non-zero.
+        """
         self._kp = kp
         self._ki = ki
         self._kd = kd
+        self._integral_max = integral_max
+        self._integral_min = integral_min
         return self
 
     def until(self, value: StopCondition | None) -> ConfigurableLineFollowBuilder:
@@ -167,6 +187,8 @@ class ConfigurableLineFollowBuilder(StepBuilder):
             "kp": self._kp,
             "ki": self._ki,
             "kd": self._kd,
+            "integral_max": self._integral_max,
+            "integral_min": self._integral_min,
             "lateral_correction": lateral_correction,
             "forward_correction": forward_correction,
             "heading_hold": self._heading_hold,

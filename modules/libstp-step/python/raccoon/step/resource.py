@@ -175,6 +175,14 @@ class ResourceManager:
                     return (res, hit[1])
         return None
 
+    def is_held(self, resource: str) -> bool:
+        """True when any step currently holds *resource* (e.g. ``"drive"``).
+
+        Read-only probe for observers (drift watchdog, diagnostics); safe to
+        call from other threads — worst case is a one-tick-stale answer.
+        """
+        return resource in self._held
+
     def acquire(self, resources: frozenset[str], holder: str) -> None:
         """Claim *resources* for *holder*.  Raises on cross-task conflict."""
         task = self._current_task()

@@ -49,7 +49,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 # Sample currently being filled in, so the phase wrappers (execute/db/acquire)
 # can attribute their time to the right step. A ContextVar (not a plain global)
@@ -132,7 +132,18 @@ class StepProfiler:
             the report / trace. Default 5 ms.
         print_report: Print the text report on exit (default True).
         top: How many step signatures to show in the per-signature table.
+        defer_trace: Buffer the Chrome-trace write in RAM instead of writing it
+            to disk when the profiled block exits, and flush all buffered traces
+            in one go via :meth:`flush_traces` after the run. Default True — a
+            per-mission profiler otherwise json.dumps a multi-MB trace to the
+            Pi's SD card *between missions*, standing the robot still (~1.8 s for
+            the setup trace) and perturbing the very run it measures.
     """
+
+    # Traces buffered by every deferred profiler in this process. Class-level so
+    # the per-mission profilers (each a short-lived instance) share one queue
+    # that the run-completion path drains with :meth:`flush_traces`.
+    _deferred_traces: ClassVar["list[tuple[str, StepProfiler]]"] = []
 
     def __init__(
         self,
@@ -146,6 +157,7 @@ class StepProfiler:
         hal: bool = True,
         sleep_track: bool = True,
         hal_span_ms: float = 1.0,
+        defer_trace: bool = True,
     ) -> None:
         self.trace_path = trace_path
         self.loop_lag = loop_lag
@@ -156,6 +168,7 @@ class StepProfiler:
         self.hal = hal
         self.sleep_track = sleep_track
         self.hal_span_ms = hal_span_ms
+        self.defer_trace = defer_trace
 
         self.samples: list[StepSample] = []
         self.lag_spikes: list[LagSpike] = []
@@ -218,6 +231,12 @@ class StepProfiler:
                                               (ms) get an individual trace span
                                               (the per-method totals always
                                               accumulate). Default 1 ms.
+        ``RACCOON_PROFILE_DEFER``             ``0``/``off`` to write each trace
+                                              inline when its block exits instead
+                                              of buffering it for a single
+                                              post-run flush (default on — keeps
+                                              the multi-MB json.dump off the
+                                              between-missions hot path).
         ====================================  ====================================
 
         Example::
@@ -263,6 +282,7 @@ class StepProfiler:
             hal=_flag("RACCOON_PROFILE_HAL", True),
             sleep_track=_flag("RACCOON_PROFILE_SLEEP", True),
             hal_span_ms=_num("RACCOON_PROFILE_HAL_SPAN_MS", 1.0),
+            defer_trace=_flag("RACCOON_PROFILE_DEFER", True),
         )
 
     # -- relative clock -------------------------------------------------
@@ -317,11 +337,37 @@ class StepProfiler:
         self._lag_running = False
         self._remove_patches()
         if self.trace_path:
-            self._write_trace(self.trace_path)
+            if self.defer_trace:
+                # Buffer for a single post-run flush so the multi-MB json.dump
+                # never lands on the SD card between two missions. The samples
+                # are already in RAM on ``self``; keeping the instance alive
+                # defers *all* trace work (build + serialize + write) to idle.
+                StepProfiler._deferred_traces.append((self.trace_path, self))
+            else:
+                self._write_trace(self.trace_path)
         if self.print_report:
             # Explicit stdout write (not print) so the diagnostics report is
             # config-agnostic w.r.t. flake8-print/T20 lint rules.
             sys.stdout.write(self.format_report() + "\n")
+
+    @classmethod
+    def flush_traces(cls) -> list[str]:
+        """Write every buffered Chrome trace to disk; return the paths written.
+
+        Call once after the run (robot idle) to drain the traces buffered by
+        deferred per-mission profilers. Failures on one trace never block the
+        others. Idempotent: a second call finds an empty queue.
+        """
+        pending = cls._deferred_traces
+        cls._deferred_traces = []
+        written: list[str] = []
+        for path, prof in pending:
+            try:
+                prof._write_trace(path)
+                written.append(path)
+            except Exception:  # a diagnostic write must never crash shutdown
+                pass
+        return written
 
     # -- patching -------------------------------------------------------
     def _patch(self, owner: Any, attr: str, factory: Callable[[Any], Any]) -> None:

@@ -4,6 +4,13 @@ from raccoon.log import debug, error, info, trace, warn
 
 
 class ClassNameLogger:
+    """Logging mixin that tags each record with the instance's runtime class.
+
+    The class name is carried as the ``_cls`` hook rather than prefixed onto the
+    message, so it lands in the JSONL ``func`` field as ``"ClassName.method"``
+    instead of cluttering ``msg``.
+    """
+
     def debug(self, msg: str) -> None:
         """
         Print a debug message.
@@ -11,7 +18,7 @@ class ClassNameLogger:
         Args:
             msg: The message to print
         """
-        debug(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
+        debug(msg, _stacklevel=2, _cls=self.__class__.__name__)
 
     def info(self, msg: str) -> None:
         """
@@ -20,7 +27,7 @@ class ClassNameLogger:
         Args:
             msg: The message to print
         """
-        info(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
+        info(msg, _stacklevel=2, _cls=self.__class__.__name__)
 
     def warn(self, msg: str) -> None:
         """
@@ -29,7 +36,7 @@ class ClassNameLogger:
         Args:
             msg: The message to print
         """
-        warn(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
+        warn(msg, _stacklevel=2, _cls=self.__class__.__name__)
 
     def error(self, msg: str) -> None:
         """
@@ -38,7 +45,7 @@ class ClassNameLogger:
         Args:
             msg: The message to print
         """
-        error(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
+        error(msg, _stacklevel=2, _cls=self.__class__.__name__)
 
     def trace(self, msg: str) -> None:
         """
@@ -47,4 +54,4 @@ class ClassNameLogger:
         Args:
             msg: The message to print
         """
-        trace(f"[{self.__class__.__name__}]: {msg}", _stacklevel=2)
+        trace(msg, _stacklevel=2, _cls=self.__class__.__name__)

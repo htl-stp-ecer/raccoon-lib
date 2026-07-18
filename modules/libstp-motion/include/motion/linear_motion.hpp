@@ -162,6 +162,9 @@ namespace libstp::motion
         // External omega override (replaces heading PID when set)
         std::optional<double> omega_override_{};
 
+        // Slew-limit state for the internal heading-hold omega output
+        double prev_omega_cmd_{0.0};
+
         // Telemetry
         double elapsed_time_{0.0};
         // At 100 Hz update rate, 30 s of motion = 3000 samples × ~80 bytes

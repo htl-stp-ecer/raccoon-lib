@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 #include "foundation/types.hpp"
@@ -36,6 +37,25 @@ namespace libstp::kinematics
 
         /** Return the number of drive wheels modeled by this instance. */
         [[nodiscard]] virtual std::size_t wheelCount() const = 0;
+
+        /**
+         * Max sustainable |yaw rate| (rad/s) while tracing an arc of
+         * `radius_m`, such that EVERY wheel stays inside the configured max
+         * wheel speed. On an arc the outer wheel travels faster than the
+         * chassis centre (`omega * (radius + lever)`), so capping only the
+         * centre speed over-commands the outer wheel — the drivetrain
+         * saturates, the commanded differential collapses and the arc turns
+         * far slower than commanded.
+         *
+         * `lateral` selects the strafe-arc geometry on holonomic bases.
+         * Default: no coupling (infinity) — models without a wheel-speed
+         * limit keep the caller's own caps.
+         */
+        [[nodiscard]] virtual double maxYawRateForArcRadius(double /*radius_m*/,
+                                                            bool /*lateral*/) const
+        {
+            return std::numeric_limits<double>::infinity();
+        }
 
         /**
          * Apply a chassis-space velocity command.

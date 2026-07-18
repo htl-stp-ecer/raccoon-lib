@@ -104,6 +104,27 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+# Renderer answers delivered within this window after a *new* screen is first
+# shown are treated as stale and discarded.
+#
+# UI answers travel on a ``reliable`` transport channel: the external renderer
+# keeps re-sending an un-ACKed answer until some subscriber ACKs it.  A fresh
+# process (or a fresh subscription) starts with an empty de-dup set, so an
+# answer left over from a previous screen — or a previous run — is re-delivered
+# to the very next screen the instant it subscribes (observed ~4 ms after the
+# render).  Because every screen shares the same ``_SCREEN_NAME`` the stale
+# answer is indistinguishable by content, and the renderer is external (possibly
+# a different, unsynchronised clock) so its timestamp cannot be trusted for
+# correlation.  A short settle window is the robust, renderer-agnostic guard: a
+# human cannot read and act on a freshly rendered input/confirm screen this
+# fast, so the window only ever eats phantom re-sends.  The phantom is ACKed by
+# the transport on first receipt (before this layer sees it), so the renderer
+# stops re-sending immediately — the guard fires at most once per screen.
+# Physical button presses come from the local listener, never this channel, and
+# are always honoured (see ``_button_listener``).
+_STALE_ANSWER_GUARD_S = 0.75
+
+
 class UIStep(Step, ABC):
     """
     Base class for Steps that show UI screens.
@@ -144,6 +165,21 @@ class UIStep(Step, ABC):
         # Persistent subscription state for non-blocking display/pump_events
         self._pump_queue: asyncio.Queue | None = None
         self._pump_sub: Subscription | None = None
+        # Monotonic time the current screen was first shown; used to discard
+        # stale renderer answers re-delivered right after (re)subscribing.
+        self._screen_shown_monotonic: float = 0.0
+
+    def _is_stale_answer(self, event: dict) -> bool:
+        """True for renderer answers arriving inside the settle window.
+
+        Physical button presses (``button_press``) come from the local
+        listener rather than the reliable answer channel, so they are never
+        considered stale.  See ``_STALE_ANSWER_GUARD_S``.
+        """
+        if event.get("_action") == "button_press":
+            return False
+        elapsed = time.monotonic() - self._screen_shown_monotonic
+        return elapsed < _STALE_ANSWER_GUARD_S
 
     async def show(self, screen: UIScreen[T]) -> T:
         """
@@ -165,6 +201,10 @@ class UIStep(Step, ABC):
         self._current_screen = screen
 
         self.debug(f"Showing screen: {screen.__class__.__name__}")
+
+        # Start the stale-answer settle window at first show (never on the
+        # per-keystroke re-renders inside _render_screen).
+        self._screen_shown_monotonic = time.monotonic()
 
         # Initial render
         await self._render_screen(screen)
@@ -229,9 +269,17 @@ class UIStep(Step, ABC):
                 # Process events from queue
                 try:
                     event = event_queue.get_nowait()
-                    await screen._dispatch_event(event)
                 except asyncio.QueueEmpty:
-                    pass
+                    event = None
+
+                if event is not None:
+                    if self._is_stale_answer(event):
+                        self.debug(
+                            "Discarding stale UI answer within settle window: "
+                            f"{event.get('_action')}"
+                        )
+                    else:
+                        await screen._dispatch_event(event)
 
                 await asyncio.sleep(0.01)
         finally:
@@ -317,6 +365,7 @@ class UIStep(Step, ABC):
         screen._result = None
         self._current_screen = screen
         self.debug(f"Displaying screen (non-blocking): {screen.__class__.__name__}")
+        self._screen_shown_monotonic = time.monotonic()
         await self._render_screen(screen)
 
         # Set up a persistent subscription so events are buffered between
@@ -375,9 +424,14 @@ class UIStep(Step, ABC):
         while True:
             try:
                 event = self._pump_queue.get_nowait()
-                await screen._dispatch_event(event)
             except asyncio.QueueEmpty:
                 break
+            if self._is_stale_answer(event):
+                self.debug(
+                    f"Discarding stale UI answer within settle window: {event.get('_action')}"
+                )
+                continue
+            await screen._dispatch_event(event)
 
     @asynccontextmanager
     async def showing(self, screen: UIScreen[T]):

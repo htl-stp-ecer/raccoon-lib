@@ -410,41 +410,4 @@ namespace libstp::map
         }
         m_layers.push_back(MapLayer{"ground", "Ground", 0.0f, m_segments});
     }
-
-    void WorldMap::loadFromDict(float tableWidthCm,
-                                float tableHeightCm,
-                                const std::vector<FtmapDictEntry>& entries)
-    {
-        clear();
-        m_tableWidthCm = tableWidthCm;
-        m_tableHeightCm = tableHeightCm;
-
-        for (const auto& e : entries)
-        {
-            MapSegment seg{};
-            if (e.kind == "wall")
-            {
-                seg.kind = MapSegment::Kind::Wall;
-            }
-            else if (e.kind == "line")
-            {
-                seg.kind = MapSegment::Kind::Line;
-            }
-            else
-            {
-                throw FtmapParseError("ftmap.lines.kind must be 'line' or 'wall'");
-            }
-
-            // Same Y-flip as parseFtmap — keeps both ingest paths
-            // semantically identical so a pytest that loads a JSON dict and
-            // a C++ test that loads the YAML string produce the same map.
-            seg.startX = e.startX;
-            seg.startY = tableHeightCm - e.startY;
-            seg.endX = e.endX;
-            seg.endY = tableHeightCm - e.endY;
-            seg.widthCm = e.widthCm;
-            m_segments.push_back(seg);
-        }
-        m_layers.push_back(MapLayer{"ground", "Ground", 0.0f, m_segments});
-    }
 }

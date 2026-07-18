@@ -55,6 +55,16 @@ inline std::uint64_t systemClockUnixNs(std::chrono::system_clock::time_point tp)
         std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch()).count());
 }
 
+// Relative nanoseconds between two steady-clock instants, clamped at zero.
+// Steady-clock deltas are immune to wall-clock steps, so the recording's time
+// axis stays monotonic even if NTP steps the system clock mid-run.
+inline std::uint64_t steadyDeltaNs(std::chrono::steady_clock::time_point start,
+                                   std::chrono::steady_clock::time_point now) {
+    const auto ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count();
+    return ns > 0 ? static_cast<std::uint64_t>(ns) : 0;
+}
+
 // Emit a JSON string literal. Used only for the fixed-vocabulary "notes" /
 // surface_kind values — the rest of the header is pre-formatted JSON passed
 // verbatim from Python.
@@ -124,7 +134,12 @@ LocalizationRecorder::LocalizationRecorder(RecorderConfig cfg) : m_cfg(std::move
         return;
     }
 
+    if (m_cfg.buffer_in_ram) {
+        m_ramCurrent.reserve(kRamChunkBytes + 4096);
+    }
+
     m_startWall = std::chrono::system_clock::now();
+    m_startSteady = std::chrono::steady_clock::now();
     m_startedAtUnixNs = systemClockUnixNs(m_startWall);
     writeHeader();
     if (!m_out.good()) {
@@ -136,8 +151,63 @@ LocalizationRecorder::LocalizationRecorder(RecorderConfig cfg) : m_cfg(std::move
     }
 
     m_ok = true;
+
+    // Free disk space from previous runs before this one starts filling it.
+    pruneOldRecordings();
+
     m_writer = libstp::threading::jthread(
         [this](libstp::threading::stop_token stop) { writerLoop(stop); });
+}
+
+void LocalizationRecorder::pruneOldRecordings() {
+    if (m_cfg.retain_recordings <= 0) {
+        return;  // retention disabled — keep everything
+    }
+    try {
+        const std::filesystem::path self(m_cfg.path);
+        const std::filesystem::path runDir = self.parent_path();          // .../runs/<id>
+        const std::filesystem::path runsRoot = runDir.parent_path();      // .../runs
+        const std::filesystem::path name = self.filename();               // localization.jsonl
+        if (runsRoot.empty() || name.empty()) {
+            return;
+        }
+        std::error_code ec;
+        if (!std::filesystem::is_directory(runsRoot, ec)) {
+            return;
+        }
+
+        // Collect every sibling recording (one per run dir) with its mtime.
+        std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> found;
+        for (const auto& entry : std::filesystem::directory_iterator(runsRoot, ec)) {
+            if (ec) break;
+            if (!entry.is_directory(ec)) continue;
+            std::filesystem::path candidate = entry.path() / name;
+            std::error_code fec;
+            if (!std::filesystem::is_regular_file(candidate, fec)) continue;
+            const auto mtime = std::filesystem::last_write_time(candidate, fec);
+            if (fec) continue;
+            found.emplace_back(mtime, std::move(candidate));
+        }
+
+        if (found.size() <= static_cast<std::size_t>(m_cfg.retain_recordings)) {
+            return;  // nothing to prune
+        }
+
+        // Newest first, then delete everything past the retain count.
+        std::sort(found.begin(), found.end(),
+                  [](const auto& a, const auto& b) { return a.first > b.first; });
+        for (std::size_t i = static_cast<std::size_t>(m_cfg.retain_recordings);
+             i < found.size(); ++i) {
+            std::error_code rec;
+            std::filesystem::remove(found[i].second, rec);
+            if (!rec) {
+                std::cerr << "[localization::Recorder] pruned old recording '"
+                          << found[i].second.string() << "'\n";
+            }
+        }
+    } catch (...) {
+        // Retention is best-effort housekeeping; never let it break recording.
+    }
 }
 
 LocalizationRecorder::~LocalizationRecorder() {
@@ -156,6 +226,11 @@ bool LocalizationRecorder::recordFrame(FrameInput frame, bool force) {
     if (!force && (tick % m_downsampleStride) != 0) {
         return false;
     }
+
+    // Stamp the capture instant here, on the filter thread, so the recording's
+    // time axis reflects when the frame actually happened — not when the writer
+    // thread later serializes it (which lags under disk backpressure).
+    frame.capture_time = std::chrono::steady_clock::now();
 
     {
         std::lock_guard<std::mutex> lk(m_queueMutex);
@@ -182,7 +257,10 @@ void LocalizationRecorder::stop() {
         m_queueCv.notify_all();
         m_writer.join();
     }
+    // Writer is joined — the RAM buffer is complete and no thread touches it.
+    // Write the whole recording to disk now, in one burst, after the run.
     if (m_out.is_open()) {
+        flushRamToDisk();
         m_out.flush();
         m_out.close();
     }
@@ -212,7 +290,35 @@ void LocalizationRecorder::writeHeader() {
     line += ",\"notes\":";
     appendJsonString(line, m_cfg.notes);
     line += "}\n";
-    m_out.write(line.data(), static_cast<std::streamsize>(line.size()));
+    emit(line.data(), line.size());
+}
+
+void LocalizationRecorder::emit(const char* data, std::size_t n) {
+    if (!m_cfg.buffer_in_ram) {
+        m_out.write(data, static_cast<std::streamsize>(n));
+        return;
+    }
+    m_ramCurrent.append(data, n);
+    if (m_ramCurrent.size() >= kRamChunkBytes) {
+        m_ramChunks.push_back(std::move(m_ramCurrent));
+        m_ramCurrent.clear();
+        m_ramCurrent.reserve(kRamChunkBytes + 4096);
+    }
+}
+
+void LocalizationRecorder::flushRamToDisk() {
+    if (!m_cfg.buffer_in_ram) {
+        return;
+    }
+    for (const auto& chunk : m_ramChunks) {
+        m_out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+    }
+    if (!m_ramCurrent.empty()) {
+        m_out.write(m_ramCurrent.data(), static_cast<std::streamsize>(m_ramCurrent.size()));
+    }
+    m_ramChunks.clear();
+    m_ramCurrent.clear();
+    m_ramCurrent.shrink_to_fit();
 }
 
 void LocalizationRecorder::serializeFrame(const FrameInput& frame, std::uint64_t t_ns) {
@@ -325,7 +431,7 @@ void LocalizationRecorder::serializeFrame(const FrameInput& frame, std::uint64_t
     line += (frame.resampled ? "true" : "false");
 
     line += "}\n";
-    m_out.write(line.data(), static_cast<std::streamsize>(line.size()));
+    emit(line.data(), line.size());
 }
 
 void LocalizationRecorder::writerLoop(libstp::threading::stop_token stop) {
@@ -357,10 +463,12 @@ void LocalizationRecorder::writerLoop(libstp::threading::stop_token stop) {
         }
 
         if (haveFrame) {
-            const auto now_ns = systemClockUnixNs(std::chrono::system_clock::now());
-            const std::uint64_t t_ns = now_ns >= m_startedAtUnixNs ? now_ns - m_startedAtUnixNs : 0;
+            const std::uint64_t t_ns = steadyDeltaNs(m_startSteady, frame.capture_time);
             serializeFrame(frame, t_ns);
-            if (++writtenSinceFlush >= m_cfg.flush_every) {
+            // Periodic disk flush only matters in streaming mode. In RAM-buffer
+            // mode nothing has been written to the file yet — the single write
+            // happens in stop()/flushRamToDisk().
+            if (!m_cfg.buffer_in_ram && ++writtenSinceFlush >= m_cfg.flush_every) {
                 m_out.flush();
                 writtenSinceFlush = 0;
             }
@@ -372,9 +480,7 @@ void LocalizationRecorder::writerLoop(libstp::threading::stop_token stop) {
             while (!m_queue.empty()) {
                 FrameInput f = std::move(m_queue.front());
                 m_queue.pop_front();
-                const auto now_ns = systemClockUnixNs(std::chrono::system_clock::now());
-                const std::uint64_t t_ns =
-                    now_ns >= m_startedAtUnixNs ? now_ns - m_startedAtUnixNs : 0;
+                const std::uint64_t t_ns = steadyDeltaNs(m_startSteady, f.capture_time);
                 serializeFrame(f, t_ns);
             }
             m_out.flush();

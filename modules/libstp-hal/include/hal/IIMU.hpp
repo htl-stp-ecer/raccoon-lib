@@ -179,6 +179,19 @@ namespace libstp::hal::imu
         virtual void getLinearAcceleration(float* linear_accel) = 0;
 
         /**
+         * Get the DMP 6-axis fused orientation quaternion (gyro+accel).
+         *
+         * Its roll/pitch is gravity-referenced and drift/vibration-immune,
+         * making it a far better tilt source than the raw accelerometer while
+         * the robot is driving. When no quaternion has been received (e.g. a
+         * firmware build that does not publish it), the output is all-zero so
+         * callers can detect "no data" via |q| < 0.5.
+         *
+         * @param quat Output array [w, x, y, z] (unit quaternion).
+         */
+        virtual void getQuaternion(float* quat) = 0;
+
+        /**
          * Get firmware-integrated velocity from accelerometer in body frame (m/s)
          * @param vel Output array [x, y, z] for velocity
          */

@@ -102,12 +102,17 @@ class SetServoPosition(Step):
     """Set a servo to a target angle and optionally wait for the move to finish."""
 
     def __init__(
-        self, servo: Servo | ServoPreset, target_angle: float, duration: float | None = None
+        self,
+        servo: Servo | ServoPreset,
+        target_angle: float,
+        duration: float | None = None,
+        blocking: bool = True,
     ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
         self._target_angle = float(target_angle)
         self._duration = float(duration) if duration is not None else None
+        self._blocking = bool(blocking)
         if self._duration is not None and self._duration < 0:
             msg = "Duration must be >= 0"
             raise ValueError(msg)
@@ -117,9 +122,17 @@ class SetServoPosition(Step):
 
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
-        return f"SetServoPosition(servo={servo_label},angle={self._target_angle},duration={self._duration})"
+        return (
+            f"SetServoPosition(servo={servo_label},angle={self._target_angle},"
+            f"duration={self._duration},blocking={self._blocking})"
+        )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        # Fire the command in every case; only the wait is conditional.
+        if not self._blocking:
+            self._servo_ref.set_position(self._target_angle)
+            return
+
         duration = self._duration
         if duration is None:
             current_angle = self._servo_ref.get_position()
@@ -131,18 +144,26 @@ class SetServoPosition(Step):
 
 
 @dsl(tags=["servo", "actuator"])
-def servo(servo: Servo, angle: float) -> SetServoPosition:
-    """Set a servo to a specific angle and wait for the move to finish.
+def servo(servo: Servo, angle: float, blocking: bool = True) -> SetServoPosition:
+    """Set a servo to a specific angle and (optionally) wait for the move to finish.
 
     Commands the servo to the requested angle, then sleeps for an
     estimated duration based on the angular distance the servo needs to
     travel and its approximate speed. This ensures subsequent steps do
     not begin until the servo has physically reached its target.
 
+    When ``blocking`` is ``False``, the command is still sent but no wait
+    time is estimated and the step returns immediately — use this when the
+    move should proceed in the background and the mission must not stall
+    waiting for it.
+
     Args:
         servo: The servo to control, obtained from the robot hardware map
             (e.g. ``robot.servo(0)``).
         angle: Target angle in degrees.
+        blocking: If ``True`` (default), wait for the estimated move
+            duration before completing. If ``False``, fire the command and
+            return immediately without computing or awaiting a wait time.
 
     Returns:
         A ``SetServoPosition`` step with automatically estimated wait
@@ -155,13 +176,16 @@ def servo(servo: Servo, angle: float) -> SetServoPosition:
         # Open a claw by moving servo 0 to 90 degrees
         servo(robot.servo(0), 90.0)
 
+        # Fire-and-forget: start the move but don't wait for it
+        servo(robot.servo(0), 90.0, blocking=False)
+
         # Close the claw, then raise the arm
         sequence(
             servo(robot.servo(0), 10.0),
             motor_move_to(robot.motor(2), position=400),
         )
     """
-    return SetServoPosition(servo=servo, target_angle=angle, duration=None)
+    return SetServoPosition(servo=servo, target_angle=angle, duration=None, blocking=blocking)
 
 
 @dsl_step(tags=["servo", "actuator"])
@@ -180,6 +204,9 @@ class ShakeServo(Step):
         duration: Total oscillation time in seconds. Must be >= 0.
         angle_a: First oscillation endpoint in degrees.
         angle_b: Second oscillation endpoint in degrees.
+        blocking: If ``True`` (default), oscillate for the full ``duration``
+            before completing. If ``False``, command the first endpoint and
+            return immediately without running or awaiting the oscillation.
 
     Example::
 
@@ -190,13 +217,19 @@ class ShakeServo(Step):
     """
 
     def __init__(
-        self, servo: Servo | ServoPreset, duration: float, angle_a: float, angle_b: float
+        self,
+        servo: Servo | ServoPreset,
+        duration: float,
+        angle_a: float,
+        angle_b: float,
+        blocking: bool = True,
     ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
         self._duration = float(duration)
         self._angle_a = float(angle_a)
         self._angle_b = float(angle_b)
+        self._blocking = bool(blocking)
         if self._duration < 0:
             msg = "Duration must be >= 0"
             raise ValueError(msg)
@@ -208,10 +241,16 @@ class ShakeServo(Step):
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
         return (
             f"ShakeServo(servo={servo_label},duration={self._duration},"
-            f"a={self._angle_a},b={self._angle_b})"
+            f"a={self._angle_a},b={self._angle_b},blocking={self._blocking})"
         )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
+        if not self._blocking:
+            # Fire-and-forget: kick off at the first endpoint without waiting
+            # out the oscillation.
+            self._servo_ref.set_position(self._angle_a)
+            return
+
         if self._angle_a == self._angle_b or self._duration == 0:
             self._servo_ref.set_position(self._angle_a)
             if self._duration > 0:
@@ -268,6 +307,10 @@ class SlowServo(Step):
         easing: Interpolation curve. Pass an :class:`Easing` member or
             any callable ``(t: float) -> float`` mapping [0, 1] → [0, 1].
             Defaults to ``Easing.EASE_IN_OUT``.
+        blocking: If ``True`` (default), wait for the move to finish before
+            completing. If ``False``, hand the eased motion off to the
+            firmware (for built-in easings) and return immediately without
+            computing or awaiting the move duration.
 
     Example::
 
@@ -289,6 +332,7 @@ class SlowServo(Step):
         angle: float,
         speed: float = 60.0,
         easing: Easing | EasingFunc = Easing.EASE_IN_OUT,
+        blocking: bool = True,
     ) -> None:
         super().__init__()
         self._servo_ref = _unwrap_servo(servo)
@@ -297,6 +341,7 @@ class SlowServo(Step):
             raise TypeError(msg)
         self._target_angle = float(angle)
         self._speed = float(speed)
+        self._blocking = bool(blocking)
         if self._speed <= 0:
             msg = f"Speed must be > 0, got {self._speed}"
             raise ValueError(msg)
@@ -311,7 +356,10 @@ class SlowServo(Step):
     def _generate_signature(self) -> str:
         servo_label = f"port-{getattr(self._servo_ref, 'port', 'na')}"
         easing_name = getattr(self._easing, "__name__", None) or getattr(self._easing, "name", "?")
-        return f"SlowServo(servo={servo_label},angle={self._target_angle},speed={self._speed},easing={easing_name})"
+        return (
+            f"SlowServo(servo={servo_label},angle={self._target_angle},"
+            f"speed={self._speed},easing={easing_name},blocking={self._blocking})"
+        )
 
     async def _execute_step(self, robot: "GenericRobot") -> None:
         start_angle = self._servo_ref.get_position()
@@ -324,6 +372,18 @@ class SlowServo(Step):
         duration = abs(delta) / self._speed
 
         easing_int = _EASING_INT.get(self._easing)
+
+        if not self._blocking:
+            # Non-blocking: only the firmware can carry out the eased motion
+            # unattended. For built-in easings hand it off and return; a
+            # custom Python easing can't be interpolated without the loop, so
+            # command the target directly.
+            if easing_int is not None:
+                self._servo_ref.set_smooth_position(self._target_angle, self._speed, easing_int)
+            else:
+                self._servo_ref.set_position(self._target_angle)
+            return
+
         if easing_int is not None:
             self._servo_ref.set_smooth_position(self._target_angle, self._speed, easing_int)
             await asyncio.sleep(duration)

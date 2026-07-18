@@ -183,7 +183,13 @@ def spline(
             ``left_cm`` is centimeters to the left (positive = left).
             Optional ``heading_deg`` is the desired heading in degrees
             (0 = initial heading, positive = CCW).
-        speed: Fraction of maximum speed, 0.0 to 1.0 (default 1.0).
+        speed: Fraction of maximum speed (default 1.0). The sign selects the
+            travel direction: positive drives the path forwards. Negative drives
+            it in reverse — on a mecanum/omni drivetrain the robot HOLDS its
+            start orientation and strafes the path backwards (nose stays put,
+            no turn); on a differential drivetrain, which cannot hold heading
+            through a curve, it backs along the path rear-first (nose points
+            opposite the travel). Magnitude is clamped to [0.01, 1.0].
         absolute_heading: If True, compute heading error against the
             absolute IMU heading instead of the reset-relative heading
             (default False).
