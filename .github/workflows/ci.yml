@@ -384,7 +384,7 @@ jobs:
       # use ccache with the project dir as the cache root (mounted as /project).
       - name: Set up sccache
         if: runner.os != 'Linux'
-        uses: mozilla-actions/sccache-action@v0.0.10
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache ccache (Linux)
         if: runner.os == 'Linux'
@@ -537,7 +537,7 @@ jobs:
           merge-multiple: true
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
