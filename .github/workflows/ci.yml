@@ -356,7 +356,8 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux-x86_64
-          - os: ubuntu-latest
+          # Native ARM64 runner: the manylinux aarch64 container runs without emulation.
+          - os: ubuntu-24.04-arm
             name: linux-aarch64
             arch: aarch64
           - os: macos-15
@@ -400,13 +401,6 @@ jobs:
           path: .gha-cache/ccache
           key: ccache-${{ matrix.name }}-${{ github.run_id }}
           restore-keys: ccache-${{ matrix.name }}-
-
-      # QEMU is only needed for the aarch64 cross-build.
-      - name: Set up QEMU
-        if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v4
-        with:
-          platforms: arm64
 
       - name: Set wheel version
         shell: python
