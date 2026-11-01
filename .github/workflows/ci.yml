@@ -341,11 +341,63 @@ jobs:
             .gha-cache/buildx
           key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+  # Release number: one more than the highest number that already exists, as a
+  # tag v<number> and on PyPI (raccoon-sim raccoon-library). github.run_number also counts every pull request and
+  # every cancelled run, which leaves gaps.
+  version:
+    name: Release number
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: >-
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) &&
+      needs.changes.outputs.has-code == 'true'
+    outputs:
+      number: ${{ steps.next.outputs.number }}
+    steps:
+      - name: Next release number
+        id: next
+        env:
+          PYPI_PACKAGES: "raccoon-sim raccoon-library"
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          numbers = []
+
+          tags = subprocess.run(
+              ["git", "ls-remote", "--tags", f"https://github.com/{repo}.git"],
+              check=True, capture_output=True, text=True,
+          ).stdout
+          for line in tags.splitlines():
+              match = re.search(r"refs/tags/v(\d+)$", line)
+              if match:
+                  numbers.append(int(match.group(1)))
+
+          # A number that is on PyPI can never be used again, even if the run that
+          # uploaded it failed before it created a tag.
+          for package in os.environ["PYPI_PACKAGES"].split():
+              with urllib.request.urlopen(f"https://pypi.org/pypi/{package}/json") as response:
+                  numbers += [int(v) for v in json.load(response)["releases"] if v.isdigit()]
+
+          if not numbers:
+              raise SystemExit("no earlier release number found")
+          number = max(numbers) + 1
+          print(f"next release number: {number}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"number={number}\n")
+          PY
+
   # ─── Multi-platform wheels for PyPI (Win / Linux x86_64+aarch64 / macOS) ──
   build-wheels:
     name: Wheels • ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [changes]
+    needs: [changes, version]
     if: >-
       (github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) &&
@@ -406,7 +458,7 @@ jobs:
         shell: python
         run: |
           import re
-          run_number = "${{ github.run_number }}"
+          run_number = "${{ needs.version.outputs.number }}"
           with open("pyproject.toml") as f:
               content = f.read()
           new_content = re.sub(
@@ -516,7 +568,7 @@ jobs:
   publish-pypi:
     name: Publish raccoon-sim to PyPI
     runs-on: ubuntu-latest
-    needs: [build-wheels]
+    needs: [build-wheels, version]
     # Run only when every matrix variant of build-wheels succeeded.
     if: always() && needs.build-wheels.result == 'success'
     permissions:
@@ -562,7 +614,7 @@ jobs:
           STAGING="${RUNNER_TEMP}/stubs-staging" \
           STUBS_OUTPUT="${GITHUB_WORKSPACE}/dist-lib" \
           PYTHON=python \
-          bash scripts/build-stubs.sh "${{ github.run_number }}"
+          bash scripts/build-stubs.sh "${{ needs.version.outputs.number }}"
           echo "=== dist/ (raccoon-sim platform wheels) ==="; ls -la dist/
           echo "=== dist-lib/ (raccoon-library header wheel) ==="; ls -la dist-lib/
 
@@ -618,7 +670,7 @@ jobs:
           mkdir -p docs-site/doxygen
           cp -R docs/_build/doxygen/html/. docs-site/doxygen/
           cp docs/_build/dsl-steps.json docs-site/
-          (cd docs-site && zip -r "../raccoon-docs-${{ github.run_number }}.zip" .)
+          (cd docs-site && zip -r "../raccoon-docs-${{ needs.version.outputs.number }}.zip" .)
           # Also expose the catalog as a standalone asset so the docs site can
           # fetch it directly without unzipping the whole bundle.
           cp docs/_build/dsl-steps.json "dsl-steps.json"
@@ -626,28 +678,28 @@ jobs:
       - name: Create GitHub Release with wheels
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ github.run_number }}
-          name: raccoon-library ${{ github.run_number }}
+          tag_name: v${{ needs.version.outputs.number }}
+          name: raccoon-library ${{ needs.version.outputs.number }}
           generate_release_notes: true
           body: |
             Automated release from commit ${{ github.sha }}.
 
             **Development / codegen / IDE — platform-independent (recommended on laptops):**
             ```bash
-            pip install raccoon-library==${{ github.run_number }}
+            pip install raccoon-library==${{ needs.version.outputs.number }}
             ```
             A pure Python/`.pyi` header package — no compilation, any platform. Powers
             the toolchain codegen and IDE type hints; it does not run the robot by itself.
 
             **Compiled runtime + simulator — to actually run missions (incl. Raspberry Pi):**
             ```bash
-            pip install "raccoon-library[sim]==${{ github.run_number }}"
+            pip install "raccoon-library[sim]==${{ needs.version.outputs.number }}"
             ```
             Pulls in the compiled `raccoon-sim` bindings + simulator + mock/wombat bundle.
           files: |
             dist/*.whl
             dist-lib/*.whl
-            raccoon-docs-${{ github.run_number }}.zip
+            raccoon-docs-${{ needs.version.outputs.number }}.zip
             dsl-steps.json
 
       # Tell the Hugo docs site (htl-stp-ecer/documentation) that a new library
@@ -658,7 +710,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
-            -d '{"event_type":"library-release","client_payload":{"version":"${{ github.run_number }}"}}'
+            -d '{"event_type":"library-release","client_payload":{"version":"${{ needs.version.outputs.number }}"}}'
 
   # ─── Publish the platform-independent raccoon-library (.pyi) wheel to PyPI ──
   # Separate job because PyPI trusted publishing is per-project and
@@ -691,7 +743,7 @@ jobs:
   notify-example:
     name: Notify raccoon-example
     runs-on: ubuntu-latest
-    needs: [publish-library]
+    needs: [publish-library, version]
     if: always() && needs.publish-library.result == 'success'
 
     steps:
@@ -718,5 +770,5 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/htl-stp-ecer/raccoon-example/dispatches \
-            -d '{"event_type":"lib-released","client_payload":{"version":"${{ github.run_number }}"}}' \
+            -d '{"event_type":"lib-released","client_payload":{"version":"${{ needs.version.outputs.number }}"}}' \
             || echo "::warning::could not notify raccoon-example"
