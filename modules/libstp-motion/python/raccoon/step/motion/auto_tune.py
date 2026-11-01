@@ -217,6 +217,11 @@ class AutoTuneProgressScreen(UIScreen[None]):
 # ---------------------------------------------------------------------------
 
 
+def _supports_velocity_gain(robot: "GenericRobot") -> bool:
+    """Only kinematics with ``set_velocity_command_gains`` (mecanum) can re-apply a gain."""
+    return hasattr(robot.kinematics, "set_velocity_command_gains")
+
+
 def _persist_velocity_config(results: dict) -> bool:
     """Persist the calibrated MCU chassis velocity-command gains.
 
@@ -839,7 +844,9 @@ class AutoTuneVelocity(Step):
 
         _write_phase_report("velocity", self.results, self)
 
-        if self.persist and any(r.accepted for r in self.results.values()):
+        if self.persist and not _supports_velocity_gain(robot):
+            self.info("  Not saved: this drivetrain cannot re-apply a velocity command gain")
+        elif self.persist and any(r.accepted for r in self.results.values()):
             if _persist_velocity_config(self.results):
                 self.info(
                     "  Saved to raccoon.project.yml "
@@ -1335,7 +1342,11 @@ class AutoTune(UIStep):
                             )
                             if results:
                                 _write_phase_report("velocity", results, self)
-                                if self.persist and any(r.accepted for r in results.values()):
+                                if (
+                                    self.persist
+                                    and _supports_velocity_gain(robot)
+                                    and any(r.accepted for r in results.values())
+                                ):
                                     _persist_velocity_config(results)
                         screen.mark("velocity", "done")
                         await screen.refresh()
