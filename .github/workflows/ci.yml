@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,7 +24,10 @@ jobs:
       - id: check
         run: |
           changed=$(git diff --name-only HEAD~1 HEAD)
-          if echo "$changed" | grep -qvE '^(docs/|.*\.md$|TESTING_DEBT\.md$|\.github/workflows/test\.yml$)'; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # A manual run is an explicit request to release, whatever the last commit touched.
+            echo "has-code=true" >> "$GITHUB_OUTPUT"
+          elif echo "$changed" | grep -qvE '^(docs/|.*\.md$|TESTING_DEBT\.md$|\.github/workflows/test\.yml$)'; then
             echo "has-code=true" >> "$GITHUB_OUTPUT"
           else
             echo "has-code=false" >> "$GITHUB_OUTPUT"
@@ -342,7 +346,10 @@ jobs:
     name: Wheels • ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     needs: [changes]
-    if: github.event_name == 'push' && needs.changes.outputs.has-code == 'true'
+    if: >-
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) &&
+      needs.changes.outputs.has-code == 'true'
     strategy:
       fail-fast: false
       matrix:
