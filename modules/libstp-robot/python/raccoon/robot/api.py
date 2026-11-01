@@ -669,29 +669,74 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         self._run_platform_probe()
 
         initialize_timer()  # reset clock to 0
-        if setup_mission is not None:
-            from contextlib import nullcontext
+        failure: Exception | None = None
+        try:
+            if setup_mission is not None:
+                from contextlib import nullcontext
 
-            from raccoon.mission.api import SetupMission
+                from raccoon.mission.api import SetupMission
 
-            timer_ctx = (
-                setup_mission.setup_timer_context()
-                if isinstance(setup_mission, SetupMission)
-                else nullcontext()
-            )
-            self.info("Running setup mission")
-            async with timer_ctx:
-                await setup_mission.run(self)
-                # Pre-start gate runs inside the timer context so the WFL
-                # screen (and any custom gate UI) still shows the countdown.
-                if setup_mission._custom_pre_start_gate:
-                    self.info("Using setup mission's custom pre-start gate")
-                    await setup_mission.pre_start_gate(self)
-                else:
-                    await self._pre_start_gate()
-        else:
-            await self._pre_start_gate()
+                timer_ctx = (
+                    setup_mission.setup_timer_context()
+                    if isinstance(setup_mission, SetupMission)
+                    else nullcontext()
+                )
+                self.info("Running setup mission")
+                async with timer_ctx:
+                    await setup_mission.run(self)
+                    # Pre-start gate runs inside the timer context so the WFL
+                    # screen (and any custom gate UI) still shows the countdown.
+                    if setup_mission._custom_pre_start_gate:
+                        self.info("Using setup mission's custom pre-start gate")
+                        await setup_mission.pre_start_gate(self)
+                    else:
+                        await self._pre_start_gate()
+            else:
+                await self._pre_start_gate()
+        except Exception as exc:
+            self._log_mission_failure("Setup", exc)
+            failure = exc
 
+        if failure is None:
+            failure = await self._run_main_phase(missions)
+
+        # Cancel orphaned background tasks before shutdown mission
+        await self._drain_background_tasks()
+
+        # Always run shutdown mission
+        initialize_timer()  # reset clock to 0 before shutdown mission
+        if shutdown_mission is not None:
+            self.info("Running shutdown mission")
+            try:
+                await shutdown_mission.run(self)
+            except Exception as exc:
+                self._log_mission_failure("Shutdown", exc)
+                failure = failure or exc
+
+        # Persist deferred diagnostics now that the robot is idle: the step-
+        # timing DB and the per-mission profiler traces both buffer in RAM
+        # during the run (so no fsync/json.dump lands between steps or missions)
+        # and write once here.
+        await self._flush_deferred_diagnostics()
+
+        if failure is not None:
+            # Logged above; re-raise so the process exits non-zero.
+            raise failure
+
+        self.info("Robot execution complete. Exiting.")
+
+    def _log_mission_failure(self, phase: str, exc: BaseException) -> None:
+        """Log a mission exception with its traceback to the run log."""
+        import traceback
+
+        trace = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        self.error(f"{phase} mission raised {type(exc).__name__}: {exc}\n{trace}")
+
+    async def _run_main_phase(self, missions: list["MissionProtocol"]) -> Exception | None:
+        """Run the main missions under the shutdown timer and watchdogs.
+
+        Returns the exception a mission raised, or ``None``.
+        """
         # Main missions with shutdown timer and watchdog manager
         initialize_timer()  # reset clock to 0 before main missions
         self.synchronizer.start_recording()
@@ -721,6 +766,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         except Exception as exc:  # pragma: no cover - defensive
             self.warn(f"Could not start heading-drift watchdog: {exc!r}")
 
+        failure: Exception | None = None
         main_task = asyncio.create_task(self._run_main_missions(missions))
         wdt.attach_main_task(main_task)
 
@@ -746,7 +792,8 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
             else:
                 exc = main_task.exception()
                 if exc is not None:
-                    self.error(f"Main missions raised: {exc}")
+                    self._log_mission_failure("Main", exc)
+                    failure = exc
         finally:
             wdt.detach_main_task()
             await wdt.cancel_all()
@@ -759,22 +806,7 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
                 with contextlib.suppress(Exception):
                     await asyncio.to_thread(drift_wd.stop)
 
-        # Cancel orphaned background tasks before shutdown mission
-        await self._drain_background_tasks()
-
-        # Always run shutdown mission
-        initialize_timer()  # reset clock to 0 before shutdown mission
-        if shutdown_mission is not None:
-            self.info("Running shutdown mission")
-            await shutdown_mission.run(self)
-
-        # Persist deferred diagnostics now that the robot is idle: the step-
-        # timing DB and the per-mission profiler traces both buffer in RAM
-        # during the run (so no fsync/json.dump lands between steps or missions)
-        # and write once here.
-        await self._flush_deferred_diagnostics()
-
-        self.info("Robot execution complete. Exiting.")
+        return failure
 
     async def _flush_deferred_diagnostics(self) -> None:
         """Write the run's RAM-buffered timing + profiler traces after the run."""
