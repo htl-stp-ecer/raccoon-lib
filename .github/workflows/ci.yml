@@ -689,3 +689,29 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist-lib
+
+  # Tell raccoon-example that a new library is on PyPI (raccoon-sim and
+  # raccoon-library), so it can open a pull request that moves the
+  # raccoon-library pin of its template branches. A failure here only warns
+  # because the release is already published.
+  notify-example:
+    name: Notify raccoon-example
+    runs-on: ubuntu-latest
+    needs: [publish-library]
+    if: always() && needs.publish-library.result == 'success'
+
+    steps:
+      - name: Dispatch lib-released
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_PAT" ]; then
+            echo "::warning::GH_PAT is not set; raccoon-example was not notified"
+            exit 0
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/htl-stp-ecer/raccoon-example/dispatches \
+            -d '{"event_type":"lib-released","client_payload":{"version":"${{ github.run_number }}"}}' \
+            || echo "::warning::could not notify raccoon-example"
