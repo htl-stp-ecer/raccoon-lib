@@ -1,7 +1,9 @@
 name: Bump transport
 
 # Moves the raccoon-transport submodule to a new release tag and opens a pull
-# request for it (the pin gate then runs on that pull request).
+# request for it (the pin gate then runs on that pull request). The same pull
+# request raises the install lower bound in pyproject.toml ("raccoon-transport>=N")
+# to the new release number, so the two never drift apart.
 #
 # Triggered by raccoon-transport ("transport-released", with the tag in the
 # payload) after its release is on PyPI, or by hand. A newer release updates the
@@ -106,6 +108,32 @@ jobs:
               github_output.write("changed=true\n")
           PY
 
+      # The submodule is what the library is built against; the lower bound in pyproject.toml is
+      # what an install demands. Raise it to the same release (never lower it).
+      - name: Raise the install lower bound
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          TAG: ${{ steps.what.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          number = int(os.environ["TAG"].removeprefix("v"))
+          path = pathlib.Path("pyproject.toml")
+          text = path.read_text()
+          pattern = re.compile(r'("raccoon-transport>=)(\d+)(")')
+          match = pattern.search(text)
+          if not match:
+              raise SystemExit("no raccoon-transport>=N lower bound in pyproject.toml")
+          if int(match.group(2)) >= number:
+              print(f"lower bound {match.group(2)} is already >= {number}")
+          else:
+              path.write_text(pattern.sub(lambda m: f"{m.group(1)}{number}{m.group(3)}", text, count=1))
+              print(f"raccoon-transport>={match.group(2)} -> >={number}")
+          PY
+
       - name: Create an app token
         id: app-token
         if: steps.bump.outputs.changed == 'true'
@@ -126,12 +154,16 @@ jobs:
           base: main
           branch: bump/raccoon-transport
           delete-branch: true
-          add-paths: "raccoon-transport"
+          add-paths: |
+            raccoon-transport
+            pyproject.toml
           commit-message: Pin raccoon-transport to ${{ steps.what.outputs.tag }}
           title: Pin raccoon-transport to ${{ steps.what.outputs.tag }}
           body: |
             Moves the `raccoon-transport` submodule from
             `${{ steps.bump.outputs.old }}` to `${{ steps.what.outputs.tag }}`.
+
+            It also raises the install lower bound in `pyproject.toml` to the same release.
 
             Opened automatically after the transport release. The pin gate checks that
             the new commit is a released tag. Whether this component still builds and
