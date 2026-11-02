@@ -81,6 +81,12 @@ try:
 except Exception:
     _raccoon_version = "unknown"
 
+# Transport contract: refuse to run (with a clear message) when this installation's
+# transport does not match the bundle on the device. Skipped off-device.
+from raccoon._contract_gate import check_transport_contract as _check_transport_contract
+
+_check_transport_contract()
+
 from raccoon.no_calibrate import is_no_calibrate as _is_no_calibrate
 from raccoon.no_checkpoints import is_no_checkpoints as _is_no_checkpoints
 
