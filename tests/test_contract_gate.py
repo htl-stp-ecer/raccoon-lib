@@ -26,8 +26,9 @@ def device(tmp_path, monkeypatch):
     monkeypatch.setenv("RACCOON_STATUS_DIR", str(tmp_path / "run"))
     from raccoon_transport import CONTRACT_HASH
 
-    def write(contract_hash):
-        (tmp_path / "bundle.json").write_text(json.dumps({"bundle": "b", "contract_hash": contract_hash}))
+    def write(contract_hash, lib_version="155"):
+        (tmp_path / "bundle.json").write_text(json.dumps(
+            {"bundle": "b", "contract_hash": contract_hash, "components": {"raccoon-lib": lib_version}}))
 
     write.hash = CONTRACT_HASH
     write.status = tmp_path / "run" / "raccoon-lib.json"
@@ -47,6 +48,24 @@ def test_mismatch_raises_a_clear_error(device):
         load_gate().check_transport_contract("155")
     assert "transport contract mismatch" in str(raised.value)
     assert json.loads(device.status.read_text())["result"] == "mismatch"
+
+
+def test_wrong_library_version_raises(device):
+    device(device.hash, lib_version="v156")
+    with pytest.raises(RuntimeError) as raised:
+        load_gate().check_transport_contract("155")
+    assert "component version mismatch" in str(raised.value)
+
+
+def test_v_prefix_does_not_matter(device):
+    device(device.hash, lib_version="v155")
+    assert load_gate().check_transport_contract("155").result == "ok"
+
+
+def test_dev_entry_omits_the_version_check(device):
+    device(device.hash, lib_version="dev")
+    result = load_gate().check_transport_contract("999")
+    assert result.result == "dev-warnung" and result.reason == "version-omitted"
 
 
 def test_missing_bundle_file_raises_on_a_device(device, tmp_path):
