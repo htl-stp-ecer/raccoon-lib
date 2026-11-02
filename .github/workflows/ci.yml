@@ -315,21 +315,42 @@ jobs:
             ${{ steps.version.outputs.wheel }}
             raccoon-docs-${{ steps.version.outputs.version }}.zip
 
+      # Dispatches go out as the Raccoon OS Bot, not with a personal token. The release
+      # is already published here, so a failure only warns.
+      - name: Create an app token for the dispatches
+        id: dispatch-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          owner: htl-stp-ecer
+          repositories: documentation,raccoon-image
+          permission-contents: write
+
       - name: Trigger documentation rebuild
+        env:
+          TOKEN: ${{ steps.dispatch-token.outputs.token }}
         run: |
-          curl -X POST \
+          if [ -z "$TOKEN" ]; then echo "::warning::no app token; documentation was not notified"; exit 0; fi
+          curl -fsS -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Authorization: Bearer $TOKEN" \
             https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
-            -d '{"event_type":"library-release","client_payload":{"version":"${{ steps.version.outputs.version }}"}}'
+            -d '{"event_type":"library-release","client_payload":{"version":"${{ steps.version.outputs.version }}"}}' \
+            || echo "::warning::could not notify documentation"
 
       - name: Trigger raccoon-image bundle
+        env:
+          TOKEN: ${{ steps.dispatch-token.outputs.token }}
         run: |
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+          if [ -z "$TOKEN" ]; then echo "::warning::no app token; raccoon-image was not notified"; exit 0; fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/htl-stp-ecer/raccoon-image/dispatches \
-            -d '{"event_type":"component-released","client_payload":{"component":"raccoon-library","version":"${{ steps.version.outputs.version }}"}}'
+            -d '{"event_type":"component-released","client_payload":{"component":"raccoon-library","version":"${{ steps.version.outputs.version }}"}}' \
+            || echo "::warning::could not notify raccoon-image"
 
       - name: Save release tool caches
         if: always()
@@ -704,13 +725,28 @@ jobs:
 
       # Tell the Hugo docs site (htl-stp-ecer/documentation) that a new library
       # build is available so it rebuilds against the latest DSL catalog.
+      - name: Create an app token for the documentation dispatch
+        id: docs-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          owner: htl-stp-ecer
+          repositories: documentation
+          permission-contents: write
+
       - name: Trigger documentation rebuild
+        env:
+          TOKEN: ${{ steps.docs-token.outputs.token }}
         run: |
+          if [ -z "$TOKEN" ]; then echo "::warning::no app token; documentation was not notified"; exit 0; fi
           curl -fsS -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "Authorization: Bearer $TOKEN" \
             https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
-            -d '{"event_type":"library-release","client_payload":{"version":"${{ needs.version.outputs.number }}"}}'
+            -d '{"event_type":"library-release","client_payload":{"version":"${{ needs.version.outputs.number }}"}}' \
+            || echo "::warning::could not notify documentation"
 
   # ─── Publish the platform-independent raccoon-library (.pyi) wheel to PyPI ──
   # Separate job because PyPI trusted publishing is per-project and
@@ -736,39 +772,3 @@ jobs:
         with:
           packages-dir: dist-lib
 
-  # Tell raccoon-example that a new library is on PyPI (raccoon-sim and
-  # raccoon-library), so it can open a pull request that moves the
-  # raccoon-library pin of its template branches. A failure here only warns
-  # because the release is already published.
-  notify-example:
-    name: Notify raccoon-example
-    runs-on: ubuntu-latest
-    needs: [publish-library, version]
-    if: always() && needs.publish-library.result == 'success'
-
-    steps:
-      - name: Create an app token for raccoon-example
-        id: app-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.BOT_APP_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          owner: htl-stp-ecer
-          repositories: raccoon-example
-          permission-contents: write
-
-      - name: Dispatch lib-released
-        env:
-          TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::no app token; raccoon-example was not notified"
-            exit 0
-          fi
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/htl-stp-ecer/raccoon-example/dispatches \
-            -d '{"event_type":"lib-released","client_payload":{"version":"${{ needs.version.outputs.number }}"}}' \
-            || echo "::warning::could not notify raccoon-example"
