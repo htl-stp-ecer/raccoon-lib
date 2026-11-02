@@ -95,3 +95,45 @@ def test_transport_without_the_check_is_ignored(monkeypatch):
     monkeypatch.setitem(sys.modules, "raccoon_transport.contract_check", None)
     monkeypatch.delattr(raccoon_transport, "contract_check", raising=False)
     assert load_gate().check_transport_contract("155") is None
+
+
+# -- the library's own version check (specified in raccoon-transport contract/COMPONENT_VERSION_CHECK.md) --
+
+CASES = [
+    ('"v58"', "ok", None), ('"58"', "ok", None), ('" v58 "', "ok", None), ('"V58"', "ok", None),
+    ('"v59"', "version-mismatch", None), ('"v058"', "version-mismatch", None),
+    ('"dev"', "dev-warnung", "version-omitted"),
+    ('""', "bundle-fehler", "version-field-empty"), ('"  "', "bundle-fehler", "version-field-empty"),
+    ("58", "bundle-fehler", "version-field-missing"),
+]
+
+
+@pytest.mark.parametrize("entry,result,reason", CASES)
+def test_version_check_cases(tmp_path, entry, result, reason):
+    bundle = tmp_path / "b.json"
+    bundle.write_text('{"bundle":"b","contract_hash":"x","components":{"raccoon-lib":%s}}' % entry)
+    check = load_gate().version_check("v58", str(bundle))
+    assert (check.result, check.reason) == (result, reason)
+
+
+def test_version_check_missing_entry_and_components(tmp_path):
+    bundle = tmp_path / "b.json"
+    for text in ('{"components":{"raccoon-cli":"v1"}}', '{"contract_hash":"x"}'):
+        bundle.write_text(text)
+        check = load_gate().version_check("58", str(bundle))
+        assert (check.result, check.reason) == ("bundle-fehler", "version-field-missing")
+        assert "no version for raccoon-lib" in check.message
+
+
+def test_version_check_message_names_both_sides(tmp_path):
+    bundle = tmp_path / "b.json"
+    bundle.write_text('{"bundle":"2026.11.02","components":{"raccoon-lib":"v59"}}')
+    check = load_gate().version_check("v58", str(bundle))
+    assert check.message == ("component version mismatch: raccoon-lib is v58 but bundle 2026.11.02 expects v59; "
+                             "update or reflash so all components match")
+
+
+def test_version_check_without_a_readable_bundle_returns_none(tmp_path):
+    assert load_gate().version_check("58", str(tmp_path / "missing.json")) is None
+    (tmp_path / "bad.json").write_text("{nope")
+    assert load_gate().version_check("58", str(tmp_path / "bad.json")) is None
