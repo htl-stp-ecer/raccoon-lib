@@ -128,7 +128,12 @@ void TransportWriter::setChassisVelocity(float vx, float vy, float wz)
     msg.x = vx;
     msg.y = vy;
     msg.z = wz;
-    transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg);
+    // The stream self-heals on the next frame, but a stop (0, 0, 0) is often
+    // sent only once (Drive::hardStop): a lost stop leaves the robot driving.
+    if (vx == 0.0f && vy == 0.0f && wz == 0.0f)
+        transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg, reliableOpts);
+    else
+        transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg);
     CommandTrace::instance().record("chassis_vel", Channels::CHASSIS_VELOCITY_CMD, -1, vx, vy, wz,
                                     3, msg.timestamp);
 }
