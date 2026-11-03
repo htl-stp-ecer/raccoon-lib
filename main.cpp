@@ -15,6 +15,6 @@ PYBIND11_MODULE(_core, m) {
 #ifdef VERSION_INFO
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
 #else
-    m.attr("__version__") = "dev";
+    m.attr("__version__") = "0.0";
 #endif
 }
