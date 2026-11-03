@@ -69,7 +69,7 @@ __platform__ = _load_platform_bundle()
 try:
     from raccoon._core import __version__
 except ImportError:  # pragma: no cover - source-tree fallback for local tooling/tests
-    __version__ = "0+source"
+    __version__ = "0.0"
 
 # Minimum project format_version required by this version of raccoon-lib.
 # Bump this when a breaking YAML change lands (e.g. a robot.yml key renamed)

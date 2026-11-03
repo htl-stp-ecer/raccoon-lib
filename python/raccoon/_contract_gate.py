@@ -30,7 +30,7 @@ def _own_version() -> str:
             return version(dist)
         except PackageNotFoundError:
             continue
-    return "dev"
+    return "0.0"
 
 
 def _normalize(value: str) -> str:
