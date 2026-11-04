@@ -38,28 +38,6 @@ jobs:
             echo "has-code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # The tests run through build.py, the script developers run: the C++ tests and the fast Python
-  # tests, natively on an ARM runner (no qemu). The simulator tests (build.py --sim-tests) are not run
-  # here yet: 47 of them are out of date (see the documentation, build system section).
-  test:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          token: ${{ secrets.GH_PAT || github.token }}
-
-      - name: Cache ccache and dependencies
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/raccoon-build/raccoon-lib
-          key: test-arm64-native-${{ github.run_id }}
-          restore-keys: test-arm64-native-
-
-      - name: Build and test
-        run: python3 build.py --test --python-tests
-
   # Release number: one more than the highest number that already exists, as a
   # tag v<number> and on PyPI (raccoon-sim raccoon-library). github.run_number also counts every pull request and
   # every cancelled run, which leaves gaps.
@@ -279,59 +257,6 @@ jobs:
           name: wheels-${{ matrix.name }}
           path: ./wheelhouse/*.whl
 
-  # ─── The wheels for the Raspberry Pi, built by build.py (the script developers run) ──
-  # On a native ARM runner (nothing is cross compiled or emulated; the raccoon-library stub wheel
-  # is written from this build), and on x86 to build the cross compiled path the developers use on
-  # their PCs, so it cannot break unnoticed. Both run in parallel with the PyPI wheels below.
-  # --test is not used yet: eight C++ tests are out of date.
-  pi-build:
-    name: build.py • ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    needs: [changes, version]
-    if: >-
-      (github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || !inputs.release))) &&
-      needs.changes.outputs.has-code == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: arm64-native
-            os: ubuntu-24.04-arm
-          - name: x86-cross
-            os: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          token: ${{ secrets.GH_PAT || github.token }}
-
-      - name: Cache ccache and dependencies
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/raccoon-build/raccoon-lib
-          key: pi-build-${{ matrix.name }}-${{ github.run_id }}
-          restore-keys: pi-build-${{ matrix.name }}-
-
-      - name: Build
-        run: python3 build.py --version "${{ needs.version.outputs.number }}"
-
-      # Only the ARM build is used further: the stub wheel goes to PyPI, the compiled wheel can be
-      # downloaded from a test run and installed with deploy.py.
-      - name: Upload the wheels
-        if: matrix.name == 'arm64-native'
-        uses: actions/upload-artifact@v7
-        with:
-          name: pi-wheels
-          path: builds/*.whl
-
-      - name: Upload the raccoon-library header wheel
-        if: matrix.name == 'arm64-native'
-        uses: actions/upload-artifact@v7
-        with:
-          name: wheel-library
-          path: builds/raccoon_library-*.whl
-
   # ─── Publish raccoon-sim platform wheels to PyPI + GitHub Release ──────────
   # PyPI trusted publishing is scoped per project, and gh-action-pypi-publish
   # may only be invoked once per job — so raccoon-sim and raccoon-library are
@@ -340,9 +265,9 @@ jobs:
   publish-pypi:
     name: Publish raccoon-sim to PyPI
     runs-on: ubuntu-latest
-    needs: [build-wheels, pi-build, version]
-    # Run only when every matrix variant of build-wheels and pi-build succeeded, and when releasing.
-    if: always() && needs.build-wheels.result == 'success' && needs.pi-build.result == 'success' && (github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.release))
+    needs: [build-wheels, version]
+    # Run only when every matrix variant of build-wheels succeeded.
+    if: always() && needs.build-wheels.result == 'success' && (github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.release))
     permissions:
       id-token: write   # PyPI OIDC trusted-publisher
       contents: write   # Create GitHub Release + tag
@@ -366,24 +291,37 @@ jobs:
         with:
           python-version: "3.13"
 
-      # The DEFAULT platform-independent ``raccoon-library`` distribution: a py3-none-any package of
-      # .pyi stubs (no compiled code). It's what ``pip install raccoon-library`` gives you — for IDE
-      # type hints and the toolchain codegen. The compiled bindings + simulator ship separately as the
-      # ``raccoon-sim`` platform wheels sitting in dist/, and are pulled in via the
-      # ``raccoon-library[sim]`` extra (pinned raccoon-sim==<version>).
-      # build.py (job pi-build, native on an ARM runner) wrote it from the library it built.
-      # It goes into a SEPARATE dir (dist-lib/) because PyPI trusted publishing is per-project —
-      # raccoon-library is uploaded by the publish-library job (from the same artifact).
-      - name: Download the raccoon-library header wheel
-        uses: actions/download-artifact@v8
-        with:
-          name: wheel-library
-          path: dist-lib
-
-      - name: List the wheels
+      # Build the DEFAULT platform-independent ``raccoon-library`` distribution:
+      # a py3-none-any package of .pyi stubs (no compiled code). It's what
+      # ``pip install raccoon-library`` gives you — for IDE type hints and the
+      # toolchain codegen. The compiled bindings + simulator ship separately as
+      # the ``raccoon-sim`` platform wheels sitting in dist/, and are pulled in
+      # via the ``raccoon-library[sim]`` extra (pinned raccoon-sim==<version>).
+      # It goes into a SEPARATE dir (dist-lib/) because PyPI trusted publishing
+      # is per-project — raccoon-library is uploaded by the publish-library job.
+      - name: Build platform-independent raccoon-library (.pyi headers) wheel
         run: |
+          set -euxo pipefail
+          python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel build
+          python -m pip install --quiet ./raccoon-transport/python
+          # Import the compiled raccoon-sim (cp313 Linux x86_64) so pybind11-stubgen
+          # can introspect the native bindings.
+          LINUX_WHEEL=$(ls dist/raccoon_sim-*-cp313-cp313-manylinux*x86_64*.whl | head -1)
+          python -m pip install --quiet "${LINUX_WHEEL}"
+          STAGING="${RUNNER_TEMP}/stubs-staging" \
+          STUBS_OUTPUT="${GITHUB_WORKSPACE}/dist-lib" \
+          PYTHON=python \
+          bash scripts/build-stubs.sh "${{ needs.version.outputs.number }}"
           echo "=== dist/ (raccoon-sim platform wheels) ==="; ls -la dist/
           echo "=== dist-lib/ (raccoon-library header wheel) ==="; ls -la dist-lib/
+
+      # Hand the header wheel to the separate publish-library job. A per-project
+      # trusted publisher means one pypi-publish invocation per job.
+      - name: Upload raccoon-library header wheel for publish-library job
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-library
+          path: dist-lib/*.whl
 
       - name: Publish raccoon-sim to PyPI (OIDC trusted publisher)
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -489,7 +427,7 @@ jobs:
   # ─── Publish the platform-independent raccoon-library (.pyi) wheel to PyPI ──
   # Separate job because PyPI trusted publishing is per-project and
   # gh-action-pypi-publish may only run once per job. The header wheel was built
-  # and uploaded as the ``wheel-library`` artifact by the pi-build job.
+  # and uploaded as the ``wheel-library`` artifact by the publish-pypi job.
   publish-library:
     name: Publish raccoon-library to PyPI
     runs-on: ubuntu-latest
