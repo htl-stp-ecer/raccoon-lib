@@ -61,7 +61,7 @@ def test_unified_motion_pid_config_defaults_match_binding() -> None:
     assert cfg.saturation_min_scale == pytest.approx(0.2)
     assert cfg.saturation_hold_cycles == 5
     # Tolerances
-    assert cfg.distance_tolerance_m == pytest.approx(0.01)
+    assert cfg.distance_tolerance_m == pytest.approx(0.002)
     assert cfg.angle_tolerance_rad == pytest.approx(0.035)
 
 

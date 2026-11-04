@@ -110,9 +110,9 @@ class TestMerge:
         opt = imp["optimize"]([imp["drive_forward"](20), imp["drive_forward"](30)])
         # No user passes were chained.
         assert opt._passes == []
-        # But the effective pipeline prepends decompose + merge.
+        # But the effective pipeline prepends resolve_heading + decompose + merge.
         names = [p.name for p in opt._effective_passes()]
-        assert names[:2] == ["decompose", "merge"]
+        assert names[:3] == ["resolve_heading", "decompose", "merge"]
 
     @requires_libstp
     def test_merge_collapses_two_adjacent_drives(self):

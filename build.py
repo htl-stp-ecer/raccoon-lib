@@ -14,6 +14,8 @@ Usage:
     python3 build.py                  # local build, version 0.0
     python3 build.py --version 157    # release build (CI)
     python3 build.py --test           # also build the C++ tests and run them
+    python3 build.py --python-tests   # also run the fast Python tests (tests/python)
+    python3 build.py --sim-tests      # also run the simulator Python tests (minutes; use native mode)
     python3 build.py --mode native    # force a mode (native on x86 makes x86_64 wheels, for testing the script)
 
 Result (both wheels always get the same version, the stubs pin raccoon-sim==<version>):
@@ -99,20 +101,33 @@ def cmake_args(cache: Path, mode: str) -> list[str]:
         f"-DFETCHCONTENT_BASE_DIR={cache / 'deps'}",
         "-DCMAKE_C_COMPILER_LAUNCHER=ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
         "-DLIBSTP_RUN_RUFF=OFF", "-DLIBSTP_RUN_MYPY=OFF",
+        # As the PyPI wheels: on Linux both platform bundles (mock and wombat) are built and switched at
+        # runtime; DRIVER_BUNDLE=mock is the static fallback and what builds raccoon.sim.mock.
+        "-DDRIVER_BUNDLE=mock",
     ]
     if mode == "cross":
         args.insert(0, f"-DCMAKE_TOOLCHAIN_FILE={WORK / TOOLCHAIN}")
     return args
 
 
-def build_sim_wheel(cache: Path, out: Path, mode: str) -> Path:
+def build_sim_wheel(cache: Path, out: Path, mode: str, tests: bool = False) -> Path:
+    """The raccoon-sim wheel. tests=True builds the flavour for the tests instead: one static mock
+    platform (the simulator helpers raccoon.sim.mock are only there then) and the C++ test programs,
+    which stay in the build directory for ctest."""
     env = dict(os.environ, CMAKE_BUILD_PARALLEL_LEVEL=str(os.cpu_count() or 4))
     if mode == "cross":  # the wheel is tagged and named for the Pi, not for the PC it is built on
         env.update(_PYTHON_HOST_PLATFORM="linux-aarch64", SETUPTOOLS_EXT_SUFFIX=EXT_SUFFIX)
+    args = cmake_args(cache, mode)
+    defines: list[str] = []
+    if tests:
+        args += ["-DLIBSTP_BUILD_TESTS=ON", "-DLIBSTP_RUNTIME_PLATFORM=OFF", "-DCMAKE_BUILD_TYPE=Release"]
+        if mode == "cross":  # CMake runs the test programs (gtest discovery) through this
+            # a define, not in cmake.args: its value is a list and cmake.args is split at ";"
+            defines += ["-C", f"cmake.define.CMAKE_CROSSCOMPILING_EMULATOR={EMULATOR}"]
     run([
         "python", "-m", "build", "--wheel", "--no-isolation", "--outdir", str(out),
-        "-C", f"build-dir={cache / f'wheel-build-{mode}'}",
-        "-C", "cmake.args=" + ";".join(cmake_args(cache, mode)),
+        "-C", f"build-dir={cache / (f'test-build-{mode}' if tests else f'wheel-build-{mode}')}",
+        "-C", "cmake.args=" + ";".join(args), *defines,
     ], cwd=WORK, env=env)
     wheels = sorted(out.glob("raccoon_sim-*.whl"))
     if len(wheels) != 1:
@@ -120,18 +135,9 @@ def build_sim_wheel(cache: Path, out: Path, mode: str) -> Path:
     return wheels[0]
 
 
-def run_tests(cache: Path, version: str, mode: str) -> None:
-    """Build the C++ tests and run them (cross: for the Pi, under qemu-user; native: directly)."""
-    build_dir = cache / f"test-build-{mode}"
-    run([
-        "cmake", "-S", str(WORK), "-B", str(build_dir), "-G", "Ninja",
-        "-DCMAKE_BUILD_TYPE=Release", "-DLIBSTP_BUILD_TESTS=ON",
-        "-DSKBUILD_PROJECT_NAME=raccoon", f"-DSKBUILD_PROJECT_VERSION={version}",
-        *([f"-DCMAKE_CROSSCOMPILING_EMULATOR={EMULATOR}"] if mode == "cross" else []),
-        *cmake_args(cache, mode),
-    ])
-    run(["cmake", "--build", str(build_dir), "-j", str(os.cpu_count() or 4)])
-    run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
+def run_cpp_tests(cache: Path, mode: str) -> None:
+    """Run the C++ tests built together with the test wheel (cross: under qemu-user)."""
+    run(["ctest", "--test-dir", str(cache / f"test-build-{mode}"), "--output-on-failure"])
 
 
 STUBS_PYPROJECT = '''\
@@ -169,6 +175,52 @@ def target_python(mode: str, site: Path, *args: str, cwd: str = "/tmp") -> None:
         cwd=cwd, env={"PYTHONPATH": str(site), "PYTHONDONTWRITEBYTECODE": "1", "HOME": "/tmp", "PATH": os.environ["PATH"]})
 
 
+def prepare_site(site: Path, sim_wheel: Path, mode: str, packages: list[str]) -> None:
+    """A folder with the wheel, its Python dependencies and `packages`, for target_python().
+
+    cross: the packages are downloaded as aarch64 wheels (nothing is built); native: the wheels for
+    this machine."""
+    shutil.rmtree(site, ignore_errors=True)
+    site.mkdir(parents=True)
+    with zipfile.ZipFile(sim_wheel) as archive:
+        archive.extractall(site)
+    platform_args = (["--python-version", "3.13", "--implementation", "cp", "--platform", "manylinux_2_28_aarch64",
+                      "--platform", "manylinux2014_aarch64", "--platform", "linux_aarch64"] if mode == "cross" else [])
+    run(["pip", "install", "--quiet", "--target", str(site), "--only-binary=:all:", *platform_args, "--no-deps",
+         "numpy", "pyyaml", "aiosqlite", *packages])
+    run(["pip", "install", "--quiet", "--target", str(site), "--no-deps", str(WORK / "raccoon-transport/python")])
+
+
+# What the CI test job ran: the fast tests (--python-tests), then the simulator tests and the
+# auto-tune simulator tests (--sim-tests; they take minutes, and under qemu-user far too long).
+PYTEST_COMMON = ["-m", "pytest", "-p", "no:cacheprovider", "-o", "asyncio_default_fixture_loop_scope=function", "-W", "ignore::pytest.PytestAssertRewriteWarning", "-ra"]
+PYTEST_FAST = [
+    ["tests/python", "--ignore=tests/python/sim", "--ignore=tests/python/test_input_validation.py",
+     "--ignore=tests/python/test_resource_conflicts.py", "--ignore=tests/python/test_watchdog.py",
+     "--ignore=tests/python/test_stubs.py", "--ignore=tests/python/testing/test_plugin_end_to_end.py"],
+]
+PYTEST_SIM = [
+    ["tests/python/sim", "--ignore=tests/python/sim/test_auto_tune.py", "--reruns", "1", "--reruns-delay", "2"],
+    ["tests/python/sim/test_auto_tune.py", "--reruns", "1", "--reruns-delay", "2"],
+]
+
+
+def run_python_tests(test_wheel: Path, mode: str, runs: list[list[str]]) -> None:
+    """pytest on the test wheel (cross: with the aarch64 Python under qemu-user)."""
+    site = Path("/tmp/test-site")
+    prepare_site(site, test_wheel, mode, ["pytest", "pytest-asyncio", "pytest-rerunfailures", "iniconfig",
+                                           "pluggy", "packaging", "pygments"])
+    failed = []
+    for arguments in runs:
+        print(f"--- pytest {' '.join(arguments)} ---", flush=True)
+        try:
+            target_python(mode, site, *PYTEST_COMMON, *arguments, cwd=str(WORK))
+        except subprocess.CalledProcessError:
+            failed.append(arguments[0])
+    if failed:
+        fail("python tests failed: " + ", ".join(failed))
+
+
 def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Path:
     """The raccoon-library wheel: the .pyi files of raccoon-sim, nothing else.
 
@@ -178,24 +230,11 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Pat
     site = Path("/tmp/arm64-site")
     staging = Path("/tmp/stubs-staging")
     py_stubs = Path("/tmp/py-stubs")
-    for path in (site, staging, py_stubs):
+    for path in (staging, py_stubs):
         shutil.rmtree(path, ignore_errors=True)
-    site.mkdir()
     (staging / "raccoon").mkdir(parents=True)
-
-    # The module and what it imports, for the aarch64 Python (the packages are downloaded as
-    # aarch64 wheels, nothing is built).
-    with zipfile.ZipFile(sim_wheel) as archive:
-        archive.extractall(site)
-    # cross: downloaded as aarch64 wheels; native: the wheels for this machine
-    platform_args = (["--python-version", "3.13", "--implementation", "cp", "--platform", "manylinux_2_28_aarch64",
-                      "--platform", "manylinux2014_aarch64", "--platform", "linux_aarch64"] if mode == "cross" else [])
-    run([
-        "pip", "install", "--quiet", "--target", str(site), "--only-binary=:all:", *platform_args, "--no-deps",
-        "numpy", "pyyaml", "aiosqlite", "pybind11-stubgen", "mypy", "mypy_extensions", "typing_extensions",
-        "pathspec", "librt",
-    ])
-    run(["pip", "install", "--quiet", "--target", str(site), "--no-deps", str(WORK / "raccoon-transport/python")])
+    prepare_site(site, sim_wheel, mode, ["pybind11-stubgen", "mypy", "mypy_extensions", "typing_extensions",
+                                         "pathspec", "librt"])
 
     print("--- pybind11-stubgen ---")
     try:
@@ -241,21 +280,30 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Pat
     return wheels[0]
 
 
-def run_in_container(version: str, owner: str, test: bool, mode: str) -> None:
+def run_in_container(version: str, owner: str, test: bool, python_tests: bool, sim_tests: bool, mode: str) -> None:
     cache = Path("/cache")
     out = Path("/tmp/out")
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir()
     prepare_sources(version)
     sim = build_sim_wheel(cache, out, mode)
-    if test:
-        run_tests(cache, version, mode)
     stubs = build_stub_wheel(sim, version, out, mode)
     uid, gid = (int(x) for x in owner.split(":"))
     for wheel in (sim, stubs):
         target = Path("/out") / wheel.name
         shutil.copy(wheel, target)
         os.chown(target, uid, gid)
+    if test or python_tests or sim_tests:
+        test_out = Path("/tmp/out-test")
+        shutil.rmtree(test_out, ignore_errors=True)
+        test_out.mkdir()
+        test_wheel = build_sim_wheel(cache, test_out, mode, tests=True)
+        if test:
+            run_cpp_tests(cache, mode)
+        if python_tests:
+            run_python_tests(test_wheel, mode, PYTEST_FAST)
+        if sim_tests:
+            run_python_tests(test_wheel, mode, PYTEST_SIM)
 
 
 # ── on the host ──────────────────────────────────────────────────────────
@@ -265,6 +313,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build the raccoon-lib wheels for the Pi in Docker.")
     parser.add_argument("--version", default="0.0", help="version of both wheels (default: 0.0 = local build)")
     parser.add_argument("--test", action="store_true", help="also build the C++ tests and run them")
+    parser.add_argument("--python-tests", action="store_true", help="run the fast Python tests (tests/python)")
+    parser.add_argument("--sim-tests", action="store_true",
+                        help="run the simulator Python tests (minutes; use native mode, qemu-user is far too slow)")
     parser.add_argument("--mode", choices=["auto", "cross", "native"], default="auto",
                         help="cross: aarch64 compiler on x86_64; native: compile on an arm64 machine "
                              "(default: native on aarch64, cross otherwise)")
@@ -282,7 +333,7 @@ def main() -> None:
 
     mode = args.mode if args.mode != "auto" else ("native" if platform.machine() in ("aarch64", "arm64") else "cross")
     if args.in_container:
-        run_in_container(args.version, args.owner, args.test, mode)
+        run_in_container(args.version, args.owner, args.test, args.python_tests, args.sim_tests, mode)
         return
 
     if not shutil.which("docker"):
@@ -310,8 +361,9 @@ def main() -> None:
         "-v", f"{ROOT}:/src:ro", "-v", f"{BUILDS}:/out", "-v", f"{cache}:/cache",
         image, "python3", "/src/build.py", "--in-container", "--mode", mode, "--version", args.version, "--owner", user,
     ]
-    if args.test:
-        command.append("--test")
+    for flag, enabled in (("--test", args.test), ("--python-tests", args.python_tests), ("--sim-tests", args.sim_tests)):
+        if enabled:
+            command.append(flag)
     run(command)
 
     wheels = sorted([*BUILDS.glob("raccoon_sim-*.whl"), *BUILDS.glob("raccoon_library-*.whl")])

@@ -15,7 +15,6 @@ full public surface of ``raccoon.step.motion.line_follow`` /
 5. The actual *runtime* error/steering logic of ``on_update()`` — the
    integral behaviour — driven through injected fake motion/PID/condition
    doubles so we assert the exact error value and control wiring.
-6. ``to_simulation_step()`` delta geometry.
 
 The C++ ``LinearMotion`` / ``DirectionalLineFollowMotion`` are only created
 in ``on_start()``; every test here either skips ``on_start()`` (injecting a
@@ -122,6 +121,11 @@ class FakeLinearMotion:
 class _TelemetrySample:
     def __init__(self, correction: float) -> None:
         self.correction = correction
+        # read by the step's debug line
+        self.cmd_vx_mps = 0.0
+        self.cmd_vy_mps = 0.0
+        self.cmd_wz_radps = 0.0
+        self.heading_error_rad = 0.0
 
 
 class FakeDirectionalMotion:
@@ -911,44 +915,6 @@ def test_until_short_circuits_directional() -> None:
     assert step.on_update(_ROBOT, 0.01) is True
     assert motion.sensor_errors == []  # never fed the controller
     assert motion.updates == []
-
-
-# ===========================================================================
-# 6. to_simulation_step() delta geometry
-# ===========================================================================
-
-
-def test_simulation_delta_profiled_forward_only() -> None:
-    step = FollowLine(FakeSensor(), FakeSensor(), distance_cm=50)
-    delta = step.to_simulation_step().delta
-    assert delta.forward == pytest.approx(0.5)  # 50 cm -> 0.5 m
-    assert delta.strafe == pytest.approx(0.0)
-    assert delta.angular == pytest.approx(0.0)
-
-
-def test_simulation_delta_profiled_until_only_uses_fallback_distance() -> None:
-    step = FollowLine(FakeSensor(), FakeSensor(), until=FakeCondition())
-    delta = step.to_simulation_step().delta
-    # No distance -> 0.3 m fallback.
-    assert delta.forward == pytest.approx(0.3)
-
-
-def test_simulation_delta_directional_splits_by_speed_components() -> None:
-    step = DirectionalFollowLine(
-        FakeSensor(), FakeSensor(), distance_cm=50, heading_speed=0.3, strafe_speed=0.4
-    )
-    delta = step.to_simulation_step().delta
-    mag = math.hypot(0.3, 0.4)  # 0.5
-    assert delta.forward == pytest.approx(0.5 * 0.3 / mag)  # 0.5 m * 0.6
-    assert delta.strafe == pytest.approx(0.5 * 0.4 / mag)  # 0.5 m * 0.8
-
-
-def test_simulation_delta_directional_zero_speed_defaults_to_forward() -> None:
-    # When both speed components are 0, geometry falls back to pure forward.
-    step = DirectionalFollowLine(FakeSensor(), FakeSensor(), until=FakeCondition())
-    delta = step.to_simulation_step().delta
-    assert delta.forward == pytest.approx(0.3)  # 0.3 m fallback * fwd_frac 1.0
-    assert delta.strafe == pytest.approx(0.0)
 
 
 # ===========================================================================

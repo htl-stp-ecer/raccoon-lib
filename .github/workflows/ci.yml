@@ -38,146 +38,27 @@ jobs:
             echo "has-code=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # The tests run through build.py, the script developers run: the C++ tests and the fast Python
+  # tests, natively on an ARM runner (no qemu). The simulator tests (build.py --sim-tests) are not run
+  # here yet: 47 of them are out of date (see the documentation, build system section).
   test:
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 90
-    # Temporarily disabled: sim-accuracy tests are failing and wasting compute.
-    # Re-enable (remove this line) once test_smooth_path / test_path_optimizer
-    # regressions are fixed.
-    if: false
-    env:
-      IS_DEPENDABOT_PR: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
-      CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
-      PIP_CACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/pip
-
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
     steps:
-      - name: Checkout with submodules
-        if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
           token: ${{ secrets.GH_PAT || github.token }}
-          clean: false
 
-      - name: Skip self-hosted tests for Dependabot PRs
-        if: env.IS_DEPENDABOT_PR == 'true'
-        run: echo "Skipping self-hosted test job for Dependabot pull requests because org secrets are not exposed there."
-
-      - name: Clean stale test build artifacts
-        if: env.IS_DEPENDABOT_PR != 'true'
-        run: |
-          rm -rf .cmake-cache-docker-test
-          rm -rf _skbuild-docker-test
-          rm -rf build-test
-
-      - name: Restore compiler and package caches
-        if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache/restore@v6
+      - name: Cache ccache and dependencies
+        uses: actions/cache@v6
         with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-
+          path: ~/.cache/raccoon-build/raccoon-lib
+          key: test-arm64-native-${{ github.run_id }}
+          restore-keys: test-arm64-native-
 
-      - name: Run native test suite
-        if: env.IS_DEPENDABOT_PR != 'true'
-        run: |
-          IMAGE_NAME="libstp-dev:test"
-          mkdir -p "$CCACHE_HOST_DIR" "$PIP_CACHE_HOST_DIR"
-
-          DOCKERFILE_HASH=$(sha256sum .github/docker/Dockerfile | cut -c1-12)
-          VERSIONED_IMAGE="libstp-dev:test-${DOCKERFILE_HASH}"
-          if ! docker image inspect "$VERSIONED_IMAGE" >/dev/null 2>&1; then
-            echo "Dockerfile changed (hash $DOCKERFILE_HASH) — rebuilding image..."
-            docker build -f .github/docker/Dockerfile -t "$VERSIONED_IMAGE" .
-            docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
-          else
-            echo "Reusing cached image $VERSIONED_IMAGE"
-            docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
-          fi
-
-          run_docker() {
-            docker run --rm \
-              -v "$PWD":/src \
-              -v "$CCACHE_HOST_DIR":/ccache \
-              -v "$PIP_CACHE_HOST_DIR":/pip-cache \
-              -e CCACHE_DIR=/ccache \
-              -e CCACHE_MAXSIZE=3G \
-              -e CCACHE_COMPRESS=1 \
-              -e CCACHE_BASEDIR=/src \
-              -e CCACHE_NOHASHDIR=1 \
-              -e CCACHE_COMPILERCHECK=content \
-              -e PIP_CACHE_DIR=/pip-cache/root-cache \
-              -w /src \
-              "$IMAGE_NAME" bash -lc "mkdir -p \"\$PIP_CACHE_DIR\" && chown 0:0 \"\$PIP_CACHE_DIR\" && $1"
-          }
-
-          run_docker "
-            set -euo pipefail
-
-            echo '::group::Install build dependencies'
-            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy pytest-rerunfailures
-            echo '::endgroup::'
-
-            echo '::group::Build editable package + test binaries'
-            pip install /src/raccoon-transport/python
-            CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) pip install -e /src \
-              --no-build-isolation \
-              --config-settings=build-dir=/src/_skbuild-docker-test \
-              --config-settings=cmake.define.LIBSTP_BUILD_TESTS=ON \
-              --config-settings=cmake.define.DRIVER_BUNDLE=mock \
-              --config-settings=cmake.define.LIBSTP_RUN_MYPY=OFF \
-              --config-settings=cmake.define.CMAKE_BUILD_TYPE=Release \
-              --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test \
-              --config-settings=cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache \
-              --config-settings=cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
-            echo '::endgroup::'
-
-            echo '::group::Run C++ tests'
-            ctest --test-dir /src/_skbuild-docker-test --output-on-failure -E MockSimIntegration
-            echo '::endgroup::'
-
-            echo '::group::Run fast Python tests (skip sim + known-broken)'
-            python -m pytest tests/python \
-              --ignore=tests/python/sim \
-              --ignore=tests/python/test_input_validation.py \
-              --ignore=tests/python/test_resource_conflicts.py \
-              --ignore=tests/python/test_watchdog.py \
-              --ignore=tests/python/test_stubs.py \
-              --ignore=tests/python/testing/test_plugin_end_to_end.py \
-              -ra --showlocals -x \
-              -W ignore::pytest.PytestAssertRewriteWarning
-            echo '::endgroup::'
-
-            echo '::group::Run sim tests (excluding auto-tune)'
-            python -m pytest tests/python/sim \
-              --ignore=tests/python/sim/test_auto_tune.py \
-              -ra --showlocals \
-              --reruns 1 --reruns-delay 2 \
-              -W ignore::pytest.PytestAssertRewriteWarning
-            echo '::endgroup::'
-
-            echo '::group::Run auto-tune sim tests'
-            python -m pytest tests/python/sim/test_auto_tune.py \
-              -ra --showlocals -v \
-              --reruns 1 --reruns-delay 2 \
-              -W ignore::pytest.PytestAssertRewriteWarning
-            echo '::endgroup::'
-          "
-
-          run_docker "ccache --show-stats"
-          echo "✓ Native C++ and Python tests passed"
-
-      - name: Save compiler and package caches
-        if: always() && env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Build and test
+        run: python3 build.py --test --python-tests
 
   # Release number: one more than the highest number that already exists, as a
   # tag v<number> and on PyPI (raccoon-sim raccoon-library). github.run_number also counts every pull request and
