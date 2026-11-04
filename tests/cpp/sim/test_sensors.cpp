@@ -74,7 +74,8 @@ TEST(RaycastTest, AngledRayHitsCorrectSegment)
 
 // ─── SimWorld line sensor sampling ───
 
-TEST(SimSensorTest, LineSensorReturnsZeroOnBlackAnd1023OnWhite)
+// Like a real reflectance sensor (and IRSensor::probabilityOfBlack): LOW on white, HIGH on black.
+TEST(SimSensorTest, LineSensorReturns1023OnBlackAndZeroOnWhite)
 {
     SimWorld sim;
     sim.configure(tinyRobot(), defaultMotors());
@@ -89,12 +90,12 @@ TEST(SimSensorTest, LineSensorReturnsZeroOnBlackAnd1023OnWhite)
     sim.setPose({100.0f, 50.0f, 0.0f});
     auto v = sim.readAnalog(2);
     ASSERT_TRUE(v.has_value());
-    EXPECT_EQ(*v, 0);
+    EXPECT_EQ(*v, 1023);
 
     sim.setPose({50.0f, 50.0f, 0.0f});
     v = sim.readAnalog(2);
     ASSERT_TRUE(v.has_value());
-    EXPECT_EQ(*v, 1023);
+    EXPECT_EQ(*v, 0);
 }
 
 TEST(SimSensorTest, UnregisteredPortReturnsNullopt)
