@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """build.py — build the raccoon-lib wheels for the Raspberry Pi in Docker.
 
-Nothing is installed on the host and nothing is written outside ./builds/. The library is cross
-compiled on your PC at native speed (aarch64 compiler, nothing is emulated). Only finished programs
-run under qemu-user: the C++ tests and the Python that writes the type stubs (no binfmt, no
---privileged).
+Nothing is installed on the host and nothing is written outside ./builds/. Two modes, picked by the
+CPU of the machine it runs on (or --mode):
+
+  cross   (x86_64 PC)   the library is cross compiled with the aarch64 compiler at native speed,
+                        nothing is emulated. Only finished programs run under qemu-user: the C++
+                        tests and the Python that writes the type stubs (no binfmt, no --privileged).
+  native  (aarch64)     compiled with the normal compiler of an arm64 image, everything runs
+                        natively, no qemu. This is what the CI does on an ARM runner.
 
 Usage:
     python3 build.py                  # local build, version 0.0
     python3 build.py --version 157    # release build (CI)
-    python3 build.py --test           # also build the C++ tests and run them with qemu-user
+    python3 build.py --test           # also build the C++ tests and run them
+    python3 build.py --mode native    # force a mode (native on x86 makes x86_64 wheels, for testing the script)
 
 Result (both wheels always get the same version, the stubs pin raccoon-sim==<version>):
     builds/raccoon_sim-<version>-cp313-cp313-linux_aarch64.whl   compiled runtime + simulator (Pi)
@@ -23,6 +28,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -33,7 +39,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 BUILDS = ROOT / "builds"
-IMAGE = "raccoon-lib-build"
+IMAGE = "raccoon-lib-build"  # + "-cross" / "-native"
 VERSION_PATTERN = re.compile(r"^[0-9]+(\.[0-9]+)*$")
 
 TOOLCHAIN = "cmake/toolchains/aarch64-linux-gnu.cmake"
@@ -88,22 +94,25 @@ def prepare_sources(version: str) -> None:
     run(["python", "tools/generate_step_builders.py"], cwd=WORK, stdout=subprocess.DEVNULL)
 
 
-def cmake_cross_args(cache: Path) -> list[str]:
-    return [
-        f"-DCMAKE_TOOLCHAIN_FILE={WORK / TOOLCHAIN}",
+def cmake_args(cache: Path, mode: str) -> list[str]:
+    args = [
         f"-DFETCHCONTENT_BASE_DIR={cache / 'deps'}",
         "-DCMAKE_C_COMPILER_LAUNCHER=ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
         "-DLIBSTP_RUN_RUFF=OFF", "-DLIBSTP_RUN_MYPY=OFF",
     ]
+    if mode == "cross":
+        args.insert(0, f"-DCMAKE_TOOLCHAIN_FILE={WORK / TOOLCHAIN}")
+    return args
 
 
-def build_sim_wheel(cache: Path, out: Path) -> Path:
-    env = dict(os.environ, _PYTHON_HOST_PLATFORM="linux-aarch64", SETUPTOOLS_EXT_SUFFIX=EXT_SUFFIX,
-               CMAKE_BUILD_PARALLEL_LEVEL=str(os.cpu_count() or 4))
+def build_sim_wheel(cache: Path, out: Path, mode: str) -> Path:
+    env = dict(os.environ, CMAKE_BUILD_PARALLEL_LEVEL=str(os.cpu_count() or 4))
+    if mode == "cross":  # the wheel is tagged and named for the Pi, not for the PC it is built on
+        env.update(_PYTHON_HOST_PLATFORM="linux-aarch64", SETUPTOOLS_EXT_SUFFIX=EXT_SUFFIX)
     run([
         "python", "-m", "build", "--wheel", "--no-isolation", "--outdir", str(out),
-        "-C", f"build-dir={cache / 'wheel-build'}",
-        "-C", "cmake.args=" + ";".join(cmake_cross_args(cache)),
+        "-C", f"build-dir={cache / f'wheel-build-{mode}'}",
+        "-C", "cmake.args=" + ";".join(cmake_args(cache, mode)),
     ], cwd=WORK, env=env)
     wheels = sorted(out.glob("raccoon_sim-*.whl"))
     if len(wheels) != 1:
@@ -111,15 +120,15 @@ def build_sim_wheel(cache: Path, out: Path) -> Path:
     return wheels[0]
 
 
-def run_tests(cache: Path, version: str) -> None:
-    """Build the C++ tests for the Pi and run them with qemu-user."""
-    build_dir = cache / "test-build"
+def run_tests(cache: Path, version: str, mode: str) -> None:
+    """Build the C++ tests and run them (cross: for the Pi, under qemu-user; native: directly)."""
+    build_dir = cache / f"test-build-{mode}"
     run([
         "cmake", "-S", str(WORK), "-B", str(build_dir), "-G", "Ninja",
         "-DCMAKE_BUILD_TYPE=Release", "-DLIBSTP_BUILD_TESTS=ON",
         "-DSKBUILD_PROJECT_NAME=raccoon", f"-DSKBUILD_PROJECT_VERSION={version}",
-        f"-DCMAKE_CROSSCOMPILING_EMULATOR={EMULATOR}",
-        *cmake_cross_args(cache),
+        *([f"-DCMAKE_CROSSCOMPILING_EMULATOR={EMULATOR}"] if mode == "cross" else []),
+        *cmake_args(cache, mode),
     ])
     run(["cmake", "--build", str(build_dir), "-j", str(os.cpu_count() or 4)])
     run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"])
@@ -151,17 +160,20 @@ packages = [
 '''
 
 
-def qemu_python(site: Path, *args: str, cwd: str = "/tmp") -> None:
-    """Run the aarch64 Python of the image under qemu-user, with the packages in `site`."""
-    run(["qemu-aarch64", "-L", ARM_ROOT, f"{ARM_ROOT}/usr/bin/python3.13", *args],
+def target_python(mode: str, site: Path, *args: str, cwd: str = "/tmp") -> None:
+    """Run the Python that can import the finished module, with the packages in `site`:
+    cross: the aarch64 Python of the image under qemu-user; native: the image's own Python."""
+    interpreter = (["qemu-aarch64", "-L", ARM_ROOT, f"{ARM_ROOT}/usr/bin/python3.13"] if mode == "cross"
+                   else ["python"])
+    run([*interpreter, *args],
         cwd=cwd, env={"PYTHONPATH": str(site), "PYTHONDONTWRITEBYTECODE": "1", "HOME": "/tmp", "PATH": os.environ["PATH"]})
 
 
-def build_stub_wheel(sim_wheel: Path, version: str, out: Path) -> Path:
+def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Path:
     """The raccoon-library wheel: the .pyi files of raccoon-sim, nothing else.
 
-    pybind11-stubgen and mypy's stubgen import the finished module, so they run with the aarch64
-    Python under qemu-user, on the wheel that was just built.
+    pybind11-stubgen and mypy's stubgen import the finished module, so they run on the wheel that
+    was just built, with a Python that can load it (see target_python).
     """
     site = Path("/tmp/arm64-site")
     staging = Path("/tmp/stubs-staging")
@@ -175,10 +187,11 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path) -> Path:
     # aarch64 wheels, nothing is built).
     with zipfile.ZipFile(sim_wheel) as archive:
         archive.extractall(site)
+    # cross: downloaded as aarch64 wheels; native: the wheels for this machine
+    platform_args = (["--python-version", "3.13", "--implementation", "cp", "--platform", "manylinux_2_28_aarch64",
+                      "--platform", "manylinux2014_aarch64", "--platform", "linux_aarch64"] if mode == "cross" else [])
     run([
-        "pip", "install", "--quiet", "--target", str(site), "--only-binary=:all:", "--python-version", "3.13",
-        "--implementation", "cp", "--platform", "manylinux_2_28_aarch64", "--platform", "manylinux2014_aarch64",
-        "--platform", "linux_aarch64", "--no-deps",
+        "pip", "install", "--quiet", "--target", str(site), "--only-binary=:all:", *platform_args, "--no-deps",
         "numpy", "pyyaml", "aiosqlite", "pybind11-stubgen", "mypy", "mypy_extensions", "typing_extensions",
         "pathspec", "librt",
     ])
@@ -186,12 +199,12 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path) -> Path:
 
     print("--- pybind11-stubgen ---")
     try:
-        qemu_python(site, "-m", "pybind11_stubgen", "raccoon", "-o", str(staging), "--ignore-all-errors")
+        target_python(mode, site, "-m", "pybind11_stubgen", "raccoon", "-o", str(staging), "--ignore-all-errors")
     except subprocess.CalledProcessError:
         print("pybind11-stubgen reported errors, using what it wrote")
     print("--- mypy stubgen --inspect-mode ---")
     try:
-        qemu_python(site, "-m", "mypy.stubgen", "--inspect-mode", "-p", "raccoon",
+        target_python(mode, site, "-m", "mypy.stubgen", "--inspect-mode", "-p", "raccoon",
                     "--search-path", str(site), "-o", str(py_stubs))
     except subprocess.CalledProcessError:
         print("stubgen reported errors, using what it wrote")
@@ -228,16 +241,16 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path) -> Path:
     return wheels[0]
 
 
-def run_in_container(version: str, owner: str, test: bool) -> None:
+def run_in_container(version: str, owner: str, test: bool, mode: str) -> None:
     cache = Path("/cache")
     out = Path("/tmp/out")
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir()
     prepare_sources(version)
-    sim = build_sim_wheel(cache, out)
+    sim = build_sim_wheel(cache, out, mode)
     if test:
-        run_tests(cache, version)
-    stubs = build_stub_wheel(sim, version, out)
+        run_tests(cache, version, mode)
+    stubs = build_stub_wheel(sim, version, out, mode)
     uid, gid = (int(x) for x in owner.split(":"))
     for wheel in (sim, stubs):
         target = Path("/out") / wheel.name
@@ -251,7 +264,10 @@ def run_in_container(version: str, owner: str, test: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the raccoon-lib wheels for the Pi in Docker.")
     parser.add_argument("--version", default="0.0", help="version of both wheels (default: 0.0 = local build)")
-    parser.add_argument("--test", action="store_true", help="also build the C++ tests and run them with qemu-user")
+    parser.add_argument("--test", action="store_true", help="also build the C++ tests and run them")
+    parser.add_argument("--mode", choices=["auto", "cross", "native"], default="auto",
+                        help="cross: aarch64 compiler on x86_64; native: compile on an arm64 machine "
+                             "(default: native on aarch64, cross otherwise)")
     parser.add_argument("--image", help="use this Docker image instead of building ./Dockerfile")
     parser.add_argument(
         "--cache-dir", default=str(Path.home() / ".cache" / "raccoon-build" / "raccoon-lib"),
@@ -264,8 +280,9 @@ def main() -> None:
     if not VERSION_PATTERN.match(args.version):
         fail(f"--version must be numbers separated by dots (got {args.version!r})")
 
+    mode = args.mode if args.mode != "auto" else ("native" if platform.machine() in ("aarch64", "arm64") else "cross")
     if args.in_container:
-        run_in_container(args.version, args.owner, args.test)
+        run_in_container(args.version, args.owner, args.test, mode)
         return
 
     if not shutil.which("docker"):
@@ -275,9 +292,9 @@ def main() -> None:
 
     image = args.image
     if not image:
-        image = IMAGE
+        image = f"{IMAGE}-{mode}"
         print(f"▶ Building Docker image {image}")
-        run(["docker", "build", "-t", image, "-f", str(ROOT / "Dockerfile"), str(ROOT)])
+        run(["docker", "build", "--target", mode, "-t", image, "-f", str(ROOT / "Dockerfile"), str(ROOT)])
 
     cache = Path(args.cache_dir)
     (cache / "ccache").mkdir(parents=True, exist_ok=True)
@@ -286,12 +303,12 @@ def main() -> None:
     for stale in [*BUILDS.glob("raccoon_sim-*.whl"), *BUILDS.glob("raccoon_library-*.whl"), BUILDS / "manifest.json"]:
         stale.unlink(missing_ok=True)
 
-    print(f"▶ Building raccoon-lib {args.version} (cross compiled for aarch64)")
+    print(f"▶ Building raccoon-lib {args.version} ({'cross compiled for aarch64' if mode == 'cross' else 'native'})")
     command = [
         "docker", "run", "--rm", "--user", user, "-e", "HOME=/tmp",
         "-e", "CCACHE_DIR=/cache/ccache", "-e", "CCACHE_BASEDIR=/tmp/w",
         "-v", f"{ROOT}:/src:ro", "-v", f"{BUILDS}:/out", "-v", f"{cache}:/cache",
-        image, "python3", "/src/build.py", "--in-container", "--version", args.version, "--owner", user,
+        image, "python3", "/src/build.py", "--in-container", "--mode", mode, "--version", args.version, "--owner", user,
     ]
     if args.test:
         command.append("--test")
