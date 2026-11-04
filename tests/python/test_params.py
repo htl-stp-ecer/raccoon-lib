@@ -322,14 +322,9 @@ def test_profile_entry_requires_number_and_side():
     assert s._closed is False
 
 
-def test_profile_entry_backspace_and_cancel():
-    import asyncio
-
+def test_profile_entry_backspace():
+    # The screen has no cancel path (see _ProfileEntryScreen): the only way out is submit.
     s = _make_screen()
     _type(s, "1", "back")
     assert s._number_str == ""
     assert s._is_valid() is False
-
-    asyncio.run(s.on_cancel())
-    assert s._closed is True
-    assert s._result is None

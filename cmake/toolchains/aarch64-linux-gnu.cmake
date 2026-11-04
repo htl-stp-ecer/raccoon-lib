@@ -1,10 +1,10 @@
 # Cross-compilation toolchain: x86_64 host → aarch64 Raspberry Pi 3
-# Prerequisites: run scripts/setup-cross-toolchain.sh once before using this.
+# Used by build.py inside the Docker image (Dockerfile); nothing to install on the host.
 #
 # Usage (direct CMake): cmake -B build-cross
 # -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/aarch64-linux-gnu.cmake
 #
-# Usage (via build-cross.sh): bash build-cross.sh
+# Usage: python3 build.py
 
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)

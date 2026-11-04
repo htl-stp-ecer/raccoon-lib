@@ -70,6 +70,9 @@ protected:
                                         static_cast<float>(y), 0.0f);
         pose.heading = static_cast<float>(heading_rad);
         mock_odometry_->setPose(pose);
+        // DiagonalMotion closes its heading loop on getHeading() (the frame of the pose and of the
+        // target heading), not on the raw IMU heading of getAbsoluteHeading().
+        mock_odometry_->setHeading(heading_rad);
         ON_CALL(*mock_odometry_, getAbsoluteHeading()).WillByDefault(Return(heading_rad));
     }
 

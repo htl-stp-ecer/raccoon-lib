@@ -11,7 +11,7 @@
 #
 # 1. CI / wheel build (default): runs with a mock raccoon already installed;
 #    emits the ``raccoon-library`` header wheel ready for PyPI.
-#       bash scripts/build-stubs.sh <version>
+#       bash scripts/build-stubs.sh [version]   # default 0.0 = local build; CI passes the release number, the same one raccoon-sim gets
 #
 # 2. Local dev: skip the wheel step and dump stubs into a staging dir
 #    pointed at by the CMake mypy target. Requires raccoon importable in
@@ -27,7 +27,7 @@
 
 set -euo pipefail
 
-VERSION="${1:?Usage: build-stubs.sh <version>}"
+VERSION="${1:-0.0}"   # CI passes the release number (same as raccoon-sim); a local build is 0.0
 STAGING="${STAGING:-/src/stubs-staging}"
 STUBS_OUTPUT="${STUBS_OUTPUT:-/src/build-docker-stubs}"
 PY_STUBS_TMP="${PY_STUBS_TMP:-/tmp/py-stubs}"

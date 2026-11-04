@@ -16,7 +16,6 @@ import os
 import sys
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENES_DIR = REPO_ROOT / "scenes"
@@ -148,7 +147,9 @@ def _build_robot(cfg):
 
     localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
 
-    return SimpleNamespace(
+    from _robot_builder import SimRobot
+
+    return SimRobot(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,
@@ -283,7 +284,6 @@ async def _run_velocity_tune(robot, cfg):
         step = AutoTuneVelocity(
             axes=["vx"],
             persist=False,
-            csv_dir=None,
         )
         await asyncio.wait_for(step._execute_step(robot), timeout=30.0)
 
@@ -321,7 +321,6 @@ async def _run_motion_tune(robot, cfg):
         step = AutoTuneMotion(
             axes=["distance"],
             persist=False,
-            csv_dir=None,
         )
         await asyncio.wait_for(step._execute_step(robot), timeout=300.0)
 

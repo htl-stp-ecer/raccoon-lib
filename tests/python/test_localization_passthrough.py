@@ -126,9 +126,14 @@ def test_generic_robot_localization_explicit_none_raises() -> None:
         descriptor.fget(stub)  # type: ignore[misc]
 
 
-def test_generic_robot_localization_propagates_odometry_failure() -> None:
+def test_generic_robot_localization_propagates_odometry_failure(monkeypatch) -> None:
     """If ``self.odometry`` raises, wrap as LocalizationNotWiredError."""
+    import raccoon.robot.api as robot_api
     from raccoon.robot.api import LocalizationNotWiredError
+
+    # With the testing switch on, _build_localization returns the dead-reckoning stand-in before
+    # it ever touches the odometry; this test is about the real path.
+    monkeypatch.setattr(robot_api, "_DISABLE_LOCALIZATION_FOR_TESTING", False)
 
     builder = GenericRobot._build_localization
 
