@@ -121,20 +121,21 @@ class TestCustomVelocityFactoryValidation:
     def test_not_callable(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
 
+        # The generated builder is lazy: the step (and its validation) is built by resolve().
         with pytest.raises(TypeError, match="callable"):
-            custom_velocity("not_a_fn")
+            custom_velocity("not_a_fn").resolve()
 
     def test_not_callable_none(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
 
         with pytest.raises(TypeError, match="callable"):
-            custom_velocity(None)
+            custom_velocity(None).resolve()
 
     def test_until_wrong_type(self):
         from raccoon.step.motion.custom_velocity_dsl import custom_velocity
 
         with pytest.raises(TypeError, match="StopCondition"):
-            custom_velocity(lambda robot, dt: (0.0, 0.0, 0.0), until="bad")
+            custom_velocity(lambda robot, dt: (0.0, 0.0, 0.0), until="bad").resolve()
 
 
 # ===========================================================================
@@ -157,15 +158,19 @@ class TestCustomVelocityBuilderValidation:
         from raccoon.step.motion.custom_velocity_dsl import CustomVelocityBuilder
 
         b = CustomVelocityBuilder()
+        b._velocity_fn = lambda robot, dt: (0.0, 0.0, 0.0)
+        b.until("stop when black")
         with pytest.raises(TypeError, match="StopCondition"):
-            b.until("stop when black")
+            b.resolve()
 
     def test_until_wrong_type_int(self):
         from raccoon.step.motion.custom_velocity_dsl import CustomVelocityBuilder
 
         b = CustomVelocityBuilder()
+        b._velocity_fn = lambda robot, dt: (0.0, 0.0, 0.0)
+        b.until(42)
         with pytest.raises(TypeError, match="StopCondition"):
-            b.until(42)
+            b.resolve()
 
     def test_chained_until_builds_correctly(self):
         from raccoon.step.condition import after_seconds

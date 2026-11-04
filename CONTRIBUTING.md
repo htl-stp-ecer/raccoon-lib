@@ -6,28 +6,16 @@ Thanks for wanting to contribute. This guide covers everything you need to add a
 
 ## Building & deploying
 
-All compilation targets ARM64 (Raspberry Pi). Local installs are not supported -- use the Docker cross-compiler.
+All compilation targets ARM64 (Raspberry Pi). Local installs are not supported -- `build.py` cross compiles in Docker (no emulation).
 
 ```bash
-# Build wheel + run tests, then deploy to Pi
-RPI_HOST=<your-pi-ip> bash deploy.sh
-
-# Build only (output: build-docker/*.whl)
-bash build.sh
-
-# Skip tests during iteration
-SKIP_TESTS=1 bash build.sh
+python3 build.py                       # wheels -> builds/ (version 0.0)
+python3 build.py --test                # also build the C++ tests and run them with qemu-user
+python3 build.py --version 157         # release build (what CI does)
+python3 deploy.py --host <your-pi-ip>  # install builds/ on the Pi, marks raccoon-lib as "dev"
 ```
 
-Useful build env vars:
-
-| Variable | Default | Description |
-|:---------|:--------|:------------|
-| `RPI_HOST` | *(required for deploy)* | Raspberry Pi IP |
-| `RPI_USER` | `pi` | SSH username |
-| `BUILD_TYPE` | `Release` | `Release` or `Debug` |
-| `BUILD_JOBS` | auto | Parallel compile jobs |
-| `SKIP_TESTS` | -- | Set to `1` to skip C++ tests |
+Only `build.py` and `deploy.py` build and install; CI runs `build.py` too. Results go to `builds/` (git-ignored) with a `manifest.json`. The compiler cache and the downloaded dependencies are kept in `~/.cache/raccoon-build/raccoon-lib` (`--cache-dir`).
 
 ---
 
@@ -115,8 +103,8 @@ library/
 │   └── python/                   # pytest suites
 ├── tools/                        # Code generators
 │   └── generate_step_builders.py
-├── build.sh                      # Docker cross-compile + codegen
-└── deploy.sh                     # build.sh + install on Pi
+├── build.py                      # Docker cross-compile + codegen + stubs
+└── deploy.py                     # install builds/ on the Pi
 ```
 
 Python code almost always lives inside the module it belongs to (`modules/libstp-<name>/python/libstp/`). The root `python/libstp/` folder is for the handful of things that don't belong to any specific module (package init, logging helpers, project YAML utilities).
@@ -258,7 +246,7 @@ class MyMotion(MotionStep):
 
 ### Builder codegen
 
-`@dsl_step` decorated classes are picked up automatically by `tools/generate_step_builders.py`, which runs as part of `build.sh`. It generates the `*Builder` class and the lowercase factory function (`my_step(...)`) that users call in missions. You don't write these by hand.
+`@dsl_step` decorated classes are picked up automatically by `tools/generate_step_builders.py`, which runs as part of `build.py`. It generates the `*Builder` class and the lowercase factory function (`my_step(...)`) that users call in missions. You don't write these by hand.
 
 ---
 
@@ -397,6 +385,6 @@ baseline is agreed.
       [Build-time quality gates](#build-time-quality-gates))
 - [ ] mypy error count did not go up vs. main (run with
       `-DLIBSTP_RUN_MYPY=ON`; the existing 833 are tracked separately)
-- [ ] `SKIP_TESTS=1 bash build.sh` completes without errors
+- [ ] `python3 build.py` completes without errors
 - [ ] No new `# noqa` comments -- justify the ignore in `pyproject.toml`
       with a comment instead

@@ -13,7 +13,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENES_DIR = REPO_ROOT / "scenes"
@@ -44,7 +43,9 @@ def _build_robot():
 
     localization = Localization(odom, LocalizationConfig(tick_period_ms=5))
 
-    return SimpleNamespace(
+    from _robot_builder import SimRobot
+
+    return SimRobot(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,

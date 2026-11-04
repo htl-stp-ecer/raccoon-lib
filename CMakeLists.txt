@@ -265,8 +265,15 @@ python_add_library(_core MODULE main.cpp WITH_SOABI)
 # x86_64 SOABI, so the .so gets the wrong name.  Patch the SUFFIX directly after
 # target creation by substituting the architecture component.
 if(CMAKE_CROSSCOMPILING AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-  string(REGEX REPLACE "(cpython-[0-9]+-)([^-]+)(-linux-gnu)" "\\1aarch64\\3"
-                       _aarch64_soabi "${Python_SOABI}")
+  if(Python_SOABI)
+    string(REGEX REPLACE "(cpython-[0-9]+-)([^-]+)(-linux-gnu)" "\\1aarch64\\3"
+                         _aarch64_soabi "${Python_SOABI}")
+  else()
+    # The host interpreter of a cross build can report no SOABI at all.
+    set(_aarch64_soabi
+        "cpython-${Python_VERSION_MAJOR}${Python_VERSION_MINOR}-aarch64-linux-gnu"
+    )
+  endif()
   message(STATUS "Cross-compile: setting _core SOABI to ${_aarch64_soabi}")
   set_target_properties(_core PROPERTIES SUFFIX ".${_aarch64_soabi}.so")
 endif()

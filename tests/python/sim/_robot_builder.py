@@ -3,6 +3,18 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 
+class SimRobot(SimpleNamespace):
+    """Stand-in for GenericRobot: attributes plus the service registry."""
+
+    def get_service(self, cls):
+        services = self.__dict__.setdefault("_services", {})
+        service = services.get(cls)
+        if service is None:
+            service = cls(self)
+            services[cls] = service
+        return service
+
+
 def _apply_motor_calibrations(motors, cfg) -> None:
     from raccoon.foundation import MotorCalibration
 
@@ -111,7 +123,7 @@ def build_robot(cfg, *, enable_localization: bool = True):
     # only needs to exist — its wait returns immediately in that mode.
     from raccoon.timing.synchronizer import Synchronizer
 
-    return SimpleNamespace(
+    return SimRobot(
         drive=drive_obj,
         odometry=odom,
         kinematics=kin,

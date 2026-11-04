@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Release: tag, GitHub release, PyPI and the documentation. Untick to only build (also works on a branch)."
+        type: boolean
+        default: true
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -33,334 +38,26 @@ jobs:
             echo "has-code=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # The tests: C++ (ctest) and the fast Python tests, natively on an ARM runner, with the script that also runs
+  # locally (`python3 build.py --test --python-tests`). The simulator tests are not run yet (issue #109).
+  # This job does not gate the release.
   test:
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 90
-    # Temporarily disabled: sim-accuracy tests are failing and wasting compute.
-    # Re-enable (remove this line) once test_smooth_path / test_path_optimizer
-    # regressions are fixed.
-    if: false
-    env:
-      IS_DEPENDABOT_PR: ${{ github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' }}
-      CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
-      PIP_CACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/pip
-
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
     steps:
-      - name: Checkout with submodules
-        if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
-          token: ${{ secrets.GH_PAT || github.token }}
-          clean: false
 
-      - name: Skip self-hosted tests for Dependabot PRs
-        if: env.IS_DEPENDABOT_PR == 'true'
-        run: echo "Skipping self-hosted test job for Dependabot pull requests because org secrets are not exposed there."
-
-      - name: Clean stale test build artifacts
-        if: env.IS_DEPENDABOT_PR != 'true'
-        run: |
-          rm -rf .cmake-cache-docker-test
-          rm -rf _skbuild-docker-test
-          rm -rf build-test
-
-      - name: Restore compiler and package caches
-        if: env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache/restore@v6
+      - name: Cache ccache and dependencies
+        uses: actions/cache@v6
         with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-
+          path: ~/.cache/raccoon-build/raccoon-lib
+          key: test-arm64-native-${{ github.run_id }}
+          restore-keys: test-arm64-native-
 
-      - name: Run native test suite
-        if: env.IS_DEPENDABOT_PR != 'true'
-        run: |
-          IMAGE_NAME="libstp-dev:test"
-          mkdir -p "$CCACHE_HOST_DIR" "$PIP_CACHE_HOST_DIR"
-
-          DOCKERFILE_HASH=$(sha256sum .github/docker/Dockerfile | cut -c1-12)
-          VERSIONED_IMAGE="libstp-dev:test-${DOCKERFILE_HASH}"
-          if ! docker image inspect "$VERSIONED_IMAGE" >/dev/null 2>&1; then
-            echo "Dockerfile changed (hash $DOCKERFILE_HASH) — rebuilding image..."
-            docker build -f .github/docker/Dockerfile -t "$VERSIONED_IMAGE" .
-            docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
-          else
-            echo "Reusing cached image $VERSIONED_IMAGE"
-            docker tag "$VERSIONED_IMAGE" "$IMAGE_NAME"
-          fi
-
-          run_docker() {
-            docker run --rm \
-              -v "$PWD":/src \
-              -v "$CCACHE_HOST_DIR":/ccache \
-              -v "$PIP_CACHE_HOST_DIR":/pip-cache \
-              -e CCACHE_DIR=/ccache \
-              -e CCACHE_MAXSIZE=3G \
-              -e CCACHE_COMPRESS=1 \
-              -e CCACHE_BASEDIR=/src \
-              -e CCACHE_NOHASHDIR=1 \
-              -e CCACHE_COMPILERCHECK=content \
-              -e PIP_CACHE_DIR=/pip-cache/root-cache \
-              -w /src \
-              "$IMAGE_NAME" bash -lc "mkdir -p \"\$PIP_CACHE_DIR\" && chown 0:0 \"\$PIP_CACHE_DIR\" && $1"
-          }
-
-          run_docker "
-            set -euo pipefail
-
-            echo '::group::Install build dependencies'
-            pip install --disable-pip-version-check -U 'scikit-build-core>=0.10' pybind11 'cmake>=3.27' numpy pytest-rerunfailures
-            echo '::endgroup::'
-
-            echo '::group::Build editable package + test binaries'
-            pip install /src/raccoon-transport/python
-            CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) pip install -e /src \
-              --no-build-isolation \
-              --config-settings=build-dir=/src/_skbuild-docker-test \
-              --config-settings=cmake.define.LIBSTP_BUILD_TESTS=ON \
-              --config-settings=cmake.define.DRIVER_BUNDLE=mock \
-              --config-settings=cmake.define.LIBSTP_RUN_MYPY=OFF \
-              --config-settings=cmake.define.CMAKE_BUILD_TYPE=Release \
-              --config-settings=cmake.define.FETCHCONTENT_BASE_DIR=/src/.cmake-cache-docker-test \
-              --config-settings=cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=ccache \
-              --config-settings=cmake.define.CMAKE_C_COMPILER_LAUNCHER=ccache
-            echo '::endgroup::'
-
-            echo '::group::Run C++ tests'
-            ctest --test-dir /src/_skbuild-docker-test --output-on-failure -E MockSimIntegration
-            echo '::endgroup::'
-
-            echo '::group::Run fast Python tests (skip sim + known-broken)'
-            python -m pytest tests/python \
-              --ignore=tests/python/sim \
-              --ignore=tests/python/test_input_validation.py \
-              --ignore=tests/python/test_resource_conflicts.py \
-              --ignore=tests/python/test_watchdog.py \
-              --ignore=tests/python/test_stubs.py \
-              --ignore=tests/python/testing/test_plugin_end_to_end.py \
-              -ra --showlocals -x \
-              -W ignore::pytest.PytestAssertRewriteWarning
-            echo '::endgroup::'
-
-            echo '::group::Run sim tests (excluding auto-tune)'
-            python -m pytest tests/python/sim \
-              --ignore=tests/python/sim/test_auto_tune.py \
-              -ra --showlocals \
-              --reruns 1 --reruns-delay 2 \
-              -W ignore::pytest.PytestAssertRewriteWarning
-            echo '::endgroup::'
-
-            echo '::group::Run auto-tune sim tests'
-            python -m pytest tests/python/sim/test_auto_tune.py \
-              -ra --showlocals -v \
-              --reruns 1 --reruns-delay 2 \
-              -W ignore::pytest.PytestAssertRewriteWarning
-            echo '::endgroup::'
-          "
-
-          run_docker "ccache --show-stats"
-          echo "✓ Native C++ and Python tests passed"
-
-      - name: Save compiler and package caches
-        if: always() && env.IS_DEPENDABOT_PR != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-  # ─── ARM64 release wheel (for Raspberry Pi / Wombat) ──────────────────────
-  # Temporarily disabled — GitHub Release + docs rebuild will be wired to
-  # the cibuildwheel publish-pypi job once that pipeline is stable.
-  build:
-    runs-on: [self-hosted, Linux, X64]
-    needs: [changes]
-    if: false
-    permissions:
-      contents: write
-    env:
-      CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
-      PIP_CACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/pip
-      DOCKER_BUILDX_CACHE_DIR: ${{ github.workspace }}/.gha-cache/buildx
-
-    steps:
-      - name: Checkout with submodules
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          token: ${{ secrets.GH_PAT || github.token }}
-          clean: false
-
-      - name: Restore release tool caches
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
-
-      - name: Install host tools
-        run: sudo apt-get install -y --no-install-recommends jq
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Clean old build artifacts and release caches
-        run: |
-          rm -rf .cmake-cache-docker
-          rm -rf _skbuild-docker
-          rm -rf build-docker
-          rm -rf docs/_build docs-site release-bundle
-          docker run --rm -v "$PWD":/src alpine sh -c \
-            "rm -rf /src/.cmake-cache-docker /src/_skbuild-docker /src/build-docker /src/docs/_build /src/docs-site /src/release-bundle"
-
-      - name: Build ARM64 wheel
-        run: |
-          SKIP_TESTS=1 \
-          BUILD_NUMBER=${{ github.run_number }} \
-          BUILD_JOBS=$(nproc) \
-          bash build.sh
-          docker run --rm --platform=linux/arm64/v8 \
-            -v "$CCACHE_HOST_DIR":/ccache \
-            -e CCACHE_DIR=/ccache \
-            libstp-dev:arm64 ccache --show-stats
-
-      - name: Determine version
-        id: version
-        run: |
-          WHL=$(find build-docker -name '*.whl' -type f -exec ls -t {} + | head -1)
-          VERSION=$(basename "$WHL" | sed 's/^raccoon_library-//;s/-.*//')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
-          echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
-
-      - name: Build documentation
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            python:3.11-slim \
-            bash -c '
-              set -euo pipefail
-              apt-get update && apt-get install --yes --no-install-recommends doxygen make zip graphviz
-              pip install --no-cache-dir -r docs/requirements.txt
-
-              rm -rf docs/_build docs-site
-
-              cd docs
-              mkdir -p _build/doxygen
-              doxygen Doxyfile
-              echo "Doxygen: $(find _build/doxygen/html -name "*.html" | wc -l) HTML files"
-
-              make html
-              echo "Sphinx: $(find _build/html -name "*.html" | wc -l) HTML files"
-
-              python3 /workspace/docs/generate_dsl_catalog.py
-              cd ..
-
-              mkdir -p docs-site
-              cp -R docs/_build/html/. docs-site/
-              mkdir -p docs-site/doxygen
-              cp -R docs/_build/doxygen/html/. docs-site/doxygen/
-              cp docs/_build/dsl-steps.json docs-site/
-              cd docs-site
-              zip -r ../raccoon-docs-'"${{ steps.version.outputs.version }}"'.zip .
-            '
-
-      - name: Bundle release assets
-        run: |
-          rm -rf release-bundle
-          mkdir -p release-bundle
-          cp "${{ steps.version.outputs.wheel }}" release-bundle/
-          cp install.py release-bundle/
-          cd release-bundle
-          tar czf ../raccoon-${{ steps.version.outputs.version }}.tar.gz *
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: raccoon ${{ steps.version.outputs.version }}
-          body: |
-            Automated release from commit ${{ github.sha }}.
-
-            **Install on Raspberry Pi:**
-            ```bash
-            tar xzf raccoon-${{ steps.version.outputs.version }}.tar.gz
-            RPI_HOST=<your-pi-ip> python3 install.py
-            ```
-
-            **Install on laptop (any platform — for development & IDE support):**
-            ```bash
-            pip install raccoon-library==${{ steps.version.outputs.version }}
-            ```
-
-            **View documentation:**
-            1. Download and unzip `raccoon-docs-${{ steps.version.outputs.version }}.zip`
-            2. Run `python3 -m http.server 8000` in the extracted folder
-            3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
-          files: |
-            raccoon-${{ steps.version.outputs.version }}.tar.gz
-            ${{ steps.version.outputs.wheel }}
-            raccoon-docs-${{ steps.version.outputs.version }}.zip
-
-      # Dispatches go out as the Raccoon OS Bot, not with a personal token. The release
-      # is already published here, so a failure only warns.
-      - name: Create an app token for the dispatches
-        id: dispatch-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.BOT_APP_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          owner: htl-stp-ecer
-          repositories: documentation,raccoon-image
-          permission-contents: write
-
-      - name: Trigger documentation rebuild
-        env:
-          TOKEN: ${{ steps.dispatch-token.outputs.token }}
-        run: |
-          if [ -z "$TOKEN" ]; then echo "::warning::no app token; documentation was not notified"; exit 0; fi
-          curl -fsS -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $TOKEN" \
-            https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
-            -d '{"event_type":"library-release","client_payload":{"version":"${{ steps.version.outputs.version }}"}}' \
-            || echo "::warning::could not notify documentation"
-
-      - name: Trigger raccoon-image bundle
-        env:
-          TOKEN: ${{ steps.dispatch-token.outputs.token }}
-        run: |
-          if [ -z "$TOKEN" ]; then echo "::warning::no app token; raccoon-image was not notified"; exit 0; fi
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/htl-stp-ecer/raccoon-image/dispatches \
-            -d '{"event_type":"component-released","client_payload":{"component":"raccoon-library","version":"${{ steps.version.outputs.version }}"}}' \
-            || echo "::warning::could not notify raccoon-image"
-
-      - name: Save release tool caches
-        if: always()
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Build and test
+        run: python3 build.py --test --python-tests
 
   # Release number: one more than the highest number that already exists, as a
   # tag v<number> and on PyPI (raccoon-sim raccoon-library). github.run_number also counts every pull request and
@@ -371,7 +68,7 @@ jobs:
     needs: [changes]
     if: >-
       (github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) &&
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || !inputs.release))) &&
       needs.changes.outputs.has-code == 'true'
     outputs:
       number: ${{ steps.next.outputs.number }}
@@ -421,7 +118,7 @@ jobs:
     needs: [changes, version]
     if: >-
       (github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) &&
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || !inputs.release))) &&
       needs.changes.outputs.has-code == 'true'
     strategy:
       fail-fast: false
@@ -505,6 +202,9 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_BUILD_VERBOSITY: 1
+          # Not the default frontend `python -m build`: run in the repository it would import ./build.py
+          # instead of the `build` package.
+          CIBW_BUILD_FRONTEND: pip
 
           # raccoon-transport is a pure-Python runtime dep (LCM message types).
           # Install it from the checked-out submodule before each wheel build.
@@ -591,7 +291,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-wheels, version]
     # Run only when every matrix variant of build-wheels succeeded.
-    if: always() && needs.build-wheels.result == 'success'
+    if: always() && needs.build-wheels.result == 'success' && (github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.release))
     permissions:
       id-token: write   # PyPI OIDC trusted-publisher
       contents: write   # Create GitHub Release + tag
@@ -756,7 +456,7 @@ jobs:
     name: Publish raccoon-library to PyPI
     runs-on: ubuntu-latest
     needs: [publish-pypi]
-    if: always() && needs.publish-pypi.result == 'success'
+    if: always() && needs.publish-pypi.result == 'success' && (github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.release))
     permissions:
       id-token: write   # PyPI OIDC trusted-publisher (project: raccoon-library)
 

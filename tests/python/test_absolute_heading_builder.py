@@ -32,11 +32,11 @@ def test_explain_shows_absolute_heading_pass():
 
 def test_absolute_heading_after_always_on_merge():
     # merge is ALWAYS-ON; absolute_heading is the only chained pass. The
-    # effective pipeline prepends decompose + merge before it.
+    # effective pipeline prepends resolve_heading + decompose + merge before it.
     opt = optimize(_path()).absolute_heading()
     assert [p.name for p in opt._passes] == ["absolute_heading"]
     effective = [p.name for p in opt._effective_passes()]
-    assert effective == ["decompose", "merge", "absolute_heading"]
+    assert effective == ["resolve_heading", "decompose", "merge", "absolute_heading"]
 
 
 def test_explain_stamps_heading_after_pass():
