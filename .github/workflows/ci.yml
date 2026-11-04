@@ -38,6 +38,27 @@ jobs:
             echo "has-code=false" >> "$GITHUB_OUTPUT"
           fi
 
+  # The tests: C++ (ctest) and the fast Python tests, natively on an ARM runner, with the script that also runs
+  # locally (`python3 build.py --test --python-tests`). The simulator tests are not run yet (issue #109).
+  # This job does not gate the release.
+  test:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Cache ccache and dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/raccoon-build/raccoon-lib
+          key: test-arm64-native-${{ github.run_id }}
+          restore-keys: test-arm64-native-
+
+      - name: Build and test
+        run: python3 build.py --test --python-tests
+
   # Release number: one more than the highest number that already exists, as a
   # tag v<number> and on PyPI (raccoon-sim raccoon-library). github.run_number also counts every pull request and
   # every cancelled run, which leaves gaps.
