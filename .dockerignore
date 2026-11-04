@@ -1,1 +1,2 @@
-./.cmake-cache
+# The images need no files from the repository.
+*

@@ -53,20 +53,14 @@ git clone https://github.com/htl-stp-ecer/raccoon-lib.git --recurse-submodules
 cd raccoon-lib
 ```
 
-**2. Build & deploy to your Pi in one step**
+**2. Build & deploy to your Pi**
 
 ```bash
-RPI_HOST=<your-pi-ip> bash deploy.sh
+python3 build.py                      # cross compiles for ARM64 in Docker -> builds/
+python3 deploy.py --host <your-pi-ip> # installs the wheels on your Pi over SSH
 ```
 
-This cross-compiles for ARM64 via Docker and installs the wheel on your Pi over SSH. No local toolchain setup needed.
-
-| Variable | Default | Description |
-|:---------|:--------|:------------|
-| `RPI_HOST` | *(required)* | Raspberry Pi IP address |
-| `RPI_USER` | `pi` | SSH username |
-| `RPI_DIR` | `/home/pi/python-libs` | Install directory |
-| `BUILD_TYPE` | `Release` | CMake build type |
+No local toolchain setup needed, only Docker. `build.py` writes `builds/raccoon_sim-0.0-…-linux_aarch64.whl` (compiled runtime + simulator) and `builds/raccoon_library-0.0-py3-none-any.whl` (type stubs) with the same version. `--version N` sets the version (CI does this), `--test` also runs the C++ tests with qemu-user. `deploy.py` is for local builds and marks `raccoon-lib` as `dev` in the Pi's bundle file; releases are installed by `raccoon update`.
 
 > **Starting a new robot project?** Use [`raccoon-cli`](https://github.com/htl-stp-ecer/raccoon-cli) — `raccoon create project MyRobot` runs a hardware wizard and generates your robot config, project structure, and deploy scripts automatically.
 
@@ -81,7 +75,7 @@ RaccoonLib ships as two coordinated distributions:
 
 The `[sim]` extra pulls in `raccoon-sim`, pinned to the exact same version, so the
 headers and the native bindings can never drift apart. `import raccoon` requires
-`[sim]` (or a locally deployed `raccoon-sim` wheel — see `deploy.sh` above).
+`[sim]` (or a locally deployed `raccoon-sim` wheel — see `deploy.py` above).
 
 ---
 

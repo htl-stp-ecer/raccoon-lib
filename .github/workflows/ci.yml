@@ -72,7 +72,7 @@ jobs:
           path: |
             .gha-cache/ccache
             .gha-cache/pip
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-
 
@@ -172,195 +172,7 @@ jobs:
           path: |
             .gha-cache/ccache
             .gha-cache/pip
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-  # ─── ARM64 release wheel (for Raspberry Pi / Wombat) ──────────────────────
-  # Temporarily disabled — GitHub Release + docs rebuild will be wired to
-  # the cibuildwheel publish-pypi job once that pipeline is stable.
-  build:
-    runs-on: [self-hosted, Linux, X64]
-    needs: [changes]
-    if: false
-    permissions:
-      contents: write
-    env:
-      CCACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/ccache
-      PIP_CACHE_HOST_DIR: ${{ github.workspace }}/.gha-cache/pip
-      DOCKER_BUILDX_CACHE_DIR: ${{ github.workspace }}/.gha-cache/buildx
-
-    steps:
-      - name: Checkout with submodules
-        uses: actions/checkout@v7
-        with:
-          submodules: recursive
-          token: ${{ secrets.GH_PAT || github.token }}
-          clean: false
-
-      - name: Restore release tool caches
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-
-
-      - name: Install host tools
-        run: sudo apt-get install -y --no-install-recommends jq
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Clean old build artifacts and release caches
-        run: |
-          rm -rf .cmake-cache-docker
-          rm -rf _skbuild-docker
-          rm -rf build-docker
-          rm -rf docs/_build docs-site release-bundle
-          docker run --rm -v "$PWD":/src alpine sh -c \
-            "rm -rf /src/.cmake-cache-docker /src/_skbuild-docker /src/build-docker /src/docs/_build /src/docs-site /src/release-bundle"
-
-      - name: Build ARM64 wheel
-        run: |
-          SKIP_TESTS=1 \
-          BUILD_NUMBER=${{ github.run_number }} \
-          BUILD_JOBS=$(nproc) \
-          bash build.sh
-          docker run --rm --platform=linux/arm64/v8 \
-            -v "$CCACHE_HOST_DIR":/ccache \
-            -e CCACHE_DIR=/ccache \
-            libstp-dev:arm64 ccache --show-stats
-
-      - name: Determine version
-        id: version
-        run: |
-          WHL=$(find build-docker -name '*.whl' -type f -exec ls -t {} + | head -1)
-          VERSION=$(basename "$WHL" | sed 's/^raccoon_library-//;s/-.*//')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
-          echo "wheel_name=$(basename "$WHL")" >> "$GITHUB_OUTPUT"
-
-      - name: Build documentation
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            python:3.11-slim \
-            bash -c '
-              set -euo pipefail
-              apt-get update && apt-get install --yes --no-install-recommends doxygen make zip graphviz
-              pip install --no-cache-dir -r docs/requirements.txt
-
-              rm -rf docs/_build docs-site
-
-              cd docs
-              mkdir -p _build/doxygen
-              doxygen Doxyfile
-              echo "Doxygen: $(find _build/doxygen/html -name "*.html" | wc -l) HTML files"
-
-              make html
-              echo "Sphinx: $(find _build/html -name "*.html" | wc -l) HTML files"
-
-              python3 /workspace/docs/generate_dsl_catalog.py
-              cd ..
-
-              mkdir -p docs-site
-              cp -R docs/_build/html/. docs-site/
-              mkdir -p docs-site/doxygen
-              cp -R docs/_build/doxygen/html/. docs-site/doxygen/
-              cp docs/_build/dsl-steps.json docs-site/
-              cd docs-site
-              zip -r ../raccoon-docs-'"${{ steps.version.outputs.version }}"'.zip .
-            '
-
-      - name: Bundle release assets
-        run: |
-          rm -rf release-bundle
-          mkdir -p release-bundle
-          cp "${{ steps.version.outputs.wheel }}" release-bundle/
-          cp install.py release-bundle/
-          cd release-bundle
-          tar czf ../raccoon-${{ steps.version.outputs.version }}.tar.gz *
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: raccoon ${{ steps.version.outputs.version }}
-          body: |
-            Automated release from commit ${{ github.sha }}.
-
-            **Install on Raspberry Pi:**
-            ```bash
-            tar xzf raccoon-${{ steps.version.outputs.version }}.tar.gz
-            RPI_HOST=<your-pi-ip> python3 install.py
-            ```
-
-            **Install on laptop (any platform — for development & IDE support):**
-            ```bash
-            pip install raccoon-library==${{ steps.version.outputs.version }}
-            ```
-
-            **View documentation:**
-            1. Download and unzip `raccoon-docs-${{ steps.version.outputs.version }}.zip`
-            2. Run `python3 -m http.server 8000` in the extracted folder
-            3. Open http://localhost:8000 (Sphinx) or http://localhost:8000/doxygen (API docs)
-          files: |
-            raccoon-${{ steps.version.outputs.version }}.tar.gz
-            ${{ steps.version.outputs.wheel }}
-            raccoon-docs-${{ steps.version.outputs.version }}.zip
-
-      # Dispatches go out as the Raccoon OS Bot, not with a personal token. The release
-      # is already published here, so a failure only warns.
-      - name: Create an app token for the dispatches
-        id: dispatch-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.BOT_APP_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          owner: htl-stp-ecer
-          repositories: documentation,raccoon-image
-          permission-contents: write
-
-      - name: Trigger documentation rebuild
-        env:
-          TOKEN: ${{ steps.dispatch-token.outputs.token }}
-        run: |
-          if [ -z "$TOKEN" ]; then echo "::warning::no app token; documentation was not notified"; exit 0; fi
-          curl -fsS -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $TOKEN" \
-            https://api.github.com/repos/htl-stp-ecer/documentation/dispatches \
-            -d '{"event_type":"library-release","client_payload":{"version":"${{ steps.version.outputs.version }}"}}' \
-            || echo "::warning::could not notify documentation"
-
-      - name: Trigger raccoon-image bundle
-        env:
-          TOKEN: ${{ steps.dispatch-token.outputs.token }}
-        run: |
-          if [ -z "$TOKEN" ]; then echo "::warning::no app token; raccoon-image was not notified"; exit 0; fi
-          curl -fsS -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/htl-stp-ecer/raccoon-image/dispatches \
-            -d '{"event_type":"component-released","client_payload":{"component":"raccoon-library","version":"${{ steps.version.outputs.version }}"}}' \
-            || echo "::warning::could not notify raccoon-image"
-
-      - name: Save release tool caches
-        if: always()
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            .gha-cache/ccache
-            .gha-cache/pip
-            .gha-cache/buildx
-          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-arm64-${{ hashFiles('.github/docker/Dockerfile', 'build.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ci-tool-cache-${{ runner.os }}-${{ runner.arch }}-native-${{ hashFiles('.github/docker/Dockerfile') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   # Release number: one more than the highest number that already exists, as a
   # tag v<number> and on PyPI (raccoon-sim raccoon-library). github.run_number also counts every pull request and
@@ -621,21 +433,16 @@ jobs:
       # toolchain codegen. The compiled bindings + simulator ship separately as
       # the ``raccoon-sim`` platform wheels sitting in dist/, and are pulled in
       # via the ``raccoon-library[sim]`` extra (pinned raccoon-sim==<version>).
+      # build.py cross compiles the library in Docker and writes the stubs from it
+      # (with qemu-user); only the raccoon_library wheel of its result is used here.
       # It goes into a SEPARATE dir (dist-lib/) because PyPI trusted publishing
       # is per-project — raccoon-library is uploaded by the publish-library job.
       - name: Build platform-independent raccoon-library (.pyi headers) wheel
         run: |
           set -euxo pipefail
-          python -m pip install --quiet pybind11-stubgen 'mypy>=1.0' wheel build
-          python -m pip install --quiet ./raccoon-transport/python
-          # Import the compiled raccoon-sim (cp313 Linux x86_64) so pybind11-stubgen
-          # can introspect the native bindings.
-          LINUX_WHEEL=$(ls dist/raccoon_sim-*-cp313-cp313-manylinux*x86_64*.whl | head -1)
-          python -m pip install --quiet "${LINUX_WHEEL}"
-          STAGING="${RUNNER_TEMP}/stubs-staging" \
-          STUBS_OUTPUT="${GITHUB_WORKSPACE}/dist-lib" \
-          PYTHON=python \
-          bash scripts/build-stubs.sh "${{ needs.version.outputs.number }}"
+          python3 build.py --version "${{ needs.version.outputs.number }}"
+          mkdir -p dist-lib
+          cp builds/raccoon_library-*.whl dist-lib/
           echo "=== dist/ (raccoon-sim platform wheels) ==="; ls -la dist/
           echo "=== dist-lib/ (raccoon-library header wheel) ==="; ls -la dist-lib/
 

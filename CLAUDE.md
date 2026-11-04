@@ -3,8 +3,12 @@
 ## Build
 
 ```bash
-RPI_HOST=10.101.156.206 bash deploy.sh
+python3 build.py                        # cross compiled in Docker -> builds/ (raccoon_sim + raccoon_library wheels, version 0.0)
+python3 build.py --version 157          # release build (CI does this)
+python3 build.py --test                 # also run the C++ tests with qemu-user
+python3 deploy.py --host 10.101.156.206 # install builds/ on the Pi, sets raccoon-lib to "dev" in its bundle file
 ```
+Only `build.py` and `deploy.py` build and install; CI runs `build.py` too. `deploy.py` is for local builds; releases are installed by `raccoon update`.
 
 ## Project Structure
 
