@@ -202,6 +202,9 @@ jobs:
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_BUILD_VERBOSITY: 1
+          # Not the default frontend `python -m build`: run in the repository it would import ./build.py
+          # instead of the `build` package.
+          CIBW_BUILD_FRONTEND: pip
 
           # raccoon-transport is a pure-Python runtime dep (LCM message types).
           # Install it from the checked-out submodule before each wheel build.
