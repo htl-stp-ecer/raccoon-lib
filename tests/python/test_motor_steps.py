@@ -14,8 +14,11 @@ Expected values are derived independently from the docstrings:
   outside it; the endpoints are valid).
 * ``SetMotorDps`` converts deg/s -> rad/s (``* pi / 180``) then rad/s -> BEMF
   ticks (``/ (ticks_to_rad * 200 Hz)``) with ``round`` to the nearest int.
-* ``MoveMotorTo`` / ``MoveMotorRelative`` block until ``is_done()`` and bail on
-  the optional timeout.
+* ``MoveMotorTo`` / ``MoveMotorRelative`` block until ``get_position()`` is
+  within ``tolerance`` ticks of the target and bail on the optional timeout.
+  They never stop the motor afterwards (it keeps holding the position).
+  ``MoveMotorRelative`` resolves ``current + delta`` itself and commands an
+  absolute ``move_to_position``.
 * stop modes map OFF -> ``off()``, PASSIVE_BRAKE -> ``set_speed(0)``,
   ACTIVE_BRAKE -> ``brake()``.
 
@@ -71,29 +74,23 @@ class _Calib:
 class FakeMotor:
     """Records every firmware command issued to it.
 
-    ``is_done`` accepts either a fixed bool or a list consumed one-per-call
-    (the last value repeats) so the blocking position loops can be driven to
-    completion deterministically.
+    ``positions`` is a list of readings consumed one-per-``get_position()``
+    call (the last value repeats) so the blocking position loops can be driven
+    to completion deterministically.
     """
 
     def __init__(
         self,
         port: int = 0,
         *,
-        is_done=True,
+        positions=(0,),
         ticks_to_rad: float = 0.01,
-        position: int = 0,
     ) -> None:
         self.port = port
         self.calls: list[tuple] = []
         self.get_position_calls = 0
         self._ticks_to_rad = ticks_to_rad
-        self._position = position
-        if isinstance(is_done, bool):
-            self._done_seq = [is_done]
-        else:
-            self._done_seq = list(is_done)
-        self._done_idx = 0
+        self._positions = list(positions)
 
     # --- commands recorded -------------------------------------------------
     def set_speed(self, value) -> None:
@@ -111,22 +108,13 @@ class FakeMotor:
     def move_to_position(self, velocity, position) -> None:
         self.calls.append(("move_to_position", velocity, position))
 
-    def move_relative(self, velocity, delta) -> None:
-        self.calls.append(("move_relative", velocity, delta))
-
     def get_position(self) -> int:
-        # Called by the source ONLY inside the timeout-warning f-string, so a
-        # nonzero count is a reliable signal that the timeout branch fired.
+        idx = min(self.get_position_calls, len(self._positions) - 1)
         self.get_position_calls += 1
-        return self._position
+        return self._positions[idx]
 
     def get_calibration(self) -> _Calib:
         return _Calib(self._ticks_to_rad)
-
-    def is_done(self) -> bool:
-        idx = min(self._done_idx, len(self._done_seq) - 1)
-        self._done_idx += 1
-        return self._done_seq[idx]
 
 
 class _NoPort:
@@ -383,55 +371,91 @@ def test_move_to_resource_name() -> None:
     )
 
 
-def test_move_to_commands_position_then_returns_when_done() -> None:
-    # is_done True on first poll -> loop body never sleeps.
-    motor = FakeMotor(port=2, is_done=True)
+def test_move_to_rejects_negative_tolerance() -> None:
+    with pytest.raises(ValueError, match=r"tolerance"):
+        MoveMotorTo(FakeMotor(), position=100, tolerance=-1)
+
+
+def test_move_to_default_tolerance_is_3() -> None:
+    assert MoveMotorTo(FakeMotor(), position=100)._tolerance == 3
+
+
+def test_move_to_commands_position_then_returns_when_reached() -> None:
+    # Already at the target on the first poll -> loop body never sleeps.
+    motor = FakeMotor(port=2, positions=[500])
     _run(MoveMotorTo(motor, position=500, velocity=800)._execute_step(_ROBOT))
     assert motor.calls[0] == ("move_to_position", 800, 500)
 
 
-def test_move_to_polls_until_done() -> None:
-    # Not done twice, then done -> loop iterates then exits.
-    motor = FakeMotor(is_done=[False, False, True])
+def test_move_to_polls_until_position_reached() -> None:
+    motor = FakeMotor(positions=[0, 200, 400, 500])
     _run(MoveMotorTo(motor, position=500, velocity=800)._execute_step(_ROBOT))
     # command issued exactly once, regardless of poll count
     assert motor.calls.count(("move_to_position", 800, 500)) == 1
+    assert motor.get_position_calls == 4
 
 
-def test_move_to_timeout_breaks_out_without_stopping_motor() -> None:
-    # Never done; a tiny timeout must break the loop and NOT issue a stop.
-    motor = FakeMotor(is_done=False)
-    step = MoveMotorTo(motor, position=500, velocity=800, timeout=0.02)
-    _run(step._execute_step(_ROBOT))
-    cmds = [c[0] for c in motor.calls]
-    assert "move_to_position" in cmds
-    assert "off" not in cmds
-    assert "brake" not in cmds
-    assert "set_speed" not in cmds
-
-
-def test_move_to_does_not_time_out_when_completing_under_generous_timeout() -> None:
-    # Elapsed wall-time = (loop.time() - start), a tiny positive value far below
-    # a 60 s timeout, so the motor reaches is_done() BEFORE the deadline and the
-    # timeout branch (which is the only caller of get_position()) never runs.
-    # If the elapsed expression were (loop.time() + start) it would be a huge
-    # monotonic sum, instantly exceed the timeout, and fire the warning on the
-    # first not-done poll -- so get_position_calls must stay 0 here.
-    motor = FakeMotor(is_done=[False, False, True])
-    _run(MoveMotorTo(motor, position=500, velocity=800, timeout=60.0)._execute_step(_ROBOT))
-    assert motor.get_position_calls == 0
-
-
-def test_move_to_timeout_reads_current_position_for_diagnostics() -> None:
-    # Conversely, when it genuinely never finishes, the timeout branch DOES run
-    # and reads the current position exactly once.
-    motor = FakeMotor(is_done=False)
-    _run(MoveMotorTo(motor, position=500, velocity=800, timeout=0.02)._execute_step(_ROBOT))
+@pytest.mark.parametrize("reading", [497, 503])
+def test_move_to_tolerance_boundary_counts_as_reached(reading) -> None:
+    # |500 - reading| == 3 == default tolerance -> reached on the first poll.
+    motor = FakeMotor(positions=[reading])
+    _run(MoveMotorTo(motor, position=500)._execute_step(_ROBOT))
     assert motor.get_position_calls == 1
 
 
+@pytest.mark.parametrize("reading", [496, 504])
+def test_move_to_just_outside_tolerance_keeps_waiting(reading) -> None:
+    motor = FakeMotor(positions=[reading, 500])
+    _run(MoveMotorTo(motor, position=500)._execute_step(_ROBOT))
+    assert motor.get_position_calls == 2
+
+
+def test_move_to_custom_tolerance() -> None:
+    motor = FakeMotor(positions=[480])
+    _run(MoveMotorTo(motor, position=500, tolerance=20)._execute_step(_ROBOT))
+    assert motor.get_position_calls == 1
+
+
+def test_move_to_leaves_motor_in_position_mode_after_reaching() -> None:
+    # The motor must keep holding: no stop/brake/off/speed command afterwards.
+    motor = FakeMotor(positions=[0, 500])
+    _run(MoveMotorTo(motor, position=500, velocity=800)._execute_step(_ROBOT))
+    assert [c[0] for c in motor.calls] == ["move_to_position"]
+
+
+def test_move_to_timeout_breaks_out_without_stopping_motor() -> None:
+    # Never reached; a tiny timeout must break the loop and NOT issue a stop.
+    motor = FakeMotor(positions=[0])
+    step = MoveMotorTo(motor, position=500, velocity=800, timeout=0.02)
+    _run(step._execute_step(_ROBOT))
+    assert [c[0] for c in motor.calls] == ["move_to_position"]
+
+
+def test_move_to_does_not_time_out_when_completing_under_generous_timeout(monkeypatch) -> None:
+    # Elapsed wall-time = (loop.time() - start), tiny vs a 60 s timeout, so the
+    # position is reached BEFORE the deadline and no timeout warning is emitted.
+    # If the elapsed expression were (loop.time() + start) it would instantly
+    # exceed the timeout and warn on the first not-reached poll.
+    motor = FakeMotor(positions=[0, 100, 500])
+    step = MoveMotorTo(motor, position=500, velocity=800, timeout=60.0)
+    warnings: list[str] = []
+    monkeypatch.setattr(step, "warn", warnings.append)
+    _run(step._execute_step(_ROBOT))
+    assert warnings == []
+
+
+def test_move_to_timeout_warns_with_current_position(monkeypatch) -> None:
+    motor = FakeMotor(positions=[42])
+    step = MoveMotorTo(motor, position=500, velocity=800, timeout=0.02)
+    warnings: list[str] = []
+    monkeypatch.setattr(step, "warn", warnings.append)
+    _run(step._execute_step(_ROBOT))
+    assert len(warnings) == 1
+    assert "target=500" in warnings[0] and "current=42" in warnings[0]
+
+
 def test_move_to_polls_at_a_fast_cadence(monkeypatch) -> None:
-    # The poll loop sleeps a short interval (~10 ms) between is_done() checks.
+    # The poll loop sleeps a short interval (~10 ms) between position checks.
     # Patch asyncio.sleep to a no-op and record the requested delays, then assert
     # each requested sleep is well under a second. A mutated 1.01 s interval
     # would blow this bound (and, unpatched, make the suite hang).
@@ -441,8 +465,8 @@ def test_move_to_polls_at_a_fast_cadence(monkeypatch) -> None:
         recorded.append(delay)
 
     monkeypatch.setattr(motor_steps.asyncio, "sleep", fake_sleep)
-    motor = FakeMotor(is_done=[False, False, False, True])
-    _run(MoveMotorTo(motor, position=10, velocity=5)._execute_step(_ROBOT))
+    motor = FakeMotor(positions=[0, 3, 6, 10])
+    _run(MoveMotorTo(motor, position=10, velocity=5, tolerance=0)._execute_step(_ROBOT))
     assert recorded  # the loop did sleep at least once
     assert all(d < 0.5 for d in recorded)
 
@@ -502,40 +526,70 @@ def test_move_relative_resource_name() -> None:
     )
 
 
-def test_move_relative_commands_delta_then_returns_when_done() -> None:
-    motor = FakeMotor(is_done=True)
-    _run(MoveMotorRelative(motor, delta=200, velocity=600)._execute_step(_ROBOT))
-    assert motor.calls[0] == ("move_relative", 600, 200)
+def test_move_relative_rejects_negative_tolerance() -> None:
+    with pytest.raises(ValueError, match=r"tolerance"):
+        MoveMotorRelative(FakeMotor(), delta=100, tolerance=-1)
 
 
-def test_move_relative_polls_until_done() -> None:
-    motor = FakeMotor(is_done=[False, True])
+def test_move_relative_commands_absolute_goal_current_plus_delta() -> None:
+    # Start at 1000; delta 200 -> absolute goal 1200 commanded via move_to_position.
+    motor = FakeMotor(positions=[1000, 1200])
     _run(MoveMotorRelative(motor, delta=200, velocity=600)._execute_step(_ROBOT))
-    assert motor.calls.count(("move_relative", 600, 200)) == 1
+    assert motor.calls == [("move_to_position", 600, 1200)]
+
+
+def test_move_relative_negative_delta_goal() -> None:
+    motor = FakeMotor(positions=[1000, 700])
+    _run(MoveMotorRelative(motor, delta=-300, velocity=600)._execute_step(_ROBOT))
+    assert motor.calls == [("move_to_position", 600, 700)]
+
+
+def test_move_relative_polls_until_position_reached() -> None:
+    motor = FakeMotor(positions=[0, 50, 150, 200])
+    _run(MoveMotorRelative(motor, delta=200, velocity=600)._execute_step(_ROBOT))
+    assert motor.calls.count(("move_to_position", 600, 200)) == 1
+    assert motor.get_position_calls == 4  # 1 start read + 3 polls
+
+
+def test_move_relative_tolerance_applies_to_goal() -> None:
+    motor = FakeMotor(positions=[0, 197])
+    _run(MoveMotorRelative(motor, delta=200)._execute_step(_ROBOT))
+    assert motor.get_position_calls == 2
+
+
+def test_move_relative_leaves_motor_in_position_mode_after_reaching() -> None:
+    motor = FakeMotor(positions=[0, 200])
+    _run(MoveMotorRelative(motor, delta=200, velocity=600)._execute_step(_ROBOT))
+    assert [c[0] for c in motor.calls] == ["move_to_position"]
 
 
 def test_move_relative_timeout_breaks_without_stopping() -> None:
-    motor = FakeMotor(is_done=False)
+    motor = FakeMotor(positions=[0])
     step = MoveMotorRelative(motor, delta=200, velocity=600, timeout=0.02)
     _run(step._execute_step(_ROBOT))
-    cmds = [c[0] for c in motor.calls]
-    assert "move_relative" in cmds
-    assert "off" not in cmds and "brake" not in cmds
+    assert [c[0] for c in motor.calls] == ["move_to_position"]
 
 
-def test_move_relative_does_not_time_out_when_completing_under_generous_timeout() -> None:
-    # Same elapsed-time sign check as MoveMotorTo: (loop.time() - start) stays
-    # tiny so the move completes before a 60 s deadline and get_position() (only
-    # called from the timeout warning) is never invoked.
-    motor = FakeMotor(is_done=[False, False, True])
-    _run(MoveMotorRelative(motor, delta=200, velocity=600, timeout=60.0)._execute_step(_ROBOT))
-    assert motor.get_position_calls == 0
+def test_move_relative_does_not_time_out_when_completing_under_generous_timeout(
+    monkeypatch,
+) -> None:
+    # Same elapsed-time sign check as MoveMotorTo.
+    motor = FakeMotor(positions=[0, 100, 200])
+    step = MoveMotorRelative(motor, delta=200, velocity=600, timeout=60.0)
+    warnings: list[str] = []
+    monkeypatch.setattr(step, "warn", warnings.append)
+    _run(step._execute_step(_ROBOT))
+    assert warnings == []
 
 
-def test_move_relative_timeout_reads_current_position_for_diagnostics() -> None:
-    motor = FakeMotor(is_done=False)
-    _run(MoveMotorRelative(motor, delta=200, velocity=600, timeout=0.02)._execute_step(_ROBOT))
-    assert motor.get_position_calls == 1
+def test_move_relative_timeout_warns_with_current_position(monkeypatch) -> None:
+    motor = FakeMotor(positions=[7])
+    step = MoveMotorRelative(motor, delta=200, velocity=600, timeout=0.02)
+    warnings: list[str] = []
+    monkeypatch.setattr(step, "warn", warnings.append)
+    _run(step._execute_step(_ROBOT))
+    assert len(warnings) == 1
+    assert "target=207" in warnings[0] and "current=7" in warnings[0]
 
 
 def test_move_relative_polls_at_a_fast_cadence(monkeypatch) -> None:
@@ -545,8 +599,8 @@ def test_move_relative_polls_at_a_fast_cadence(monkeypatch) -> None:
         recorded.append(delay)
 
     monkeypatch.setattr(motor_steps.asyncio, "sleep", fake_sleep)
-    motor = FakeMotor(is_done=[False, False, False, True])
-    _run(MoveMotorRelative(motor, delta=5, velocity=5)._execute_step(_ROBOT))
+    motor = FakeMotor(positions=[0, 0, 2, 5])
+    _run(MoveMotorRelative(motor, delta=5, velocity=5, tolerance=0)._execute_step(_ROBOT))
     assert recorded
     assert all(d < 0.5 for d in recorded)
 

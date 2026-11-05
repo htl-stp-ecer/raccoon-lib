@@ -63,10 +63,10 @@ void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goa
 
 void libstp::hal::motor::Motor::moveRelative(const int velocity, const int deltaPosition)
 {
-    const int dirVel = inverted_ ? -velocity : velocity;
-    const int dirDelta = inverted_ ? -deltaPosition : deltaPosition;
     LIBSTP_LOG_TRACE("Wombat Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
-    platform::wombat::core::TransportWriter::instance().setMotorRelative(port_, dirVel, dirDelta);
+    // Relative moves exist only here: resolve to an absolute goal (in the logical,
+    // inversion-corrected frame) so the daemon and firmware only know absolute targets.
+    moveToPosition(velocity, getPosition() + deltaPosition);
 }
 
 int libstp::hal::motor::Motor::getPosition() const
@@ -88,11 +88,6 @@ int libstp::hal::motor::Motor::getBemf() const
     const int corrected = inverted_ ? -reading.value : reading.value;
     LIBSTP_LOG_TRACE("Wombat Motor port={} getBemf raw={} corrected={}", port_, reading.value, corrected);
     return corrected;
-}
-
-bool libstp::hal::motor::Motor::isDone() const
-{
-    return platform::wombat::core::TransportReader::instance().readMotorDone(port_);
 }
 
 void libstp::hal::motor::Motor::brake()

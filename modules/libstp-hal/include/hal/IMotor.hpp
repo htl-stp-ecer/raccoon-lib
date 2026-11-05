@@ -23,11 +23,10 @@ namespace libstp::hal::motor
         virtual void setVelocity(int velocity) = 0;
         /// Move to an absolute position using firmware-side control.
         virtual void moveToPosition(int velocity, int goalPosition) = 0;
-        /// Move by a relative position delta using firmware-side control.
+        /// Move by a relative delta (resolved to an absolute goal from the current position).
         virtual void moveRelative(int velocity, int deltaPosition) = 0;
         [[nodiscard]] virtual int getPosition() const = 0;
         [[nodiscard]] virtual int getBemf() const = 0;
-        [[nodiscard]] virtual bool isDone() const = 0;
         /// Stop this motor using the implementation's preferred strategy.
         virtual void brake() = 0;
         /// Disable this motor completely (no power, no brake — free-spinning).
