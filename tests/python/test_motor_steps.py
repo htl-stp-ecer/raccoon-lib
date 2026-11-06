@@ -608,11 +608,16 @@ def test_move_relative_polls_at_a_fast_cadence(monkeypatch) -> None:
 
 
 # ===========================================================================
-# MoveMotorToDegrees / MoveMotorRelativeDegrees — degrees via ticks_to_rad
+# MoveMotorToDegrees / MoveMotorRelativeDegrees — same as the tick steps,
+# but the target is an angle converted via the calibration's ticks_to_rad
 # ===========================================================================
 
 # 1 tick == 1 degree: makes the expected tick values equal the degree values.
 _ONE_DEG_PER_TICK = math.pi / 180.0
+
+
+def _deg_motor(**kwargs) -> FakeMotor:
+    return FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, **kwargs)
 
 
 def test_move_to_degrees_requires_port() -> None:
@@ -620,21 +625,33 @@ def test_move_to_degrees_requires_port() -> None:
         MoveMotorToDegrees(_NoPort(), degrees=90)
 
 
-@pytest.mark.parametrize("dps", [0, -1, -90.5])
-def test_move_to_degrees_rejects_nonpositive_velocity(dps) -> None:
-    with pytest.raises(ValueError, match=r"velocity_dps"):
-        MoveMotorToDegrees(FakeMotor(), degrees=90, velocity_dps=dps)
+@pytest.mark.parametrize("velocity", [0, -1, -1000])
+def test_move_to_degrees_rejects_nonpositive_velocity(velocity) -> None:
+    with pytest.raises(ValueError, match=r"velocity"):
+        MoveMotorToDegrees(FakeMotor(), degrees=90, velocity=velocity)
 
 
-@pytest.mark.parametrize("timeout", [0, -1])
+@pytest.mark.parametrize("timeout", [0, -1, 0.0])
 def test_move_to_degrees_rejects_nonpositive_timeout(timeout) -> None:
     with pytest.raises(ValueError, match=r"timeout"):
         MoveMotorToDegrees(FakeMotor(), degrees=90, timeout=timeout)
 
 
+def test_move_to_degrees_rejects_non_numeric_timeout() -> None:
+    with pytest.raises(ValueError, match=r"timeout"):
+        MoveMotorToDegrees(FakeMotor(), degrees=90, timeout="soon")
+
+
 def test_move_to_degrees_rejects_negative_tolerance() -> None:
-    with pytest.raises(ValueError, match=r"tolerance_degrees"):
-        MoveMotorToDegrees(FakeMotor(), degrees=90, tolerance_degrees=-0.1)
+    with pytest.raises(ValueError, match=r"tolerance"):
+        MoveMotorToDegrees(FakeMotor(), degrees=90, tolerance=-1)
+
+
+def test_move_to_degrees_defaults_match_tick_step() -> None:
+    step = MoveMotorToDegrees(FakeMotor(), degrees=90)
+    assert step._velocity == 1000
+    assert step._timeout is None
+    assert step._tolerance == 3
 
 
 def test_move_to_degrees_resource_name() -> None:
@@ -642,66 +659,52 @@ def test_move_to_degrees_resource_name() -> None:
     assert step.required_resources() == frozenset({"motor:3"})
 
 
-def test_move_to_degrees_converts_to_absolute_ticks_and_velocity() -> None:
-    # 1 tick/deg: 90 deg -> goal 90 ticks; 200 deg/s -> 200 ticks/s -> 1 per 5 ms.
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[90])
-    _run(MoveMotorToDegrees(motor, degrees=90, velocity_dps=200)._execute_step(_ROBOT))
-    assert motor.calls == [("move_to_position", 1, 90)]
+def test_move_to_degrees_commands_absolute_ticks_with_unchanged_velocity() -> None:
+    motor = _deg_motor(positions=[90])
+    _run(MoveMotorToDegrees(motor, degrees=90, velocity=800)._execute_step(_ROBOT))
+    assert motor.calls == [("move_to_position", 800, 90)]
 
 
 def test_move_to_degrees_uses_calibration_ticks_to_rad() -> None:
     # ticks_to_rad = 0.01 rad -> 180 deg = pi rad = 314.159.. ticks -> 314.
     motor = FakeMotor(ticks_to_rad=0.01, positions=[314])
-    _run(MoveMotorToDegrees(motor, degrees=180, velocity_dps=360)._execute_step(_ROBOT))
-    goal = motor.calls[0][2]
-    assert goal == round(math.pi / 0.01)
-    # 360 deg/s = 2*pi rad/s -> /0.01 = 628.3 ticks/s -> /200 Hz = 3.14 -> 3
-    assert motor.calls[0][1] == 3
+    _run(MoveMotorToDegrees(motor, degrees=180)._execute_step(_ROBOT))
+    assert motor.calls[0][2] == round(math.pi / 0.01)
 
 
 def test_move_to_degrees_negative_angle() -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[-45])
+    motor = _deg_motor(positions=[-45])
     _run(MoveMotorToDegrees(motor, degrees=-45)._execute_step(_ROBOT))
     assert motor.calls[0][2] == -45
 
 
-def test_move_to_degrees_velocity_never_rounds_to_zero() -> None:
-    # Tiny dps would round to 0; the firmware needs a positive velocity.
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[10])
-    _run(MoveMotorToDegrees(motor, degrees=10, velocity_dps=0.5)._execute_step(_ROBOT))
-    assert motor.calls[0][1] == 1
-
-
 def test_move_to_degrees_polls_until_reached_and_keeps_holding() -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[0, 40, 90])
+    motor = _deg_motor(positions=[0, 40, 90])
     _run(MoveMotorToDegrees(motor, degrees=90)._execute_step(_ROBOT))
     assert [c[0] for c in motor.calls] == ["move_to_position"]
     assert motor.get_position_calls == 3
 
 
-def test_move_to_degrees_default_tolerance_is_3_ticks() -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[87])
+def test_move_to_degrees_tolerance_in_ticks() -> None:
+    motor = _deg_motor(positions=[87])  # |90-87| == 3 == default
     _run(MoveMotorToDegrees(motor, degrees=90)._execute_step(_ROBOT))
     assert motor.get_position_calls == 1
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[86, 90])
+    motor = _deg_motor(positions=[86, 90])  # 4 > 3 -> keeps waiting
     _run(MoveMotorToDegrees(motor, degrees=90)._execute_step(_ROBOT))
     assert motor.get_position_calls == 2
-
-
-def test_move_to_degrees_custom_tolerance_in_degrees() -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[80])
-    step = MoveMotorToDegrees(motor, degrees=90, tolerance_degrees=10)
-    _run(step._execute_step(_ROBOT))
+    motor = _deg_motor(positions=[80])
+    _run(MoveMotorToDegrees(motor, degrees=90, tolerance=10)._execute_step(_ROBOT))
     assert motor.get_position_calls == 1
 
 
 def test_move_to_degrees_timeout_warns_without_stopping(monkeypatch) -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[0])
+    motor = _deg_motor(positions=[0])
     step = MoveMotorToDegrees(motor, degrees=90, timeout=0.02)
     warnings: list[str] = []
     monkeypatch.setattr(step, "warn", warnings.append)
     _run(step._execute_step(_ROBOT))
     assert len(warnings) == 1
+    assert "target=90" in warnings[0]
     assert [c[0] for c in motor.calls] == ["move_to_position"]
 
 
@@ -717,29 +720,55 @@ def test_move_relative_degrees_requires_port() -> None:
         MoveMotorRelativeDegrees(_NoPort(), delta_degrees=90)
 
 
-@pytest.mark.parametrize("dps", [0, -5])
-def test_move_relative_degrees_rejects_nonpositive_velocity(dps) -> None:
-    with pytest.raises(ValueError, match=r"velocity_dps"):
-        MoveMotorRelativeDegrees(FakeMotor(), delta_degrees=90, velocity_dps=dps)
+@pytest.mark.parametrize("velocity", [0, -5])
+def test_move_relative_degrees_rejects_nonpositive_velocity(velocity) -> None:
+    with pytest.raises(ValueError, match=r"velocity"):
+        MoveMotorRelativeDegrees(FakeMotor(), delta_degrees=90, velocity=velocity)
+
+
+@pytest.mark.parametrize("timeout", [0, -1])
+def test_move_relative_degrees_rejects_nonpositive_timeout(timeout) -> None:
+    with pytest.raises(ValueError, match=r"timeout"):
+        MoveMotorRelativeDegrees(FakeMotor(), delta_degrees=90, timeout=timeout)
+
+
+def test_move_relative_degrees_rejects_negative_tolerance() -> None:
+    with pytest.raises(ValueError, match=r"tolerance"):
+        MoveMotorRelativeDegrees(FakeMotor(), delta_degrees=90, tolerance=-1)
+
+
+def test_move_relative_degrees_defaults_match_tick_step() -> None:
+    step = MoveMotorRelativeDegrees(FakeMotor(), delta_degrees=90)
+    assert (step._velocity, step._timeout, step._tolerance) == (1000, None, 3)
 
 
 def test_move_relative_degrees_commands_current_plus_delta() -> None:
     # Start at 1000 ticks, +90 deg at 1 tick/deg -> absolute goal 1090.
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[1000, 1090])
-    step = MoveMotorRelativeDegrees(motor, delta_degrees=90, velocity_dps=200)
+    motor = _deg_motor(positions=[1000, 1090])
+    step = MoveMotorRelativeDegrees(motor, delta_degrees=90, velocity=600)
     _run(step._execute_step(_ROBOT))
-    assert motor.calls == [("move_to_position", 1, 1090)]
+    assert motor.calls == [("move_to_position", 600, 1090)]
 
 
 def test_move_relative_degrees_negative_delta() -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[500, 410])
+    motor = _deg_motor(positions=[500, 410])
     _run(MoveMotorRelativeDegrees(motor, delta_degrees=-90)._execute_step(_ROBOT))
     assert motor.calls[0][2] == 410
 
 
 def test_move_relative_degrees_leaves_motor_holding() -> None:
-    motor = FakeMotor(ticks_to_rad=_ONE_DEG_PER_TICK, positions=[0, 0, 90])
+    motor = _deg_motor(positions=[0, 0, 90])
     _run(MoveMotorRelativeDegrees(motor, delta_degrees=90)._execute_step(_ROBOT))
+    assert [c[0] for c in motor.calls] == ["move_to_position"]
+
+
+def test_move_relative_degrees_timeout_warns_without_stopping(monkeypatch) -> None:
+    motor = _deg_motor(positions=[0])
+    step = MoveMotorRelativeDegrees(motor, delta_degrees=90, timeout=0.02)
+    warnings: list[str] = []
+    monkeypatch.setattr(step, "warn", warnings.append)
+    _run(step._execute_step(_ROBOT))
+    assert len(warnings) == 1
     assert [c[0] for c in motor.calls] == ["move_to_position"]
 
 
