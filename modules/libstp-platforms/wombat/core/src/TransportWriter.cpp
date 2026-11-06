@@ -58,21 +58,6 @@ void TransportWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t g
                                     msg.timestamp);
 }
 
-void TransportWriter::setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition)
-{
-    raccoon::vector3f_t msg{};
-    msg.timestamp = currentTimestampUsec();
-    msg.x = static_cast<float>(velocity);
-    msg.y = static_cast<float>(deltaPosition);
-    msg.z = 0.0f;
-    const auto ch = Channels::motorRelativeCommand(port);
-    if (!transport_.publish(ch, msg, reliableOpts))
-        LIBSTP_LOG_WARN("TransportWriter: motor relative command DROPPED (publish failed) "
-                        "port={} velocity={} delta={} channel={}", port, velocity, deltaPosition, ch);
-    CommandTrace::instance().record("motor_rel", ch, port, velocity, deltaPosition, 0, 2,
-                                    msg.timestamp);
-}
-
 void TransportWriter::setServo(uint8_t port, float degrees)
 {
     raccoon::scalar_f_t publishedValue{};

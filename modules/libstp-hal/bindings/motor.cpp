@@ -36,11 +36,15 @@ void init_motor(const py::module& m)
         .def("move_relative", &libstp::hal::motor::IMotor::moveRelative,
              py::arg("velocity"), py::arg("delta_position"),
              "Move relative position at given velocity")
+        .def("move_to_degrees", &libstp::hal::motor::IMotor::moveToDegrees,
+             py::arg("velocity"), py::arg("goal_degrees"),
+             "Move to absolute angle in degrees at given velocity (uses calibration ticks_to_rad)")
+        .def("move_relative_degrees", &libstp::hal::motor::IMotor::moveRelativeDegrees,
+             py::arg("velocity"), py::arg("delta_degrees"),
+             "Move relative angle in degrees at given velocity (uses calibration ticks_to_rad)")
         .def("get_position", &libstp::hal::motor::IMotor::getPosition)
         .def("get_bemf", &libstp::hal::motor::IMotor::getBemf,
              "Read current BEMF velocity value from firmware")
-        .def("is_done", &libstp::hal::motor::IMotor::isDone,
-             "Check if position move is complete")
         .def("brake", &libstp::hal::motor::IMotor::brake)
         .def("off", &libstp::hal::motor::IMotor::off,
              "Disable motor completely (no power, no brake — free-spinning)")
@@ -68,7 +72,6 @@ void init_motor(const py::module& m)
              py::arg("velocity"), py::arg("delta_position"))
         .def("get_position", &libstp::hal::motor::Motor::getPosition)
         .def("get_bemf", &libstp::hal::motor::Motor::getBemf)
-        .def("is_done", &libstp::hal::motor::Motor::isDone)
         .def("brake", &libstp::hal::motor::Motor::brake)
         .def("off", &libstp::hal::motor::Motor::off,
              "Disable motor completely (no power, no brake — free-spinning)")

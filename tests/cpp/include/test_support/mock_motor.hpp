@@ -16,7 +16,6 @@ namespace libstp::test
         MOCK_METHOD(void, moveToPosition, (int velocity, int goalPosition), (override));
         MOCK_METHOD(void, moveRelative, (int velocity, int deltaPosition), (override));
         MOCK_METHOD(int, getPosition, (), (const, override));
-        MOCK_METHOD(bool, isDone, (), (const, override));
         MOCK_METHOD(void, brake, (), (override));
         MOCK_METHOD(void, off, (), (override));
         MOCK_METHOD(void, resetPositionCounter, (), (override));

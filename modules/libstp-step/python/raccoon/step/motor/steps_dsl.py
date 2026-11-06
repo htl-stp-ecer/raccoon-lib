@@ -16,9 +16,12 @@ from .steps import (
     SetMotorDps,
     MoveMotorTo,
     MoveMotorRelative,
+    MoveMotorToDegrees,
+    MoveMotorRelativeDegrees,
     MotorOff,
     MotorPassiveBrake,
     MotorBrake,
+    _DEFAULT_POSITION_TOLERANCE,
 )
 
 from raccoon.hal import IMotor
@@ -223,6 +226,7 @@ class MoveMotorToBuilder(StepBuilder):
         self._position = _UNSET
         self._velocity = 1000
         self._timeout = None
+        self._tolerance = _DEFAULT_POSITION_TOLERANCE
 
     def motor(self, value: IMotor):
         self._motor = value
@@ -240,6 +244,10 @@ class MoveMotorToBuilder(StepBuilder):
         self._timeout = value
         return self
 
+    def tolerance(self, value: int):
+        self._tolerance = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
@@ -248,6 +256,7 @@ class MoveMotorToBuilder(StepBuilder):
             kwargs["position"] = self._position
         kwargs["velocity"] = self._velocity
         kwargs["timeout"] = self._timeout
+        kwargs["tolerance"] = self._tolerance
         return MoveMotorTo(**kwargs)
 
 
@@ -257,23 +266,29 @@ def move_motor_to(
     position: int = _UNSET,
     velocity: int = 1000,
     timeout: float | None = None,
+    tolerance: int = _DEFAULT_POSITION_TOLERANCE,
 ):
     """
     Move a motor to an absolute encoder position and wait for completion.
 
     Commands the motor's firmware position controller to drive to the given
     absolute encoder tick count. The step blocks (yielding to the async
-    loop) until the firmware reports the move is complete, or until the
-    optional timeout expires.
+    loop) until the measured position is within ``tolerance`` ticks of the
+    target, or until the optional timeout expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step (e.g. ``motor_off``,
+    ``motor_brake`` or a velocity/speed step) switches it.
 
     Args:
         motor: The motor to control, obtained from the robot hardware map (e.g. ``robot.motor(2)``).
         position: Target position in absolute encoder ticks.
         velocity: Movement speed in firmware ticks/s. Must be positive. Defaults to 1000.
         timeout: Maximum seconds to wait for the move to finish. ``None`` (the default) means wait indefinitely. If the timeout fires a warning is logged and the step returns without stopping the motor.
+        tolerance: Allowed distance to the target in ticks for the move to count as reached. Must be >= 0. Defaults to 3.
 
     Returns:
-        A MoveMotorToBuilder (chainable via ``.motor()``, ``.position()``, ``.velocity()``, ``.timeout()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A MoveMotorToBuilder (chainable via ``.motor()``, ``.position()``, ``.velocity()``, ``.timeout()``, ``.tolerance()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -289,6 +304,7 @@ def move_motor_to(
         b._position = position
     b._velocity = velocity
     b._timeout = timeout
+    b._tolerance = tolerance
     return b
 
 
@@ -301,6 +317,7 @@ class MoveMotorRelativeBuilder(StepBuilder):
         self._delta = _UNSET
         self._velocity = 1000
         self._timeout = None
+        self._tolerance = _DEFAULT_POSITION_TOLERANCE
 
     def motor(self, value: IMotor):
         self._motor = value
@@ -318,6 +335,10 @@ class MoveMotorRelativeBuilder(StepBuilder):
         self._timeout = value
         return self
 
+    def tolerance(self, value: int):
+        self._tolerance = value
+        return self
+
     def _build(self):
         kwargs = {}
         if self._motor is not _UNSET:
@@ -326,29 +347,39 @@ class MoveMotorRelativeBuilder(StepBuilder):
             kwargs["delta"] = self._delta
         kwargs["velocity"] = self._velocity
         kwargs["timeout"] = self._timeout
+        kwargs["tolerance"] = self._tolerance
         return MoveMotorRelative(**kwargs)
 
 
 @dsl(tags=["motor", "actuator"])
 def move_motor_relative(
-    motor: IMotor = _UNSET, delta: int = _UNSET, velocity: int = 1000, timeout: float | None = None
+    motor: IMotor = _UNSET,
+    delta: int = _UNSET,
+    velocity: int = 1000,
+    timeout: float | None = None,
+    tolerance: int = _DEFAULT_POSITION_TOLERANCE,
 ):
     """
     Move a motor by a relative encoder delta and wait for completion.
 
     Commands the motor's firmware position controller to move by the given
-    number of encoder ticks relative to its current position. The step
-    blocks until the firmware reports the move is complete, or until the
+    number of encoder ticks relative to its current position (resolved to an
+    absolute target when the step starts). The step blocks until the measured
+    position is within ``tolerance`` ticks of that target, or until the
     optional timeout expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step switches it.
 
     Args:
         motor: The motor to control, obtained from the robot hardware map (e.g. ``robot.motor(2)``).
         delta: Number of encoder ticks to move. Positive values move forward; negative values move in reverse.
         velocity: Movement speed in firmware ticks/s. Must be positive. Defaults to 1000.
         timeout: Maximum seconds to wait for the move to finish. ``None`` (the default) means wait indefinitely. If the timeout fires a warning is logged and the step returns without stopping the motor.
+        tolerance: Allowed distance to the target in ticks for the move to count as reached. Must be >= 0. Defaults to 3.
 
     Returns:
-        A MoveMotorRelativeBuilder (chainable via ``.motor()``, ``.delta()``, ``.velocity()``, ``.timeout()``, ``.on_anomaly()``, ``.skip_timing()``).
+        A MoveMotorRelativeBuilder (chainable via ``.motor()``, ``.delta()``, ``.velocity()``, ``.timeout()``, ``.tolerance()``, ``.on_anomaly()``, ``.skip_timing()``).
 
     Example::
 
@@ -367,6 +398,191 @@ def move_motor_relative(
         b._delta = delta
     b._velocity = velocity
     b._timeout = timeout
+    b._tolerance = tolerance
+    return b
+
+
+class MoveMotorToDegreesBuilder(StepBuilder):
+    """Builder for MoveMotorToDegrees. Auto-generated — do not edit."""
+
+    def __init__(self):
+        super().__init__()
+        self._motor = _UNSET
+        self._degrees = _UNSET
+        self._velocity = 1000
+        self._timeout = None
+        self._tolerance = _DEFAULT_POSITION_TOLERANCE
+
+    def motor(self, value: IMotor):
+        self._motor = value
+        return self
+
+    def degrees(self, value: float):
+        self._degrees = value
+        return self
+
+    def velocity(self, value: int):
+        self._velocity = value
+        return self
+
+    def timeout(self, value: float | None):
+        self._timeout = value
+        return self
+
+    def tolerance(self, value: int):
+        self._tolerance = value
+        return self
+
+    def _build(self):
+        kwargs = {}
+        if self._motor is not _UNSET:
+            kwargs["motor"] = self._motor
+        if self._degrees is not _UNSET:
+            kwargs["degrees"] = self._degrees
+        kwargs["velocity"] = self._velocity
+        kwargs["timeout"] = self._timeout
+        kwargs["tolerance"] = self._tolerance
+        return MoveMotorToDegrees(**kwargs)
+
+
+@dsl(tags=["motor", "actuator"])
+def move_motor_to_degrees(
+    motor: IMotor = _UNSET,
+    degrees: float = _UNSET,
+    velocity: int = 1000,
+    timeout: float | None = None,
+    tolerance: int = _DEFAULT_POSITION_TOLERANCE,
+):
+    """
+    Move a motor to an absolute angle in degrees and wait for completion.
+
+    Same as ``move_motor_to`` but the target is an angle in degrees instead of
+    encoder ticks. Degrees are converted with the motor's ``ticks_to_rad``
+    calibration; 0 degrees is the position-counter zero (see
+    ``reset_position_counter``). The step blocks until the measured position
+    is within ``tolerance`` ticks of the target, or until the optional timeout
+    expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step (e.g. ``motor_off``,
+    ``motor_brake`` or a velocity/speed step) switches it.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map (e.g. ``robot.motor(2)``). Needs a valid ``ticks_to_rad``.
+        degrees: Target angle in degrees (signed).
+        velocity: Movement speed in firmware ticks/s. Must be positive. Defaults to 1000.
+        timeout: Maximum seconds to wait for the move to finish. ``None`` (the default) means wait indefinitely. If the timeout fires a warning is logged and the step returns without stopping the motor.
+        tolerance: Allowed distance to the target in ticks for the move to count as reached. Must be >= 0. Defaults to 3.
+
+    Returns:
+        A MoveMotorToDegreesBuilder (chainable via ``.motor()``, ``.degrees()``, ``.velocity()``, ``.timeout()``, ``.tolerance()``, ``.on_anomaly()``, ``.skip_timing()``).
+
+    Example::
+
+        from raccoon.step.motor import move_motor_to_degrees
+
+        # Swing the arm to 90 degrees at speed 800, with a 3s safety timeout
+        move_motor_to_degrees(robot.motor(2), degrees=90, velocity=800, timeout=3.0)
+    """
+    b = MoveMotorToDegreesBuilder()
+    if motor is not _UNSET:
+        b._motor = motor
+    if degrees is not _UNSET:
+        b._degrees = degrees
+    b._velocity = velocity
+    b._timeout = timeout
+    b._tolerance = tolerance
+    return b
+
+
+class MoveMotorRelativeDegreesBuilder(StepBuilder):
+    """Builder for MoveMotorRelativeDegrees. Auto-generated — do not edit."""
+
+    def __init__(self):
+        super().__init__()
+        self._motor = _UNSET
+        self._delta_degrees = _UNSET
+        self._velocity = 1000
+        self._timeout = None
+        self._tolerance = _DEFAULT_POSITION_TOLERANCE
+
+    def motor(self, value: IMotor):
+        self._motor = value
+        return self
+
+    def delta_degrees(self, value: float):
+        self._delta_degrees = value
+        return self
+
+    def velocity(self, value: int):
+        self._velocity = value
+        return self
+
+    def timeout(self, value: float | None):
+        self._timeout = value
+        return self
+
+    def tolerance(self, value: int):
+        self._tolerance = value
+        return self
+
+    def _build(self):
+        kwargs = {}
+        if self._motor is not _UNSET:
+            kwargs["motor"] = self._motor
+        if self._delta_degrees is not _UNSET:
+            kwargs["delta_degrees"] = self._delta_degrees
+        kwargs["velocity"] = self._velocity
+        kwargs["timeout"] = self._timeout
+        kwargs["tolerance"] = self._tolerance
+        return MoveMotorRelativeDegrees(**kwargs)
+
+
+@dsl(tags=["motor", "actuator"])
+def move_motor_relative_degrees(
+    motor: IMotor = _UNSET,
+    delta_degrees: float = _UNSET,
+    velocity: int = 1000,
+    timeout: float | None = None,
+    tolerance: int = _DEFAULT_POSITION_TOLERANCE,
+):
+    """
+    Move a motor by a relative angle in degrees and wait for completion.
+
+    Same as ``move_motor_relative`` but the delta is an angle in degrees
+    instead of encoder ticks. The target is resolved to an absolute position
+    (current position + delta) when the step starts. The step blocks until the
+    measured position is within ``tolerance`` ticks of that target, or until
+    the optional timeout expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step switches it.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map (e.g. ``robot.motor(2)``). Needs a valid ``ticks_to_rad``.
+        delta_degrees: Angle to move in degrees. Positive values move forward; negative values move in reverse.
+        velocity: Movement speed in firmware ticks/s. Must be positive. Defaults to 1000.
+        timeout: Maximum seconds to wait for the move to finish. ``None`` (the default) means wait indefinitely. If the timeout fires a warning is logged and the step returns without stopping the motor.
+        tolerance: Allowed distance to the target in ticks for the move to count as reached. Must be >= 0. Defaults to 3.
+
+    Returns:
+        A MoveMotorRelativeDegreesBuilder (chainable via ``.motor()``, ``.delta_degrees()``, ``.velocity()``, ``.timeout()``, ``.tolerance()``, ``.on_anomaly()``, ``.skip_timing()``).
+
+    Example::
+
+        from raccoon.step.motor import move_motor_relative_degrees
+
+        # Turn the arm motor a quarter turn forward
+        move_motor_relative_degrees(robot.motor(2), delta_degrees=90, velocity=600)
+    """
+    b = MoveMotorRelativeDegreesBuilder()
+    if motor is not _UNSET:
+        b._motor = motor
+    if delta_degrees is not _UNSET:
+        b._delta_degrees = delta_degrees
+    b._velocity = velocity
+    b._timeout = timeout
+    b._tolerance = tolerance
     return b
 
 
@@ -534,6 +750,10 @@ __all__ = [
     "move_motor_to",
     "MoveMotorRelativeBuilder",
     "move_motor_relative",
+    "MoveMotorToDegreesBuilder",
+    "move_motor_to_degrees",
+    "MoveMotorRelativeDegreesBuilder",
+    "move_motor_relative_degrees",
     "MotorOffBuilder",
     "motor_off",
     "MotorPassiveBrakeBuilder",

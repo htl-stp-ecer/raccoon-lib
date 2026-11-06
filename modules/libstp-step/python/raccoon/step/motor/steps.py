@@ -188,14 +188,42 @@ class SetMotorDps(Step):
         self._motor.set_velocity(bemf_target)
 
 
+_DEFAULT_POSITION_TOLERANCE = 3  # ticks; matches the firmware hold deadband
+
+
+async def _wait_until_reached(
+    step: Step,
+    motor: IMotor,
+    goal: int,
+    tolerance: int,
+    timeout: float | None,
+    label: str,
+) -> None:
+    """Poll the motor position until it is within ``tolerance`` ticks of ``goal``."""
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    while abs(motor.get_position() - goal) > tolerance:
+        if timeout is not None and (loop.time() - start) >= timeout:
+            step.warn(
+                f"{label} timed out after {timeout:.1f}s "
+                f"(target={goal}, current={motor.get_position()})"
+            )
+            break
+        await asyncio.sleep(0.01)
+
+
 @dsl_step(tags=["motor", "actuator"])
 class MoveMotorTo(Step):
     """Move a motor to an absolute encoder position and wait for completion.
 
     Commands the motor's firmware position controller to drive to the given
     absolute encoder tick count. The step blocks (yielding to the async
-    loop) until the firmware reports the move is complete, or until the
-    optional timeout expires.
+    loop) until the measured position is within ``tolerance`` ticks of the
+    target, or until the optional timeout expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step (e.g. ``motor_off``,
+    ``motor_brake`` or a velocity/speed step) switches it.
 
     Args:
         motor: The motor to control, obtained from the robot hardware map
@@ -203,6 +231,8 @@ class MoveMotorTo(Step):
         position: Target position in absolute encoder ticks.
         velocity: Movement speed in firmware ticks/s. Must be positive.
             Defaults to 1000.
+        tolerance: Allowed distance to the target in ticks for the move to
+            count as reached. Must be >= 0. Defaults to 3.
         timeout: Maximum seconds to wait for the move to finish. ``None``
             (the default) means wait indefinitely. If the timeout fires
             a warning is logged and the step returns without stopping the
@@ -222,6 +252,7 @@ class MoveMotorTo(Step):
         position: int,
         velocity: int = 1000,
         timeout: float | None = None,
+        tolerance: int = _DEFAULT_POSITION_TOLERANCE,
     ) -> None:
         super().__init__()
         if not hasattr(motor, "port"):
@@ -231,6 +262,10 @@ class MoveMotorTo(Step):
         self._position = int(position)
         self._velocity = int(velocity)
         self._timeout = timeout
+        self._tolerance = int(tolerance)
+        if self._tolerance < 0:
+            msg = f"tolerance must be >= 0, got {self._tolerance}"
+            raise ValueError(msg)
         if self._velocity <= 0:
             msg = f"velocity must be > 0, got {self._velocity}"
             raise ValueError(msg)
@@ -246,16 +281,9 @@ class MoveMotorTo(Step):
 
     async def _execute_step(self, robot: GenericRobot) -> None:
         self._motor.move_to_position(self._velocity, self._position)
-        loop = asyncio.get_running_loop()
-        start = loop.time()
-        while not self._motor.is_done():
-            if self._timeout is not None and (loop.time() - start) >= self._timeout:
-                self.warn(
-                    f"MoveMotorTo timed out after {self._timeout:.1f}s "
-                    f"(target={self._position}, current={self._motor.get_position()})"
-                )
-                break
-            await asyncio.sleep(0.01)
+        await _wait_until_reached(
+            self, self._motor, self._position, self._tolerance, self._timeout, "MoveMotorTo"
+        )
 
 
 @dsl_step(tags=["motor", "actuator"])
@@ -263,9 +291,13 @@ class MoveMotorRelative(Step):
     """Move a motor by a relative encoder delta and wait for completion.
 
     Commands the motor's firmware position controller to move by the given
-    number of encoder ticks relative to its current position. The step
-    blocks until the firmware reports the move is complete, or until the
+    number of encoder ticks relative to its current position (resolved to an
+    absolute target when the step starts). The step blocks until the measured
+    position is within ``tolerance`` ticks of that target, or until the
     optional timeout expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step switches it.
 
     Args:
         motor: The motor to control, obtained from the robot hardware map
@@ -274,6 +306,8 @@ class MoveMotorRelative(Step):
             forward; negative values move in reverse.
         velocity: Movement speed in firmware ticks/s. Must be positive.
             Defaults to 1000.
+        tolerance: Allowed distance to the target in ticks for the move to
+            count as reached. Must be >= 0. Defaults to 3.
         timeout: Maximum seconds to wait for the move to finish. ``None``
             (the default) means wait indefinitely. If the timeout fires
             a warning is logged and the step returns without stopping the
@@ -296,6 +330,7 @@ class MoveMotorRelative(Step):
         delta: int,
         velocity: int = 1000,
         timeout: float | None = None,
+        tolerance: int = _DEFAULT_POSITION_TOLERANCE,
     ) -> None:
         super().__init__()
         if not hasattr(motor, "port"):
@@ -305,6 +340,10 @@ class MoveMotorRelative(Step):
         self._delta = int(delta)
         self._velocity = int(velocity)
         self._timeout = timeout
+        self._tolerance = int(tolerance)
+        if self._tolerance < 0:
+            msg = f"tolerance must be >= 0, got {self._tolerance}"
+            raise ValueError(msg)
         if self._velocity <= 0:
             msg = f"velocity must be > 0, got {self._velocity}"
             raise ValueError(msg)
@@ -322,17 +361,188 @@ class MoveMotorRelative(Step):
         )
 
     async def _execute_step(self, robot: GenericRobot) -> None:
-        self._motor.move_relative(self._velocity, self._delta)
-        loop = asyncio.get_running_loop()
-        start = loop.time()
-        while not self._motor.is_done():
-            if self._timeout is not None and (loop.time() - start) >= self._timeout:
-                self.warn(
-                    f"MoveMotorRelative timed out after {self._timeout:.1f}s "
-                    f"(delta={self._delta}, current={self._motor.get_position()})"
-                )
-                break
-            await asyncio.sleep(0.01)
+        goal = self._motor.get_position() + self._delta
+        self._motor.move_to_position(self._velocity, goal)
+        await _wait_until_reached(
+            self, self._motor, goal, self._tolerance, self._timeout, "MoveMotorRelative"
+        )
+
+
+def _degrees_to_ticks(motor: IMotor, degrees: float) -> int:
+    """Convert degrees to encoder ticks with the motor calibration (``ticks_to_rad``)."""
+    ticks_to_rad = motor.get_calibration().ticks_to_rad
+    if ticks_to_rad == 0:
+        msg = (
+            f"Motor {motor.port} has no calibration (ticks_to_rad == 0); "
+            "degree-based moves need ticks_to_rad in the motor config"
+        )
+        raise ValueError(msg)
+    return round(math.radians(degrees) / ticks_to_rad)
+
+
+class _MoveMotorDegreesBase(Step):
+    """Shared validation and execution for the degree-based move steps.
+
+    Identical to ``MoveMotorTo`` / ``MoveMotorRelative`` (same ``velocity``,
+    ``timeout`` and ``tolerance``) except that the target is an angle.
+    """
+
+    _LABEL = "MoveMotorDegrees"
+
+    def __init__(
+        self,
+        motor: IMotor,
+        velocity: int,
+        timeout: float | None,
+        tolerance: int,
+    ) -> None:
+        super().__init__()
+        if not hasattr(motor, "port"):
+            msg = f"motor must be a Motor (has .port), got {type(motor).__name__}"
+            raise TypeError(msg)
+        self._motor = motor
+        self._velocity = int(velocity)
+        self._timeout = timeout
+        self._tolerance = int(tolerance)
+        if self._velocity <= 0:
+            msg = f"velocity must be > 0, got {self._velocity}"
+            raise ValueError(msg)
+        if timeout is not None and (not isinstance(timeout, int | float) or timeout <= 0):
+            msg = f"timeout must be > 0, got {timeout}"
+            raise ValueError(msg)
+        if self._tolerance < 0:
+            msg = f"tolerance must be >= 0, got {self._tolerance}"
+            raise ValueError(msg)
+
+    def required_resources(self) -> frozenset[str]:
+        return frozenset({f"motor:{self._motor.port}"})
+
+    def _goal_ticks(self) -> int:
+        raise NotImplementedError
+
+    async def _execute_step(self, robot: GenericRobot) -> None:
+        goal = self._goal_ticks()
+        self._motor.move_to_position(self._velocity, goal)
+        await _wait_until_reached(
+            self, self._motor, goal, self._tolerance, self._timeout, self._LABEL
+        )
+
+
+@dsl_step(tags=["motor", "actuator"])
+class MoveMotorToDegrees(_MoveMotorDegreesBase):
+    """Move a motor to an absolute angle in degrees and wait for completion.
+
+    Same as ``move_motor_to`` but the target is an angle in degrees instead of
+    encoder ticks. Degrees are converted with the motor's ``ticks_to_rad``
+    calibration; 0 degrees is the position-counter zero (see
+    ``reset_position_counter``). The step blocks until the measured position
+    is within ``tolerance`` ticks of the target, or until the optional timeout
+    expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step (e.g. ``motor_off``,
+    ``motor_brake`` or a velocity/speed step) switches it.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(2)``). Needs a valid ``ticks_to_rad``.
+        degrees: Target angle in degrees (signed).
+        velocity: Movement speed in firmware ticks/s. Must be positive.
+            Defaults to 1000.
+        timeout: Maximum seconds to wait for the move to finish. ``None``
+            (the default) means wait indefinitely. If the timeout fires
+            a warning is logged and the step returns without stopping the
+            motor.
+        tolerance: Allowed distance to the target in ticks for the move to
+            count as reached. Must be >= 0. Defaults to 3.
+
+    Example::
+
+        from raccoon.step.motor import move_motor_to_degrees
+
+        # Swing the arm to 90 degrees at speed 800, with a 3s safety timeout
+        move_motor_to_degrees(robot.motor(2), degrees=90, velocity=800, timeout=3.0)
+    """
+
+    _LABEL = "MoveMotorToDegrees"
+
+    def __init__(
+        self,
+        motor: IMotor,
+        degrees: float,
+        velocity: int = 1000,
+        timeout: float | None = None,
+        tolerance: int = _DEFAULT_POSITION_TOLERANCE,
+    ) -> None:
+        super().__init__(motor, velocity, timeout, tolerance)
+        self._degrees = float(degrees)
+
+    def _generate_signature(self) -> str:
+        return (
+            f"MoveMotorToDegrees(port={self._motor.port},"
+            f"deg={self._degrees},vel={self._velocity})"
+        )
+
+    def _goal_ticks(self) -> int:
+        return _degrees_to_ticks(self._motor, self._degrees)
+
+
+@dsl_step(tags=["motor", "actuator"])
+class MoveMotorRelativeDegrees(_MoveMotorDegreesBase):
+    """Move a motor by a relative angle in degrees and wait for completion.
+
+    Same as ``move_motor_relative`` but the delta is an angle in degrees
+    instead of encoder ticks. The target is resolved to an absolute position
+    (current position + delta) when the step starts. The step blocks until the
+    measured position is within ``tolerance`` ticks of that target, or until
+    the optional timeout expires.
+
+    The motor keeps holding the target position after the step finishes. It
+    stays in position mode until another motor step switches it.
+
+    Args:
+        motor: The motor to control, obtained from the robot hardware map
+            (e.g. ``robot.motor(2)``). Needs a valid ``ticks_to_rad``.
+        delta_degrees: Angle to move in degrees. Positive values move
+            forward; negative values move in reverse.
+        velocity: Movement speed in firmware ticks/s. Must be positive.
+            Defaults to 1000.
+        timeout: Maximum seconds to wait for the move to finish. ``None``
+            (the default) means wait indefinitely. If the timeout fires
+            a warning is logged and the step returns without stopping the
+            motor.
+        tolerance: Allowed distance to the target in ticks for the move to
+            count as reached. Must be >= 0. Defaults to 3.
+
+    Example::
+
+        from raccoon.step.motor import move_motor_relative_degrees
+
+        # Turn the arm motor a quarter turn forward
+        move_motor_relative_degrees(robot.motor(2), delta_degrees=90, velocity=600)
+    """
+
+    _LABEL = "MoveMotorRelativeDegrees"
+
+    def __init__(
+        self,
+        motor: IMotor,
+        delta_degrees: float,
+        velocity: int = 1000,
+        timeout: float | None = None,
+        tolerance: int = _DEFAULT_POSITION_TOLERANCE,
+    ) -> None:
+        super().__init__(motor, velocity, timeout, tolerance)
+        self._delta_degrees = float(delta_degrees)
+
+    def _generate_signature(self) -> str:
+        return (
+            f"MoveMotorRelativeDegrees(port={self._motor.port},"
+            f"delta_deg={self._delta_degrees},vel={self._velocity})"
+        )
+
+    def _goal_ticks(self) -> int:
+        return self._motor.get_position() + _degrees_to_ticks(self._motor, self._delta_degrees)
 
 
 @dsl(hidden=True)
@@ -456,6 +666,8 @@ __all__ = [
     "SetMotorDps",
     "MoveMotorTo",
     "MoveMotorRelative",
+    "MoveMotorToDegrees",
+    "MoveMotorRelativeDegrees",
     "StopMotor",
     "MotorOff",
     "MotorPassiveBrake",
