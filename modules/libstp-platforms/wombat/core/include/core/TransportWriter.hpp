@@ -40,7 +40,6 @@ namespace platform::wombat::core
         /// Publish an absolute position move command.
         void setMotorPosition(uint8_t port, int32_t velocity, int32_t goalPosition);
         /// Publish a relative position move command.
-        void setMotorRelative(uint8_t port, int32_t velocity, int32_t deltaPosition);
         /// Publish a servo position command in degrees (0-180).
         void setServo(uint8_t port, float degrees);
         /// Publish a servo mode update.

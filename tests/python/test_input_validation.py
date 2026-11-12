@@ -47,13 +47,11 @@ def _make_motor():
     m = MagicMock()
     m.port = 0
     m.get_position = MagicMock(return_value=0)
-    m.is_done = MagicMock(return_value=True)
     m.set_speed = MagicMock()
     m.set_velocity = MagicMock()
     m.brake = MagicMock()
     m.off = MagicMock()
     m.move_to_position = MagicMock()
-    m.move_relative = MagicMock()
     m.get_calibration = MagicMock()
     return m
 

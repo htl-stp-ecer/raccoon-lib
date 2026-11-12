@@ -5,6 +5,9 @@
 
 #include "foundation/motor.hpp"
 
+#include <cmath>
+#include <numbers>
+
 namespace libstp::hal::motor
 {
     /**
@@ -23,11 +26,26 @@ namespace libstp::hal::motor
         virtual void setVelocity(int velocity) = 0;
         /// Move to an absolute position using firmware-side control.
         virtual void moveToPosition(int velocity, int goalPosition) = 0;
-        /// Move by a relative position delta using firmware-side control.
+        /// Move by a relative delta (resolved to an absolute goal from the current position).
         virtual void moveRelative(int velocity, int deltaPosition) = 0;
+
+        /// Like moveToPosition, but the goal is an absolute angle in degrees
+        /// (converted with the motor calibration's ticks_to_rad).
+        void moveToDegrees(const int velocity, const double goalDegrees)
+        {
+            getCalibration().validate_degrees(goalDegrees);
+            moveToPosition(velocity, degreesToTicks(goalDegrees));
+        }
+
+        /// Like moveRelative, but the delta is an angle in degrees
+        /// (converted with the motor calibration's ticks_to_rad).
+        void moveRelativeDegrees(const int velocity, const double deltaDegrees)
+        {
+            getCalibration().validate_degrees(deltaDegrees);
+            moveRelative(velocity, degreesToTicks(deltaDegrees));
+        }
         [[nodiscard]] virtual int getPosition() const = 0;
         [[nodiscard]] virtual int getBemf() const = 0;
-        [[nodiscard]] virtual bool isDone() const = 0;
         /// Stop this motor using the implementation's preferred strategy.
         virtual void brake() = 0;
         /// Disable this motor completely (no power, no brake — free-spinning).
@@ -68,6 +86,13 @@ namespace libstp::hal::motor
             kp = 0.0f;
             ki = 0.0f;
             kd = 0.0f;
+        }
+
+    private:
+        /// Pure conversion; call getCalibration().validate_degrees() first.
+        [[nodiscard]] int degreesToTicks(const double degrees) const
+        {
+            return static_cast<int>(std::lround(degrees * std::numbers::pi / 180.0 / getCalibration().ticks_to_rad));
         }
     };
 }

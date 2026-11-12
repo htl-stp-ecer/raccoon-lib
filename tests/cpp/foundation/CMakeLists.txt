@@ -4,5 +4,6 @@ register_libstp_test(
   test_types.cpp
   test_math.cpp
   test_pid_edge.cpp
+  test_motor_calibration.cpp
   LIBS
   foundation)

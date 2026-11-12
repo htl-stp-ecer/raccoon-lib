@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <optional>
 #include <stdexcept>
@@ -59,13 +60,13 @@ namespace libstp::foundation
         }
 
         /// Throws std::invalid_argument if the calibration would silently
-        /// corrupt odometry. ticks_to_rad must be strictly positive (zero
-        /// would divide by zero downstream); vel_lpf_alpha is an IIR weight
-        /// and must lie in [0, 1].
+        /// corrupt odometry. ticks_to_rad must be finite and strictly positive
+        /// (zero would divide by zero downstream, inf would collapse every
+        /// conversion to 0); vel_lpf_alpha is an IIR weight and must lie in [0, 1].
         void validate() const
         {
-            if (!(ticks_to_rad > 0.0))
-                throw std::invalid_argument("MotorCalibration: ticks_to_rad must be > 0");
+            if (!(std::isfinite(ticks_to_rad) && ticks_to_rad > 0.0))
+                throw std::invalid_argument("MotorCalibration: ticks_to_rad must be finite and > 0");
             if (!(vel_lpf_alpha >= 0.0 && vel_lpf_alpha <= 1.0))
                 throw std::invalid_argument("MotorCalibration: vel_lpf_alpha must be in [0, 1]");
             if (!std::isfinite(bemf_offset))
@@ -74,6 +75,18 @@ namespace libstp::foundation
                 throw std::invalid_argument("MotorCalibration: static_friction_pct must be finite and >= 0");
             if (pid && (!std::isfinite(pid->kp) || !std::isfinite(pid->ki) || !std::isfinite(pid->kd)))
                 throw std::invalid_argument("MotorCalibration: pid gains must be finite");
+        }
+
+        /// Throws std::invalid_argument if `degrees` cannot be turned into a valid tick
+        /// count: it must be finite, and the resulting ticks (degrees * pi / 180 /
+        /// ticks_to_rad) must fit into an int. Assumes validate() already passed.
+        void validate_degrees(double degrees) const
+        {
+            if (!std::isfinite(degrees))
+                throw std::invalid_argument("MotorCalibration: angle must be finite (got NaN or inf)");
+            const double ticks = degrees * std::numbers::pi / 180.0 / ticks_to_rad;
+            if (!std::isfinite(ticks) || std::fabs(ticks) > static_cast<double>(std::numeric_limits<int>::max()))
+                throw std::invalid_argument("MotorCalibration: angle is out of range for the tick counter");
         }
     };
 

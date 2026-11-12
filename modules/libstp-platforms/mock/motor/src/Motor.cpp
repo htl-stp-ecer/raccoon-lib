@@ -79,13 +79,13 @@ void libstp::hal::motor::Motor::setVelocity(const int velocity)
 void libstp::hal::motor::Motor::moveToPosition(const int velocity, const int goalPosition)
 {
     LIBSTP_LOG_DEBUG("Mock Motor port={} moveToPosition vel={} goal={}", port_, velocity, goalPosition);
-    // Mock: store goal, simulate immediate completion
+    // Mock: no motion simulated
 }
 
 void libstp::hal::motor::Motor::moveRelative(const int velocity, const int deltaPosition)
 {
     LIBSTP_LOG_DEBUG("Mock Motor port={} moveRelative vel={} delta={}", port_, velocity, deltaPosition);
-    // Mock: store delta, simulate immediate completion
+    // Mock: no motion simulated
 }
 
 int libstp::hal::motor::Motor::getPosition() const
@@ -113,12 +113,6 @@ int libstp::hal::motor::Motor::getBemf() const
     const int value = static_cast<int>(platform::mock::core::bemf(port_));
     LIBSTP_LOG_TRACE("Mock Motor port={} getBemf -> {}", port_, value);
     return value;
-}
-
-bool libstp::hal::motor::Motor::isDone() const
-{
-    LIBSTP_LOG_TRACE("Mock Motor port={} isDone -> true", port_);
-    return true;
 }
 
 void libstp::hal::motor::Motor::brake()

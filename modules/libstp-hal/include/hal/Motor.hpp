@@ -50,7 +50,6 @@ namespace libstp::hal::motor
         /// Return the driver's current BEMF or velocity-like feedback value.
         [[nodiscard]] int getBemf() const override;
         /// Return whether the last position command has completed.
-        [[nodiscard]] bool isDone() const override;
 
         /// Actively stop this motor using the platform's safest available path.
         void brake() override;
