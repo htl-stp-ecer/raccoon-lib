@@ -6,6 +6,7 @@
 #include "foundation/motor.hpp"
 
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 
@@ -91,9 +92,14 @@ namespace libstp::hal::motor
         [[nodiscard]] int degreesToTicks(const double degrees) const
         {
             const double ticksToRad = getCalibration().ticks_to_rad;
-            if (ticksToRad == 0.0)
-                throw std::invalid_argument("Motor ticks_to_rad is 0; cannot convert degrees to ticks");
-            return static_cast<int>(std::lround(degrees * std::numbers::pi / 180.0 / ticksToRad));
+            if (!std::isfinite(degrees))
+                throw std::invalid_argument("Motor angle must be finite (got NaN or inf)");
+            if (!std::isfinite(ticksToRad) || ticksToRad == 0.0)
+                throw std::invalid_argument("Motor ticks_to_rad must be finite and non-zero; cannot convert degrees to ticks");
+            const double ticks = degrees * std::numbers::pi / 180.0 / ticksToRad;
+            if (!std::isfinite(ticks) || std::fabs(ticks) > static_cast<double>(std::numeric_limits<int>::max()))
+                throw std::invalid_argument("Motor angle is out of range for the tick counter");
+            return static_cast<int>(std::lround(ticks));
         }
     };
 }

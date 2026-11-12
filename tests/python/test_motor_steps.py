@@ -715,6 +715,29 @@ def test_move_to_degrees_without_calibration_raises() -> None:
     assert motor.calls == []
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_move_to_degrees_rejects_non_finite_angle(bad) -> None:
+    motor = _deg_motor()
+    with pytest.raises(ValueError, match=r"finite"):
+        _run(MoveMotorToDegrees(motor, degrees=bad)._execute_step(_ROBOT))
+    assert motor.calls == []
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_move_to_degrees_rejects_non_finite_calibration(bad) -> None:
+    motor = FakeMotor(ticks_to_rad=bad)
+    with pytest.raises(ValueError, match=r"ticks_to_rad"):
+        _run(MoveMotorToDegrees(motor, degrees=90)._execute_step(_ROBOT))
+    assert motor.calls == []
+
+
+def test_move_relative_degrees_rejects_non_finite_angle() -> None:
+    motor = _deg_motor(positions=[0])
+    with pytest.raises(ValueError, match=r"finite"):
+        _run(MoveMotorRelativeDegrees(motor, delta_degrees=float("nan"))._execute_step(_ROBOT))
+    assert motor.calls == []
+
+
 def test_move_relative_degrees_requires_port() -> None:
     with pytest.raises(TypeError, match=r"port"):
         MoveMotorRelativeDegrees(_NoPort(), delta_degrees=90)

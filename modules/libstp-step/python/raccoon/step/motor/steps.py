@@ -371,10 +371,13 @@ class MoveMotorRelative(Step):
 def _degrees_to_ticks(motor: IMotor, degrees: float) -> int:
     """Convert degrees to encoder ticks with the motor calibration (``ticks_to_rad``)."""
     ticks_to_rad = motor.get_calibration().ticks_to_rad
-    if ticks_to_rad == 0:
+    if not math.isfinite(degrees):
+        msg = f"degrees must be finite, got {degrees}"
+        raise ValueError(msg)
+    if not math.isfinite(ticks_to_rad) or ticks_to_rad == 0:
         msg = (
-            f"Motor {motor.port} has no calibration (ticks_to_rad == 0); "
-            "degree-based moves need ticks_to_rad in the motor config"
+            f"Motor {motor.port} has no valid calibration (ticks_to_rad == {ticks_to_rad}); "
+            "degree-based moves need a finite, non-zero ticks_to_rad in the motor config"
         )
         raise ValueError(msg)
     return round(math.radians(degrees) / ticks_to_rad)
