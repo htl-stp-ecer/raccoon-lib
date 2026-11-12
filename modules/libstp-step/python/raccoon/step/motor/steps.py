@@ -368,19 +368,23 @@ class MoveMotorRelative(Step):
         )
 
 
-def _degrees_to_ticks(motor: IMotor, degrees: float) -> int:
-    """Convert degrees to encoder ticks with the motor calibration (``ticks_to_rad``)."""
-    ticks_to_rad = motor.get_calibration().ticks_to_rad
+def _validate_degrees(motor: IMotor, degrees: float) -> None:
+    """Single place that validates a degree-based move (angle and calibration)."""
     if not math.isfinite(degrees):
         msg = f"degrees must be finite, got {degrees}"
         raise ValueError(msg)
+    ticks_to_rad = motor.get_calibration().ticks_to_rad
     if not math.isfinite(ticks_to_rad) or ticks_to_rad == 0:
         msg = (
             f"Motor {motor.port} has no valid calibration (ticks_to_rad == {ticks_to_rad}); "
             "degree-based moves need a finite, non-zero ticks_to_rad in the motor config"
         )
         raise ValueError(msg)
-    return round(math.radians(degrees) / ticks_to_rad)
+
+
+def _degrees_to_ticks(motor: IMotor, degrees: float) -> int:
+    """Pure conversion with the motor calibration; call ``_validate_degrees`` first."""
+    return round(math.radians(degrees) / motor.get_calibration().ticks_to_rad)
 
 
 class _MoveMotorDegreesBase(Step):
@@ -423,7 +427,11 @@ class _MoveMotorDegreesBase(Step):
     def _goal_ticks(self) -> int:
         raise NotImplementedError
 
+    def _angle_degrees(self) -> float:
+        raise NotImplementedError
+
     async def _execute_step(self, robot: GenericRobot) -> None:
+        _validate_degrees(self._motor, self._angle_degrees())
         goal = self._goal_ticks()
         self._motor.move_to_position(self._velocity, goal)
         await _wait_until_reached(
@@ -486,6 +494,9 @@ class MoveMotorToDegrees(_MoveMotorDegreesBase):
             f"deg={self._degrees},vel={self._velocity})"
         )
 
+    def _angle_degrees(self) -> float:
+        return self._degrees
+
     def _goal_ticks(self) -> int:
         return _degrees_to_ticks(self._motor, self._degrees)
 
@@ -543,6 +554,9 @@ class MoveMotorRelativeDegrees(_MoveMotorDegreesBase):
             f"MoveMotorRelativeDegrees(port={self._motor.port},"
             f"delta_deg={self._delta_degrees},vel={self._velocity})"
         )
+
+    def _angle_degrees(self) -> float:
+        return self._delta_degrees
 
     def _goal_ticks(self) -> int:
         return self._motor.get_position() + _degrees_to_ticks(self._motor, self._delta_degrees)

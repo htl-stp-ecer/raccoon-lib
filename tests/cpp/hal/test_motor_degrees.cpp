@@ -30,7 +30,7 @@ TEST(MotorDegreesTest, MoveToDegreesConvertsToAbsoluteTicks)
     motor.setCalibration(calibrationWithTicksToRad(0.01));
 
     // 180 deg = pi rad -> 314.159 ticks -> 314
-    EXPECT_CALL(motor, getCalibration()).Times(1);
+    EXPECT_CALL(motor, getCalibration()).Times(2); // validate + conversion
     EXPECT_CALL(motor, moveToPosition(800, std::lround(kPi / 0.01)));
     motor.moveToDegrees(800, 180.0);
 }
@@ -40,7 +40,7 @@ TEST(MotorDegreesTest, MoveToDegreesNegativeAngle)
     StrictMock<MockMotor> motor;
     motor.setCalibration(calibrationWithTicksToRad(kPi / 180.0)); // 1 tick == 1 deg
 
-    EXPECT_CALL(motor, getCalibration()).Times(1);
+    EXPECT_CALL(motor, getCalibration()).Times(2); // validate + conversion
     EXPECT_CALL(motor, moveToPosition(500, -45));
     motor.moveToDegrees(500, -45.0);
 }
@@ -50,7 +50,7 @@ TEST(MotorDegreesTest, MoveRelativeDegreesConvertsDelta)
     StrictMock<MockMotor> motor;
     motor.setCalibration(calibrationWithTicksToRad(kPi / 180.0));
 
-    EXPECT_CALL(motor, getCalibration()).Times(1);
+    EXPECT_CALL(motor, getCalibration()).Times(2); // validate + conversion
     EXPECT_CALL(motor, moveRelative(600, 90));
     motor.moveRelativeDegrees(600, 90.0);
 }

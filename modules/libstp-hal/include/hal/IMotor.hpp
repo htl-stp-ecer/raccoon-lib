@@ -35,6 +35,7 @@ namespace libstp::hal::motor
         /// (converted with the motor calibration's ticks_to_rad).
         void moveToDegrees(const int velocity, const double goalDegrees)
         {
+            validateDegrees(goalDegrees);
             moveToPosition(velocity, degreesToTicks(goalDegrees));
         }
 
@@ -42,6 +43,7 @@ namespace libstp::hal::motor
         /// (converted with the motor calibration's ticks_to_rad).
         void moveRelativeDegrees(const int velocity, const double deltaDegrees)
         {
+            validateDegrees(deltaDegrees);
             moveRelative(velocity, degreesToTicks(deltaDegrees));
         }
         [[nodiscard]] virtual int getPosition() const = 0;
@@ -89,7 +91,9 @@ namespace libstp::hal::motor
         }
 
     private:
-        [[nodiscard]] int degreesToTicks(const double degrees) const
+        /// Single place that validates a degree-based move (angle, calibration, tick range).
+        /// Throws std::invalid_argument; the conversion itself does no checking.
+        void validateDegrees(const double degrees) const
         {
             const double ticksToRad = getCalibration().ticks_to_rad;
             if (!std::isfinite(degrees))
@@ -99,7 +103,12 @@ namespace libstp::hal::motor
             const double ticks = degrees * std::numbers::pi / 180.0 / ticksToRad;
             if (!std::isfinite(ticks) || std::fabs(ticks) > static_cast<double>(std::numeric_limits<int>::max()))
                 throw std::invalid_argument("Motor angle is out of range for the tick counter");
-            return static_cast<int>(std::lround(ticks));
+        }
+
+        /// Pure conversion; call validateDegrees() first.
+        [[nodiscard]] int degreesToTicks(const double degrees) const
+        {
+            return static_cast<int>(std::lround(degrees * std::numbers::pi / 180.0 / getCalibration().ticks_to_rad));
         }
     };
 }
