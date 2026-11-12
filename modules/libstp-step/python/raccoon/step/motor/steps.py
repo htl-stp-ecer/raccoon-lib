@@ -368,17 +368,14 @@ class MoveMotorRelative(Step):
         )
 
 
-def _validate_degrees(motor: IMotor, degrees: float) -> None:
-    """Single place that validates a degree-based move (angle and calibration)."""
+def _validate_degrees(degrees: float) -> None:
+    """Single place that validates a degree-based move (the angle).
+
+    The calibration (finite, non-zero ``ticks_to_rad``) is already guaranteed by
+    the C++ ``MotorCalibration::validate()`` when a motor is created or recalibrated.
+    """
     if not math.isfinite(degrees):
         msg = f"degrees must be finite, got {degrees}"
-        raise ValueError(msg)
-    ticks_to_rad = motor.get_calibration().ticks_to_rad
-    if not math.isfinite(ticks_to_rad) or ticks_to_rad == 0:
-        msg = (
-            f"Motor {motor.port} has no valid calibration (ticks_to_rad == {ticks_to_rad}); "
-            "degree-based moves need a finite, non-zero ticks_to_rad in the motor config"
-        )
         raise ValueError(msg)
 
 
@@ -431,7 +428,7 @@ class _MoveMotorDegreesBase(Step):
         raise NotImplementedError
 
     async def _execute_step(self, robot: GenericRobot) -> None:
-        _validate_degrees(self._motor, self._angle_degrees())
+        _validate_degrees(self._angle_degrees())
         goal = self._goal_ticks()
         self._motor.move_to_position(self._velocity, goal)
         await _wait_until_reached(

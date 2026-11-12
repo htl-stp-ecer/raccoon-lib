@@ -708,26 +708,11 @@ def test_move_to_degrees_timeout_warns_without_stopping(monkeypatch) -> None:
     assert [c[0] for c in motor.calls] == ["move_to_position"]
 
 
-def test_move_to_degrees_without_calibration_raises() -> None:
-    motor = FakeMotor(ticks_to_rad=0.0)
-    with pytest.raises(ValueError, match=r"ticks_to_rad"):
-        _run(MoveMotorToDegrees(motor, degrees=90)._execute_step(_ROBOT))
-    assert motor.calls == []
-
-
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
 def test_move_to_degrees_rejects_non_finite_angle(bad) -> None:
     motor = _deg_motor()
     with pytest.raises(ValueError, match=r"finite"):
         _run(MoveMotorToDegrees(motor, degrees=bad)._execute_step(_ROBOT))
-    assert motor.calls == []
-
-
-@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
-def test_move_to_degrees_rejects_non_finite_calibration(bad) -> None:
-    motor = FakeMotor(ticks_to_rad=bad)
-    with pytest.raises(ValueError, match=r"ticks_to_rad"):
-        _run(MoveMotorToDegrees(motor, degrees=90)._execute_step(_ROBOT))
     assert motor.calls == []
 
 

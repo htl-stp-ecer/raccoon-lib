@@ -6,9 +6,7 @@
 #include "foundation/motor.hpp"
 
 #include <cmath>
-#include <limits>
 #include <numbers>
-#include <stdexcept>
 
 namespace libstp::hal::motor
 {
@@ -35,7 +33,7 @@ namespace libstp::hal::motor
         /// (converted with the motor calibration's ticks_to_rad).
         void moveToDegrees(const int velocity, const double goalDegrees)
         {
-            validateDegrees(goalDegrees);
+            getCalibration().validate_degrees(goalDegrees);
             moveToPosition(velocity, degreesToTicks(goalDegrees));
         }
 
@@ -43,7 +41,7 @@ namespace libstp::hal::motor
         /// (converted with the motor calibration's ticks_to_rad).
         void moveRelativeDegrees(const int velocity, const double deltaDegrees)
         {
-            validateDegrees(deltaDegrees);
+            getCalibration().validate_degrees(deltaDegrees);
             moveRelative(velocity, degreesToTicks(deltaDegrees));
         }
         [[nodiscard]] virtual int getPosition() const = 0;
@@ -91,21 +89,7 @@ namespace libstp::hal::motor
         }
 
     private:
-        /// Single place that validates a degree-based move (angle, calibration, tick range).
-        /// Throws std::invalid_argument; the conversion itself does no checking.
-        void validateDegrees(const double degrees) const
-        {
-            const double ticksToRad = getCalibration().ticks_to_rad;
-            if (!std::isfinite(degrees))
-                throw std::invalid_argument("Motor angle must be finite (got NaN or inf)");
-            if (!std::isfinite(ticksToRad) || ticksToRad == 0.0)
-                throw std::invalid_argument("Motor ticks_to_rad must be finite and non-zero; cannot convert degrees to ticks");
-            const double ticks = degrees * std::numbers::pi / 180.0 / ticksToRad;
-            if (!std::isfinite(ticks) || std::fabs(ticks) > static_cast<double>(std::numeric_limits<int>::max()))
-                throw std::invalid_argument("Motor angle is out of range for the tick counter");
-        }
-
-        /// Pure conversion; call validateDegrees() first.
+        /// Pure conversion; call getCalibration().validate_degrees() first.
         [[nodiscard]] int degreesToTicks(const double degrees) const
         {
             return static_cast<int>(std::lround(degrees * std::numbers::pi / 180.0 / getCalibration().ticks_to_rad));

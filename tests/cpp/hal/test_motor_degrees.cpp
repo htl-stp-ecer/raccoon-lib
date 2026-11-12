@@ -30,7 +30,7 @@ TEST(MotorDegreesTest, MoveToDegreesConvertsToAbsoluteTicks)
     motor.setCalibration(calibrationWithTicksToRad(0.01));
 
     // 180 deg = pi rad -> 314.159 ticks -> 314
-    EXPECT_CALL(motor, getCalibration()).Times(2); // validate + conversion
+    EXPECT_CALL(motor, getCalibration()).Times(2); // validate_degrees + conversion
     EXPECT_CALL(motor, moveToPosition(800, std::lround(kPi / 0.01)));
     motor.moveToDegrees(800, 180.0);
 }
@@ -40,7 +40,7 @@ TEST(MotorDegreesTest, MoveToDegreesNegativeAngle)
     StrictMock<MockMotor> motor;
     motor.setCalibration(calibrationWithTicksToRad(kPi / 180.0)); // 1 tick == 1 deg
 
-    EXPECT_CALL(motor, getCalibration()).Times(2); // validate + conversion
+    EXPECT_CALL(motor, getCalibration()).Times(2); // validate_degrees + conversion
     EXPECT_CALL(motor, moveToPosition(500, -45));
     motor.moveToDegrees(500, -45.0);
 }
@@ -50,19 +50,9 @@ TEST(MotorDegreesTest, MoveRelativeDegreesConvertsDelta)
     StrictMock<MockMotor> motor;
     motor.setCalibration(calibrationWithTicksToRad(kPi / 180.0));
 
-    EXPECT_CALL(motor, getCalibration()).Times(2); // validate + conversion
+    EXPECT_CALL(motor, getCalibration()).Times(2); // validate_degrees + conversion
     EXPECT_CALL(motor, moveRelative(600, 90));
     motor.moveRelativeDegrees(600, 90.0);
-}
-
-TEST(MotorDegreesTest, ZeroCalibrationThrowsAndSendsNothing)
-{
-    StrictMock<MockMotor> motor;
-    motor.setCalibration(calibrationWithTicksToRad(0.0));
-
-    EXPECT_CALL(motor, getCalibration()).Times(2);
-    EXPECT_THROW(motor.moveToDegrees(500, 90.0), std::invalid_argument);
-    EXPECT_THROW(motor.moveRelativeDegrees(500, 90.0), std::invalid_argument);
 }
 
 TEST(MotorDegreesTest, NonFiniteAngleThrowsAndSendsNothing)
@@ -72,24 +62,11 @@ TEST(MotorDegreesTest, NonFiniteAngleThrowsAndSendsNothing)
 
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const double inf = std::numeric_limits<double>::infinity();
-    EXPECT_CALL(motor, getCalibration()).Times(4);
+    EXPECT_CALL(motor, getCalibration()).Times(4); // validate_degrees only, then it throws
     EXPECT_THROW(motor.moveToDegrees(500, nan), std::invalid_argument);
     EXPECT_THROW(motor.moveToDegrees(500, -inf), std::invalid_argument);
     EXPECT_THROW(motor.moveRelativeDegrees(500, nan), std::invalid_argument);
     EXPECT_THROW(motor.moveRelativeDegrees(500, inf), std::invalid_argument);
-}
-
-TEST(MotorDegreesTest, NonFiniteCalibrationThrowsAndSendsNothing)
-{
-    StrictMock<MockMotor> motor;
-    motor.setCalibration(calibrationWithTicksToRad(std::numeric_limits<double>::quiet_NaN()));
-
-    EXPECT_CALL(motor, getCalibration()).Times(1);
-    EXPECT_THROW(motor.moveToDegrees(500, 90.0), std::invalid_argument);
-
-    motor.setCalibration(calibrationWithTicksToRad(std::numeric_limits<double>::infinity()));
-    EXPECT_CALL(motor, getCalibration()).Times(1);
-    EXPECT_THROW(motor.moveRelativeDegrees(500, 90.0), std::invalid_argument);
 }
 
 TEST(MotorDegreesTest, AngleBeyondTickRangeThrows)
