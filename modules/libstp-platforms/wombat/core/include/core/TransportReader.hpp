@@ -53,7 +53,6 @@ namespace platform::wombat::core {
         raccoon::quaternion_t readQuaternion();
         raccoon::scalar_i32_t readBemf(int idx);
         int32_t readMotorPosition(int port);
-        bool readMotorDone(int port);
 
         raccoon::scalar_i32_t readAnalog(int port);
         raccoon::scalar_i32_t readDigital(int port);
@@ -118,7 +117,6 @@ namespace platform::wombat::core {
         std::unordered_map<int, float> servo_value_cache_;
         std::unordered_map<int, int32_t> bemf_cache_;
         std::unordered_map<int, int32_t> motor_position_cache_;
-        std::unordered_map<int, int32_t> motor_done_cache_;
         std::unordered_map<int, int32_t> analog_cache_;
         std::unordered_map<int, int32_t> digital_cache_;
 

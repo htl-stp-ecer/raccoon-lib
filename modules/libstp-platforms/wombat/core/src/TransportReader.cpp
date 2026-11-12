@@ -113,20 +113,13 @@ TransportReader::TransportReader()
             }, retainedOpts);
     }
 
-    // Subscribe to motor position and done topics (ports 0-3) — retained
+    // Subscribe to motor position topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
         transport_.subscribe<raccoon::scalar_i32_t>(
             Channels::motorPosition(port),
             [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 motor_position_cache_[port] = msg.value;
-            }, retainedOpts);
-
-        transport_.subscribe<raccoon::scalar_i32_t>(
-            Channels::motorDone(port),
-            [this, port](const raccoon::scalar_i32_t& msg) {
-                std::lock_guard<std::mutex> lock(cache_mutex_);
-                motor_done_cache_[port] = msg.value;
             }, retainedOpts);
     }
 
@@ -255,7 +248,6 @@ TransportReader::TransportReader()
     for (int idx = 0; idx < 4; ++idx) {
         bemf_cache_[idx] = 0;
         motor_position_cache_[idx] = 0;
-        motor_done_cache_[idx] = 0;
     }
 
     // Initialize digital cache with zeros (hardware default)
@@ -327,12 +319,6 @@ int32_t TransportReader::readMotorPosition(const int port) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     auto it = motor_position_cache_.find(port);
     return (it != motor_position_cache_.end()) ? it->second : 0;
-}
-
-bool TransportReader::readMotorDone(const int port) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    auto it = motor_done_cache_.find(port);
-    return (it != motor_done_cache_.end()) ? it->second != 0 : false;
 }
 
 raccoon::scalar_i32_t TransportReader::readAnalog(const int port) {

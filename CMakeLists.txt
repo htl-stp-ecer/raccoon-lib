@@ -57,7 +57,14 @@ else()
 endif()
 
 # Scikit-build-core sets these values for you, or you can just hard-code the
-# name and version.
+# name and version. Fall back to defaults when configured outside
+# scikit-build-core (e.g. directly from CLion), where these are undefined.
+if(NOT SKBUILD_PROJECT_NAME)
+  set(SKBUILD_PROJECT_NAME "raccoon-lib")
+endif()
+if(NOT SKBUILD_PROJECT_VERSION)
+  set(SKBUILD_PROJECT_VERSION "0.0")
+endif()
 project(
   ${SKBUILD_PROJECT_NAME}
   VERSION ${SKBUILD_PROJECT_VERSION}
