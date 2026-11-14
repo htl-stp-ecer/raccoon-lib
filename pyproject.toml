@@ -61,7 +61,6 @@ build-dir = "build"
 # roots up front, otherwise it fails on the first relative import.
 mypy_path = [
   "python",
-  "modules/libstp-cam/python",
   "modules/libstp-debug/python",
   "modules/libstp-foundation/python",
   "modules/libstp-mission/python",
