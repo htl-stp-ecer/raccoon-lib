@@ -8,13 +8,12 @@
 
 PID motion control · Kinematics · Odometry · Step-based missions · Python bindings
 
-[![Build & Release](https://github.com/htl-stp-ecer/raccoon-lib/actions/workflows/build-release.yml/badge.svg)](https://github.com/htl-stp-ecer/raccoon-lib/actions/workflows/build-release.yml)
-[![Latest Release](https://img.shields.io/github/v/release/htl-stp-ecer/raccoon-lib)](https://github.com/htl-stp-ecer/raccoon-lib/releases/latest)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![C++20](https://img.shields.io/badge/C%2B%2B20-00599C?logo=cplusplus&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=ffdd54)
 ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-ARM64-A22846?logo=raspberrypi&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-KIPR%20Wombat-orange)
+[![CI](https://github.com/htl-stp-ecer/raccoon-lib/actions/workflows/ci.yml/badge.svg)](https://github.com/htl-stp-ecer/raccoon-lib/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/htl-stp-ecer/raccoon-lib)](https://github.com/htl-stp-ecer/raccoon-lib/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 > 📖 **Full documentation at [raccoon-docs.pages.dev](https://raccoon-docs.pages.dev/)**
 
