@@ -2,6 +2,7 @@
 #include "threading/thread_manager.hpp"
 
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
 #include <cstdint>
 
@@ -16,11 +17,14 @@ extern "C" bool raccoon_platform_heartbeat_publish(std::int32_t pid);
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cerrno>
+#include <cstdlib>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -70,6 +74,7 @@ namespace
     std::atomic<std::int64_t>  g_last_schedule_slip_us{0};
     std::atomic<std::int64_t>  g_max_schedule_slip_us{0};
     std::atomic<bool>          g_daemon_started{false};
+    std::atomic<bool>          g_disabled{false};
     std::atomic<bool>          g_is_owner{false};
     std::atomic<int32_t>       g_owner_pid{0};
 
@@ -339,10 +344,39 @@ namespace
                          local_beats, local_failed);
     }
 
+    // RACCOON_NO_HEARTBEATS switches the daemon off in this process.
+    //
+    // The daemon starts in every process that loads raccoon.hal, and the first one to take the
+    // owner lock feeds the STM32 watchdog. A process that only borrows the library (the camera
+    // service, which needs the transport and nothing else) would then keep the watchdog fed after
+    // the robot program has died. Such a process sets this variable. Unset, empty, "0", "false",
+    // "no" and "off" leave the heartbeat on (the default for every robot program).
+    bool heartbeat_disabled_by(const char* raw)
+    {
+        if (raw == nullptr)
+        {
+            return false;
+        }
+        std::string value(raw);
+        std::transform(value.begin(), value.end(), value.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return !(value.empty() || value == "0" || value == "false" || value == "no" || value == "off");
+    }
+
+    bool heartbeat_disabled_by_env()
+    {
+        return heartbeat_disabled_by(std::getenv("RACCOON_NO_HEARTBEATS"));
+    }
+
     struct HeartbeatStarter
     {
         HeartbeatStarter()
         {
+            if (heartbeat_disabled_by_env())
+            {
+                g_disabled.store(true, std::memory_order_release);
+                return;
+            }
             // Persistent: heartbeat lives as long as the library is loaded
             // and is joined by ThreadManager's destructor at process exit.
             libstp::threading::ThreadManager::instance().add_persistent_daemon(
@@ -358,6 +392,15 @@ void init_heartbeat(py::module& m)
 {
     py::class_<std::tuple<std::uint64_t, std::uint64_t, std::int64_t, std::int64_t, bool>>(
         m, "_HeartbeatDiagTuple");  // unused placeholder so pybind doesn't whine
+
+    // How a value of RACCOON_NO_HEARTBEATS is read, without touching the environment: the daemon
+    // starts when the library is loaded, so the variable can only be tested in a fresh process.
+    m.def(
+        "_heartbeat_env_disables",
+        [](const std::optional<std::string>& value)
+        { return heartbeat_disabled_by(value ? value->c_str() : nullptr); },
+        py::arg("value"),
+        "True if this value of RACCOON_NO_HEARTBEATS (None: not set) switches the heartbeat daemon off.");
 
     m.def(
         "heartbeat_diagnostics",
@@ -376,6 +419,7 @@ void init_heartbeat(py::module& m)
             d["last_schedule_slip_us"] = g_last_schedule_slip_us.load(std::memory_order_relaxed);
             d["max_schedule_slip_us"] = g_max_schedule_slip_us.load(std::memory_order_relaxed);
             d["daemon_started"]  = g_daemon_started.load(std::memory_order_acquire);
+            d["disabled"] = g_disabled.load(std::memory_order_acquire);
             d["is_owner"] = g_is_owner.load(std::memory_order_relaxed);
             d["owner_pid"] = g_owner_pid.load(std::memory_order_relaxed);
             return d;
@@ -394,6 +438,8 @@ Snapshot of the C++ heartbeat daemon's state. Returns a dict with:
   max_publish_us   — max observed sendHeartbeat() time
   last_schedule_slip_us — how far behind cadence the loop was on the last slip
   max_schedule_slip_us  — max observed cadence slip
+  disabled         — True if RACCOON_NO_HEARTBEATS switched the daemon off in this
+                     process (then no daemon runs and ``is_owner`` stays False)
   is_owner         — True only in the elected sender process
   owner_pid        — PID of the sender process in this process, else 0
   daemon_started   — True once the daemon has entered its loop. False

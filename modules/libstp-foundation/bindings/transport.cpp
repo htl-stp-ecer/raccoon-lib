@@ -243,14 +243,14 @@ void init_transport(py::module_& m)
 
     // Install a Python-level atexit hook that performs an orderly
     // shutdown and then short-circuits the rest of process exit via
-    // os._exit(0). We register it from Python (via py::exec) rather
+    // os._exit(). We register it from Python (via py::exec) rather
     // than as a `py::cpp_function` because the pybind11 callable path
     // didn't fire reliably during interpreter teardown on Pi 3B (the
     // lambda was effectively dropped — the hook never ran, the
     // segfault still happened). A plain Python lambda invoked through
     // the atexit registry works.
     //
-    // Why both shutdown_transport() and _exit(0):
+    // Why both shutdown_transport() and _exit():
     //   1) shutdown_transport() stops the spin daemon and destroys the
     //      raccoon-transport backend handle while the surrounding process
     //      state is still alive.
@@ -265,12 +265,20 @@ void init_transport(py::module_& m)
         py::exec(R"(
 import atexit as _atexit
 import os as _os
+import sys as _sys
 def _raccoon_finalize():
     try:
         _shutdown()
     except Exception:
         pass
-    _os._exit(0)
+    # _exit() replaces the exit status, so keep a crash visible: an uncaught
+    # exception (sys.last_exc is set by the interpreter before atexit runs)
+    # exits with 1, otherwise `raccoon run` reports a crashed program as a
+    # clean run and never shows its traceback. Ctrl+C stays a clean exit.
+    # The attribute does not exist at all until something crashed.
+    _crash = getattr(_sys, "last_exc", None)
+    _failed = _crash is not None and not isinstance(_crash, KeyboardInterrupt)
+    _os._exit(1 if _failed else 0)
 _atexit.register(_raccoon_finalize)
 )", scope);
     }
