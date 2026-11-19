@@ -61,7 +61,7 @@ python3 deploy.py --host <your-pi-ip> # installs the wheels on your Pi over SSH
 
 No local toolchain setup needed, only Docker. `build.py` writes `builds/raccoon_sim-0.0-…-linux_aarch64.whl` (compiled runtime + simulator) and `builds/raccoon_library-0.0-py3-none-any.whl` (type stubs) with the same version. `--version N` sets the version (CI does this), `--test` also runs the C++ tests with qemu-user. `deploy.py` is for local builds and marks `raccoon-lib` as `dev` in the Pi's bundle file; releases are installed by `raccoon update`.
 
-> **Starting a new robot project?** Run the setup script of [`raccoon-example`](https://github.com/htl-stp-ecer/raccoon-example), see [Getting Started](https://raccoon-docs.pages.dev/00-getting-started/03-create-your-project/). [`raccoon-cli`](https://github.com/htl-stp-ecer/raccoon-cli)'s `raccoon codegen` then generates the hardware code from your project config.
+> **Starting a new robot project?** Run the setup script of [`raccoon-template`](https://github.com/htl-stp-ecer/raccoon-template), see [Getting Started](https://raccoon-docs.pages.dev/00-getting-started/03-create-your-project/). [`raccoon-cli`](https://github.com/htl-stp-ecer/raccoon-cli)'s `raccoon codegen` then generates the hardware code from your project config.
 
 ### Installing from PyPI
 
