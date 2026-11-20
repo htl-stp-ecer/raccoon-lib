@@ -80,15 +80,15 @@ fi
 echo "--- Running pybind11-stubgen ---"
 (cd /tmp && "${PYBIND11_STUBGEN[@]}" raccoon -o "$STAGING" --ignore-all-errors) || true
 
-# --- 2) Python source stubs (mypy stubgen --inspect-mode) ---
-# --inspect-mode imports modules at runtime, producing cleaner stubs that
-# preserve docstrings, full signatures, and proper types compared to
-# --no-import which only does static analysis and loses most of this.
-echo "--- Running stubgen --inspect-mode ---"
-# --ignore-errors skips a module stubgen crashes on instead of aborting the
-# whole run. No ``|| true``: if stubgen itself can't run, the build must fail,
-# otherwise the wheel silently ships without the pure-Python modules.
-"${STUBGEN[@]}" --inspect-mode --ignore-errors -p raccoon --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP"
+# --- 2) Python source stubs (mypy stubgen, static) ---
+# Static mode reads the annotations from the .py source. --inspect-mode is not
+# used: it rebuilds signatures from runtime objects, crashes on NamedTuples
+# with ``from __future__ import annotations`` (step.motion.goto) and can't
+# stub modules that raise on import (step.sim without the static mock bundle).
+# No ``|| true``: if stubgen fails, the build must fail, otherwise the wheel
+# silently ships without the pure-Python modules.
+echo "--- Running stubgen ---"
+"${STUBGEN[@]}" -p raccoon --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP"
 if [ -d "$PY_STUBS_TMP/raccoon" ]; then
   find "$PY_STUBS_TMP/raccoon" -name '*.pyi' | while read -r pyi; do
     REL="${pyi#$PY_STUBS_TMP/raccoon/}"
