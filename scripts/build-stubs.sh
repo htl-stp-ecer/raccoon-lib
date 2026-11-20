@@ -51,7 +51,9 @@ else
 fi
 
 if "$PYTHON" -c "import mypy.stubgen" 2>/dev/null; then
-  STUBGEN=("$PYTHON" -m mypy.stubgen)
+  # Not ``-m mypy.stubgen``: mypy ships stubgen compiled (mypyc), and
+  # ``python -m`` can't run a compiled module ("No code object available").
+  STUBGEN=("$PYTHON" -c 'from mypy.stubgen import main; main()')
 elif command -v stubgen >/dev/null 2>&1; then
   STUBGEN=(stubgen)
 else
@@ -83,7 +85,10 @@ echo "--- Running pybind11-stubgen ---"
 # preserve docstrings, full signatures, and proper types compared to
 # --no-import which only does static analysis and loses most of this.
 echo "--- Running stubgen --inspect-mode ---"
-"${STUBGEN[@]}" --inspect-mode -p raccoon --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP" || true
+# --ignore-errors skips a module stubgen crashes on instead of aborting the
+# whole run. No ``|| true``: if stubgen itself can't run, the build must fail,
+# otherwise the wheel silently ships without the pure-Python modules.
+"${STUBGEN[@]}" --inspect-mode --ignore-errors -p raccoon --search-path "$SITE_PACKAGES" -o "$PY_STUBS_TMP"
 if [ -d "$PY_STUBS_TMP/raccoon" ]; then
   find "$PY_STUBS_TMP/raccoon" -name '*.pyi' | while read -r pyi; do
     REL="${pyi#$PY_STUBS_TMP/raccoon/}"
