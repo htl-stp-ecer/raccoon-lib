@@ -90,7 +90,7 @@ warn_unreachable = true
 check_untyped_defs = true
 disallow_incomplete_defs = true
 
-# pybind11-stubgen + ``stubgen --inspect-mode`` produces .pyi files for
+# pybind11-stubgen + mypy ``stubgen`` produces .pyi files for
 # every native binding; the CMake target ``raccoon_python_stubs`` writes
 # them under ``build-*/python-staging/`` and the local mypy invocation
 # is run with ``MYPYPATH`` pointing there. With those stubs available we

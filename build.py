@@ -241,12 +241,11 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Pat
         target_python(mode, site, "-m", "pybind11_stubgen", "raccoon", "-o", str(staging), "--ignore-all-errors")
     except subprocess.CalledProcessError:
         print("pybind11-stubgen reported errors, using what it wrote")
-    print("--- mypy stubgen --inspect-mode ---")
-    try:
-        target_python(mode, site, "-m", "mypy.stubgen", "--inspect-mode", "-p", "raccoon",
-                    "--search-path", str(site), "-o", str(py_stubs))
-    except subprocess.CalledProcessError:
-        print("stubgen reported errors, using what it wrote")
+    # Not `-m mypy.stubgen`: stubgen is compiled (mypyc) and `python -m` can't run it. Static mode,
+    # not --inspect-mode, and no error swallowing: see the stubgen step in scripts/build-stubs.sh.
+    print("--- mypy stubgen ---")
+    target_python(mode, site, "-c", "from mypy.stubgen import main; main()", "--include-docstrings",
+                  "-p", "raccoon", "--search-path", str(site), "-o", str(py_stubs))
     if (py_stubs / "raccoon").is_dir():
         for pyi in (py_stubs / "raccoon").rglob("*.pyi"):
             target = staging / "raccoon" / pyi.relative_to(py_stubs / "raccoon")
