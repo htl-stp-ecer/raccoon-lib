@@ -244,8 +244,8 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Pat
     # Not `-m mypy.stubgen`: stubgen is compiled (mypyc) and `python -m` can't run it. Static mode,
     # not --inspect-mode, and no error swallowing: see the stubgen step in scripts/build-stubs.sh.
     print("--- mypy stubgen ---")
-    target_python(mode, site, "-c", "from mypy.stubgen import main; main()", "-p", "raccoon",
-                  "--search-path", str(site), "-o", str(py_stubs))
+    target_python(mode, site, "-c", "from mypy.stubgen import main; main()", "--include-docstrings",
+                  "-p", "raccoon", "--search-path", str(site), "-o", str(py_stubs))
     if (py_stubs / "raccoon").is_dir():
         for pyi in (py_stubs / "raccoon").rglob("*.pyi"):
             target = staging / "raccoon" / pyi.relative_to(py_stubs / "raccoon")
