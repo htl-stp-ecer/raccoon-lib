@@ -97,8 +97,8 @@ disallow_incomplete_defs = true
 # do **not** ignore native imports — mypy gets to validate calls into
 # raccoon.hal, raccoon.foundation, etc.
 #
-# raccoon-transport is a vendored sibling repo that ships its own LCM
-# message bindings without stubs, so it stays on ignore_missing_imports
+# raccoon-transport is a vendored sibling repo that ships its message
+# classes without stubs, so it stays on ignore_missing_imports
 # until upstream lands its own stubgen pipeline.
 [[tool.mypy.overrides]]
 module = [
