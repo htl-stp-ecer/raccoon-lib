@@ -244,11 +244,34 @@ def build_stub_wheel(sim_wheel: Path, version: str, out: Path, mode: str) -> Pat
         target_python(mode, site, "-m", "pybind11_stubgen", "raccoon", "-o", str(staging), "--ignore-all-errors")
     except subprocess.CalledProcessError:
         print("pybind11-stubgen reported errors, using what it wrote")
+    if mode == "cross":
+        # In the other mode mypy's stubgen imports the compiled modules too (below) and writes a stub for
+        # each; here it only reads sources, so the compiled modules that pybind11-stubgen has not
+        # reached get theirs from pybind11-stubgen, one by one.
+        for extension in sorted((site / "raccoon").glob("*.so")):
+            name = extension.name.split(".")[0]
+            if name.startswith(("lib", "_")) or (staging / "raccoon" / f"{name}.pyi").exists() \
+                    or (staging / "raccoon" / name).is_dir():
+                continue
+            try:
+                target_python(mode, site, "-m", "pybind11_stubgen", f"raccoon.{name}", "-o", str(staging),
+                              "--ignore-all-errors")
+            except subprocess.CalledProcessError:
+                print(f"pybind11-stubgen reported errors for raccoon.{name}, using what it wrote")
     # Not `-m mypy.stubgen`: stubgen is compiled (mypyc) and `python -m` can't run it. Static mode,
     # not --inspect-mode, and no error swallowing: see the stubgen step in scripts/build-stubs.sh.
     print("--- mypy stubgen ---")
-    target_python(mode, site, "-c", "from mypy.stubgen import main; main()", "--include-docstrings",
-                  "-p", "raccoon", "--search-path", str(site), "-o", str(py_stubs))
+    stubgen = ["-c", "from mypy.stubgen import main; main()", "--include-docstrings",
+               "--search-path", str(site), "-o", str(py_stubs)]
+    if mode == "cross":
+        # Static mode only reads the .py sources, which do not depend on the CPU, so the image's own
+        # Python does it, on the directory. `-p raccoon` would import the package to find its modules,
+        # and the helper process that does that cannot run under qemu-user (it passes file descriptors
+        # over a socket: BrokenPipeError).
+        run(["python", *stubgen, str(site / "raccoon")], cwd="/tmp",
+            env={"PYTHONDONTWRITEBYTECODE": "1", "HOME": "/tmp", "PATH": os.environ["PATH"]})
+    else:
+        target_python(mode, site, *stubgen[:3], "-p", "raccoon", *stubgen[3:])
     if (py_stubs / "raccoon").is_dir():
         for pyi in (py_stubs / "raccoon").rglob("*.pyi"):
             target = staging / "raccoon" / pyi.relative_to(py_stubs / "raccoon")
