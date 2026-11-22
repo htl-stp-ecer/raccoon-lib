@@ -210,6 +210,8 @@ jobs:
           # channel names). Install it from the checked-out submodule before each wheel build,
           # without compiling its native module.
           CIBW_BEFORE_BUILD: RACCOON_TRANSPORT_PURE=1 pip install {project}/raccoon-transport/python
+          # Windows runs the command in cmd.exe, which has no `VAR=1 command`.
+          CIBW_BEFORE_BUILD_WINDOWS: set "RACCOON_TRANSPORT_PURE=1" && pip install {project}/raccoon-transport/python
 
           # Install ccache inside the manylinux container before each Linux build.
           CIBW_BEFORE_ALL_LINUX: yum install -y ccache
