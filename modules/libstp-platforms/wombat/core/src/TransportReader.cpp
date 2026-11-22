@@ -5,17 +5,15 @@
 #include "foundation/logging.hpp"
 
 using namespace platform::wombat::core;
-namespace Channels = raccoon::Channels;
 
 namespace
 {
-    // External calibration-board odometry channels, published by the
-    // raccoon-calib-bridge (../calibration-board/host). Kept as local literals
-    // because they live outside the core raccoon::Channels namespace.
-    constexpr auto kCalibOdomPosX   = "raccoon/calib_board/odom/pos_x";   // cm
-    constexpr auto kCalibOdomPosY   = "raccoon/calib_board/odom/pos_y";   // cm
-    constexpr auto kCalibOdomHeading = "raccoon/calib_board/odom/heading"; // deg
-    constexpr auto kCalibStatusBoard = "raccoon/calib_board/status/board"; // "connected"/...
+    // External calibration-board channels, published by the raccoon-calib-bridge
+    // (../calibration-board/host); they are entries of the channel table.
+    constexpr auto kCalibOdomPosX = raccoon::channels::hardware::calib_board::odom::state::POS_X;       // cm
+    constexpr auto kCalibOdomPosY = raccoon::channels::hardware::calib_board::odom::state::POS_Y;       // cm
+    constexpr auto kCalibOdomHeading = raccoon::channels::hardware::calib_board::odom::state::HEADING;  // deg
+    constexpr auto kCalibStatusBoard = raccoon::channels::hardware::calib_board::state::BOARD;          // "connected"/...
 
     constexpr float kCmToMeters = 0.01f;
     constexpr float kDegToRad = 0.017453292519943295f; // M_PI / 180
@@ -24,109 +22,104 @@ namespace
 TransportReader::TransportReader()
     : transport_(libstp::transport_core::SharedTransport::instance())
 {
-    using raccoon::SubscribeOptions;
-
-    // Retained subscribe options for channels that cache latest values
-    static const SubscribeOptions retainedOpts{.requestRetained = true};
-
     // Subscribe to servo topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
         transport_.subscribe<raccoon::scalar_i8_t>(
-            Channels::servoMode(port),
+            raccoon::channels::hardware::servo::state::mode(port),
             [this, port](const raccoon::scalar_i8_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_mode_cache_[port] = msg.dir;
-            }, retainedOpts);
+            });
 
         transport_.subscribe<raccoon::scalar_f_t>(
-            Channels::servoPosition(port),
+            raccoon::channels::hardware::servo::state::position(port),
             [this, port](const raccoon::scalar_f_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 servo_value_cache_[port] = msg.value;
-            }, retainedOpts);
+            });
     }
 
     // Subscribe to IMU topics — high-frequency, no retain needed
     transport_.subscribe<raccoon::vector3f_t>(
-        Channels::GYRO,
+        raccoon::channels::hardware::imu::state::GYRO,
         [this](const raccoon::vector3f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             gyro_cache_ = msg;
         });
 
     transport_.subscribe<raccoon::vector3f_t>(
-        Channels::ACCELEROMETER,
+        raccoon::channels::hardware::imu::state::ACCEL,
         [this](const raccoon::vector3f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             accel_cache_ = msg;
         });
 
     transport_.subscribe<raccoon::vector3f_t>(
-        Channels::LINEAR_ACCELERATION,
+        raccoon::channels::hardware::imu::state::LINEAR_ACCEL,
         [this](const raccoon::vector3f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             linear_accel_cache_ = msg;
         });
 
     transport_.subscribe<raccoon::vector3f_t>(
-        Channels::ACCEL_VELOCITY,
+        raccoon::channels::hardware::imu::state::ACCEL_VELOCITY,
         [this](const raccoon::vector3f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             accel_velocity_cache_ = msg;
         });
 
     transport_.subscribe<raccoon::vector3f_t>(
-        Channels::MAGNETOMETER,
+        raccoon::channels::hardware::imu::state::MAG,
         [this](const raccoon::vector3f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             mag_cache_ = msg;
         });
 
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::HEADING,
+        raccoon::channels::hardware::imu::state::HEADING,
         [this](const raccoon::scalar_f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             heading_cache_ = msg;
             imu_heading_received_ = true;
-        }, retainedOpts);
+        });
 
     // DMP 6-axis fused orientation quaternion — drift/vibration-immune tilt
     // source for on_incline / on_level (retained so a late subscriber sees the
     // last orientation on first poll).
     transport_.subscribe<raccoon::quaternion_t>(
-        Channels::DMP_ORIENTATION,
+        raccoon::channels::hardware::imu::state::QUATERNION,
         [this](const raccoon::quaternion_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             quaternion_cache_ = msg;
-        }, retainedOpts);
+        });
 
     // Subscribe to BEMF topics (indices 0-3) — retained
     for (int idx = 0; idx < 4; ++idx) {
         transport_.subscribe<raccoon::scalar_i32_t>(
-            Channels::backEmf(idx),
+            raccoon::channels::hardware::motor::state::bemf(idx),
             [this, idx](const raccoon::scalar_i32_t& msg) {
                 {
                     std::lock_guard<std::mutex> lock(cache_mutex_);
                     bemf_cache_[idx] = msg.value;
                 }
                 bemf_received_.store(true, std::memory_order_release);
-            }, retainedOpts);
+            });
     }
 
     // Subscribe to motor position topics (ports 0-3) — retained
     for (int port = 0; port < 4; ++port) {
         transport_.subscribe<raccoon::scalar_i32_t>(
-            Channels::motorPosition(port),
+            raccoon::channels::hardware::motor::state::position(port),
             [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 motor_position_cache_[port] = msg.value;
-            }, retainedOpts);
+            });
     }
 
     // Subscribe to analog topics (ports 0-7)
     for (int port = 0; port < 8; ++port) {
         transport_.subscribe<raccoon::scalar_i32_t>(
-            Channels::analog(port),
+            raccoon::channels::hardware::analog::state::value(port),
             [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 analog_cache_[port] = msg.value;
@@ -136,7 +129,7 @@ TransportReader::TransportReader()
     // Subscribe to digital topics (ports 0-15)
     for (int port = 0; port < 16; ++port) {
         transport_.subscribe<raccoon::scalar_i32_t>(
-            Channels::digital(port),
+            raccoon::channels::hardware::digital::state::value(port),
             [this, port](const raccoon::scalar_i32_t& msg) {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 digital_cache_[port] = msg.value;
@@ -145,7 +138,7 @@ TransportReader::TransportReader()
 
     // Subscribe to temperature topic
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::TEMPERATURE,
+        raccoon::channels::hardware::imu::state::TEMPERATURE,
         [this](const raccoon::scalar_f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             temp_cache_ = msg;
@@ -153,44 +146,44 @@ TransportReader::TransportReader()
 
     // Subscribe to STM32 odometry topics — retained
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::ODOM_POS_X,
+        raccoon::channels::hardware::odometry::state::POS_X,
         [this](const raccoon::scalar_f_t& msg) {
             { std::lock_guard<std::mutex> lock(cache_mutex_);
               odom_cache_.pos_x = msg.value; }
             odom_cv_.notify_all();
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::ODOM_POS_Y,
+        raccoon::channels::hardware::odometry::state::POS_Y,
         [this](const raccoon::scalar_f_t& msg) {
             { std::lock_guard<std::mutex> lock(cache_mutex_);
               odom_cache_.pos_y = msg.value; }
             odom_cv_.notify_all();
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::ODOM_HEADING,
+        raccoon::channels::hardware::odometry::state::HEADING,
         [this](const raccoon::scalar_f_t& msg) {
             { std::lock_guard<std::mutex> lock(cache_mutex_);
               odom_cache_.heading = msg.value; }
             odom_cv_.notify_all();
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::ODOM_VX,
+        raccoon::channels::hardware::odometry::state::VX,
         [this](const raccoon::scalar_f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             odom_cache_.vx = msg.value;
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::ODOM_VY,
+        raccoon::channels::hardware::odometry::state::VY,
         [this](const raccoon::scalar_f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             odom_cache_.vy = msg.value;
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
-        Channels::ODOM_WZ,
+        raccoon::channels::hardware::odometry::state::WZ,
         [this](const raccoon::scalar_f_t& msg) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             odom_cache_.wz = msg.value;
-        }, retainedOpts);
+        });
 
     // Subscribe to external calibration-board odometry — retained so a late
     // subscriber immediately picks up the bridge's current pose. The bridge
@@ -202,27 +195,27 @@ TransportReader::TransportReader()
             { std::lock_guard<std::mutex> lock(cache_mutex_);
               calib_pos_x_cm_ = msg.value; }
             calib_odom_received_.store(true, std::memory_order_release);
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
         kCalibOdomPosY,
         [this](const raccoon::scalar_f_t& msg) {
             { std::lock_guard<std::mutex> lock(cache_mutex_);
               calib_pos_y_cm_ = msg.value; }
             calib_odom_received_.store(true, std::memory_order_release);
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::scalar_f_t>(
         kCalibOdomHeading,
         [this](const raccoon::scalar_f_t& msg) {
             { std::lock_guard<std::mutex> lock(cache_mutex_);
               calib_heading_deg_ = msg.value; }
             calib_odom_received_.store(true, std::memory_order_release);
-        }, retainedOpts);
+        });
     transport_.subscribe<raccoon::string_t>(
         kCalibStatusBoard,
         [this](const raccoon::string_t& msg) {
             calib_board_attached_.store(msg.value == "connected",
                                         std::memory_order_release);
-        }, retainedOpts);
+        });
 
     // Initialize default values
     gyro_cache_.x = 0.0f;

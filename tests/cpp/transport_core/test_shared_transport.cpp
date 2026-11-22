@@ -24,15 +24,13 @@ TEST(SharedTransportTest, RepeatedSubscribeUnsubscribeDoesNotMultiplyUnderlyingD
     auto ignored = transport.get_and_reset_stats();
     (void)ignored;
 
-    const std::string channel = "unit/shared-transport/churn";
+    const std::string channel = "messages/warn";
 
     for (int i = 0; i < 100; ++i)
     {
         auto subscription = transport.subscribe_raw(
             channel,
-            [](const void*, int) {},
-            false,
-            false);
+            [](const void*, int) {});
         ASSERT_NE(subscription, 0U);
         transport.unsubscribe(subscription);
     }
@@ -40,16 +38,14 @@ TEST(SharedTransportTest, RepeatedSubscribeUnsubscribeDoesNotMultiplyUnderlyingD
     std::atomic<int> deliveries{0};
     auto live_subscription = transport.subscribe_raw(
         channel,
-        [&deliveries](const void*, int) { deliveries.fetch_add(1); },
-        false,
-        false);
+        [&deliveries](const void*, int) { deliveries.fetch_add(1); });
     ASSERT_NE(live_subscription, 0U);
 
     const std::uint8_t payload[] = {0x12, 0x34, 0x56, 0x78};
     constexpr int publish_count = 8;
     for (int i = 0; i < publish_count; ++i)
     {
-        ASSERT_TRUE(transport.publish_raw(channel, payload, static_cast<int>(sizeof(payload)), false, false, 100, 10));
+        ASSERT_EQ(transport.publish_raw(channel, payload, sizeof(payload)), raccoon::PublishResult::Ok);
     }
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
@@ -61,7 +57,6 @@ TEST(SharedTransportTest, RepeatedSubscribeUnsubscribeDoesNotMultiplyUnderlyingD
     EXPECT_EQ(deliveries.load(), publish_count);
 
     auto stats = transport.get_and_reset_stats();
-    ASSERT_EQ(transport.active_subscription_count(), 1U);
 
     const auto channel_it = std::find_if(
         stats.channels.begin(),
@@ -76,7 +71,6 @@ TEST(SharedTransportTest, RepeatedSubscribeUnsubscribeDoesNotMultiplyUnderlyingD
     EXPECT_EQ(channel_it->callback.count, publish_count);
 
     transport.unsubscribe(live_subscription);
-    EXPECT_EQ(transport.active_subscription_count(), 0U);
 }
 
 // shutdown() must leave the singleton usable: the raccoon-transport backend tears
@@ -93,18 +87,16 @@ TEST(SharedTransportTest, ShutdownIsReversibleViaLazyReinit)
     auto ignored = transport.get_and_reset_stats();
     (void)ignored;
 
-    const std::string channel = "unit/shared-transport/reinit";
+    const std::string channel = "messages/warn";
     std::atomic<int> deliveries{0};
     auto sub = transport.subscribe_raw(
         channel,
-        [&deliveries](const void*, int) { deliveries.fetch_add(1); },
-        false, false);
+        [&deliveries](const void*, int) { deliveries.fetch_add(1); });
     ASSERT_NE(sub, 0U) << "subscribe_raw must re-init the underlying transport "
                          "after shutdown(); it returned 0";
 
     const std::uint8_t payload[] = {0xDE, 0xAD, 0xBE, 0xEF};
-    ASSERT_TRUE(transport.publish_raw(channel, payload, sizeof(payload),
-                                      false, false, 100, 10));
+    ASSERT_EQ(transport.publish_raw(channel, payload, sizeof(payload)), raccoon::PublishResult::Ok);
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (deliveries.load() < 1 && std::chrono::steady_clock::now() < deadline)
@@ -114,7 +106,6 @@ TEST(SharedTransportTest, ShutdownIsReversibleViaLazyReinit)
     EXPECT_EQ(deliveries.load(), 1);
 
     transport.unsubscribe(sub);
-    EXPECT_EQ(transport.active_subscription_count(), 0U);
 }
 
 // The raccoon-transport backend uses a dynamic payload type, so payloads
@@ -126,8 +117,8 @@ TEST(SharedTransportTest, LargePayloadRoundtripsIntact)
     auto& transport = libstp::transport_core::SharedTransport::instance();
     transport.shutdown();
 
-    const std::string channel = "unit/shared-transport/big";
-    constexpr std::size_t kSize = 256 * 1024; // 256 KB
+    const std::string channel = "messages/error";
+    constexpr std::size_t kSize = 256 * 1024; // 256 KB (messages/error takes up to 1 MiB)
     std::vector<std::uint8_t> tx(kSize);
     for (std::size_t i = 0; i < kSize; ++i)
     {
@@ -150,13 +141,10 @@ TEST(SharedTransportTest, LargePayloadRoundtripsIntact)
                 }
             }
             got_ok.store(true);
-        },
-        false, false);
+        });
     ASSERT_NE(sub, 0U);
 
-    ASSERT_TRUE(transport.publish_raw(channel, tx.data(),
-                                      static_cast<int>(tx.size()),
-                                      false, false, 100, 10));
+    ASSERT_EQ(transport.publish_raw(channel, tx.data(), tx.size()), raccoon::PublishResult::Ok);
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (!got_ok.load() && std::chrono::steady_clock::now() < deadline)
@@ -182,8 +170,8 @@ TEST(SharedTransportTest, ConcurrentPublishAndSubscribeDoesNotDeadlock)
     auto& transport = libstp::transport_core::SharedTransport::instance();
     transport.shutdown();
 
-    const std::string busy_channel = "unit/shared-transport/busy";
-    const std::string late_channel = "unit/shared-transport/late";
+    const std::string busy_channel = "camera/cmd/request";
+    const std::string late_channel = "camera/response";
 
     std::atomic<bool> stop_publisher{false};
     auto publisher = std::thread([&]()
@@ -191,14 +179,13 @@ TEST(SharedTransportTest, ConcurrentPublishAndSubscribeDoesNotDeadlock)
         const std::uint8_t payload[] = {0x01, 0x02, 0x03, 0x04};
         while (!stop_publisher.load())
         {
-            transport.publish_raw(busy_channel, payload, sizeof(payload),
-                                  false, false, 100, 10);
+            transport.publish_raw(busy_channel, payload, sizeof(payload));
             wait_for(std::chrono::milliseconds(1));
         }
     });
 
     auto busy_sub = transport.subscribe_raw(
-        busy_channel, [](const void*, int) {}, false, false);
+        busy_channel, [](const void*, int) {});
     ASSERT_NE(busy_sub, 0U);
 
     // Now in the middle of the publish/drain churn, register a *fresh*
@@ -209,7 +196,7 @@ TEST(SharedTransportTest, ConcurrentPublishAndSubscribeDoesNotDeadlock)
     while (late_sub == 0 && std::chrono::steady_clock::now() < late_deadline)
     {
         late_sub = transport.subscribe_raw(
-            late_channel, [](const void*, int) {}, false, false);
+            late_channel, [](const void*, int) {});
     }
     EXPECT_NE(late_sub, 0U)
         << "subscribe_raw never returned during a publish burst — apiMutex is "

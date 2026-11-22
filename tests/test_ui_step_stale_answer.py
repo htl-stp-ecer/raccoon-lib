@@ -40,7 +40,9 @@ def _stub(name: str, **attrs: object) -> types.ModuleType:
 def _load_step_module() -> types.ModuleType:
     # Stub the heavy/hardware imports pulled in at module import time.
     _stub("raccoon.button", is_pressed=lambda: False)
-    _stub("raccoon.foundation", Subscription=object, get_transport=lambda: None)
+    _screen = types.SimpleNamespace(RENDER="ui/screen/render", ANSWER="ui/screen/answer")
+    _stub("raccoon_transport", Subscription=object, get_transport=lambda: None,
+          channels=types.SimpleNamespace(ui=types.SimpleNamespace(screen=_screen)))
     _stub("raccoon.step.base", Step=type("Step", (), {}))
     _stub("raccoon.ui.messages", ScreenRender=object, ScreenRenderAnswer=object)
     import typing
@@ -72,6 +74,8 @@ def _load_step_module() -> types.ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules["raccoon.ui.step"] = module
     spec.loader.exec_module(module)
+    # The stub of raccoon_transport only serves the import above; other tests need the real package.
+    sys.modules.pop("raccoon_transport", None)
     return module
 
 

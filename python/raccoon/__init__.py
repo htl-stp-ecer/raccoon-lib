@@ -117,11 +117,11 @@ from raccoon.robot import *
 from raccoon.mission.api import Mission, MissionProtocol, SetupMission
 from raccoon.timing import StepTimingTracker
 
-from raccoon.foundation import get_transport, shutdown_transport
+from raccoon_transport import get_transport, shutdown_transport
 
+# The exit hook of raccoon_transport shuts the transport down when the program ends.
 with contextlib.suppress(RuntimeError):
     get_transport()
-atexit.register(shutdown_transport)
 
 
 # UI library (replaces legacy RenderScreen)

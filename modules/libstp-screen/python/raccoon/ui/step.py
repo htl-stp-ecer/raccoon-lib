@@ -16,7 +16,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from raccoon.button import is_pressed
-from raccoon.foundation import Subscription, get_transport
+from raccoon_transport import Subscription, channels, get_transport
 from raccoon.step.base import Step
 
 from .messages import ScreenRender, ScreenRenderAnswer
@@ -107,7 +107,7 @@ T = TypeVar("T")
 # Renderer answers delivered within this window after a *new* screen is first
 # shown are treated as stale and discarded.
 #
-# UI answers travel on a ``reliable`` transport channel: the external renderer
+# UI answers travel on a reliable channel of the channel table: the external renderer
 # keeps re-sending an un-ACKed answer until some subscriber ACKs it.  A fresh
 # process (or a fresh subscription) starts with an empty de-dup set, so an
 # answer left over from a previous screen — or a previous run — is re-delivered
@@ -233,7 +233,7 @@ class UIStep(Step, ABC):
 
         msg.entries = json.dumps(screen._to_dict(setup_timer=setup_timer))
         self.debug(f"[UI TX] screen_render -> {screen.__class__.__name__}: {screen.title}")
-        self._transport.publish_raw("raccoon/screen_render", msg.encode())
+        self._transport.publish_raw(channels.ui.screen.RENDER, msg.encode())
         self._ui_active = True
 
     async def _run_screen_events(self, screen: UIScreen) -> None:
@@ -256,9 +256,8 @@ class UIStep(Step, ABC):
                 loop.call_soon_threadsafe(event_queue.put_nowait, event)
 
         sub = self._transport.subscribe(
-            "raccoon/screen_render/answer",
+            channels.ui.screen.ANSWER,
             on_answer,
-            reliable=True,
         )
 
         # Start button listener task
@@ -313,7 +312,7 @@ class UIStep(Step, ABC):
             entries=json.dumps({"screen": "close"}),
         )
         self.debug("[UI TX] screen_render -> close")
-        self._transport.publish_raw("raccoon/screen_render", msg.encode())
+        self._transport.publish_raw(channels.ui.screen.RENDER, msg.encode())
         self._current_screen = None
         self._ui_active = False
 
@@ -386,9 +385,8 @@ class UIStep(Step, ABC):
                 loop.call_soon_threadsafe(queue.put_nowait, event)
 
         self._pump_sub = self._transport.subscribe(
-            "raccoon/screen_render/answer",
+            channels.ui.screen.ANSWER,
             on_answer,
-            reliable=True,
         )
 
     def _teardown_pump_sub(self) -> None:

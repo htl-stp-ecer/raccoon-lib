@@ -5,7 +5,7 @@
 #include "hal/ScreenRender.hpp"
 
 #include <raccoon/ui_messages.hpp>
-#include <raccoon/Channels.h>
+#include <raccoon/ChannelTable.h>
 #include <raccoon/Transport.h>
 
 #include <chrono>
@@ -45,8 +45,8 @@ void libstp::hal::screen_render::ScreenRender::sendState(const std::string &json
         msg.entries = jsonData;
         std::vector<std::uint8_t> payload;
         msg.encode(payload);
-        screen_transport().publishRaw(
-            raccoon::Channels::SCREEN_RENDER,
+        screen_transport().publish_raw(
+            raccoon::channels::ui::screen::RENDER,
             payload.data(),
             static_cast<int>(payload.size()));
     }

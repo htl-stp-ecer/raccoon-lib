@@ -2,7 +2,7 @@
 
 #include "transport_core/shared_transport.hpp"
 
-#include <raccoon/Channels.h>
+#include <raccoon/ChannelTable.h>
 #include <raccoon/vector3f_t.hpp>
 #include <raccoon/scalar_i8_t.hpp>
 #include <raccoon/scalar_i32_t.hpp>

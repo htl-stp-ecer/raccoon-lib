@@ -5,6 +5,7 @@
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <string_view>
 
 namespace platform::wombat::core
 {
@@ -47,7 +48,7 @@ namespace platform::wombat::core
 
         /// Append one command record. ``nvals`` (1-3) selects how many of
         /// ``v0/v1/v2`` are meaningful. Cheap no-op when tracing is disabled.
-        void record(const char* kind, const std::string& channel, int port, double v0,
+        void record(const char* kind, std::string_view channel, int port, double v0,
                     double v1, double v2, int nvals, int64_t msgTimestampUsec);
 
     private:

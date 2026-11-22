@@ -12,9 +12,9 @@ This step is the only sanctioned way to flip the flag — it owns the
 LCM handshake with ``stm32-data-reader``:
 
 1. Publish ``raccoon::scalar_i32_t(value=1|0)`` on
-   ``raccoon/cmd/feature/bemf_enabled`` (1 = BEMF on / normal mode,
+   ``hardware/feature/cmd/bemf_active`` (1 = BEMF on / normal mode,
    0 = BEMF off / SpeedMode).
-2. Wait for the retained ACK on ``raccoon/feature/bemf_enabled``.
+2. Wait for the retained ACK on ``hardware/feature/state/bemf_active``.
 3. On ACK, update ``raccoon.foundation.set_speed_mode_enabled`` so
    the motion runtime sees the new state.
 4. On timeout, raise ``RuntimeError`` — the firmware did not confirm
@@ -27,7 +27,10 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from raccoon.foundation import get_transport, set_speed_mode_enabled
+import time
+
+from raccoon.foundation import set_speed_mode_enabled
+from raccoon_transport import channels, get_transport
 from raccoon_transport.types.raccoon import scalar_i32_t
 
 from .. import Step
@@ -37,8 +40,8 @@ if TYPE_CHECKING:
     from raccoon.robot.api import GenericRobot
 
 
-_CMD_CHANNEL = "raccoon/cmd/feature/bemf_enabled"
-_ACK_CHANNEL = "raccoon/feature/bemf_enabled"
+_CMD_CHANNEL = channels.hardware.feature.cmd.BEMF_ACTIVE
+_ACK_CHANNEL = channels.hardware.feature.state.BEMF_ACTIVE
 _DEFAULT_ACK_TIMEOUT_S = 0.5
 
 
@@ -54,7 +57,7 @@ class SetSpeedMode(Step):
     instead. Returning to normal mode restores BEMF and cm accuracy.
 
     The step publishes the command, waits for the firmware's ACK on
-    the retained ``raccoon/feature/bemf_enabled`` channel, and only
+    the retained ``hardware/feature/state/bemf_active`` channel, and only
     then updates the library's ``SpeedModeContext`` flag. If no ACK
     arrives within the timeout it raises so the program does not
     proceed with library / firmware state out of sync.
@@ -105,11 +108,12 @@ class SetSpeedMode(Step):
         # of truth — if it reports a different value than what we asked
         # for, we sync to what was actually applied).
         #
-        # Wire contract on `raccoon/cmd/feature/bemf_enabled`:
+        # Wire contract on `hardware/feature/cmd/bemf_active`:
         #   value=1 → BEMF on  → normal mode (speed_mode OFF)
         #   value=0 → BEMF off → speed mode  (speed_mode ON)
         # So engaging SpeedMode publishes 0, returning to normal publishes 1.
         target_value = 0 if self._enabled else 1
+        command_time_us = int(time.time() * 1_000_000)
         loop = asyncio.get_running_loop()
         ack_future: asyncio.Future[int] = loop.create_future()
         transport = get_transport()
@@ -119,21 +123,19 @@ class SetSpeedMode(Step):
                 msg = scalar_i32_t.decode(data)
             except Exception:
                 return
-            if ack_future.done():
+            if ack_future.done() or msg.timestamp < command_time_us:
                 return
             loop.call_soon_threadsafe(ack_future.set_result, int(msg.value))
 
-        # stm32-data-reader subscribes to the command channel in reliable
-        # mode, so the request has to be wrapped in a reliable envelope. The
-        # ACK is published with retained=true but the reader also emits a
-        # live publish on the plain channel, which is what a plain subscribe
-        # picks up — do NOT request_retained here or we'd immediately fire on
-        # the stale cached value from a previous run and skip the handshake.
+        # The command channel is reliable (see the channel table): the transport repeats the
+        # command until stm32-data-reader acknowledges it. The state channel is retained, so
+        # a new subscription first receives the value of an earlier run; only an answer that
+        # was published after this command counts.
         sub = transport.subscribe(_ACK_CHANNEL, _on_ack)
         try:
             cmd = scalar_i32_t()
             cmd.value = target_value
-            transport.publish(_CMD_CHANNEL, cmd, reliable=True)
+            transport.publish(_CMD_CHANNEL, cmd)
 
             deadline = loop.time() + self._timeout_s
             while not ack_future.done():

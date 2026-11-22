@@ -10,7 +10,6 @@ void init_logger(py::module_& m);
 void init_motor(const py::module& m);
 void init_types(const py::module& m);
 void init_speed_mode(py::module_& m);
-void init_transport(py::module_& m);
 
 PYBIND11_MODULE(foundation, m)
 {
@@ -23,5 +22,4 @@ PYBIND11_MODULE(foundation, m)
     init_motor(m);
     init_types(m);
     init_speed_mode(m);
-    init_transport(m);
 }

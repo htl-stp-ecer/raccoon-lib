@@ -1,6 +1,4 @@
-# transport_core provides the C++ SharedTransport singleton. Python bindings for
-# it live in libstp-foundation so that user code can do `from raccoon.foundation
-# import get_transport`. This keeps transport_core a pure C++ library and avoids
-# the threading <-> foundation link cycle that would arise if foundation owned
-# the SharedTransport sources directly.
-register_libstp_module(transport_core "FALSE" "threading;raccoon::transport")
+# transport_core provides the C++ SharedTransport singleton (the raccoon::Transport of the
+# process, with the reliable-delivery events routed into the libstp log). Python uses the
+# transport of the raccoon_transport package (`raccoon_transport.get_transport()`).
+register_libstp_module(transport_core "FALSE" "foundation;raccoon::transport")

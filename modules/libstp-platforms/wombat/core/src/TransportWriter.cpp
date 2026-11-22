@@ -4,13 +4,9 @@
 
 #include "foundation/logging.hpp"
 
-#include <raccoon/Options.h>
 #include <chrono>
 
 using namespace platform::wombat::core;
-namespace Channels = raccoon::Channels;
-
-static const raccoon::PublishOptions reliableOpts{.reliable = true};
 
 static int64_t currentTimestampUsec()
 {
@@ -23,8 +19,8 @@ void TransportWriter::setMotor(uint8_t port, int valueData)
     raccoon::scalar_i32_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = valueData;
-    const auto ch = Channels::motorPowerCommand(port);
-    if (!transport_.publish(ch, publishedValue, reliableOpts))
+    const auto ch = raccoon::channels::hardware::motor::cmd::power(port);
+    if (transport_.publish(ch, publishedValue) != raccoon::PublishResult::Ok)
         LIBSTP_LOG_WARN("TransportWriter: motor power command DROPPED (publish failed) "
                         "port={} value={} channel={}", port, valueData, ch);
     CommandTrace::instance().record("motor_power", ch, port, valueData, 0, 0, 1,
@@ -36,8 +32,8 @@ void TransportWriter::setMotorVelocity(uint8_t port, int32_t velocity)
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = velocity;
-    const auto ch = Channels::motorVelocityCommand(port);
-    if (!transport_.publish(ch, msg, reliableOpts))
+    const auto ch = raccoon::channels::hardware::motor::cmd::velocity(port);
+    if (transport_.publish(ch, msg) != raccoon::PublishResult::Ok)
         LIBSTP_LOG_WARN("TransportWriter: motor velocity command DROPPED (publish failed) "
                         "port={} velocity={} channel={}", port, velocity, ch);
     CommandTrace::instance().record("motor_vel", ch, port, velocity, 0, 0, 1, msg.timestamp);
@@ -50,8 +46,8 @@ void TransportWriter::setMotorPosition(uint8_t port, int32_t velocity, int32_t g
     msg.x = static_cast<float>(velocity);
     msg.y = static_cast<float>(goalPosition);
     msg.z = 0.0f;
-    const auto ch = Channels::motorPositionCommand(port);
-    if (!transport_.publish(ch, msg, reliableOpts))
+    const auto ch = raccoon::channels::hardware::motor::cmd::position(port);
+    if (transport_.publish(ch, msg) != raccoon::PublishResult::Ok)
         LIBSTP_LOG_WARN("TransportWriter: motor position command DROPPED (publish failed) "
                         "port={} velocity={} goal={} channel={}", port, velocity, goalPosition, ch);
     CommandTrace::instance().record("motor_pos", ch, port, velocity, goalPosition, 0, 2,
@@ -63,8 +59,8 @@ void TransportWriter::setServo(uint8_t port, float degrees)
     raccoon::scalar_f_t publishedValue{};
     publishedValue.timestamp = currentTimestampUsec();
     publishedValue.value = degrees;
-    const auto ch = Channels::servoPositionCommand(port);
-    transport_.publish(ch, publishedValue, reliableOpts);
+    const auto ch = raccoon::channels::hardware::servo::cmd::position(port);
+    transport_.publish(ch, publishedValue);
     CommandTrace::instance().record("servo_pos", ch, port, degrees, 0, 0, 1,
                                     publishedValue.timestamp);
 }
@@ -77,8 +73,8 @@ void TransportWriter::setSmoothServo(const uint8_t port, const float targetDeg,
     msg.x = targetDeg;
     msg.y = speedDegPerSec;
     msg.z = static_cast<float>(easing);
-    const auto ch = Channels::servoSmoothPositionCommand(port);
-    transport_.publish(ch, msg, reliableOpts);
+    const auto ch = raccoon::channels::hardware::servo::cmd::smooth(port);
+    transport_.publish(ch, msg);
     CommandTrace::instance().record("servo_smooth", ch, port, targetDeg, speedDegPerSec, easing,
                                     3, msg.timestamp);
 }
@@ -91,8 +87,8 @@ void TransportWriter::setServoMode(uint8_t port, uint8_t mode)
     // Publish on the dedicated COMMAND channel so the reader doesn't
     // ping-pong with its own state publish on the formerly-shared
     // `servoMode` channel. State lives on `servoMode`; commands here.
-    const auto ch = Channels::servoModeCommand(port);
-    transport_.publish(ch, msg, reliableOpts);
+    const auto ch = raccoon::channels::hardware::servo::cmd::mode(port);
+    transport_.publish(ch, msg);
     CommandTrace::instance().record("servo_mode", ch, port, mode, 0, 0, 1, msg.timestamp);
 }
 
@@ -103,7 +99,7 @@ void TransportWriter::setMotorPid(uint8_t port, float kp, float ki, float kd)
     msg.x = kp;
     msg.y = ki;
     msg.z = kd;
-    transport_.publish(Channels::motorPidCommand(port), msg, reliableOpts);
+    transport_.publish(raccoon::channels::hardware::motor::cmd::pid(port), msg);
 }
 
 void TransportWriter::setChassisVelocity(float vx, float vy, float wz)
@@ -113,13 +109,18 @@ void TransportWriter::setChassisVelocity(float vx, float vy, float wz)
     msg.x = vx;
     msg.y = vy;
     msg.z = wz;
-    // The stream self-heals on the next frame, but a stop (0, 0, 0) is often
-    // sent only once (Drive::hardStop): a lost stop leaves the robot driving.
+    // The stream self-heals on the next frame. A stop is a command of its own and a reliable
+    // channel: it is often sent only once (Drive::hardStop), and a lost stop leaves the robot driving.
     if (vx == 0.0f && vy == 0.0f && wz == 0.0f)
-        transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg, reliableOpts);
+    {
+        raccoon::scalar_i32_t stop{};
+        stop.timestamp = msg.timestamp;
+        stop.value = 1;
+        transport_.publish(raccoon::channels::hardware::chassis::cmd::STOP, stop);
+    }
     else
-        transport_.publish(Channels::CHASSIS_VELOCITY_CMD, msg);
-    CommandTrace::instance().record("chassis_vel", Channels::CHASSIS_VELOCITY_CMD, -1, vx, vy, wz,
+        transport_.publish(raccoon::channels::hardware::chassis::cmd::VELOCITY, msg);
+    CommandTrace::instance().record("chassis_vel", raccoon::channels::hardware::chassis::cmd::VELOCITY, -1, vx, vy, wz,
                                     3, msg.timestamp);
 }
 
@@ -128,8 +129,8 @@ void TransportWriter::resetMotorPosition(uint8_t port)
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = 1;
-    const auto ch = Channels::motorPositionResetCommand(port);
-    transport_.publish(ch, msg, reliableOpts);
+    const auto ch = raccoon::channels::hardware::motor::cmd::reset_position(port);
+    transport_.publish(ch, msg);
     CommandTrace::instance().record("motor_pos_reset", ch, port, 1, 0, 0, 1, msg.timestamp);
 }
 
@@ -138,8 +139,8 @@ void TransportWriter::setMotorMode(uint8_t port, int mode)
     raccoon::scalar_i32_t modeCmd{};
     modeCmd.timestamp = currentTimestampUsec();
     modeCmd.value = mode;
-    const auto ch = Channels::motorModeCommand(port);
-    if (!transport_.publish(ch, modeCmd, reliableOpts))
+    const auto ch = raccoon::channels::hardware::motor::cmd::mode(port);
+    if (transport_.publish(ch, modeCmd) != raccoon::PublishResult::Ok)
         LIBSTP_LOG_WARN("TransportWriter: motor mode command DROPPED (publish failed) "
                         "port={} mode={} channel={}", port, mode, ch);
     CommandTrace::instance().record("motor_mode", ch, port, mode, 0, 0, 1, modeCmd.timestamp);
@@ -150,7 +151,7 @@ void TransportWriter::setShutdown(bool enabled)
     raccoon::scalar_i32_t shutdownCmd{};
     shutdownCmd.timestamp = currentTimestampUsec();
     shutdownCmd.value = enabled ? 1 : 0;
-    transport_.publish(Channels::SHUTDOWN_CMD, shutdownCmd, reliableOpts);
+    transport_.publish(raccoon::channels::hardware::latch::cmd::ENGAGED, shutdownCmd);
 }
 
 void TransportWriter::sendKinematicsConfig(const std::array<std::array<float, 4>, 3>& inv_matrix,
@@ -170,7 +171,7 @@ void TransportWriter::sendKinematicsConfig(const std::array<std::array<float, 4>
             msg.fwd_matrix[r * 3 + c] = fwd_matrix[r][c];
     for (int i = 0; i < 4; ++i)
         msg.bemf_offset[i] = bemf_offset[i];
-    transport_.publish(Channels::KINEMATICS_CONFIG_CMD, msg, reliableOpts);
+    transport_.publish(raccoon::channels::hardware::kinematics::cmd::CONFIG, msg);
 }
 
 void TransportWriter::resetOdometry()
@@ -178,17 +179,17 @@ void TransportWriter::resetOdometry()
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = 1;
-    transport_.publish(Channels::ODOM_RESET_CMD, msg, reliableOpts);
+    transport_.publish(raccoon::channels::hardware::odometry::cmd::RESET, msg);
 }
 
 void TransportWriter::resetCalibOdometry()
 {
-    // Channel lives outside raccoon::Channels (calibration-board bridge).
-    static constexpr auto kCalibOdomResetCmd = "raccoon/calib_board/cmd/odom/reset";
+    // Command of the calibration-board bridge; the channel is in the table.
+    static constexpr auto kCalibOdomResetCmd = raccoon::channels::hardware::calib_board::odom::cmd::RESET;
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = 1;
-    transport_.publish(kCalibOdomResetCmd, msg, reliableOpts);
+    transport_.publish(kCalibOdomResetCmd, msg);
 }
 
 void TransportWriter::sendHeartbeat()
@@ -196,7 +197,7 @@ void TransportWriter::sendHeartbeat()
     raccoon::scalar_i32_t msg{};
     msg.timestamp = currentTimestampUsec();
     msg.value = 1;
-    transport_.publish(Channels::HEARTBEAT_CMD, msg);
+    transport_.publish(raccoon::channels::hardware::watchdog::cmd::HEARTBEAT, msg);
 }
 
 TransportWriter::TransportWriter()

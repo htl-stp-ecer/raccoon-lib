@@ -59,7 +59,7 @@ CommandTrace::~CommandTrace()
         out_.flush();
 }
 
-void CommandTrace::record(const char* kind, const std::string& channel, int port, double v0,
+void CommandTrace::record(const char* kind, std::string_view channel, int port, double v0,
                           double v1, double v2, int nvals, int64_t msgTimestampUsec)
 {
     if (!enabled_)

@@ -1,7 +1,7 @@
 #include <chrono>
 #include <cstdint>
 
-#include "raccoon/Channels.h"
+#include "raccoon/ChannelTable.h"
 #include "raccoon/Transport.h"
 #include "raccoon/scalar_i32_t.hpp"
 
@@ -24,5 +24,6 @@ extern "C" bool raccoon_platform_heartbeat_publish(std::int32_t pid)
     msg.timestamp = std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     msg.value = pid;
-    return heartbeat_transport().publish(raccoon::Channels::HEARTBEAT_CMD, msg);
+    return heartbeat_transport().publish(raccoon::channels::hardware::watchdog::cmd::HEARTBEAT, msg) ==
+           raccoon::PublishResult::Ok;
 }
