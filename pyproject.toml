@@ -108,7 +108,7 @@ module = [
 ignore_missing_imports = true
 follow_imports = "silent"
 
-# Generated DSL wrappers and LCM-generated message types: the codegen owns
+# Generated DSL wrappers and generated message types: the codegen owns
 # their shape; mypy noise here doesn't help anyone.
 [[tool.mypy.overrides]]
 module = [
@@ -229,8 +229,7 @@ isort.known-first-party = ["raccoon", "raccoon_cli", "raccoon_transport"]
 # Generated DSL wrappers: the codegen owns formatting; spurious imports
 # are by design (forward refs, conditional helpers).
 "**/*_dsl.py" = ["ALL"]
-# LCM-generated message types — file header says "DO NOT MODIFY BY HAND".
-# Re-running `lcm-gen` would overwrite anything we change. The pattern is
+# Generated message types. The pattern is
 # kept loose (suffix-only) so it matches both relative and absolute paths
 # that ruff sees when invoked from CMake build dirs.
 "**/screen_render_t.py" = ["ALL"]

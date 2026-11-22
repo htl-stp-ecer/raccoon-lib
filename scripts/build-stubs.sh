@@ -69,7 +69,7 @@ PYTHON="${PYTHON:-python3}"
 SITE_PACKAGES="$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_path("platlib"))')"
 echo "Site-packages: $SITE_PACKAGES"
 
-# Stub out the raccoon_transport LCM types module if not present in container
+# Stub out the raccoon_transport module if it is not present in the container
 if ! "$PYTHON" -c "import raccoon_transport" 2>/dev/null; then
   echo "Creating stub 'raccoon_transport' module for import resolution"
   mkdir -p "$SITE_PACKAGES/raccoon_transport"

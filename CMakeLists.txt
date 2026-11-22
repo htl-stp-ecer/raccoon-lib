@@ -94,7 +94,7 @@ FetchContent_Declare(
   GIT_TAG v2.13.6)
 FetchContent_MakeAvailable(pybind11)
 
-# Google Test for C++ unit testing - must be declared before LCM to avoid
+# Google Test for C++ unit testing - must be declared before raccoon-transport to avoid
 # conflicts
 option(LIBSTP_BUILD_TESTS "Build unit tests" OFF)
 
@@ -214,17 +214,17 @@ FetchContent_MakeAvailable(eigen)
 # links it PUBLIC). No need for a global include_directories().
 
 # All vendored deps build STATIC so the produced wheel is self-contained and
-# doesn't depend on a system liblcm.so / libspdlog.so / libyaml-cpp.so.
+# doesn't depend on a system libspdlog.so / libyaml-cpp.so.
 # Subprojects that respect their own *_BUILD_SHARED variable still have it set
-# explicitly below; raccoon-transport's LCM only honours BUILD_SHARED_LIBS.
+# explicitly below.
 # Module shared/static (libfoundation.so, libbutton.so) is decided per-target in
 # modules/CMakeLists.txt with explicit STATIC/SHARED, not via this flag.
 set(BUILD_SHARED_LIBS
     OFF
     CACHE BOOL "Build vendored libraries as shared" FORCE)
 
-# ---------- raccoon-transport (brings LCM + message types) ----------
-# Pure-mock builds skip LCM entirely and provide an empty stub target so modules
+# ---------- raccoon-transport (the shared-memory transport and the message types) ----------
+# Pure-mock builds skip the transport entirely and provide an empty stub target so modules
 # declaring raccoon::transport as a dependency still configure without errors. A
 # runtime-platform build always needs the real transport because the wombat
 # bundle it ships links against it (the mock bundle just never calls it).

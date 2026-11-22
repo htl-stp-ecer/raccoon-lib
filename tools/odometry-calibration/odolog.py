@@ -1,6 +1,6 @@
 """Log internal STM32 odometry vs calibration-board ground truth, side by side.
 
-Runs ON THE PI. Samples both odometry sources from the raccoon_ring SHM and
+Runs ON THE PI. Samples both odometry sources from the transport and
 writes a timestamped CSV. Use together with analyze.py.
 
 Usage (on the Pi):
@@ -20,15 +20,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from rring import Ring
 
+from raccoon_transport import channels
 from raccoon_transport.types.raccoon import scalar_f_t
 
+calib = channels.hardware.calib_board
+odometry = channels.hardware.odometry.state
+
 CHANNELS = {
-    "cx": "raccoon/calib_board/odom/pos_x",  # cm   ground truth (PAA optical-flow + IMU)
-    "cy": "raccoon/calib_board/odom/pos_y",  # cm
-    "ch": "raccoon/calib_board/odom/heading",  # deg
-    "ix": "raccoon/odometry/pos_x",  # m    internal STM32 dead reckoning
-    "iy": "raccoon/odometry/pos_y",  # m
-    "ih": "raccoon/odometry/heading",  # rad
+    "cx": calib.odom.state.POS_X,  # cm   ground truth (PAA optical-flow + IMU)
+    "cy": calib.odom.state.POS_Y,  # cm
+    "ch": calib.odom.state.HEADING,  # deg
+    "ix": odometry.POS_X,  # m    internal STM32 dead reckoning
+    "iy": odometry.POS_Y,  # m
+    "ih": odometry.HEADING,  # rad
 }
 
 

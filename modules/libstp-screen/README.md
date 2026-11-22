@@ -34,22 +34,22 @@ The split of responsibility is important:
 
 This module currently publishes dynamic UI payloads on:
 
-- `raccoon/screen_render`
-- `raccoon/screen_render/answer`
+- `ui/screen/render`
+- `ui/screen/answer`
 
 `UIScreen._to_dict()` is the stable internal format for widget serialization in this module. If contributors change that structure, they must update the corresponding renderer at the same time.
 
 ## Wire Format
 
-Both channels use a local big-endian binary format with no LCM dependency.
+Both channels use a local big-endian binary format.
 
-`raccoon/screen_render` field order:
+`ui/screen/render` field order:
 
 - `timestamp`: 8-byte signed big-endian integer
 - `screen_name`: 4-byte big-endian byte length, then UTF-8 bytes
 - `entries`: 4-byte big-endian byte length, then UTF-8 bytes
 
-`raccoon/screen_render/answer` field order:
+`ui/screen/answer` field order:
 
 - `timestamp`: 8-byte signed big-endian integer
 - `screen_name`: 4-byte big-endian byte length, then UTF-8 bytes

@@ -54,7 +54,7 @@ Wer `setup-cross-toolchain.sh` nicht lokal ausführen will oder auf einem andere
 bash build-cross-docker.sh
 ```
 
-`Dockerfile.cross` enthält den vollständigen Cross-Toolchain-Setup (Compiler, ARM64-Header, LCM). Der Container läuft nativ als x86_64 — **keine QEMU-Emulation**. Der erste Aufruf baut das Docker-Image (~2 Min.); danach wird es wiederverwendet. ccache läuft in einem Docker-Volume, inkrementelle Builds sind damit genauso schnell wie beim Host-Build.
+`Dockerfile.cross` enthält den vollständigen Cross-Toolchain-Setup (Compiler, ARM64-Header). Der Container läuft nativ als x86_64 — **keine QEMU-Emulation**. Der erste Aufruf baut das Docker-Image (~2 Min.); danach wird es wiederverwendet. ccache läuft in einem Docker-Volume, inkrementelle Builds sind damit genauso schnell wie beim Host-Build.
 
 Optionen für `build-cross-docker.sh`:
 
@@ -143,12 +143,6 @@ scikit-build-core liest den Platform-Tag aus `sysconfig.get_platform()`, was auf
 
 **`ARM64 Python 3.13 headers not found`**
 → `libpython3.13-dev:arm64` fehlt. Das Setup-Skript extrahiert die Headers direkt aus dem Debian-Paket (kein vollständiges ARM64-Python-Runtime nötig).
-
-**`GLib2 not found` / `Could NOT find GLib2`**
-→ LCM braucht GLib2 auch für ARM64. Das Setup-Skript installiert `libglib2.0-dev:arm64`. Ubuntu ARM64-Pakete kommen von `ports.ubuntu.com` — das Setup-Skript richtet die nötige APT-Quelle ein.
-
-**`add_executable cannot create target 'lcm-gen' because an imported target exists`**
-→ `build-cross.sh` patcht LCM's CMakeLists.txt im Cross-Build-Cache (`.cmake-cache-cross/lcm-src/`) einmalig: `lcmgen/` wird bei Cross-Compilation nicht gebaut. Stattdessen wird das System-`/usr/bin/lcm-gen` (x86_64) als IMPORTED CMake-Target registriert. Der Docker-Build (`.cmake-cache-docker/`) ist davon nicht betroffen.
 
 **`python3: command not found`**
 → Ubuntu 25.04 hat keinen `python3`-Symlink standardmäßig. `build-cross.sh` verwendet `python3.13` explizit. Andere Versions-Symlinks müssen ggf. manuell gesetzt werden.

@@ -14,13 +14,13 @@ STM32 + PAA + ICM-IMU, am Roboter montiert) liefert die genaue Referenz.
 
 - **Pi:** `pi@192.168.178.150` (Port 8421). SSH-Key vorhanden.
 - **Services müssen laufen** (laufen normalerweise per systemd, `enabled`):
-  - `raccoon-calib-bridge` — liest `/dev/ttyACM0`, publiziert `raccoon/calib_board/*`
-  - `stm32_data_reader` — interne Odometry/Motoren über SPI, publiziert `raccoon/odometry/*`
+  - `raccoon-calib-bridge` — liest `/dev/ttyACM0`, publiziert `hardware/calib_board/*`
+  - `stm32_data_reader` — interne Odometry/Motoren über SPI, publiziert `hardware/odometry/*`
   ```bash
   ssh pi@192.168.178.150 'systemctl is-active raccoon-calib-bridge stm32_data_reader'
   ```
-- **Board-Gesundheit prüfen** (siehe Schritt 2): `status/board = connected`,
-  `status/paa = connected`, `paa/cal/valid = 1`, `squal` möglichst hoch (>~60).
+- **Board-Gesundheit prüfen** (siehe Schritt 2): `state/board = connected`,
+  `state/paa = connected`, `paa/state/cal_valid = 1`, `squal` möglichst hoch (>~60).
 - **Projekt:** `.../competition/Ecer2026/packingbot`, gefahren mit der dortigen
   **uv-Instanz**: `uv run raccoon run`.
 
@@ -67,11 +67,11 @@ Wichtige Channels:
 
 | Channel | Einheit | Bedeutung |
 |---|---|---|
-| `raccoon/calib_board/odom/pos_x` / `pos_y` / `heading` | cm / cm / deg | **Ground Truth** (PAA + IMU fusioniert) |
-| `raccoon/calib_board/status/board`, `status/paa` | string | `connected` |
-| `raccoon/calib_board/paa/cal/valid`, `paa/squal` | int | Kal. gültig (1), Oberflächenqualität (0..169) |
-| `raccoon/odometry/pos_x` / `pos_y` / `heading` | m / m / rad | **interne** STM32-Dead-Reckoning (die kaputte) |
-| `raccoon/odometry/vx` / `vy` / `wz` | m/s, rad/s | interne Geschwindigkeiten |
+| `hardware/calib_board/odom/state/pos_x` / `pos_y` / `heading` | cm / cm / deg | **Ground Truth** (PAA + IMU fusioniert) |
+| `hardware/calib_board/state/board`, `state/paa` | string | `connected` |
+| `hardware/calib_board/paa/state/cal_valid`, `paa/state/squal` | int | Kal. gültig (1), Oberflächenqualität (0..169) |
+| `hardware/odometry/state/pos_x` / `pos_y` / `heading` | m / m / rad | **interne** STM32-Dead-Reckoning (die kaputte) |
+| `hardware/odometry/state/vx` / `vy` / `wz` | m/s, rad/s | interne Geschwindigkeiten |
 
 Calib-Odometry läuft **frei** (kein Reset im deployten Stand) → immer **Deltas**
 über das Bewegungsfenster auswerten, nicht Absolutwerte. Interne Odometry wird vom

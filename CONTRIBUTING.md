@@ -277,7 +277,7 @@ cmake --build build-mecanum --target raccoon_python_mypy
 `pyproject.toml` carries the canonical config. Three rules are globally
 ignored with technical reasons (UP037 conflicts with the step-builder
 codegen, F821 misfires on `TYPE_CHECKING` forward refs, ARG002 trips on
-abstract lifecycle hooks); generated `_dsl.py` files and LCM-generated
+abstract lifecycle hooks); generated `_dsl.py` files and generated
 message types are excluded entirely. **Don't add `# noqa` comments** -- if a
 finding looks like noise, reach for a per-file ignore in `pyproject.toml`
 instead, with a comment explaining why.

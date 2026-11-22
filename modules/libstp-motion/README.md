@@ -138,8 +138,8 @@ distance and angle termination — the firmware no longer integrates
 encoder ticks while BEMF sampling is off.
 
 Activate it via `set_speed_mode(True)` (class: `SetSpeedMode`).
-The step publishes `raccoon/cmd/feature/bemf_enabled = 0` on LCM, waits
-for the firmware ACK on `raccoon/feature/bemf_enabled`, and only then
+The step publishes `hardware/feature/cmd/bemf_active = 0` on the transport, waits
+for the firmware ACK on `hardware/feature/state/bemf_active`, and only then
 flips the library's `SpeedModeContext` flag. It raises `RuntimeError` if
 no ACK arrives within the timeout (default 500 ms), keeping the library
 state in sync with the firmware.

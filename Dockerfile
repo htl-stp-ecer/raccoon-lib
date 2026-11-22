@@ -13,9 +13,9 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG TZ=Europe/Vienna
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ >/etc/timezone
 
-# Tools that do not depend on the mode. liblcm-dev provides lcm-gen for code generation at build time.
+# Tools that do not depend on the mode.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates git cmake ninja-build ccache pkg-config liblcm-dev \
+      ca-certificates git cmake ninja-build ccache pkg-config \
       python3 python3-dev python3-venv python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
@@ -40,9 +40,8 @@ WORKDIR /src
 
 
 FROM base AS native
-# libglib2.0-dev is needed by the LCM the transport builds from source.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      gcc g++ libglib2.0-dev \
+      gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 CMD ["/bin/bash"]
 
@@ -50,10 +49,10 @@ CMD ["/bin/bash"]
 FROM base AS cross
 RUN dpkg --add-architecture arm64
 
-# Cross toolchain and qemu-user. libglib2.0-dev:arm64 is needed by the LCM the transport builds from source.
+# Cross toolchain and qemu-user.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu \
-      libglib2.0-dev:arm64 qemu-user \
+      qemu-user \
     && rm -rf /var/lib/apt/lists/*
 
 # aarch64 Python 3.13: the headers to compile against, and a runtime for qemu-user.

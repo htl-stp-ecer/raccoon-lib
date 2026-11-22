@@ -28,9 +28,9 @@ list(APPEND CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 # Libraries must come from the target sysroot only
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-# Headers: BOTH so arch-independent headers (glib-2.0, python3.13) are found on
+# Headers: BOTH so arch-independent headers (python3.13) are found on
 # the host while the cross-compiler's default search paths still take precedence
-# for arch-specific headers like pyconfig.h and glib glibconfig.h.
+# for arch-specific headers like pyconfig.h.
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
