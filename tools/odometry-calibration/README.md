@@ -54,9 +54,8 @@ uv run raccoon run            # sync -> codegen -> führt src.main auf dem Pi au
 
 ## 2. Live-Daten lesen (Ground Truth + intern)
 
-> Das Python-`raccoon_transport` (0.1.63) ist der in-process **`_Memq`-Stub** und
-> liest den Live-Bus **nicht** (0 Frames cross-process). Stattdessen lesen wir die
-> `raccoon_ring`-SHM-Dateien unter `/dev/shm/` direkt — **auf dem Pi**.
+> `rring.py` abonniert die Kanäle über das Python-`raccoon_transport` und merkt sich den
+> letzten Frame jedes Kanals. Es läuft **auf dem Pi**, wo der Transport liegt.
 
 ```bash
 scp rring.py odolog.py pi@192.168.178.150:/tmp/
@@ -113,7 +112,7 @@ um ~15–18 %, schon auf der Geraden. Frames sind gegeneinander verdreht
 
 Die uncommitteten raccoon-lib-Änderungen (`OdometrySource`, Auto-Switch in
 `WombatOdometry`, `get_internal_*`-Bindings) machen den Vergleich direkt über
-`robot.odometry` möglich — statt SHM-Reader. Dazu deployen:
+`robot.odometry` möglich — statt der Transport-Abos in `rring.py`. Dazu deployen:
 
 ```bash
 cd .../raccoon-lib && RPI_HOST=192.168.178.150 bash deploy.sh   # Docker ARM64 cross-build
@@ -131,5 +130,5 @@ legt Daten + Plots unter `.raccoon/auto_tune/bemf_velocity/<ts>/` ab.
 Danach in einer Mission/Step: `robot.odometry.get_distance_from_origin()` (aktive
 Quelle = Calib-Board, wenn erkannt) vs. `robot.odometry.get_internal_distance_from_origin()`
 (immer STM32) und `robot.odometry.get_active_source()`. Aktuell auf dem Pi **nicht**
-deployt (lib 1.0.0), daher der SHM-Weg oben.
+deployt (lib 1.0.0), daher der Weg über `rring.py` oben.
 ```
