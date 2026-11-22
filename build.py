@@ -188,7 +188,10 @@ def prepare_site(site: Path, sim_wheel: Path, mode: str, packages: list[str]) ->
                       "--platform", "manylinux2014_aarch64", "--platform", "linux_aarch64"] if mode == "cross" else [])
     run(["pip", "install", "--quiet", "--target", str(site), "--only-binary=:all:", *platform_args, "--no-deps",
          "numpy", "pyyaml", "aiosqlite", *packages])
-    run(["pip", "install", "--quiet", "--target", str(site), "--no-deps", str(WORK / "raccoon-transport/python")])
+    # The tests and the stub generation run an aarch64 Python that cannot load a native module built
+    # here, so this site gets the pure package (message classes, channel names, contract check).
+    run(["pip", "install", "--quiet", "--target", str(site), "--no-deps", str(WORK / "raccoon-transport/python")],
+        env={**os.environ, "RACCOON_TRANSPORT_PURE": "1"})
 
 
 # What the CI test job ran: the fast tests (--python-tests), then the simulator tests and the
