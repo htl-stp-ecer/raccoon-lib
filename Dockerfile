@@ -64,6 +64,7 @@ RUN apt-get update \
          libsqlite3-0:arm64 libstdc++6:arm64 libgcc-s1:arm64 libglib2.0-0t64:arm64 \
     && mkdir -p /opt/arm64-root \
     && for deb in /var/cache/apt/archives/*_arm64.deb; do dpkg-deb --extract "$deb" /opt/arm64-root; done \
+    && ln -s usr/lib /opt/arm64-root/lib \
     && mkdir -p /usr/include/aarch64-linux-gnu \
     && cp -r /opt/arm64-root/usr/include/aarch64-linux-gnu/python3.13 /usr/include/aarch64-linux-gnu/ \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
