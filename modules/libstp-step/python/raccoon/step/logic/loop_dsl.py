@@ -12,7 +12,7 @@ from raccoon.step.condition import StopCondition
 from raccoon.step.annotation import dsl
 from .loop import LoopForever, LoopFor
 
-from .. import StepProtocol
+from .. import Step
 
 
 class LoopForeverBuilder(StepBuilder):
@@ -22,7 +22,7 @@ class LoopForeverBuilder(StepBuilder):
         super().__init__()
         self._step = _UNSET
 
-    def step(self, value: StepProtocol):
+    def step(self, value: Step):
         self._step = value
         return self
 
@@ -34,7 +34,7 @@ class LoopForeverBuilder(StepBuilder):
 
 
 @dsl(tags=["control", "loop"])
-def loop_forever(step: StepProtocol = _UNSET):
+def loop_forever(step: Step = _UNSET):
     """
     Repeat a step indefinitely until externally cancelled.
 
@@ -79,7 +79,7 @@ class LoopForBuilder(StepBuilder):
         self._step = _UNSET
         self._iterations = _UNSET
 
-    def step(self, value: StepProtocol):
+    def step(self, value: Step):
         self._step = value
         return self
 
@@ -97,7 +97,7 @@ class LoopForBuilder(StepBuilder):
 
 
 @dsl(tags=["control", "loop"])
-def loop_for(step: StepProtocol = _UNSET, iterations: int = _UNSET):
+def loop_for(step: Step = _UNSET, iterations: int = _UNSET):
     """
     Repeat a step a fixed number of times.
 

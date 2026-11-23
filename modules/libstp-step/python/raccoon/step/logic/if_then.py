@@ -48,8 +48,8 @@ class IfThen(Step):
     def __init__(
         self,
         condition: Callable[["GenericRobot"], bool],
-        then_step: StepProtocol,
-        else_step: StepProtocol | None = None,
+        then_step: Step,
+        else_step: Step | None = None,
     ) -> None:
         super().__init__()
 

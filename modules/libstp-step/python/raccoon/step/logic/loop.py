@@ -34,7 +34,7 @@ class LoopForever(Step):
         do_until_checkpoint(30.0, loop_forever(toggle))
     """
 
-    def __init__(self, step: StepProtocol):
+    def __init__(self, step: Step):
         super().__init__()
 
         if not isinstance(step, StepProtocol):
@@ -83,7 +83,7 @@ class LoopFor(Step):
         loop_for(seq([drive_forward(20), drive_backward(20)]), iterations=3)
     """
 
-    def __init__(self, step: StepProtocol, iterations: int):
+    def __init__(self, step: Step, iterations: int):
         super().__init__()
 
         if not isinstance(step, StepProtocol):

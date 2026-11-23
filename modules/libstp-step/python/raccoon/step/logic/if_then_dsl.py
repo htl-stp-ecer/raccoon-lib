@@ -12,7 +12,7 @@ from raccoon.step.condition import StopCondition
 from raccoon.step.annotation import dsl
 from .if_then import IfThen
 
-from .. import StepProtocol
+from .. import Step
 
 
 class IfThenBuilder(StepBuilder):
@@ -28,11 +28,11 @@ class IfThenBuilder(StepBuilder):
         self._condition = value
         return self
 
-    def then_step(self, value: StepProtocol):
+    def then_step(self, value: Step):
         self._then_step = value
         return self
 
-    def else_step(self, value: StepProtocol | None):
+    def else_step(self, value: Step | None):
         self._else_step = value
         return self
 
@@ -49,8 +49,8 @@ class IfThenBuilder(StepBuilder):
 @dsl(tags=["control", "logic"])
 def if_then(
     condition: Callable[["GenericRobot"], bool] = _UNSET,
-    then_step: StepProtocol = _UNSET,
-    else_step: StepProtocol | None = None,
+    then_step: Step = _UNSET,
+    else_step: Step | None = None,
 ):
     """
     Conditionally run one of two steps based on a runtime predicate.
