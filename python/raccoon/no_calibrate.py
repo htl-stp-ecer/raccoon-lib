@@ -2,7 +2,7 @@
 Global ``--no-calibrate`` flag.
 
 When active, interactive calibration steps are skipped and stored
-values from ``raccoon.project.yml`` / ``racoon.calibration.yml`` are
+values from ``raccoon.project.yml`` / ``raccoon.calibration.yml`` are
 used instead.
 
 Activated by the ``LIBSTP_NO_CALIBRATE=1`` environment variable,

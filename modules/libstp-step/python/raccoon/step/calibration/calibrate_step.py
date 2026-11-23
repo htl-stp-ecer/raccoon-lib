@@ -6,7 +6,7 @@ persistent storage.  The base class takes care of:
 
 * Running optional *setup_steps* before the first attempt and on every retry.
 * The collect → confirm → apply/retry loop.
-* Persisting confirmed values to ``racoon.calibration.yml``.
+* Persisting confirmed values to ``raccoon.calibration.yml``.
 * Honouring ``--no-calibrate``: loading stored values instead of running the
   interactive flow.
 """

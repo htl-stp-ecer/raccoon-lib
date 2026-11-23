@@ -49,7 +49,7 @@ time regardless of build order::
     )
 
 Persistence is opt-in: ``persist=True`` mirrors the value into
-``racoon.calibration.yml`` (via the shared :class:`CalibrationStore`) so it
+``raccoon.calibration.yml`` (via the shared :class:`CalibrationStore`) so it
 survives a process restart and is reused under ``--no-calibrate``.  Without it
 a parameter lives only in RAM for the current process — set once in setup,
 read by every later mission.
@@ -120,7 +120,7 @@ if TYPE_CHECKING:
 # Storage
 # ---------------------------------------------------------------------------
 
-#: YAML section (inside ``racoon.calibration.yml``) that persisted parameters
+#: YAML section (inside ``raccoon.calibration.yml``) that persisted parameters
 #: live under.  Each parameter is its own ``set_name`` there, so parameters
 #: never clobber each other or the sensor-calibration sections.
 _PARAM_SECTION = "params"
@@ -275,7 +275,7 @@ class NumberParam:
         default: Value returned by :meth:`get` before anything is entered.
         unit: Display unit shown on the input screen (e.g. ``"cm"``).
         persist: When ``True``, entered values are mirrored to
-            ``racoon.calibration.yml`` and reused across restarts /
+            ``raccoon.calibration.yml`` and reused across restarts /
             ``--no-calibrate``.
         scoped: When ``True``, the value is stored *per active profile*
             (game-table + side) rather than globally — see

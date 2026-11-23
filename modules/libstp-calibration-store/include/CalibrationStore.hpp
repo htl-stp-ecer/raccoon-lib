@@ -17,8 +17,10 @@ namespace libstp::calibration_store {
     class CalibrationStore final {
         CalibrationStore() = default;
         ~CalibrationStore();
-        /// Backing file path relative to the current working directory.
-        std::string FILE_PATH = "./racoon.calibration.yml";
+        /// Backing file, relative to the current working directory: `raccoon.calibration.yml`, or the legacy
+        /// `racoon.calibration.yml` when that is the only one that exists (a deprecation warning, once).
+        /// Looked up on every use.
+        [[nodiscard]] static std::string filePath();
     public:
         CalibrationStore(const CalibrationStore&) = delete;
         CalibrationStore& operator=(const CalibrationStore&) = delete;

@@ -26,7 +26,7 @@ Python bindings live in `bindings/` and expose free functions that delegate to t
 
 Implementation details that matter to contributors:
 
-- the backing file path is hard-coded as `./racoon.calibration.yml`
+- the backing file is `./raccoon.calibration.yml` in the working directory. The legacy name `./racoon.calibration.yml` is used when it is the only one that exists, with a deprecation warning
 - data is written under the YAML key `root`
 - `IR_SENSOR` maps to the YAML key `ir-calibration`
 - stored keys are `white_tresh` and `black_tresh` as spelled in the current implementation

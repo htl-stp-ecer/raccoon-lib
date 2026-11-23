@@ -1,6 +1,7 @@
 #include "CalibrationStore.hpp"
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 
 #include <yaml-cpp/yaml.h>
 
@@ -10,13 +11,27 @@ using namespace libstp::calibration_store;
 
 CalibrationStore::~CalibrationStore() = default;
 
+std::string CalibrationStore::filePath() {
+    static const std::string current = "./raccoon.calibration.yml";
+    static const std::string legacy = "./racoon.calibration.yml";
+    if (std::filesystem::exists(current) || !std::filesystem::exists(legacy)) {
+        return current;
+    }
+    static std::once_flag warned;
+    std::call_once(warned, [] {
+        LIBSTP_LOG_WARN("racoon.calibration.yml is deprecated: rename it to raccoon.calibration.yml "
+                        "(`raccoon migrate` does that and updates .gitignore)");
+    });
+    return legacy;
+}
+
 CalibrationStore & CalibrationStore::instance() {
     static CalibrationStore instance;
     return instance;
 }
 
 bool CalibrationStore::doesFileExist() const {
-    return std::filesystem::exists(FILE_PATH);
+    return std::filesystem::exists(filePath());
 }
 
 static std::string typeKeyFor(CalibrationType type) {
@@ -45,12 +60,12 @@ void CalibrationStore::storeReading(float black_tresh, float white_tresh,
                                      CalibrationType type,
                                      const std::string& set_name) const {
     if (!doesFileExist()) {
-        std::ofstream(FILE_PATH).close();
+        std::ofstream(filePath()).close();
     }
 
     YAML::Node root;
-    if (std::filesystem::file_size(FILE_PATH) > 0) {
-        root = YAML::LoadFile(FILE_PATH);
+    if (std::filesystem::file_size(filePath()) > 0) {
+        root = YAML::LoadFile(filePath());
     }
 
     YAML::Node calibrationNode = root["root"];
@@ -75,17 +90,17 @@ void CalibrationStore::storeReading(float black_tresh, float white_tresh,
     setNode["white_tresh"] = white_tresh;
     setNode["black_tresh"] = black_tresh;
 
-    std::ofstream out(FILE_PATH);
+    std::ofstream out(filePath());
     out << root;
 }
 
 bool CalibrationStore::hasReadings(CalibrationType type,
                                     const std::string& set_name) const {
-    if (!doesFileExist() || std::filesystem::file_size(FILE_PATH) == 0) {
+    if (!doesFileExist() || std::filesystem::file_size(filePath()) == 0) {
         return false;
     }
 
-    YAML::Node root = YAML::LoadFile(FILE_PATH);
+    YAML::Node root = YAML::LoadFile(filePath());
     YAML::Node calibrationNode = root["root"];
     if (!calibrationNode) {
         return false;
@@ -110,11 +125,11 @@ bool CalibrationStore::hasReadings(CalibrationType type,
 
 std::vector<float> CalibrationStore::getReadings(CalibrationType type,
                                                   const std::string& set_name) const {
-    if (!doesFileExist() || std::filesystem::file_size(FILE_PATH) == 0) {
+    if (!doesFileExist() || std::filesystem::file_size(filePath()) == 0) {
         return {0.0, 0.0};
     }
 
-    YAML::Node root = YAML::LoadFile(FILE_PATH);
+    YAML::Node root = YAML::LoadFile(filePath());
     YAML::Node calibrationNode = root["root"];
     if (!calibrationNode) {
         return {0.0, 0.0};
@@ -143,11 +158,11 @@ std::vector<float> CalibrationStore::getReadings(CalibrationType type,
 std::vector<std::string> CalibrationStore::getSetNames(CalibrationType type) const {
     std::vector<std::string> names;
 
-    if (!doesFileExist() || std::filesystem::file_size(FILE_PATH) == 0) {
+    if (!doesFileExist() || std::filesystem::file_size(filePath()) == 0) {
         return names;
     }
 
-    YAML::Node root = YAML::LoadFile(FILE_PATH);
+    YAML::Node root = YAML::LoadFile(filePath());
     YAML::Node calibrationNode = root["root"];
     if (!calibrationNode) {
         return names;

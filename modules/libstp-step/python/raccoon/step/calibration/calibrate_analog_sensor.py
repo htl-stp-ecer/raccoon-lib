@@ -44,7 +44,7 @@ class CalibrateAnalogSensor(CalibrateStep[AnalogSensorCalibration]):
 
     Guides the operator to position the robot at a reference location, then
     samples the analog sensor for a short period to derive a stable reference
-    raw value.  The result is persisted in ``racoon.calibration.yml`` under the
+    raw value.  The result is persisted in ``raccoon.calibration.yml`` under the
     ``analog-sensor`` section and consumed at runtime by
     ``drive_to_analog_target()``.
 
