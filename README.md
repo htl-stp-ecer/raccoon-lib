@@ -32,7 +32,7 @@ Built from years of competition experience at HTL St. Pölten, it's designed so 
 | Module | What it does |
 |:-------|:-------------|
 | **Motion Control** | PID-controlled `drive_forward`, `turn_right`, `strafe_left` with feedforward compensation |
-| **Calibration** | Auto-tune feedforward (kS, kV, kA) and PID via relay-feedback — no guessing |
+| **Calibration** | Auto-tune feedforward (kS, kV, kA) and PID via relay-feedback — no guessing; the results are stored in `raccoon.calibration.yml` in the project |
 | **Kinematics** | Differential and mecanum drivetrains — forward & inverse |
 | **Odometry** | Real-time position and heading from wheel encoders + IMU fusion |
 | **Step Framework** | `seq()`, `parallel()`, `.until()` — write missions like a readable recipe |
