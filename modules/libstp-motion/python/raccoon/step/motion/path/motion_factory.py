@@ -387,8 +387,7 @@ def _create_linear_motion(
         from raccoon.robot.heading_reference import HeadingReferenceService
 
         ref_svc = robot.get_service(HeadingReferenceService)
-        sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
-        config.target_heading_rad = ref_svc._reference_rad + sign * math.radians(seg.heading_deg)
+        config.target_heading_rad = ref_svc.target_absolute_rad(seg.heading_deg)
     elif seg.target_heading_rad is not None:
         config.target_heading_rad = seg.target_heading_rad
     elif current_world_heading_rad is not None:

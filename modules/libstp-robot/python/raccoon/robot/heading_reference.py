@@ -164,7 +164,7 @@ class HeadingReferenceService(RobotService):
             RuntimeError: If no reference has been marked yet.
         """
         if self._reference_rad is None:
-            msg = "No heading reference set. Call mark_heading_reference() first."
+            msg = "No valid heading reference. Call mark_heading_reference() first."
             raise RuntimeError(msg)
         sign = 1.0 if self._positive_direction == "left" else -1.0
         current_absolute = _world_heading(self.robot)
@@ -182,7 +182,7 @@ class HeadingReferenceService(RobotService):
             RuntimeError: If no reference has been marked yet.
         """
         if self._reference_rad is None:
-            msg = "No heading reference set. Call mark_heading_reference() first."
+            msg = "No valid heading reference. Call mark_heading_reference() first."
             raise RuntimeError(msg)
         sign = 1.0 if self._positive_direction == "left" else -1.0
         return self._reference_rad + sign * math.radians(target_deg)
@@ -215,7 +215,7 @@ class HeadingReferenceService(RobotService):
             ValueError: If ``force_direction`` is not a valid direction.
         """
         if self._reference_rad is None:
-            msg = "No heading reference set. Call mark_heading_reference() first."
+            msg = "No valid heading reference. Call mark_heading_reference() first."
             raise RuntimeError(msg)
 
         direction = TurnDirection.coerce(force_direction)

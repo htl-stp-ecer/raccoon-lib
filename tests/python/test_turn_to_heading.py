@@ -386,3 +386,14 @@ def test_on_start_preserves_forced_direction_target(monkeypatch):
     assert captured["config"].target_angle_rad == pytest.approx(math.radians(-350.0))
     # Guard against the old bug: must NOT have collapsed to the +10° shortest path.
     assert captured["config"].target_angle_rad < -math.pi
+
+
+@requires_libstp
+def test_unmarked_reference_raises_clear_error():
+    """Using a heading without mark_heading_reference() raises a clear
+    RuntimeError (not a TypeError from ``None + float``)."""
+    from raccoon.robot.heading_reference import HeadingReferenceService
+
+    service = HeadingReferenceService(_FakeRobot(heading=0.0))  # never marked
+    with pytest.raises(RuntimeError, match="No valid heading reference.*mark_heading_reference"):
+        service.target_absolute_rad(90.0)

@@ -100,10 +100,7 @@ class SplinePath(MotionStep):
                 from raccoon.robot.heading_reference import HeadingReferenceService
 
                 ref_svc = robot.get_service(HeadingReferenceService)
-                sign = 1.0 if ref_svc._positive_direction == "left" else -1.0
-                abs_target_rad = ref_svc._reference_rad + sign * math.radians(
-                    self._final_heading_deg
-                )
+                abs_target_rad = ref_svc.target_absolute_rad(self._final_heading_deg)
                 current_abs_rad = get_world_heading_rad(robot)
                 config.final_heading_rad = abs_target_rad - current_abs_rad
             else:
