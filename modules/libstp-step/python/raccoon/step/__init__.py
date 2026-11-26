@@ -47,6 +47,8 @@ from .setup_timer import PauseSetupTimer, StartSetupTimer, ResumeSetupTimer
 from .setup_timer_dsl import pause_setup_timer, start_setup_timer, resume_setup_timer
 from .timeout_dsl import timeout
 from .timeout_or import TimeoutOr, timeout_or
+from .run_supervised import RunSupervised
+from .run_supervised_dsl import run_supervised
 from .watchdog import (
     StartWatchdog,
     FeedWatchdog,
@@ -106,6 +108,8 @@ __all__ = [
     "timeout",
     "TimeoutOr",
     "timeout_or",
+    "RunSupervised",
+    "run_supervised",
     "StartWatchdog",
     "FeedWatchdog",
     "StopWatchdog",
