@@ -154,8 +154,8 @@ def _maybe_mark(step, env: Env) -> None:
     """If ``step`` is a MarkHeadingReference, update ``env`` in place."""
     if type(step).__name__ != "MarkHeadingReference":
         return
-    env.o_rad = math.radians(getattr(step, "_origin_offset_deg", 0.0) or 0.0)
     env.sign = 1.0 if getattr(step, "_positive_direction", "left") == "left" else -1.0
+    env.o_rad = env.sign * math.radians(getattr(step, "_origin_offset_deg", 0.0) or 0.0)
     env.marked = True
 
 

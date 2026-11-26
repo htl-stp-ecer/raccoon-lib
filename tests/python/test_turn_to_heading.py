@@ -26,6 +26,7 @@ construction/signature, lowering, and optimizer-pass integration only.
 from __future__ import annotations
 
 import importlib.util
+import math
 
 import pytest
 
@@ -353,6 +354,42 @@ def test_compute_turn_forced_direction_extends_past_180():
     # And vice-versa: shortest path to -10° is right; forcing LEFT wraps to +350.
     assert service.compute_turn(-10.0) == pytest.approx(-10.0)
     assert service.compute_turn(-10.0, force_direction="left") == pytest.approx(350.0)
+
+
+@requires_libstp
+@pytest.mark.parametrize(("positive_direction", "expected_deg"), [("left", 90.0), ("right", -90.0)])
+def test_origin_offset_follows_positive_direction(positive_direction, expected_deg):
+    _, service = _robot_with_marked_reference(heading=0.0)
+    service.mark(origin_offset_deg=90, positive_direction=positive_direction)
+
+    # Turning to 0° goes toward the offset, in the positive direction.
+    assert service.compute_turn(0.0) == pytest.approx(expected_deg)
+    assert service.current_relative_deg() == pytest.approx(-90.0)
+
+
+@requires_libstp
+@pytest.mark.parametrize(("positive_direction", "side"), [("left", 1.0), ("right", -1.0)])
+def test_to_absolute_origin_offset_follows_positive_direction(positive_direction, side):
+    from raccoon.step.motion.drive_dsl import drive_forward
+    from raccoon.step.motion.heading_reference import turn_to_heading_right
+    from raccoon.step.motion.heading_reference_dsl import mark_heading_reference
+    from raccoon.step.motion.path.compiler import PathCompiler
+    from raccoon.step.motion.path.ir import SideAction
+    from raccoon.step.motion.path.optimize import optimize
+
+    opt = optimize(
+        [
+            mark_heading_reference(origin_offset_deg=90, positive_direction=positive_direction),
+            turn_to_heading_right(0),
+            drive_forward(30),
+        ]
+    ).to_absolute()
+    nodes = PathCompiler(opt._effective_passes()).compile(opt._raw_steps).nodes
+    goto = next(
+        n.step for n in nodes if isinstance(n, SideAction) and hasattr(n.step, "_waypoints")
+    )
+
+    assert goto._waypoints[0][5] == pytest.approx(side * math.pi / 2)
 
 
 @requires_libstp

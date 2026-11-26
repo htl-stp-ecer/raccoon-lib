@@ -153,12 +153,13 @@ def _abs_heading_rad(r_deg: float, o_rad: float, sign: float) -> float:
     """Reference-relative degrees ``r`` → absolute heading in the LOCALIZATION frame.
 
     Localization 0° = the start heading; the heading reference sits ``O`` =
-    ``mark`` ``origin_offset_deg`` away from it (the compile-time offset).  The
+    ``sign·radians(origin_offset_deg)`` away from it (the compile-time offset of
+    the ``mark``, passed in as ``o_rad``).  The
     service computes ``target_absolute_rad(r) = reference_rad + sign·radians(r)``
     in the odometry frame; expressed in the localization frame the runtime start
     heading cancels and only the compile-time constants remain::
 
-        θ_localization = radians(O) + sign·radians(r)
+        θ_localization = O + sign·radians(r)
 
     so a turn_to_heading / heading-holding drive resolves to a fixed heading at
     COMPILE time, with NO runtime service read or frame bridge.
@@ -188,7 +189,7 @@ def _run_to_waypoints(
       that GotoWaypoints rotates by the runtime anchor heading.
     - ABSOLUTE legs (``turn_to_heading``, or a drive/strafe with ``heading=``)
       target a heading fixed to the reference — known in the localization frame
-      as ``radians(O) + sign·r`` (see :func:`_abs_heading_rad`).  Once an
+      as ``O + sign·radians(r)`` (see :func:`_abs_heading_rad`).  Once an
       absolute leg appears, the running heading is known absolutely, so every
       following leg integrates in the localization frame directly.
 
@@ -310,10 +311,8 @@ class ToAbsolutePass:
         while i < n:
             node_i = nodes[i]
             if isinstance(node_i, SideAction) and isinstance(node_i.step, MarkHeadingReference):
-                active_mark = (
-                    math.radians(node_i.step._origin_offset_deg),
-                    1.0 if node_i.step._positive_direction == "left" else -1.0,
-                )
+                sign = 1.0 if node_i.step._positive_direction == "left" else -1.0
+                active_mark = (sign * math.radians(node_i.step._origin_offset_deg), sign)
             if not _segment_qualifies(nodes[i]):
                 node = nodes[i]
                 if _is_sensor_linear_leg(node):

@@ -64,8 +64,8 @@ def mark_heading_reference(
     origin is captured before the robot moves.
 
     Args:
-        origin_offset_deg: Offset in degrees added to the captured heading. Use this to define a consistent board-relative origin regardless of the robot's physical starting rotation. For example, if the robot always starts angled 30° clockwise from "forward on the board", pass ``origin_offset_deg=-30`` so that 0° means "forward on the board".
-        positive_direction: Which physical direction is treated as positive for subsequent ``turn_to_heading_left`` and ``turn_to_heading_right`` calls. ``"left"`` (default) means counter-clockwise angles are positive, matching the standard mathematical convention. ``"right"`` flips the sign so clockwise angles are positive.
+        origin_offset_deg: Angle in degrees from the captured heading to the 0° reference, measured in ``positive_direction``. Use this to define a consistent board-relative origin regardless of the robot's physical starting rotation. For example, if the robot always starts angled 30° clockwise from "forward on the board", pass ``origin_offset_deg=30`` (with the default ``positive_direction="left"``) so that 0° means "forward on the board".
+        positive_direction: Which physical direction is treated as positive for ``origin_offset_deg`` and for subsequent ``turn_to_heading_left`` and ``turn_to_heading_right`` calls. ``"left"`` (default) means counter-clockwise angles are positive, matching the standard mathematical convention. ``"right"`` flips the sign so clockwise angles are positive.
 
     Returns:
         A MarkHeadingReferenceBuilder (chainable via ``.origin_offset_deg()``, ``.positive_direction()``, ``.on_anomaly()``, ``.skip_timing()``).
@@ -83,7 +83,7 @@ def mark_heading_reference(
         turn_to_heading_right(90)
 
         # With offset: robot starts 30° CW from board forward
-        mark_heading_reference(origin_offset_deg=-30)
+        mark_heading_reference(origin_offset_deg=30)
 
         # Positive direction is clockwise (right)
         mark_heading_reference(positive_direction="right")

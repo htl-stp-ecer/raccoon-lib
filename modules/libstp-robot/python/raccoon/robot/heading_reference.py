@@ -98,18 +98,20 @@ class HeadingReferenceService(RobotService):
         """Capture the current absolute world heading as the reference.
 
         Args:
-            origin_offset_deg: Offset in degrees added to the captured heading.
-                Use this to define a consistent origin regardless of the robot's
-                physical starting rotation.  For example, if the robot is placed
-                at 30° to the board edge but you want 0° to mean "along the
-                board edge", pass ``origin_offset_deg=-30``.
+            origin_offset_deg: Angle in degrees from the captured heading to
+                the 0° reference, measured in ``positive_direction``.  Use this
+                to define a consistent origin regardless of the robot's physical
+                starting rotation.  For example, if "along the board edge" is
+                30° to the left of the robot and left is positive, pass
+                ``origin_offset_deg=30``.
             positive_direction: Which physical direction corresponds to positive
                 angles.  ``"left"`` (default) means CCW is positive, matching the
                 standard mathematical convention.  ``"right"`` flips the sign so
                 CW is positive.
         """
         raw = _world_heading(self.robot)
-        self._reference_rad = raw + math.radians(origin_offset_deg)
+        sign = 1.0 if positive_direction == "left" else -1.0
+        self._reference_rad = raw + sign * math.radians(origin_offset_deg)
         self._positive_direction = positive_direction
         self._capture_tilt_reference()
         self.info(
