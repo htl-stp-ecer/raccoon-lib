@@ -45,7 +45,7 @@ namespace libstp::motion
         /// linearly interpolated by arc-length.  Ignored when headings_rad
         /// is non-empty (explicit per-waypoint headings take precedence).
         /// Headings are interpreted in the body frame captured at start;
-        /// the controller adds the captured absolute heading offset internally.
+        /// the controller adds the heading captured at start internally.
         std::optional<double> final_heading_rad{};
     };
 
@@ -111,7 +111,7 @@ namespace libstp::motion
 
         // Initial pose snapshot — replaces odometry().reset() at start.
         Eigen::Vector2d initial_position_m_{Eigen::Vector2d::Zero()};
-        double initial_absolute_heading_rad_{0.0};  // getAbsoluteHeading() captured at start
+        double initial_heading_rad_{0.0};  // getHeading() captured at start
 
         // Heading interpolation LUT: arc-length → heading (built if explicit headings)
         std::vector<double> heading_arc_lengths_;  // arc-length at each point (origin + waypoints)

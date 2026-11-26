@@ -171,6 +171,7 @@ static void setWorldPose(NiceMock<MockOdometry>& mock,
                                      0.0f);
     pose.heading = static_cast<float>(heading_rad);
     mock.setPose(pose);
+    ON_CALL(mock, getHeading()).WillByDefault(testing::Return(heading_rad));
     ON_CALL(mock, getAbsoluteHeading()).WillByDefault(testing::Return(heading_rad));
 }
 
@@ -361,5 +362,27 @@ TEST_F(SplineMotionTest, MecanumLateralCommandPointsTowardsPath)
         EXPECT_GT(side * t.cmd_vy_mps, 0.0) << "side=" << side;
         EXPECT_NEAR(t.cmd_vx_mps, 0.0, 1e-6) << "side=" << side;
     }
+}
+
+// getAbsoluteHeading() is the raw-IMU frame and may sit at any offset from the
+// odometry heading. That offset must not steer the robot.
+TEST_F(SplineMotionTest, RawImuHeadingOffsetDoesNotTurnTheRobot)
+{
+    SplineMotionConfig cfg;
+    cfg.waypoints_m = {{0.3, 0.0}, {0.6, 0.0}};  // straight ahead
+
+    auto motion = makeMotion(cfg);
+    setWorldPose(*mock_odometry_, 0.0, 0.0, 0.5);
+    ON_CALL(*mock_odometry_, getAbsoluteHeading())
+        .WillByDefault(::testing::Return(0.5 + 2.0 * std::numbers::pi / 3.0));
+    motion->start();
+    motion->update(kDt);
+    motion->update(kDt);
+
+    const auto& t = motion->getTelemetry().back();
+    EXPECT_NEAR(t.target_heading_rad, 0.5, 1e-6);
+    EXPECT_NEAR(t.cmd_wz_radps, 0.0, 1e-6);
+    EXPECT_NEAR(t.cmd_vy_mps, 0.0, 1e-6);
+    EXPECT_GT(t.cmd_vx_mps, 0.0);
 }
 

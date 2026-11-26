@@ -85,18 +85,16 @@ class SplinePath(MotionStep):
             config.headings_rad = [math.radians(wp[2]) for wp in self._waypoints]
 
         config.speed_scale = self._speed
-        # Phase 4: SplineMotion is absolute-heading-only — the C++ side always
-        # captures the world heading at start and adds it to relative target
-        # headings during update(). The legacy ``use_absolute_heading`` toggle
-        # is gone; ``_absolute_heading`` only changes how ``final_heading_deg``
-        # is interpreted (absolute reference vs. relative-to-start) below.
+        # SplineMotion interprets all headings relative to the heading it
+        # captures at start; ``_absolute_heading`` only selects how
+        # ``final_heading_deg`` is interpreted (heading reference vs. start).
 
         if self._final_heading_deg is not None and not self._has_headings:
             if self._absolute_heading:
                 # User gave an absolute heading (degrees, same convention as
                 # drive_forward(heading=…)).  Convert to a relative offset so
-                # the C++ addition of initial_absolute_heading_rad_ produces
-                # the correct absolute target at the end of the path.
+                # adding the start heading in C++ produces the correct
+                # absolute target at the end of the path.
                 from raccoon.robot.heading_reference import HeadingReferenceService
 
                 ref_svc = robot.get_service(HeadingReferenceService)
@@ -147,15 +145,9 @@ def spline(
       at each waypoint, linearly interpolated along the path. Omni
       drivetrains only — raises ``ValueError`` on differential bots.
 
-    **Absolute heading mode** (``absolute_heading=True``): the heading PID
-    computes its error against the world heading from
-    ``robot.localization.get_pose().heading``, which lives across motion
-    boundaries and is independent of any odometry reset.
-    The absolute heading at the start of the step is captured and used as
-    an offset so that waypoint headings are still expressed relative to the
-    robot's facing direction at the start — the convention is unchanged.
-    Use this when the spline is chained after other motions that reset
-    odometry and you need heading tracking to remain stable.
+    Heading tracking runs on the odometry heading, relative to the robot's
+    facing direction at the start of the step. No heading reference is needed
+    unless ``final_heading`` is absolute.
 
     **Final heading** (``final_heading``): the heading the robot should be
     facing when it arrives at the last waypoint, in degrees.  The robot
@@ -187,9 +179,10 @@ def spline(
             no turn); on a differential drivetrain, which cannot hold heading
             through a curve, it backs along the path rear-first (nose points
             opposite the travel). Magnitude is clamped to [0.01, 1.0].
-        absolute_heading: If True, compute heading error against the
-            absolute IMU heading instead of the reset-relative heading
-            (default False).
+        absolute_heading: If True, ``final_heading`` is measured from the
+            heading reference instead of the start orientation (default
+            False). Waypoints and waypoint headings are always relative to
+            the start pose.
         final_heading: Optional desired heading in degrees at the end of
             the path.  Relative to start orientation when
             ``absolute_heading=False``; absolute (heading-reference-based)
@@ -218,9 +211,6 @@ def spline(
 
         # Omni: curve while rotating to face 90° left at the end
         spline((30, 0, 0), (50, 15, 45), (50, 30, 90))
-
-        # After an odometry reset, keep heading stable against the IMU
-        spline((30, 0), (50, 20), absolute_heading=True)
 
         # Absolute heading + arrive facing north (heading reference = north)
         spline((30, 0), (50, 20), absolute_heading=True, final_heading=0)

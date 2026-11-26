@@ -70,13 +70,15 @@ namespace libstp::motion
         spline_ = std::make_unique<CatmullRomSpline>(std::move(points));
 
         // Snapshot start pose — replaces odometry().reset(). Position projects
-        // robot pose into the body frame; absolute heading is the offset added
-        // to relative target headings in update().
+        // robot pose into the body frame; the start heading is the offset added
+        // to relative target headings in update(). It comes from getHeading(),
+        // the frame the heading loop closes on. getAbsoluteHeading() is the
+        // raw-IMU frame, whose offset to the odometry frame is arbitrary.
         {
             const auto pose = odometry().getPose();
             initial_position_m_ = Eigen::Vector2d(static_cast<double>(pose.position.x()),
                                                   static_cast<double>(pose.position.y()));
-            initial_absolute_heading_rad_ = odometry().getAbsoluteHeading();
+            initial_heading_rad_ = odometry().getHeading();
         }
 
         // Set up heading interpolation if explicit headings provided
@@ -129,10 +131,10 @@ namespace libstp::motion
         profiled_pid_.reset(0.0);
         profiled_pid_.setGoal(spline_->totalLength());
 
-        LIBSTP_LOG_TRACE("SplineMotion started: {} waypoints, arc_length={:.3f} m, max_velocity={:.3f} m/s, heading_mode={}, initial_abs_heading={:.3f} rad",
+        LIBSTP_LOG_TRACE("SplineMotion started: {} waypoints, arc_length={:.3f} m, max_velocity={:.3f} m/s, heading_mode={}, initial_heading={:.3f} rad",
                     cfg_.waypoints_m.size(), spline_->totalLength(), max_velocity_,
                     (use_explicit_headings_ ? "explicit" : "tangent"),
-                    initial_absolute_heading_rad_);
+                    initial_heading_rad_);
     }
 
     void SplineMotion::update(double dt)
@@ -164,8 +166,8 @@ namespace libstp::motion
         const auto pose = odometry().getPose();
         const double dx = static_cast<double>(pose.position.x()) - initial_position_m_.x();
         const double dy = static_cast<double>(pose.position.y()) - initial_position_m_.y();
-        const double cos_h = std::cos(initial_absolute_heading_rad_);
-        const double sin_h = std::sin(initial_absolute_heading_rad_);
+        const double cos_h = std::cos(initial_heading_rad_);
+        const double sin_h = std::sin(initial_heading_rad_);
         const double body_forward = dx * cos_h + dy * sin_h;
         const double body_lateral = -dx * sin_h + dy * cos_h;
         const Eigen::Vector2d robot_pos(body_forward, body_lateral);
@@ -232,10 +234,10 @@ namespace libstp::motion
         }
 
         // Heading target: targetHeadingAt() returns a heading relative to the
-        // robot's start orientation.  In absolute mode we offset by the captured
-        // IMU heading so the error is computed in the absolute frame.
+        // robot's start orientation; offset by the captured start heading so the
+        // error is computed in the odometry heading frame.
         const double target_heading = targetHeadingAt(s_setpoint)
-                                    + initial_absolute_heading_rad_;
+                                    + initial_heading_rad_;
 
         // Heading error
         const double heading_error = std::remainder(target_heading - current_heading,
@@ -252,7 +254,7 @@ namespace libstp::motion
         // CCW angle is negated.
         Eigen::Vector2d tangent = spline_->tangentAt(s_setpoint);
         double path_angle = std::atan2(-tangent.y(), tangent.x())
-                          + initial_absolute_heading_rad_;
+                          + initial_heading_rad_;
         double rel_angle = path_angle - current_heading;
 
         double vx = speed_cmd * std::cos(rel_angle);
