@@ -330,3 +330,36 @@ TEST_F(SplineMotionTest, MecanumReverseHoldsHeading)
     // Backward-leading path + held forward nose => body drives backward.
     EXPECT_LT(s.cmd_vx_mps, 0.0);
 }
+
+// Lateral direction: spline waypoints and ChassisVelocity::vy are both
+// right-positive, so a path leading left commands a negative vy and a path
+// leading right a positive one.
+TEST_F(SplineMotionTest, MecanumLateralCommandPointsTowardsPath)
+{
+    for (const double side : {-1.0, 1.0})  // -1 = left, +1 = right
+    {
+        auto kin = std::make_unique<NiceMock<MockKinematics>>();
+        kin->setupAsMecanum();
+        Drive mdrive(std::move(kin), ChassisVelocityControlConfig{}, *mock_imu_);
+
+        SplineMotionConfig cfg;
+        cfg.waypoints_m = {{0.0, side * 0.3}, {0.0, side * 0.6}};  // pure strafe
+        cfg.headings_rad = {0.0, 0.0};                             // nose stays put
+
+        pid_config_ = defaultUnifiedMotionPidConfig();
+        pid_config_.linear = AxisConstraints{0.5, 1.0, 1.0};
+        pid_config_.lateral = AxisConstraints{0.3, 0.8, 0.8};
+        MotionContext ctx{mdrive, *mock_odometry_, pid_config_};
+        auto motion = std::make_shared<SplineMotion>(ctx, cfg);
+
+        setWorldPose(*mock_odometry_, 0.0, 0.0, 0.0);
+        motion->start();
+        motion->update(kDt);
+        motion->update(kDt);
+
+        const auto& t = motion->getTelemetry().back();
+        EXPECT_GT(side * t.cmd_vy_mps, 0.0) << "side=" << side;
+        EXPECT_NEAR(t.cmd_vx_mps, 0.0, 1e-6) << "side=" << side;
+    }
+}
+

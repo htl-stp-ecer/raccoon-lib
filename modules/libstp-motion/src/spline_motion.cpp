@@ -248,13 +248,15 @@ namespace libstp::motion
         // Decompose speed along path into robot-frame velocity.
         // Spline frame: x=forward, y=right-positive. Heading convention: positive=CCW.
         // Convert by negating y for atan2 (left-handed frame → right-handed heading).
+        // ChassisVelocity::vy is right-positive, so the lateral component of the
+        // CCW angle is negated.
         Eigen::Vector2d tangent = spline_->tangentAt(s_setpoint);
         double path_angle = std::atan2(-tangent.y(), tangent.x())
                           + initial_absolute_heading_rad_;
         double rel_angle = path_angle - current_heading;
 
         double vx = speed_cmd * std::cos(rel_angle);
-        double vy = speed_cmd * std::sin(rel_angle);
+        double vy = -speed_cmd * std::sin(rel_angle);
 
         foundation::ChassisVelocity cmd{vx, vy, omega_cmd};
         drive().setVelocity(cmd);
