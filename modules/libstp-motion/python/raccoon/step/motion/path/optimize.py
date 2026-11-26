@@ -341,6 +341,9 @@ class Optimizer(Step):
                 result |= node.step.collected_resources()
         return frozenset(result)
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return tuple(self._raw_steps)
+
     def _generate_signature(self) -> str:
         # Show the effective pipeline (always-on decompose+merge prepended)
         # so the signature reflects what actually runs at compile time.

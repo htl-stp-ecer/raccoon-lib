@@ -78,6 +78,9 @@ class IfThen(Step):
 
     _composite = True
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return tuple(s for s in (self.then_step, self.else_step) if s is not None)
+
     def _generate_signature(self) -> str:
         return "IfThen()"
 

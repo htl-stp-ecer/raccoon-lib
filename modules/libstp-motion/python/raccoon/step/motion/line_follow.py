@@ -591,6 +591,15 @@ def _forward_correction_sign_for_lateral_follow(strafe_speed: float) -> float:
     return -1.0 if strafe_speed >= 0.0 else 1.0
 
 
+def _holds_reference_heading(config) -> bool:
+    """True if the config's ``heading_deg`` takes effect (see _apply_hold_heading)."""
+    return (
+        config.heading_deg is not None
+        and config.heading_hold
+        and (config.forward_correction or config.lateral_correction)
+    )
+
+
 def _apply_hold_heading(
     step: "MotionStep",
     motion_config: "DirectionalLineFollowMotionConfig",
@@ -650,6 +659,9 @@ class DirectionalLineFollow(MotionStep):
         self.config = config
         self._until = until
         self._motion: DirectionalLineFollowMotion | None = None
+
+    def requires_heading_reference(self) -> bool:
+        return _holds_reference_heading(self.config)
 
     def _generate_signature(self) -> str:
         parts = []
@@ -835,6 +847,9 @@ class DirectionalSingleLineFollow(MotionStep):
         self.config = config
         self._until = until
         self._motion: DirectionalLineFollowMotion | None = None
+
+    def requires_heading_reference(self) -> bool:
+        return _holds_reference_heading(self.config)
 
     def _generate_signature(self) -> str:
         parts = []

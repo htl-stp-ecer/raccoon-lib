@@ -38,6 +38,8 @@ class Defer(Step):
         )
     """
 
+    _opaque_to_checks = True
+
     def __init__(self, factory: Callable[["GenericRobot"], Step]) -> None:
         super().__init__()
         if not callable(factory):
@@ -84,6 +86,8 @@ class Run(Step):
             ]
         )
     """
+
+    _opaque_to_checks = True
 
     def __init__(
         self,

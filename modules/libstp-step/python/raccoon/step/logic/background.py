@@ -45,6 +45,9 @@ class Background(Step):
         # empty so Parallel/DoWhileActive validation doesn't block them.
         return frozenset()
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self._step,)
+
     def _generate_signature(self) -> str:
         name_part = f", name={self._name!r}" if self._name else ""
         return f"Background({self._step._generate_signature()}{name_part})"

@@ -65,6 +65,9 @@ class _ConditionalDrive(MotionStep):
         self._skip_calibration = False
         self._motion: LinearMotion | None = None
 
+    def requires_heading_reference(self) -> bool:
+        return self._heading_deg is not None
+
     def _generate_signature(self) -> str:
         mode = f"{self._cm:.1f}cm" if self._cm else "until"
         heading = f", heading={self._heading_deg:.1f}°" if self._heading_deg is not None else ""

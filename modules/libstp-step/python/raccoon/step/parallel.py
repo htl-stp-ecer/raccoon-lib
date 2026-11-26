@@ -17,6 +17,7 @@ class Parallel(Step):
     Composite step that runs branches concurrently and waits for all of them.
     """
 
+    _children_run_concurrently = True
     _composite = True
 
     def __init__(self, steps: list[Step]) -> None:
@@ -51,6 +52,9 @@ class Parallel(Step):
         for step in self.steps:
             result |= step.collected_resources()
         return frozenset(result)
+
+    def child_steps(self) -> "tuple[Step, ...]":
+        return tuple(self.steps)
 
     def _generate_signature(self) -> str:
         return f"Parallel(groups={len(self.steps)})"

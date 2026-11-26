@@ -83,6 +83,9 @@ class DriveAngle(MotionStep):
         self._heading_deg = heading
         self._motion: DiagonalMotion | None = None
 
+    def requires_heading_reference(self) -> bool:
+        return self._heading_deg is not None
+
     def _generate_signature(self) -> str:
         mode = f"{self._cm:.1f}cm" if self._cm else "until"
         heading = (

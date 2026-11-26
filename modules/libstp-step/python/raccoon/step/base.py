@@ -29,6 +29,10 @@ class Step(ClassNameLogger):
     """Base async action executed by missions and higher-level step combinators."""
 
     _composite: bool = False
+    # Pre-run checks (see heading_check): an opaque step has behaviour that is
+    # unknown before it executes.
+    _opaque_to_checks: bool = False
+    _children_run_concurrently: bool = False
 
     def __init__(self) -> None:
         self._skip_timing: bool = False
@@ -56,6 +60,25 @@ class Step(ClassNameLogger):
         override to union their children's collected resources.
         """
         return self.required_resources()
+
+    def child_steps(self) -> "tuple[Step, ...]":
+        """The steps this step runs, in execution order.
+
+        Composite steps override this so that pre-run checks can walk the
+        whole step tree.
+        """
+        return ()
+
+    def requires_heading_reference(self) -> bool:
+        """True if executing this step fails without a heading reference.
+
+        Stop conditions held by the step are checked separately.
+        """
+        return False
+
+    def sets_heading_reference(self) -> bool:
+        """True if executing this step marks the heading reference."""
+        return False
 
     def resolve(self) -> "Step":
         """Return the concrete Step that should actually execute.

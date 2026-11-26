@@ -837,7 +837,12 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         setup_mission: "MissionProtocol" | None,
         shutdown_mission: "MissionProtocol" | None,
     ) -> None:
-        """Build mission sequences early to validate step construction."""
+        """Build mission sequences early to validate them before anything runs.
+
+        Building validates step construction. The built trees are then walked in
+        execution order to ensure the heading reference is marked before any
+        step needs it.
+        """
         preload_targets: list[tuple[str, "MissionProtocol"]] = []
         if setup_mission is not None:
             preload_targets.append(("setup", setup_mission))
@@ -848,14 +853,28 @@ class GenericRobot(ABC, RobotGeometry, ClassNameLogger):
         if not preload_targets:
             return
 
+        from raccoon.mission.api import Mission
+        from raccoon.step.heading_check import HeadingReferenceChecker
+
+        heading_check = HeadingReferenceChecker()
+        custom_gate = type(self)._pre_start_gate is not GenericRobot._pre_start_gate
+
         self.info("Preloading mission sequences")
         for label, mission in preload_targets:
             sequence_builder = getattr(mission, "sequence", None)
             if not callable(sequence_builder):
                 self.warn(f"Mission does not expose sequence() for preload: {mission}")
+                heading_check.assume_marked()
                 continue
             self.debug(f"Preloading {label} mission: {mission}")
             # Resolve the root so a bare StepBuilder at the top of sequence()
             # still triggers construction-time validation (nested builders are
             # already resolved via composite constructors).
-            sequence_builder().resolve()
+            root = sequence_builder().resolve()
+            if isinstance(mission, Mission) and type(mission).run is not Mission.run:
+                heading_check.assume_marked()
+            heading_check.check(root, f"mission {mission}")
+            if label == "setup" and (
+                custom_gate or getattr(mission, "_custom_pre_start_gate", False)
+            ):
+                heading_check.assume_marked()

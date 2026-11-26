@@ -65,7 +65,11 @@ class DoWhileActive(Step):
     def collected_resources(self) -> frozenset[str]:
         return self.reference_step.collected_resources() | self.task.collected_resources()
 
+    _children_run_concurrently = True
     _composite = True
+
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self.reference_step, self.task)
 
     def _generate_signature(self) -> str:
         return "DoWhileActive()"

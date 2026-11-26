@@ -91,6 +91,9 @@ class MarkHeadingReference(Step):
         self._origin_offset_deg = origin_offset_deg
         self._positive_direction = positive_direction
 
+    def sets_heading_reference(self) -> bool:
+        return True
+
     def _generate_signature(self) -> str:
         parts = []
         if self._origin_offset_deg != 0.0:
@@ -152,6 +155,9 @@ class TurnToHeading(MotionStep):
 
     def required_resources(self) -> frozenset[str]:
         return frozenset({"drive"})
+
+    def requires_heading_reference(self) -> bool:
+        return True
 
     def _generate_signature(self) -> str:
         return f"TurnToHeading(target={self._target_deg:.1f}°)"

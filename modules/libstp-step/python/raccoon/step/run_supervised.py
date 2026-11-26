@@ -227,6 +227,9 @@ class RunSupervised(UIStep):
     def collected_resources(self) -> frozenset[str]:
         return self._probe.collected_resources()
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self._probe,)
+
     def _generate_signature(self) -> str:
         return f"RunSupervised(step={self._probe.__class__.__name__}, title={self._title!r})"
 

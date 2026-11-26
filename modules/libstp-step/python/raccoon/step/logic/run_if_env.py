@@ -72,6 +72,9 @@ class RunIfEnv(Step):
         op = "!=" if self._negate else "=="
         return f"{self._var} {op} {self._equals!r}"
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self._step,) if self._gate_open() else ()
+
     def _generate_signature(self) -> str:
         return f"RunIfEnv({self._gate_description()}, step={self._step._generate_signature()})"
 

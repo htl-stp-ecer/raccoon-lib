@@ -59,6 +59,11 @@ class SplinePath(MotionStep):
         self._has_headings = first_len == 3
         self._motion: SplineMotion | None = None
 
+    def requires_heading_reference(self) -> bool:
+        return self._absolute_heading and (
+            self._has_headings or self._final_heading_deg is not None
+        )
+
     def _generate_signature(self) -> str:
         pts = ", ".join(
             f"({wp[0]:.1f}, {wp[1]:.1f})"

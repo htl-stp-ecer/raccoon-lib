@@ -48,6 +48,9 @@ class LoopForever(Step):
 
     _composite = True
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self.step,)
+
     def _generate_signature(self) -> str:
         return "LoopForever()"
 
@@ -103,6 +106,9 @@ class LoopFor(Step):
         return self.step.collected_resources()
 
     _composite = True
+
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self.step,)
 
     def _generate_signature(self) -> str:
         return f"LoopFor(iterations={self.iterations})"

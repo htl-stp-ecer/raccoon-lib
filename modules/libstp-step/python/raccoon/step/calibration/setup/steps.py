@@ -129,6 +129,9 @@ class CollectDrive(UIStep):
         self._step = step
         self._manual_measurement = manual_measurement
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self._step,)
+
     def _generate_signature(self) -> str:
         return f"CollectDrive(step={self._step}, manual={self._manual_measurement})"
 
@@ -237,6 +240,9 @@ class CollectIrSet(Step):
         self._step = step
         self._set_name = set_name
         self._sensors = sensors
+
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self._step,)
 
     def _generate_signature(self) -> str:
         return f"CollectIrSet(set={self._set_name!r}, step={self._step})"

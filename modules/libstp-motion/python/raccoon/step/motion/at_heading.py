@@ -190,6 +190,9 @@ class WaitUntilDegrees(Step):
         self._origin = origin
         self._hz = 100
 
+    def requires_heading_reference(self) -> bool:
+        return self._origin == HeadingOrigin.HEADING_REFERENCE
+
     def _generate_signature(self) -> str:
         suffix = (
             f", origin={self._origin.value}" if self._origin != HeadingOrigin.STEP_START else ""

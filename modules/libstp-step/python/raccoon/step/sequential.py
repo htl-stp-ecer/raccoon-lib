@@ -43,6 +43,9 @@ class Sequential(Step):
             result |= step.collected_resources()
         return frozenset(result)
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return tuple(self.steps)
+
     def _generate_signature(self) -> str:
         first = self.steps[0].__class__.__name__ if self.steps else "None"
         last = self.steps[-1].__class__.__name__ if self.steps else "None"

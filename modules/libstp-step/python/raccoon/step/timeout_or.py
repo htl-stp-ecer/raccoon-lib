@@ -36,6 +36,9 @@ class TimeoutOr(Step):
     def collected_resources(self) -> frozenset[str]:
         return self.step.collected_resources() | self.fallback.collected_resources()
 
+    def child_steps(self) -> "tuple[Step, ...]":
+        return (self.step, self.fallback)
+
     def _generate_signature(self) -> str:
         return (
             f"TimeoutOr(step={self.step.__class__.__name__}, "

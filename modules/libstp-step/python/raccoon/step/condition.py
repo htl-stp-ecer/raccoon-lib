@@ -42,6 +42,10 @@ class StopCondition:
     # fresh per motion step, so at worst a reused instance skips one log line.
     _fire_logged: bool = False
 
+    def requires_heading_reference(self) -> bool:
+        """True if the condition fails without a heading reference."""
+        return False
+
     def start(self, robot: "GenericRobot") -> None:
         """Called once when the motion step starts. Override to initialize state."""
 
@@ -126,6 +130,9 @@ class _Then(StopCondition):
         self._second = second
         self._first_done = False
 
+    def requires_heading_reference(self) -> bool:
+        return self._first.requires_heading_reference() or self._second.requires_heading_reference()
+
     def start(self, robot: "GenericRobot") -> None:
         self._first_done = False
         self._first.start(robot)
@@ -153,6 +160,9 @@ class _AnyOf(StopCondition):
                 raise TypeError(msg)
         self._conditions = conditions
 
+    def requires_heading_reference(self) -> bool:
+        return any(c.requires_heading_reference() for c in self._conditions)
+
     def start(self, robot: "GenericRobot") -> None:
         for c in self._conditions:
             c.start(robot)
@@ -173,6 +183,9 @@ class _AllOf(StopCondition):
                 msg = f"Expected StopCondition at position {i}, " f"got {type(c).__name__}"
                 raise TypeError(msg)
         self._conditions = conditions
+
+    def requires_heading_reference(self) -> bool:
+        return any(c.requires_heading_reference() for c in self._conditions)
 
     def start(self, robot: "GenericRobot") -> None:
         for c in self._conditions:
@@ -364,6 +377,9 @@ class _AxisDisplacementCondition(StopCondition):
         self._cos_h: float = 1.0
         self._sin_h: float = 0.0
         self._started = False
+
+    def requires_heading_reference(self) -> bool:
+        return self._heading_deg is not None and not self._absolute
 
     def _reference_heading_rad(self, robot: "GenericRobot") -> float:
         """Resolve the frozen reference heading (radians) at ``start()``."""
@@ -625,6 +641,9 @@ class _InclinationCondition(StopCondition):
     """
 
     _MIN_QUAT_NORM: ClassVar[float] = 0.5
+
+    def requires_heading_reference(self) -> bool:
+        return True
 
     def __init__(self, degrees: float, *, up_axis: str = "z", smoothing: float = 0.2):
         if not isinstance(degrees, int | float):
