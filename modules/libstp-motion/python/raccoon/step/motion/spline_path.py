@@ -52,6 +52,19 @@ class SplinePath(MotionStep):
                 )
                 raise ValueError(msg)
 
+        if first_len == 3 and final_heading_deg is not None:
+            msg = (
+                "spline() cannot combine final_heading with 3-tuple waypoints; "
+                "set the heading of the last waypoint instead"
+            )
+            raise ValueError(msg)
+        if absolute_heading and final_heading_deg is None:
+            msg = (
+                "spline() absolute_heading=True requires final_heading; "
+                "waypoints and waypoint headings are always relative to the start pose"
+            )
+            raise ValueError(msg)
+
         self._waypoints = waypoints
         self._speed = speed
         self._absolute_heading = absolute_heading
@@ -89,7 +102,7 @@ class SplinePath(MotionStep):
         # captures at start; ``_absolute_heading`` only selects how
         # ``final_heading_deg`` is interpreted (heading reference vs. start).
 
-        if self._final_heading_deg is not None and not self._has_headings:
+        if self._final_heading_deg is not None:
             if self._absolute_heading:
                 # User gave an absolute heading (degrees, same convention as
                 # drive_forward(heading=…)).  Convert to a relative offset so
@@ -147,13 +160,13 @@ def spline(
 
     Heading tracking runs on the odometry heading, relative to the robot's
     facing direction at the start of the step. No heading reference is needed
-    unless ``final_heading`` is absolute.
+    unless ``final_heading`` is absolute (``absolute_heading=True``).
 
     **Final heading** (``final_heading``): the heading the robot should be
     facing when it arrives at the last waypoint, in degrees.  The robot
     smoothly rotates from its start heading to this target heading as it
-    follows the path (linear interpolation by arc-length).  Ignored when
-    3-tuple waypoints are used (per-waypoint headings take precedence).
+    follows the path (linear interpolation by arc-length).  It cannot be
+    combined with 3-tuple waypoints, which carry their own headings.
     When ``absolute_heading=True``, ``final_heading`` is interpreted as an
     absolute heading relative to the heading reference (same convention as
     ``drive_forward(heading=…)``).  When ``absolute_heading=False``,
@@ -181,8 +194,8 @@ def spline(
             opposite the travel). Magnitude is clamped to [0.01, 1.0].
         absolute_heading: If True, ``final_heading`` is measured from the
             heading reference instead of the start orientation (default
-            False). Waypoints and waypoint headings are always relative to
-            the start pose.
+            False). Requires ``final_heading``. Waypoints are always relative
+            to the start pose.
         final_heading: Optional desired heading in degrees at the end of
             the path.  Relative to start orientation when
             ``absolute_heading=False``; absolute (heading-reference-based)
@@ -193,6 +206,9 @@ def spline(
 
     Raises:
         ValueError: If fewer than 2 waypoints or inconsistent tuple sizes.
+        ValueError: If ``final_heading`` is combined with 3-tuple waypoints.
+        ValueError: If ``absolute_heading=True`` is used without
+            ``final_heading``.
         ValueError: If explicit headings (3-tuples) are used on a
             non-omni drivetrain.
 
